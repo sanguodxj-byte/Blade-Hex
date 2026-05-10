@@ -1,6 +1,7 @@
 # SkillTreeUI.gd
 # 技能盘可视化UI - 六边形网格布局, 150+节点, 支持缩放平移
 # 坐标转换委托给 SkillTreeCoord (axial → pixel)
+# 状态查询通过 CharacterSkillTree（不修改共享 SkillTreeData）
 extends PanelContainer
 class_name SkillTreeUI
 
@@ -26,10 +27,10 @@ const REGION_NAMES := {
 	SkillNodeData.Region.NONE: "中心", SkillNodeData.Region.TRANSITION: "过渡",
 }
 
-## 坐标转换组件（由 SkillTreeManager 提供）
-var _coord: SkillTreeCoord = null
-
 const SkillTreeCoord = preload("res://src/core/skill_tree/SkillTreeCoord.gd")
+
+## 坐标转换组件
+var _coord: SkillTreeCoord = null
 
 # ============================================================================
 # 内部
@@ -131,13 +132,15 @@ func _setup():
 
 # ============================================================================
 # Hex 坐标转换 — 委托给 SkillTreeCoord
-# grid_position 存储 axial (q, r)，通过 SkillTreeCoord.hex_to_pixel 转像素
 # ============================================================================
 
-func _node_to_pixel(node: SkillNodeData) -> Vector2:
+func _ensure_coord():
 	if not _coord:
 		_coord = SkillTreeCoord.new()
 		_coord.hex_size = HEX_SIZE
+
+func _node_to_pixel(node: SkillNodeData) -> Vector2:
+	_ensure_coord()
 	var px = _coord.hex_to_pixel(node.grid_position.x, node.grid_position.y)
 	return _center + px * _zoom + _pan_offset
 
@@ -176,9 +179,9 @@ func open_skill_tree(character_tree: CharacterSkillTree, tree_data: SkillTreeDat
 	_tree_data = tree_data
 	_zoom = 1.0
 	_pan_offset = Vector2.ZERO
+	_coord = null  # 重置坐标组件
 	visible = true
-	_sync_activation()
-	_build_nodes()
+	_build_or_update_nodes()
 	_update_stats()
 
 func close_skill_tree():
@@ -186,33 +189,29 @@ func close_skill_tree():
 	_character_tree = null
 	_tree_data = null
 
-func _sync_activation():
-	if not _tree_data or not _character_tree: return
-	for node_id in _tree_data.nodes:
-		_tree_data.nodes[node_id].is_activated = false
-	for node_id in _character_tree.activated_nodes:
-		if _tree_data.nodes.has(node_id):
-			_tree_data.nodes[node_id].is_activated = true
-
 # ============================================================================
-# 节点构建
+# 节点构建 — 首次创建，后续只更新样式和位置
 # ============================================================================
 
-func _build_nodes():
-	for key in _node_buttons:
-		var btn: Button = _node_buttons[key]
-		if is_instance_valid(btn): btn.queue_free()
-	_node_buttons.clear()
-	_node_positions.clear()
+func _build_or_update_nodes():
 	if not _tree_data: return
-	await get_tree().process_frame
 	_center = _draw_container.size / 2.0
 	if _center == Vector2.ZERO: _center = Vector2(500, 400)
+
+	var existing_ids = {}
+	for key in _node_buttons:
+		existing_ids[key] = true
+
+	# Create new buttons for nodes not yet built
 	for node_id in _tree_data.nodes:
 		var node: SkillNodeData = _tree_data.nodes[node_id]
 		var pos = _node_to_pixel(node)
 		_node_positions[node_id] = pos
-		_create_node_button(node_id, node, pos)
+		if not existing_ids.has(node_id):
+			_create_node_button(node_id, node, pos)
+
+	# Update all button styles and positions
+	_update_all_button_states()
 	_draw_container.queue_redraw()
 
 func _rebuild_positions():
@@ -221,10 +220,7 @@ func _rebuild_positions():
 		var node: SkillNodeData = _tree_data.nodes[node_id]
 		var pos = _node_to_pixel(node)
 		_node_positions[node_id] = pos
-		if _node_buttons.has(node_id) and is_instance_valid(_node_buttons[node_id]):
-			var btn: Button = _node_buttons[node_id]
-			btn.position = pos - Vector2(HEX_SIZE * 0.5, HEX_SIZE * 0.3) * _zoom
-			btn.size = Vector2(HEX_SIZE, HEX_SIZE * 0.6) * _zoom
+	_update_button_positions()
 
 func _create_node_button(node_id: String, node: SkillNodeData, pos: Vector2):
 	var btn := Button.new()
@@ -232,12 +228,29 @@ func _create_node_button(node_id: String, node: SkillNodeData, pos: Vector2):
 	btn.size = Vector2(HEX_SIZE, HEX_SIZE * 0.6) * _zoom
 	btn.text = node.node_name.left(4)
 	btn.tooltip_text = "%s\n%s" % [node.node_name, node.description]
-	var activated = node.state == SkillNodeData.State.UNLOCKED
-	var available = node.state == SkillNodeData.State.AVAILABLE
-	_style_btn(btn, node, activated, available)
+	_style_btn(btn, node, false, false)
 	btn.pressed.connect(_on_node_clicked.bind(node_id))
 	_draw_container.add_child(btn)
 	_node_buttons[node_id] = btn
+
+func _update_all_button_states():
+	for node_id in _node_buttons:
+		if not _tree_data.nodes.has(node_id): continue
+		var btn: Button = _node_buttons[node_id]
+		if not is_instance_valid(btn): continue
+		var node: SkillNodeData = _tree_data.nodes[node_id]
+		var act = _character_tree.is_activated(node_id) if _character_tree else false
+		var avail = _character_tree.is_available(node_id) if _character_tree else false
+		_style_btn(btn, node, act, avail)
+
+func _update_button_positions():
+	for node_id in _node_buttons:
+		var btn: Button = _node_buttons[node_id]
+		if not is_instance_valid(btn): continue
+		if not _node_positions.has(node_id): continue
+		var pos = _node_positions[node_id]
+		btn.position = pos - Vector2(HEX_SIZE * 0.5, HEX_SIZE * 0.3) * _zoom
+		btn.size = Vector2(HEX_SIZE, HEX_SIZE * 0.6) * _zoom
 
 func _style_btn(btn: Button, node: SkillNodeData, activated: bool, available: bool):
 	var rc = _theme.get_region_color(node.region as int)
@@ -274,13 +287,13 @@ func _on_draw():
 		if not _node_positions.has(node_id): continue
 		var pos = _node_positions[node_id]
 		var node: SkillNodeData = _tree_data.nodes[node_id]
-		var activated = node.state == SkillNodeData.State.UNLOCKED
-		var available = node.state == SkillNodeData.State.AVAILABLE
+		var act = _character_tree.is_activated(node_id) if _character_tree else false
+		var avail = _character_tree.is_available(node_id) if _character_tree else false
 		var rc = _theme.get_region_color(node.region as int)
 		var color: Color
-		if activated:
+		if act:
 			color = Color(rc.r, rc.g, rc.b, 0.25)
-		elif available:
+		elif avail:
 			color = Color(0.25, 0.25, 0.3, 0.2)
 		else:
 			color = Color(0.08, 0.08, 0.1, 0.15)
@@ -294,16 +307,14 @@ func _on_draw():
 			if not _node_positions.has(nid): continue
 			if nid < node_id: continue  # avoid double draw
 			var to = _node_positions[nid]
-			var fa = _tree_data.nodes[node_id].state == SkillNodeData.State.UNLOCKED
-			var ta = _tree_data.nodes[nid].state == SkillNodeData.State.UNLOCKED
+			var fa = _character_tree.is_activated(node_id) if _character_tree else false
+			var ta = _character_tree.is_activated(nid) if _character_tree else false
 			var both = fa and ta
 			var c = _theme.border_highlight if both else _theme.border_default
 			var w = 2.0 if both else 1.0
 			_draw_container.draw_line(from, to, c, w)
-	# Draw region labels — 用坐标系统在远端放标签
-	if not _coord:
-		_coord = SkillTreeCoord.new()
-		_coord.hex_size = HEX_SIZE
+	# Draw region labels
+	_ensure_coord()
 	var label_dirs := {
 		SkillNodeData.Region.STR: Vector2i(10, 0),
 		SkillNodeData.Region.DEX: Vector2i(0, 10),
@@ -332,15 +343,6 @@ func _draw_hex(center: Vector2, size: float, color: Color):
 # 事件处理
 # ============================================================================
 
-func _is_available(node_id: String) -> bool:
-	if not _character_tree or not _tree_data: return false
-	if not _tree_data.nodes.has(node_id): return false
-	var node: SkillNodeData = _tree_data.nodes[node_id]
-	if node.state == SkillNodeData.State.UNLOCKED: return false
-	if node.state != SkillNodeData.State.AVAILABLE: return false
-	if _character_tree.available_skill_points <= 0: return false
-	return true
-
 func _on_node_clicked(node_id: String):
 	_selected_node_id = node_id
 	_update_info_panel()
@@ -358,8 +360,8 @@ func _on_jump_pressed():
 		else: _info_desc.text = "[color=red]%s[/color]" % r.message
 
 func _refresh(msg: String):
-	_sync_activation()
-	_build_nodes()
+	_update_all_button_states()
+	_draw_container.queue_redraw()
 	_update_stats()
 	_update_info_panel()
 	_info_desc.text += "\n[color=green]%s[/color]" % msg
@@ -392,20 +394,20 @@ func _update_info_panel():
 		for nid in node.neighbors:
 			if _tree_data.nodes.has(nid):
 				var n2: SkillNodeData = _tree_data.nodes[nid]
-				var st = "*" if _character_tree and _character_tree.activated_nodes.has(nid) else "o"
+				var st = "*" if _character_tree and _character_tree.is_activated(nid) else "o"
 				nn.append("%s %s" % [st, n2.node_name])
 		d += "\n[color=gray]相邻:[/color] %s" % "、".join(nn)
-	var activated = _character_tree and _character_tree.activated_nodes.has(_selected_node_id)
+	var activated = _character_tree and _character_tree.is_activated(_selected_node_id)
 	if activated:
 		d += "\n\n[color=green]已点亮[/color]"
 	_info_desc.text = d
-	var can_normal = not activated and _is_available(_selected_node_id)
+	var can_normal = not activated and _character_tree and _character_tree.is_available(_selected_node_id) and _character_tree.available_skill_points > 0
 	var can_jump = not activated and _character_tree and _character_tree.get_remaining_jumps() > 0 and _character_tree.available_skill_points > 0
 	if can_jump and _tree_data and _tree_data.nodes.has(_selected_node_id):
 		var sn: SkillNodeData = _tree_data.nodes[_selected_node_id]
 		if sn.required_level > _character_tree.character_level: can_jump = false
 		for p in sn.prerequisites:
-			if p not in _character_tree.activated_nodes: can_jump = false
+			if not _character_tree.is_activated(p): can_jump = false
 	_info_activate_btn.disabled = not can_normal
 	_info_jump_btn.disabled = not can_jump
 

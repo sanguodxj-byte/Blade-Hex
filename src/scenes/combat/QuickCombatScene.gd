@@ -68,14 +68,35 @@ func _init_systems():
 # ============================================================
 
 func _generate_battlefield():
-	var generator = BattleMapGenerator.new()
-	var template_names = generator.get_template_names()
-	var chosen_template = template_names[randi() % template_names.size()]
-	var map_data = generator.generate_from_template(
-		chosen_template,
+	# 生成一个小型大地图（10×8），用于驱动战术地图生成
+	var ow_generator = HexOverworldGenerator.new()
+	var ow_grid = ow_generator.generate(10, 8, randi())
+	
+	# 在大地图中央附近找一个可通行格作为遭遇点
+	var center_tile = ow_grid.find_passable_near_pixel(
+		ow_grid.get_center_pixel().x,
+		ow_grid.get_center_pixel().y,
+		5
+	)
+	var encounter_coord = center_tile.coord if center_tile else Vector2i(5, 4)
+	var terrain_type = ow_grid.sample_terrain_at_pixel(
+		center_tile.pixel_pos.x if center_tile else 0.0,
+		center_tile.pixel_pos.y if center_tile else 0.0
+	)
+	
+	# 创建战斗上下文，传入大地图数据
+	var ctx := BattleContext.create(
+		terrain_type,
 		BattleMapGenerator.BattleSize.MERCENARY,
+		BattleContext.EngagementType.NORMAL,
 		randi()
 	)
+	ctx.overworld_grid = ow_grid
+	ctx.encounter_coord = encounter_coord
+	ctx.poi_type = -1  # 野外遭遇
+	
+	var generator = BattleMapGenerator.new()
+	var map_data = generator.generate(ctx)
 	
 	_map_width = map_data.width
 	_map_height = map_data.height

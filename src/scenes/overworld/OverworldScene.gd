@@ -703,7 +703,7 @@ func _on_sub_panel_closed(_dummy = null) -> void:
 func _enter_combat_with_context(ctx: BattleContext) -> void:
 	print("战斗上下文: %s" % ctx.get_description())
 	player_party.is_moving = false
-	_enter_combat_scene()
+	_enter_combat_scene(ctx)
 
 
 # ========================================
@@ -1018,10 +1018,18 @@ func _create_town_from_poi(poi: OverworldPOI) -> OverworldTown:
 func _trigger_combat_with_entity(entity: OverworldEntity):
 	print("遭遇 %s: %s！切换至战术战场..." % [entity.get_type_name(), entity.entity_name])
 	player_party.is_moving = false
+	# 从玩家位置采样大地图坐标作为遭遇点
+	var encounter_tile = hex_grid.find_passable_near_pixel(player_party.position.x, player_party.position.y, 5)
+	var encounter_coord = encounter_tile.coord if encounter_tile else Vector2i.ZERO
+	var terrain_type = hex_grid.sample_terrain_at_pixel(player_party.position.x, player_party.position.y)
+	var ctx := BattleContext.create(terrain_type, BattleMapGenerator.BattleSize.MERCENARY, BattleContext.EngagementType.NORMAL)
+	ctx.overworld_grid = hex_grid
+	ctx.encounter_coord = encounter_coord
+	ctx.poi_type = -1  # 野外遭遇
 	entity_manager._remove_entity(entity)
-	_enter_combat_scene()
+	_enter_combat_scene(ctx)
 
-func _enter_combat_scene():
+func _enter_combat_scene(battle_context: BattleContext = null):
 	hex_renderer.visible = false
 	player_party.visible = false
 	ui.visible = false
@@ -1030,6 +1038,8 @@ func _enter_combat_scene():
 		if is_instance_valid(visual): visual.visible = false
 	
 	var combat_scene = CombatScene.new()
+	if battle_context != null:
+		combat_scene.battle_context = battle_context
 	combat_scene.combat_finished.connect(_on_combat_finished.bind(combat_scene))
 	get_tree().root.add_child(combat_scene)
 
@@ -1180,6 +1190,11 @@ func _on_player_reached_quest_target(site: QuestTargetSite) -> void:
 	var terrain_type := hex_grid.sample_terrain_at_pixel(site.world_position.x, site.world_position.y)
 	var ctx := BattleContext.create(terrain_type, BattleMapGenerator.BattleSize.MERCENARY, BattleContext.EngagementType.NORMAL)
 	ctx.encounter_position = Vector2i(int(site.world_position.x), int(site.world_position.y))
+	# 传入大地图数据，让 BattleMapGenerator 从大地图采样地形
+	ctx.overworld_grid = hex_grid
+	var encounter_tile = hex_grid.find_passable_near_pixel(site.world_position.x, site.world_position.y, 5)
+	ctx.encounter_coord = encounter_tile.coord if encounter_tile else Vector2i.ZERO
+	ctx.poi_type = -1  # 任务目标遭遇，无固定POI类型
 	# 将任务遭遇数据存储在元数据中，供 CombatScene 使用
 	ctx.set_meta("quest_id", site.quest_id)
 	ctx.set_meta("enemy_ids", config.get("enemies", []))

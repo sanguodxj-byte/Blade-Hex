@@ -24,7 +24,8 @@ enum NodeType {
 @export var node_type: NodeType = NodeType.SMALL
 
 # ============================================================================
-# 节点状态（运行时）
+# 节点状态（已废弃 — 状态由 CharacterSkillTree.activated_set / available_set 管理）
+# 保留枚举仅供 UI 兼容过渡
 # ============================================================================
 
 enum State {
@@ -32,7 +33,6 @@ enum State {
 	AVAILABLE, # 可解锁，高亮
 	UNLOCKED   # 已解锁，点亮
 }
-var state: State = State.LOCKED
 
 # ============================================================================
 # 所属区域
@@ -125,11 +125,8 @@ var prerequisites: Array = []
 ## 图标路径
 @export var icon_path: String = ""
 
-## 是否已点亮（兼容旧代码，实际状态看 state）
-var is_activated: bool = false:
-	set(v):
-		is_activated = v
-		state = State.UNLOCKED if v else State.LOCKED
+## 节点运行时状态（由 SkillTreeData 构建，不再被每角色逻辑修改）
+var is_activated: bool = false
 
 
 # ============================================================================
@@ -175,8 +172,11 @@ func _get_stat_bonus_text() -> String:
 	for key in stat_bonuses:
 		var val = stat_bonuses[key]
 		var name_str = stat_names.get(key, key)
-		if typeof(val) == TYPE_FLOAT and val < 1.0:
-			parts.append("%s+%.0f%%" % [name_str, val * 100])
+		if typeof(val) == TYPE_FLOAT:
+			if absf(val) < 1.0:
+				parts.append("%s%+.0f%%" % [name_str, val * 100])
+			else:
+				parts.append("%s%+.0f" % [name_str, val])
 		elif val > 0:
 			parts.append("%s+%d" % [name_str, val])
 		elif val < 0:
@@ -186,22 +186,30 @@ func _get_stat_bonus_text() -> String:
 
 
 ## 检查该节点是否可以被点亮（不考虑相邻关系，只看等级和前置）
-func can_be_unlocked(character_level: int, activated_nodes: Array[String]) -> bool:
+func can_be_unlocked(character_level: int, activated_nodes) -> bool:
 	if is_activated:
 		return false
 	if required_level > character_level:
 		return false
 	for prereq in prerequisites:
-		if prereq not in activated_nodes:
-			return false
+		if activated_nodes is Dictionary:
+			if not activated_nodes.has(prereq):
+				return false
+		else:
+			if prereq not in activated_nodes:
+				return false
 	return true
 
 
-## 检查是否与已点亮节点相邻
-func is_adjacent_to_activated(activated_nodes: Array[String]) -> bool:
+## 检查是否与已点亮节点相邻（支持 Array 或 Dictionary）
+func is_adjacent_to_activated(activated_nodes) -> bool:
 	for neighbor_id in neighbors:
-		if neighbor_id in activated_nodes:
-			return true
+		if activated_nodes is Dictionary:
+			if activated_nodes.has(neighbor_id):
+				return true
+		else:
+			if neighbor_id in activated_nodes:
+				return true
 	return false
 
 

@@ -88,11 +88,19 @@ func _init_systems():
 
 var _map_data: BattleMapGenerator.BattleMapData
 
+## 战斗上下文 — 由 OverworldScene 传入大地图数据时设置
+var battle_context: BattleContext = null
+
 func _generate_battlefield():
 	var generator = BattleMapGenerator.new()
-	var template_names = generator.get_template_names()
-	var random_template = template_names[randi() % template_names.size()]
-	_map_data = generator.generate_from_template(random_template, BattleMapGenerator.BattleSize.MERCENARY)
+	if battle_context != null:
+		# 使用大地图驱动的生成路径
+		_map_data = generator.generate(battle_context)
+	else:
+		# 回退：随机模板生成（兼容旧调用方式）
+		var template_names = generator.get_template_names()
+		var random_template = template_names[randi() % template_names.size()]
+		_map_data = generator.generate_from_template(random_template, BattleMapGenerator.BattleSize.MERCENARY)
 	
 	hex_grid.load_from_map_data(_map_data)
 	

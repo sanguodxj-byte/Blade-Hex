@@ -1,6 +1,9 @@
 ﻿# BattleMapGenerator.gd
-# 随机战斗地图生成器 — 根据大地图地形上下文生成战术战斗地图
+# 战斗地图生成器 — 两种生成路径:
+#   1. 大地图驱动: 从 HexOverworldGrid 采样遭遇点周围地形，展开为战术地图
+#   2. 模板随机: 无大地图数据时（测试/QuickCombat），从模板权重随机生成
 # 包含地图模板(BattleMapTemplate)、地图数据(BattleMapData)和生成逻辑
+# 战场兄弟(Battle Brothers)风格: 战术地图是大地图遭遇区域的放大版
 class_name BattleMapGenerator
 extends RefCounted
 
@@ -499,7 +502,350 @@ func _register_templates():
 
 ## 生成战斗地图（主入口）
 ## context: BattleContext 实例
+## 当 context.overworld_grid != null 时，从大地图采样地形生成战术地图
+## 否则回退到模板随机生成
 func generate(context: BattleContext) -> BattleMapData:
+	seed(context.seed)
+	if context.overworld_grid != null:
+		return _generate_from_overworld(context)
+	else:
+		return _generate_from_template_internal(context)
+
+
+## =========================================
+## 大地图驱动生成路径
+## =========================================
+
+## 从大地图遭遇点周围采样地形，展开为战术地图
+func _generate_from_overworld(context: BattleContext) -> BattleMapData:
+	var size_info = SIZE_MAP.get(context.battle_size, SIZE_MAP[BattleSize.MERCENARY])
+	var map_data = BattleMapData.new()
+	map_data.width = size_info["width"]
+	map_data.height = size_info["height"]
+
+	# 采样半径：雇佣兵=3, 骑士=4, 领主=5
+	var sample_radius: int = 3
+	match context.battle_size:
+		BattleSize.KNIGHT: sample_radius = 4
+		BattleSize.LORD: sample_radius = 5
+
+	var grid: HexOverworldGrid = context.overworld_grid
+	var center: Vector2i = context.encounter_coord
+
+	# 步骤 1: 采样大地图周围地形
+	var sampled_tiles: Array[HexOverworldTile] = []
+	var center_tile = grid.get_tile_at_coord(center)
+	if center_tile:
+		sampled_tiles.append(center_tile)
+	for tile in grid.get_tiles_in_range(center.x, center.y, sample_radius):
+		sampled_tiles.append(tile)
+
+	# 步骤 2: 将大地图格展开为战术格 (每个大地图格 → 2×2 战术格)
+	var terrain_map: Dictionary = {}
+	var elevation_map: Dictionary = {}
+	var detail_noise = FastNoiseLite.new()
+	detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	detail_noise.seed = randi()
+	detail_noise.frequency = 0.15
+
+	# 先填充所有合法战术坐标为默认值
+	for q in range(map_data.width):
+		var q_offset = int(floor(q / 2.0))
+		for r in range(-q_offset, map_data.height - q_offset):
+			var key = Vector2i(q, r)
+			terrain_map[key] = BattleCellData.TerrainType.GRASSLAND
+			elevation_map[key] = 1
+
+	# 用大地图瓦片覆盖对应的战术格
+	for tile in sampled_tiles:
+		var battle_terrain = _map_overworld_to_battle(tile.terrain)
+		var battle_elev = _map_overworld_elevation(tile.elevation)
+
+		# 大地图坐标 × 2 = 战术地图基础坐标
+		var base_q = (tile.coord.x - center.x) * 2 + map_data.width / 2
+		var base_r = (tile.coord.y - center.y) * 2 + map_data.height / 2
+
+		for dq in range(2):
+			for dr in range(2):
+				var tq = base_q + dq
+				var tr = base_r + dr
+				var key = Vector2i(tq, tr)
+				if not terrain_map.has(key):
+					continue
+
+				# 微变化：用噪声对地形做轻微扰动
+				var noise_val = detail_noise.get_noise_2d(float(tq) * 2.0, float(tr) * 2.0)
+				var final_terrain = _terrain_micro_variation(battle_terrain, tile.moisture, noise_val)
+				var final_elev = battle_elev
+				if noise_val < -0.5 and final_elev > 0:
+					final_elev -= 1
+				elif noise_val > 0.5 and final_elev < 2:
+					final_elev += 1
+
+				# 继承道路/河流
+				if tile.is_road:
+					final_terrain = BattleCellData.TerrainType.ROAD
+					final_elev = 1
+				elif tile.is_river or tile.terrain == HexOverworldTile.TerrainType.RIVER:
+					final_terrain = BattleCellData.TerrainType.SHALLOW_WATER
+					final_elev = 0
+
+				terrain_map[key] = final_terrain
+				elevation_map[key] = final_elev
+
+	# 步骤 3: 河流相邻格浅水扩散
+	var shallow_type = BattleCellData.TerrainType.SHALLOW_WATER
+	var keys_snapshot = terrain_map.keys().duplicate()
+	for key in keys_snapshot:
+		if terrain_map[key] == shallow_type:
+			for dir in range(6):
+				var neighbor = HexUtils.get_neighbor(key.x, key.y, dir)
+				if terrain_map.has(neighbor):
+					var n_type = terrain_map[neighbor]
+					if n_type != shallow_type and n_type != BattleCellData.TerrainType.DEEP_WATER \
+					and n_type != BattleCellData.TerrainType.ROAD and n_type != BattleCellData.TerrainType.WALL:
+						if randf() < 0.20:
+							terrain_map[neighbor] = shallow_type
+							elevation_map[neighbor] = 0
+
+	# 步骤 4: 按 POI 类型放置结构元素
+	var poi_type = context.poi_type
+	# 根据POI类型确定废墟/墙壁数量
+	var ruin_count := Vector2i(0, 1)
+	var wall_count := Vector2i(0, 1)
+	match poi_type:
+		0, 1, 2:  # TOWN, VILLAGE, CASTLE
+			ruin_count = Vector2i(1, 3)
+			wall_count = Vector2i(1, 2)
+		3:  # SETTLEMENT (enemy camps)
+			ruin_count = Vector2i(1, 3)
+			wall_count = Vector2i(0, 2)
+		4:  # LAIR (dragon/ancient tomb/ruins)
+			ruin_count = Vector2i(2, 4)
+			wall_count = Vector2i(1, 3)
+
+	var fake_template = BattleMapTemplate.new()
+	fake_template.ruin_structure_count = ruin_count
+	fake_template.wall_segment_count = wall_count
+	fake_template.wall_segment_length = Vector2i(2, 4)
+	fake_template.smoothing_passes = 2
+	_generate_ruin_structures(terrain_map, map_data.width, map_data.height, fake_template)
+	_generate_wall_segments(terrain_map, map_data.width, map_data.height, fake_template)
+
+	# 步骤 5: 特殊元素散落
+	_scatter_special_features(terrain_map)
+
+	# 步骤 6: 地形平滑
+	_smooth_terrain_map(terrain_map, map_data.width, map_data.height, 2)
+
+	# 步骤 7: 创建 BattleCellData
+	_finalize_cells(map_data, terrain_map, elevation_map, BattleCellData.TerrainType.GRASSLAND)
+
+	# 步骤 8: 环境事件（从主导地形推断）
+	map_data.template_name = "overworld_" + OverworldTerrain.get_name(context.overworld_terrain)
+	map_data.environment_event = _derive_environment_event(terrain_map)
+
+	# 步骤 9: 部署区域
+	var zones = DeploymentZone.generate_zones(
+		map_data.width, map_data.height, context.engagement_type, map_data.cells
+	)
+	map_data.player_deployment = zones["player"]
+	map_data.enemy_deployment = zones["enemy"]
+
+	# 步骤 10: 连通性验证（确保玩家和敌人可互相到达）
+	_ensure_connectivity(map_data, context.engagement_type)
+
+	if context.environment_override != "":
+		map_data.environment_event = context.environment_override
+
+	return map_data
+
+
+## 大地图地形类型 → 战斗地形类型映射
+func _map_overworld_to_battle(ow_terrain: int) -> BattleCellData.TerrainType:
+	match ow_terrain:
+		HexOverworldTile.TerrainType.DEEP_WATER:    return BattleCellData.TerrainType.DEEP_WATER
+		HexOverworldTile.TerrainType.SHALLOW_WATER: return BattleCellData.TerrainType.SHALLOW_WATER
+		HexOverworldTile.TerrainType.SAND:          return BattleCellData.TerrainType.SAND
+		HexOverworldTile.TerrainType.PLAINS:        return BattleCellData.TerrainType.PLAINS
+		HexOverworldTile.TerrainType.GRASSLAND:     return BattleCellData.TerrainType.GRASSLAND
+		HexOverworldTile.TerrainType.FOREST:        return BattleCellData.TerrainType.FOREST
+		HexOverworldTile.TerrainType.DENSE_FOREST:  return BattleCellData.TerrainType.DENSE_FOREST
+		HexOverworldTile.TerrainType.HILLS:         return BattleCellData.TerrainType.HILLS
+		HexOverworldTile.TerrainType.MOUNTAIN:      return BattleCellData.TerrainType.MOUNTAIN
+		HexOverworldTile.TerrainType.SNOW:          return BattleCellData.TerrainType.SNOW
+		HexOverworldTile.TerrainType.SWAMP:         return BattleCellData.TerrainType.SWAMP
+		HexOverworldTile.TerrainType.SAVANNA:       return BattleCellData.TerrainType.SAVANNA
+		HexOverworldTile.TerrainType.ROAD:          return BattleCellData.TerrainType.ROAD
+		HexOverworldTile.TerrainType.RIVER:         return BattleCellData.TerrainType.SHALLOW_WATER
+		_: return BattleCellData.TerrainType.PLAINS
+
+
+## 大地图连续高程 → 战术地图3级高程
+func _map_overworld_elevation(elev: float) -> int:
+	if elev < 0.30:
+		return 0  # 低地
+	elif elev > 0.65:
+		return 2  # 高地
+	else:
+		return 1  # 平地
+
+
+## 地形微变化：用噪声+湿度做轻微扰动
+func _terrain_micro_variation(base: BattleCellData.TerrainType, moisture: float, noise_val: float) -> BattleCellData.TerrainType:
+	if noise_val < 0.65:
+		return base  # 大部分保持不变
+
+	# ~10%概率微变
+	match base:
+		BattleCellData.TerrainType.GRASSLAND:
+			if moisture > 0.6:
+				return BattleCellData.TerrainType.FOREST
+			elif noise_val > 0.85:
+				return BattleCellData.TerrainType.LUCKY_GRASS
+		BattleCellData.TerrainType.PLAINS:
+			if moisture < 0.35:
+				return BattleCellData.TerrainType.SAVANNA
+		BattleCellData.TerrainType.FOREST:
+			if noise_val > 0.85:
+				return BattleCellData.TerrainType.DENSE_FOREST
+		BattleCellData.TerrainType.SAVANNA:
+			if moisture > 0.55:
+				return BattleCellData.TerrainType.GRASSLAND
+		BattleCellData.TerrainType.SWAMP:
+			if noise_val > 0.9:
+				return BattleCellData.TerrainType.POISON_MUSHROOM
+		_:
+			pass
+	return base
+
+
+## 散落特殊元素（大地图路径用）
+func _scatter_special_features(terrain_map: Dictionary) -> void:
+	var feature_chances: Dictionary = {
+		BattleCellData.TerrainType.LUCKY_GRASS: 0.02,
+		BattleCellData.TerrainType.POISON_MUSHROOM: 0.01,
+	}
+	for key in terrain_map:
+		var current = terrain_map[key]
+		if current == BattleCellData.TerrainType.GRASSLAND or \
+		   current == BattleCellData.TerrainType.PLAINS or \
+		   current == BattleCellData.TerrainType.SAVANNA:
+			for feat_type in feature_chances:
+				if randf() < feature_chances[feat_type]:
+					terrain_map[key] = feat_type
+					break
+
+
+## 从主导地形推断环境事件
+func _derive_environment_event(terrain_map: Dictionary) -> String:
+	var counts: Dictionary = {}
+	for key in terrain_map:
+		var t = terrain_map[key]
+		if not counts.has(t):
+			counts[t] = 0
+		counts[t] += 1
+
+	var dominant: BattleCellData.TerrainType = BattleCellData.TerrainType.PLAINS
+	var max_count: int = 0
+	for t in counts:
+		if counts[t] > max_count:
+			max_count = counts[t]
+			dominant = t
+
+	match dominant:
+		BattleCellData.TerrainType.SWAMP: return "poison_fog"
+		BattleCellData.TerrainType.FOREST, BattleCellData.TerrainType.DENSE_FOREST: return "fog"
+		BattleCellData.TerrainType.HILLS, BattleCellData.TerrainType.MOUNTAIN: return "earthquake"
+		BattleCellData.TerrainType.SHALLOW_WATER, BattleCellData.TerrainType.SAND: return "storm"
+		_: return ""
+
+
+## 连通性验证 — 确保玩家和敌人部署区可互相到达
+func _ensure_connectivity(map_data: BattleMapData, engagement_type: int = BattleContext.EngagementType.NORMAL) -> void:
+	if map_data.player_deployment.is_empty() or map_data.enemy_deployment.is_empty():
+		return
+
+	# BFS 从玩家部署区出发，找所有可达的格子
+	var reachable: Dictionary = {}
+	var queue: Array[Vector2i] = [map_data.player_deployment[0]]
+	reachable[queue[0]] = true
+
+	while not queue.is_empty():
+		var current = queue.pop_front()
+		for dir in range(6):
+			var neighbor = HexUtils.get_neighbor(current.x, current.y, dir)
+			if map_data.cells.has(neighbor) and not reachable.has(neighbor):
+				var cell: BattleCellData = map_data.cells[neighbor]
+				if cell.is_passable:
+					reachable[neighbor] = true
+					queue.append(neighbor)
+
+	# 检查敌人部署区是否可达
+	var need_carve := false
+	var carve_target: Vector2i = Vector2i.ZERO
+	for ep in map_data.enemy_deployment:
+		if not reachable.has(ep):
+			need_carve = true
+			carve_target = ep
+			break
+
+	if not need_carve:
+		return
+
+	# 打通一条走廊: BFS 忽略通行性，找最短路径
+	var start = map_data.player_deployment[0]
+	var end = carve_target
+	var path = _find_path_ignoring_passability(map_data, start, end)
+	for pos in path:
+		if map_data.cells.has(pos):
+			var cell: BattleCellData = map_data.cells[pos]
+			if not cell.is_passable or cell.terrain_type == BattleCellData.TerrainType.DEEP_WATER:
+				map_data.cells[pos] = BattleCellData.create_from_type(BattleCellData.TerrainType.PLAINS, 1)
+
+	# 重新生成部署区（打通走廊后可能新增可部署格）
+	var zones = DeploymentZone.generate_zones(
+		map_data.width, map_data.height,
+		engagement_type,
+		map_data.cells
+	)
+	if zones["player"].size() > 0:
+		map_data.player_deployment = zones["player"]
+	if zones["enemy"].size() > 0:
+		map_data.enemy_deployment = zones["enemy"]
+
+
+## BFS 寻路（忽略通行性），用于连通性打通
+func _find_path_ignoring_passability(map_data: BattleMapData, start: Vector2i, end: Vector2i) -> Array[Vector2i]:
+	var visited: Dictionary = {}
+	var parent: Dictionary = {}
+	var queue: Array[Vector2i] = [start]
+	visited[start] = true
+
+	while not queue.is_empty():
+		var current = queue.pop_front()
+		if current == end:
+			# 回溯路径
+			var path: Array[Vector2i] = []
+			var node = end
+			while node != start:
+				path.append(node)
+				node = parent[node]
+			path.reverse()
+			return path
+
+		for dir in range(6):
+			var neighbor = HexUtils.get_neighbor(current.x, current.y, dir)
+			if map_data.cells.has(neighbor) and not visited.has(neighbor):
+				visited[neighbor] = true
+				parent[neighbor] = current
+				queue.append(neighbor)
+
+	return []
+
+
+## 模板随机生成路径（内部）
+func _generate_from_template_internal(context: BattleContext) -> BattleMapData:
 	var template_name = OverworldTerrain.get_battle_template_name(context.overworld_terrain)
 	var template: BattleMapTemplate = _templates.get(template_name, _templates["plain_field"])
 
@@ -509,53 +855,55 @@ func generate(context: BattleContext) -> BattleMapData:
 	map_data.height = size_info["height"]
 	map_data.template_name = template.template_name
 
-	# 设置随机种子
-	seed(context.seed)
-
-	# 步骤 1：生成高程图
 	var elevation_map = _generate_elevation_map(map_data.width, map_data.height, template.elevation_bias)
-
-	# 步骤 2：生成基础地形填充
 	var terrain_map = _generate_terrain_map(map_data.width, map_data.height, template)
-
-	# 步骤 3：应用线性特征（河流/道路）
 	_apply_linear_features(terrain_map, elevation_map, map_data.width, map_data.height, template)
-
-	# 步骤 4：生成树木聚集区域
 	_generate_tree_clusters(terrain_map, map_data.width, map_data.height, template)
-
-	# 步骤 5：生成废墟建筑结构
 	_generate_ruin_structures(terrain_map, map_data.width, map_data.height, template)
-
-	# 步骤 6：生成墙壁/断壁残垣
 	_generate_wall_segments(terrain_map, map_data.width, map_data.height, template)
-
-	# 步骤 7：放置散落特殊元素
 	_apply_special_features(terrain_map, template)
-
-	# 步骤 8：地形过渡平滑（减少尖锐边界）
 	_smooth_terrain_map(terrain_map, map_data.width, map_data.height, template.smoothing_passes)
 
-	# 步骤 9：创建 BattleCellData 并存入结果
+	_finalize_cells(map_data, terrain_map, elevation_map, template.primary_terrain)
+
+	var zones = DeploymentZone.generate_zones(
+		map_data.width, map_data.height, context.engagement_type, map_data.cells
+	)
+	map_data.player_deployment = zones["player"]
+	map_data.enemy_deployment = zones["enemy"]
+
+	if context.environment_override != "":
+		map_data.environment_event = context.environment_override
+	else:
+		map_data.environment_event = template.environment_event
+
+	# 连通性验证
+	_ensure_connectivity(map_data, context.engagement_type)
+
+	return map_data
+
+
+## 从 terrain_map + elevation_map 创建 BattleCellData 并写入 map_data.cells
+func _finalize_cells(
+	map_data: BattleMapData,
+	terrain_map: Dictionary,
+	elevation_map: Dictionary,
+	default_terrain: BattleCellData.TerrainType
+) -> void:
 	for q in range(map_data.width):
 		var q_offset = int(floor(q / 2.0))
 		for r in range(-q_offset, map_data.height - q_offset):
 			var key = Vector2i(q, r)
-			var terrain_type: BattleCellData.TerrainType = terrain_map.get(key, template.primary_terrain)
+			var terrain_type: BattleCellData.TerrainType = terrain_map.get(key, default_terrain)
 			var elev: int = elevation_map.get(key, 1)
 			var cell_data = BattleCellData.create_from_type(terrain_type, elev)
 
-			# 不可通行地形强制设置 elevation
-			if not cell_data.is_passable:
-				pass
-			# 水域和沼泽倾向低地
-			elif terrain_type == BattleCellData.TerrainType.DEEP_WATER:
+			if terrain_type == BattleCellData.TerrainType.DEEP_WATER:
 				cell_data.elevation = 0
 			elif terrain_type == BattleCellData.TerrainType.SHALLOW_WATER:
 				cell_data.elevation = min(elev, 1)
 			elif terrain_type == BattleCellData.TerrainType.SWAMP:
 				cell_data.elevation = min(elev, 1)
-			# 山地和丘陵强制高地
 			elif terrain_type == BattleCellData.TerrainType.MOUNTAIN:
 				cell_data.elevation = max(elev, 2)
 			elif terrain_type == BattleCellData.TerrainType.HILLS:
@@ -563,30 +911,16 @@ func generate(context: BattleContext) -> BattleMapData:
 
 			map_data.cells[key] = cell_data
 
-	# 步骤 10：生成部署区域
-	var zones = DeploymentZone.generate_zones(
-		map_data.width, map_data.height, context.engagement_type, map_data.cells
-	)
-	map_data.player_deployment = zones["player"]
-	map_data.enemy_deployment = zones["enemy"]
 
-	# 步骤 11：设置环境事件
-	if context.environment_override != "":
-		map_data.environment_event = context.environment_override
-	else:
-		map_data.environment_event = template.environment_event
-
-	return map_data
-
-
-## 无上下文时直接生成（用于测试）
+## 无上下文时直接生成（用于测试 / QuickCombatScene）
 func generate_from_template(template_name: String, size: BattleSize, seed_val: int = 0) -> BattleMapData:
 	var context = BattleContext.new()
 	context.overworld_terrain = OverworldTerrain.Type.PLAINS
 	context.battle_size = size
 	context.engagement_type = BattleContext.EngagementType.NORMAL
 	context.seed = seed_val if seed_val != 0 else randi()
-	# 手动覆盖模板名
+	seed(context.seed)
+
 	var template: BattleMapTemplate = _templates.get(template_name, _templates["plain_field"])
 	var size_info = SIZE_MAP.get(size, SIZE_MAP[BattleSize.MERCENARY])
 
@@ -595,41 +929,16 @@ func generate_from_template(template_name: String, size: BattleSize, seed_val: i
 	map_data.height = size_info["height"]
 	map_data.template_name = template.template_name
 
-	seed(context.seed)
-
 	var elevation_map = _generate_elevation_map(map_data.width, map_data.height, template.elevation_bias)
 	var terrain_map = _generate_terrain_map(map_data.width, map_data.height, template)
 	_apply_linear_features(terrain_map, elevation_map, map_data.width, map_data.height, template)
-
-	# 生成树木聚集区域
 	_generate_tree_clusters(terrain_map, map_data.width, map_data.height, template)
-
-	# 生成废墟建筑结构
 	_generate_ruin_structures(terrain_map, map_data.width, map_data.height, template)
-
-	# 生成墙壁/断壁残垣
 	_generate_wall_segments(terrain_map, map_data.width, map_data.height, template)
-
-	# 放置散落特殊元素
 	_apply_special_features(terrain_map, template)
-
-	# 地形过渡平滑
 	_smooth_terrain_map(terrain_map, map_data.width, map_data.height, template.smoothing_passes)
 
-	for q in range(map_data.width):
-		var q_offset = int(floor(q / 2.0))
-		for r in range(-q_offset, map_data.height - q_offset):
-			var key = Vector2i(q, r)
-			var terrain_type: BattleCellData.TerrainType = terrain_map.get(key, template.primary_terrain)
-			var elev: int = elevation_map.get(key, 1)
-			var cell_data = BattleCellData.create_from_type(terrain_type, elev)
-			if terrain_type == BattleCellData.TerrainType.DEEP_WATER:
-				cell_data.elevation = 0
-			elif terrain_type == BattleCellData.TerrainType.MOUNTAIN:
-				cell_data.elevation = max(elev, 2)
-			elif terrain_type == BattleCellData.TerrainType.HILLS:
-				cell_data.elevation = max(elev, 2) if randf() < 0.6 else max(elev, 1)
-			map_data.cells[key] = cell_data
+	_finalize_cells(map_data, terrain_map, elevation_map, template.primary_terrain)
 
 	var zones = DeploymentZone.generate_zones(
 		map_data.width, map_data.height, context.engagement_type, map_data.cells
@@ -637,6 +946,9 @@ func generate_from_template(template_name: String, size: BattleSize, seed_val: i
 	map_data.player_deployment = zones["player"]
 	map_data.enemy_deployment = zones["enemy"]
 	map_data.environment_event = template.environment_event
+
+	# 连通性验证
+	_ensure_connectivity(map_data, context.engagement_type)
 
 	return map_data
 
@@ -864,27 +1176,28 @@ func _generate_ruin_structures(
 	var structure_count = randi_range(template.ruin_structure_count.x, template.ruin_structure_count.y)
 	var used_cells: Dictionary = {}
 
-	# 建筑布局模式（偏移+地形类型）
+	# 六边形轴向坐标的建筑布局模式
+	# (1,0)=东, (0,1)=东南, (-1,1)=西南 — 六边形自然方向
 	var patterns: Array = [
-		# L形（3格）
-		[
-			Vector2i(0,0), Vector2i(1,0), Vector2i(0,1)
-		],
-		# 一字型（3格）
+		# 一字型沿方向0（东）: 3格
 		[
 			Vector2i(0,0), Vector2i(1,0), Vector2i(2,0)
 		],
-		# 2x2矩形
+		# L形: 方向0两步 + 方向5(东南)一步
 		[
-			Vector2i(0,0), Vector2i(1,0), Vector2i(0,1), Vector2i(1,1)
+			Vector2i(0,0), Vector2i(1,0), Vector2i(1,1)
 		],
-		# 十字形（5格）
+		# 2x2蜂巢: 六边形自然填充
 		[
-			Vector2i(0,0), Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)
+			Vector2i(0,0), Vector2i(1,0), Vector2i(0,1), Vector2i(1,-1)
 		],
-		# T形（4格）
+		# T形: 方向0一步 + 方向3(西)一步 + 方向5(东南)一步
 		[
 			Vector2i(0,0), Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1)
+		],
+		# 十字形: 四个交替方向
+		[
+			Vector2i(0,0), Vector2i(1,0), Vector2i(-1,0), Vector2i(0,-1), Vector2i(0,1)
 		],
 	]
 
@@ -1056,9 +1369,9 @@ func _smooth_terrain_map(
 
 
 
-			# 如果超过4个邻居是同一种地形，且不同于当前格，则考虑平滑
+			# 如果超过3个邻居是同一种地形，且不同于当前格，则考虑平滑
 			for n_type in neighbor_counts:
-				if neighbor_counts[n_type] >= 4 and n_type != current_type:
+				if neighbor_counts[n_type] >= 3 and n_type != current_type:
 					# 50%概率平滑（保留一些边界特征）
 					if randf() < 0.5:
 						changes[key] = n_type

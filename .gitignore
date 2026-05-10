@@ -11,11 +11,19 @@ export_presets.cfg
 # Imported translations (automatically generated from CSV files)
 *.translation
 
-# Mono-specific ignores
+# Mono/C# ignores
 .mono/
 data_*/
-*.csproj
-*.sln
+# 排除 .csproj 和 .sln（现在需要提交，因为使用 C#）
+# *.csproj
+# *.sln
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.DotSettings.user
+.vs/
 
 # OS-specific ignores
 .DS_Store

@@ -108,7 +108,7 @@ func _build_str_region():
 	n.neighbors = ["str_b05", "str_ks01"]
 	n = _ms("str_s16", "无畏冲锋", 6, ["str_b06"], {"melee_damage": 2, "speed": 1}, _mp(0, 6, -4))
 	n.neighbors = ["str_b06", "str_s09"]
-	n = _ms("str_s09", "巨力挥击", 6, ["str_s16"], {"melee_damage": 3}, _mp(0, 6, -5))
+	n = _ms("str_s09", "巨力挥击", 7, ["str_s16"], {"melee_damage": 3}, _mp(0, 7, -5))
 	n.neighbors = ["str_s16"]
 	# Ring 7
 	n = _ms("str_s13", "武器大师", 7, ["str_s12"], {"melee_hit": 2, "melee_damage": 2}, _mp(0, 7, 0))
@@ -125,7 +125,7 @@ func _build_str_region():
 	n = _ms("str_s19", "血性狂热", 9, ["str_b07"], {"melee_damage": 2, "max_hp": 5}, _mp(0, 9, 1))
 	n.neighbors = ["str_b07"]
 	# 血腥漩涡分支 (从str_b03延伸)
-	n = _ms("str_s20", "战争践踏", 6, ["str_b03"], {"melee_damage": 2, "ac": -1}, _mp(0, 6, 1))
+	n = _ms("str_s20", "战争践踏", 6, ["str_b03"], {"melee_damage": 2, "ac": -1}, _mp(0, 6, 3))
 	n.neighbors = ["str_b03", "str_b08"]
 	n = _mb("str_b08", "血腥漩涡", 7, [7], ["str_s20"], "blood_vortex", true, "主动: 横扫周围所有敌人, 每命中1个敌人恢复自身1d6HP", _mp(0, 7, 2))
 	n.neighbors = ["str_s20", "str_s21"]
@@ -483,51 +483,51 @@ func _build_cha_region():
 func _build_transition_nodes():
 	var n
 	# STR(0) <-> DEX(1): 中间方向 = E+SE=(1,1)
-	n = _ms("trans_sd01", "战斗技巧", 2, ["str_s01", "dex_s01"], {"melee_hit": 1, "critical_rate": 0.02}, Vector2i(1, 1))
+	n = _ms("trans_sd01", "战斗技巧", 2, ["str_s01", "dex_s01"], {"melee_hit": 1, "critical_rate": 0.02}, Vector2i(2, -5))
 	n.is_bridge = true
-	n = _ms("trans_sd02", "武器大师", 4, ["str_b01", "dex_b01"], {"melee_hit": 1, "ranged_hit": 1}, Vector2i(2, 2))
+	n = _ms("trans_sd02", "武器大师", 4, ["str_b01", "dex_b01"], {"melee_hit": 1, "ranged_hit": 1}, Vector2i(5, 1))
 	n.is_bridge = true
 	# STR(0) <-> CON(2): 中间方向 = E+SW=(0,1)
-	n = _ms("trans_sc01", "近战生存", 2, ["str_s01", "con_s01"], {"max_hp": 3, "melee_hit": 1}, Vector2i(0, 1))
+	n = _ms("trans_sc01", "近战生存", 2, ["str_s01", "con_s01"], {"max_hp": 3, "melee_hit": 1}, Vector2i(1, -5))
 	n.is_bridge = true
-	n = _ms("trans_sc02", "盾牌掌握", 4, ["str_b01", "con_b01"], {"ac": 1, "melee_damage": 1}, Vector2i(-1, 2))
+	n = _ms("trans_sc02", "盾牌掌握", 4, ["str_b01", "con_b01"], {"ac": 1, "melee_damage": 1}, Vector2i(4, 2))
 	n.is_bridge = true
 	# DEX(1) <-> INT(3): 中间方向 = SE+W=(-1,1)
-	n = _ms("trans_di01", "精准施法", 2, ["dex_s01", "int_s01"], {"mana_max": 2, "spell_hit": 1}, Vector2i(-1, 1))
+	n = _ms("trans_di01", "精准施法", 2, ["dex_s01", "int_s01"], {"mana_max": 2, "spell_hit": 1}, Vector2i(-3, -1))
 	n.is_bridge = true
-	n = _ms("trans_di02", "奥术射手", 4, ["dex_b01", "int_b01"], {"ranged_hit": 1, "spell_damage": 1}, Vector2i(-2, 2))
+	n = _ms("trans_di02", "奥术射手", 4, ["dex_b01", "int_b01"], {"ranged_hit": 1, "spell_damage": 1}, Vector2i(-5, 3))
 	n.is_bridge = true
 	# INT(3) <-> WIS(4): 中间方向 = W+NW=(-1,-1)
-	n = _ms("trans_iw01", "神秘学", 2, ["int_s01", "wis_s01"], {"mana_max": 2, "all_save": 1}, Vector2i(-1, -1))
+	n = _ms("trans_iw01", "神秘学", 2, ["int_s01", "wis_s01"], {"mana_max": 2, "all_save": 1}, Vector2i(4, 1))
 	n.is_bridge = true
-	n = _ms("trans_iw02", "古代智慧", 4, ["int_b01", "wis_b01"], {"spell_damage": 1, "heal_amount": 1}, Vector2i(-1, -2))
+	n = _ms("trans_iw02", "古代智慧", 4, ["int_b01", "wis_b01"], {"spell_damage": 1, "heal_amount": 1}, Vector2i(-4, -2))
 	n.is_bridge = true
 	# WIS(4) <-> CHA(5): 中间方向 = NW+NE=(1,-2)
-	n = _ms("trans_wc01", "精神领袖", 2, ["wis_s01", "cha_s01"], {"heal_amount": 1, "morale": 1}, Vector2i(1, -2))
+	n = _ms("trans_wc01", "精神领袖", 2, ["wis_s01", "cha_s01"], {"heal_amount": 1, "morale": 1}, Vector2i(-5, -1))
 	n.is_bridge = true
-	n = _ms("trans_wc02", "圣洁光辉", 4, ["wis_b01", "cha_b01"], {"heal_amount": 1, "ally_bonus": 1}, Vector2i(2, -3))
+	n = _ms("trans_wc02", "圣洁光辉", 4, ["wis_b01", "cha_b01"], {"heal_amount": 1, "ally_bonus": 1}, Vector2i(2, -6))
 	n.is_bridge = true
 	# CHA(5) <-> CON(2): 对角方向，通过环绕路径
-	n = _ms("trans_cc01", "鼓舞防御", 2, ["cha_s01", "con_s01"], {"ac": 1, "morale": 1}, Vector2i(0, 0))
+	n = _ms("trans_cc01", "鼓舞防御", 2, ["cha_s01", "con_s01"], {"ac": 1, "morale": 1}, Vector2i(-1, 4))
 	n.is_bridge = true
 	n.neighbors = ["start"]
-	n = _ms("trans_cc02", "铁血指挥", 4, ["cha_b01", "con_b01"], {"ally_bonus": 1, "max_hp": 3}, Vector2i(-2, 1))
+	n = _ms("trans_cc02", "铁血指挥", 4, ["cha_b01", "con_b01"], {"ally_bonus": 1, "max_hp": 3}, Vector2i(-4, 3))
 	n.is_bridge = true
 	# 深层过渡
-	n = _ms("trans_sd03", "剑弓合一", 7, ["str_b08", "dex_b13"], {"melee_damage": 1, "ranged_damage": 1, "critical_rate": 0.02}, _mp(0, 7, 2))
+	n = _ms("trans_sd03", "剑弓合一", 7, ["str_b08", "dex_b13"], {"melee_damage": 1, "ranged_damage": 1, "critical_rate": 0.02}, Vector2i(3, 6))
 	n.is_bridge = true
-	n = _ms("trans_sc03", "战神信仰", 7, ["str_b07", "cha_b10"], {"melee_hit": 1, "morale": 2}, Vector2i(3, -2))
+	n = _ms("trans_sc03", "战神信仰", 7, ["str_b07", "cha_b10"], {"melee_hit": 1, "morale": 2}, Vector2i(7, -3))
 	n.is_bridge = true
-	n = _ms("trans_cw01", "生命之力", 6, ["con_b08", "wis_b08"], {"max_hp": 8, "heal_amount": 1}, Vector2i(-2, 0))
+	n = _ms("trans_cw01", "生命之力", 6, ["con_b08", "wis_b08"], {"max_hp": 8, "heal_amount": 1}, Vector2i(-4, -1))
 	n.is_bridge = true
-	n = _ms("trans_ic01", "奥术外交", 7, ["int_b11", "cha_b11"], {"mana_max": 3, "cha_check": 1}, Vector2i(-3, -1))
+	n = _ms("trans_ic01", "奥术外交", 7, ["int_b11", "cha_b11"], {"mana_max": 3, "cha_check": 1}, Vector2i(-3, -2))
 	n.is_bridge = true
-	n = _ms("trans_dc01", "战场机动", 6, ["dex_b11", "con_b08"], {"ac": 1, "initiative": 2, "max_hp": 3}, Vector2i(-3, 3))
+	n = _ms("trans_dc01", "战场机动", 6, ["dex_b11", "con_b08"], {"ac": 1, "initiative": 2, "max_hp": 3}, Vector2i(-1, 5))
 	n.is_bridge = true
 	# 对角过渡
-	n = _ms("trans_ci01", "战斗法师", 5, ["con_b02", "int_b08"], {"spell_damage": 1, "max_hp": 3}, Vector2i(-3, 1))
+	n = _ms("trans_ci01", "战斗法师", 5, ["con_b02", "int_b08"], {"spell_damage": 1, "max_hp": 3}, Vector2i(-5, 4))
 	n.is_bridge = true
-	n = _ms("trans_dw01", "野性直觉", 5, ["dex_b02", "wis_b02"], {"initiative": 2, "wis_check": 1}, Vector2i(-1, -1))
+	n = _ms("trans_dw01", "野性直觉", 5, ["dex_b02", "wis_b02"], {"initiative": 2, "wis_check": 1}, Vector2i(1, -4))
 	n.is_bridge = true
 
 # ============================================================================
@@ -561,6 +561,31 @@ func _build_cross_region_loops():
 	_ac("cha_s09", "trans_cc01")
 	_ac("dex_s14", "trans_di01")
 	_ac("int_s15", "trans_di01")
+		# 前置节点也加入邻居（确保 _check_available 的邻居检查能通过）
+		_ac("str_s01", "trans_sd01")
+		_ac("dex_s01", "trans_sd01")
+		_ac("str_s01", "trans_sc01")
+		_ac("con_s01", "trans_sc01")
+		_ac("dex_s01", "trans_di01")
+		_ac("int_s01", "trans_di01")
+		_ac("int_s01", "trans_iw01")
+		_ac("wis_s01", "trans_iw01")
+		_ac("wis_s01", "trans_wc01")
+		_ac("cha_s01", "trans_wc01")
+		_ac("cha_s01", "trans_cc01")
+		_ac("con_s01", "trans_cc01")
+		_ac("str_b01", "trans_sd02")
+		_ac("dex_b01", "trans_sd02")
+		_ac("str_b01", "trans_sc02")
+		_ac("con_b01", "trans_sc02")
+		_ac("dex_b01", "trans_di02")
+		_ac("int_b01", "trans_di02")
+		_ac("int_b01", "trans_iw02")
+		_ac("wis_b01", "trans_iw02")
+		_ac("wis_b01", "trans_wc02")
+		_ac("cha_b01", "trans_wc02")
+		_ac("cha_b01", "trans_cc02")
+		_ac("con_b01", "trans_cc02")
 	# 深层环路
 	_ac("str_b08", "trans_sd03")
 	_ac("dex_b13", "trans_sd03")
