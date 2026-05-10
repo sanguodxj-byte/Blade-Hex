@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="QuestData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/data/QuestData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+quest_id = "goblin_extermination_01"
+quest_name = "清除哥布林"
+description = "村庄附近的哥布林营地威胁到了村民的安全，需要清除至少8只哥布林。"
+quest_type = 0
+difficulty = 0
+issuer_name = "绿谷村"
+issuer_location = Vector2i(10, 15)
+target_location = Vector2i(12, 18)
+target_description = "哥布林营地"
+target_count = 8
+reward_gold = 150
+reward_items = []
+reward_reputation = 5
+reward_faction = "绿谷村"
+has_time_limit = false
+time_limit_days = 0
+required_reputation = 0
+required_quests = []

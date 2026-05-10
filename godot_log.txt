@@ -1,0 +1,396 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Could not find type "UITheme" in the current scope.
+   at: GDScript::reload (res://src/ui/loading/LoadingScreen.gd:53)
+SCRIPT ERROR: Parse Error: Identifier "UITheme" not declared in the current scope.
+   at: GDScript::reload (res://src/ui/loading/LoadingScreen.gd:54)
+SCRIPT ERROR: Parse Error: Could not find type "UIFactory" in the current scope.
+   at: GDScript::reload (res://src/ui/main_menu/SettingsPanel.gd:15)
+SCRIPT ERROR: Parse Error: Could not find type "UITheme" in the current scope.
+   at: GDScript::reload (res://src/ui/main_menu/SettingsPanel.gd:16)
+SCRIPT ERROR: Parse Error: Identifier "UITheme" not declared in the current scope.
+   at: GDScript::reload (res://src/ui/main_menu/SettingsPanel.gd:28)
+SCRIPT ERROR: Parse Error: Identifier "UIFactory" not declared in the current scope.
+   at: GDScript::reload (res://src/ui/main_menu/SettingsPanel.gd:29)
+SCRIPT ERROR: Parse Error: Could not find type "RaceData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:16)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:16)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:81)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:81)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:81)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:81)
+SCRIPT ERROR: Parse Error: Could not find type "RaceData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:123)
+SCRIPT ERROR: Parse Error: Could not find type "RaceData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:168)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:187)
+SCRIPT ERROR: Parse Error: Could not find type "RaceData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:249)
+SCRIPT ERROR: Parse Error: Could not find type "TraitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:259)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:270)
+SCRIPT ERROR: Parse Error: Could not find type "TraitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:270)
+SCRIPT ERROR: Parse Error: Could not find type "TraitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:287)
+SCRIPT ERROR: Parse Error: Could not find type "TraitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:309)
+SCRIPT ERROR: Parse Error: Could not find type "TraitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:309)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:330)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:361)
+SCRIPT ERROR: Parse Error: Could not find type "RaceData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:388)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:414)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:461)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:468)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:477)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:486)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:493)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:513)
+SCRIPT ERROR: Parse Error: Could not find type "SpellData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:520)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:680)
+SCRIPT ERROR: Parse Error: Identifier "RaceData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:22)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:35)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:38)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:52)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:67)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:82)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:101)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:104)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:105)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:106)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:110)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:124)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:125)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:130)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:132)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:147)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:151)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:156)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:188)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:189)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:193)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:195)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:200)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:203)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:205)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:207)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:209)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:211)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:213)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:229)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:232)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:237)
+SCRIPT ERROR: Parse Error: Identifier "TraitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:272)
+SCRIPT ERROR: Parse Error: Identifier "TraitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:288)
+SCRIPT ERROR: Parse Error: Identifier "TraitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:289)
+SCRIPT ERROR: Parse Error: Could not find type "TraitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:291)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:332)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:347)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:353)
+SCRIPT ERROR: Parse Error: Identifier "RaceData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:399)
+SCRIPT ERROR: Parse Error: Identifier "RaceData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:400)
+SCRIPT ERROR: Parse Error: Identifier "RaceData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:401)
+SCRIPT ERROR: Parse Error: Identifier "RaceData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:402)
+SCRIPT ERROR: Parse Error: Identifier "RaceData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:403)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:415)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:419)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:421)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:436)
+SCRIPT ERROR: Parse Error: Identifier "RPGRuleEngine" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:452)
+SCRIPT ERROR: Parse Error: Identifier "UnitTemplateDB" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:462)
+SCRIPT ERROR: Parse Error: Identifier "UnitTemplateDB" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:469)
+SCRIPT ERROR: Parse Error: Identifier "UnitTemplateDB" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:478)
+SCRIPT ERROR: Parse Error: Identifier "UnitTemplateDB" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:480)
+SCRIPT ERROR: Parse Error: Identifier "UnitTemplateDB" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:487)
+SCRIPT ERROR: Parse Error: Could not find type "UnitData" in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:494)
+SCRIPT ERROR: Parse Error: Identifier "UnitTemplateDB" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:500)
+SCRIPT ERROR: Parse Error: Identifier "UnitData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:502)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:521)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:526)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:527)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:528)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:529)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:530)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:534)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:535)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:536)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:537)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:541)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:542)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:543)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:544)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:545)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:549)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:550)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:551)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:552)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:553)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:558)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:559)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:560)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:561)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:562)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:566)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:567)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:568)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:569)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:570)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:574)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:575)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:576)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:577)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:578)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:582)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:583)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:584)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:585)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:589)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:590)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:591)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:592)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:593)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:598)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:599)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:600)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:601)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:605)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:606)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:607)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:608)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:612)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:613)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:614)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:615)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:619)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:620)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:621)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:622)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:623)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:627)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:628)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:629)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:630)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:634)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:635)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:636)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:637)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:641)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:642)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:643)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:644)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:648)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:649)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:650)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:651)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:652)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:656)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:657)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:658)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:659)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:660)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:664)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:665)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:666)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:667)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:671)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:672)
+SCRIPT ERROR: Parse Error: Identifier "SpellData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:673)
+SCRIPT ERROR: Parse Error: Identifier "SkillData" not declared in the current scope.
+   at: GDScript::reload (res://src/core/character/CharacterGenerator.gd:682)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://src/ui/main_menu/MainMenu.gd:0)
+ERROR: Failed to load script "res://src/ui/main_menu/MainMenu.gd" with error "Compilation failed".
+   at: load (modules/gdscript/gdscript.cpp:2907)
+[SkillTreeManager] 技能盘图数据加载完成，节点总数: 184
+SCRIPT ERROR: Parse Error: Could not find type "WeaponData" in the current scope.
+   at: GDScript::reload (res://src/core/data/SaveManager.gd:66)
+   GDScript backtrace (most recent call first):
+       [0] _init_save_manager (res://src/ui/main_menu/MainMenu.gd:27)
+       [1] _ready (res://src/ui/main_menu/MainMenu.gd:17)
+ERROR: Failed to load script "res://src/core/data/SaveManager.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:2907)
+   GDScript backtrace (most recent call first):
+       [0] _init_save_manager (res://src/ui/main_menu/MainMenu.gd:27)
+       [1] _ready (res://src/ui/main_menu/MainMenu.gd:17)
+SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base 'GDScript'.
+   at: MainMenu._init_save_manager (res://src/ui/main_menu/MainMenu.gd:28)
+   GDScript backtrace (most recent call first):
+       [0] _init_save_manager (res://src/ui/main_menu/MainMenu.gd:28)
+       [1] _ready (res://src/ui/main_menu/MainMenu.gd:17)
+SCRIPT ERROR: Invalid call. Nonexistent function 'new' in base 'GDScript'.
+   at: MainMenu._init_settings_panel (res://src/ui/main_menu/MainMenu.gd:22)
+   GDScript backtrace (most recent call first):
+       [0] _init_settings_panel (res://src/ui/main_menu/MainMenu.gd:22)
+       [1] _ready (res://src/ui/main_menu/MainMenu.gd:18)
+SCRIPT ERROR: Invalid call. Nonexistent function 'has_save' in base 'Nil'.
+   at: MainMenu._setup_ui (res://src/ui/main_menu/MainMenu.gd:102)
+   GDScript backtrace (most recent call first):
+       [0] _setup_ui (res://src/ui/main_menu/MainMenu.gd:102)
+       [1] _ready (res://src/ui/main_menu/MainMenu.gd:19)

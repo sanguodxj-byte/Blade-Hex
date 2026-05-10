@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="QuestData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/data/QuestData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+quest_id = "escort_caravan_01"
+quest_name = "护送商队"
+description = "护送商队从绿谷村前往银月城，路上可能遭遇强盗。"
+quest_type = 1
+difficulty = 1
+issuer_name = "商人吉尔伯特"
+issuer_location = Vector2i(10, 15)
+target_location = Vector2i(25, 30)
+target_description = "银月城"
+target_count = 1
+reward_gold = 300
+reward_items = []
+reward_reputation = 10
+reward_faction = "商人公会"
+has_time_limit = true
+time_limit_days = 5
+required_reputation = 0
+required_quests = []
