@@ -5,13 +5,13 @@ class_name MainMenu
 
 const VERSION_STRING = "v0.2.1-Alpha"
 
-## 预加载，避免 class_name 解析顺序问题
+## 预加载
 const LoadingScreenClass = preload("res://src/ui/loading/LoadingScreen.gd")
 const SettingsPanelClass = preload("res://src/ui/main_menu/SettingsPanel.gd")
-const CharacterGeneratorClass = preload("res://src/core/character/CharacterGenerator.gd")
 
 var save_manager: Node
 var settings_panel
+@onready var character_generator = $CharacterGenerator
 
 func _ready():
 	# 播放主菜单背景音乐
@@ -27,7 +27,7 @@ func _init_settings_panel():
 	settings_panel.settings_closed.connect(_on_settings_closed)
 
 func _init_save_manager():
-	var save_script = load("res://src/core/data/SaveManager.gd")
+	var save_script = load("res://src/core/data/SaveManager.cs")
 	if save_script:
 		save_manager = save_script.new()
 		add_child(save_manager)
@@ -137,32 +137,31 @@ func _create_menu_button(text: String, action_name: String, parent: Control) -> 
 func _on_menu_button_pressed(action_name: String):
 	match action_name:
 		"new_game":
-			GlobalState.is_loading_save = false
-			GlobalState.is_quick_game = false
+			GlobalState.IsLoadingSave = false
+			GlobalState.IsQuickGame = false
 			save_manager.delete_save()
 			get_tree().change_scene_to_file("res://src/ui/main_menu/origin_select.tscn")
 		"quick_game":
-			GlobalState.is_loading_save = false
-			GlobalState.is_quick_game = true
+			GlobalState.IsLoadingSave = false
+			GlobalState.IsQuickGame = true
 			save_manager.delete_save()
 			# 快速游戏：随机生成角色直接进入大地图
-			var CharacterGenerator = load("res://src/core/character/CharacterGenerator.gd")
-			var unit_data = CharacterGenerator.generate_character()
-			GlobalState.player_origin = {
-				"race": unit_data.race,
+			var unit_data = character_generator.generate_character()
+			GlobalState.PlayerOrigin = {
+				"race": unit_data.Race,
 				"unit_data": unit_data,
 			}
 			LoadingScreenClass.load_scene("res://src/scenes/overworld/overworld_scene.tscn",
 				LoadingScreenClass.PhaseType.QUICK_GAME)
 		"continue":
-			GlobalState.is_loading_save = true
-			GlobalState.is_quick_game = false
-			GlobalState.loaded_data = save_manager.load_game_data()
+			GlobalState.IsLoadingSave = true
+			GlobalState.IsQuickGame = false
+			GlobalState.LoadedData = save_manager.load_game_data()
 			LoadingScreenClass.load_scene("res://src/scenes/overworld/overworld_scene.tscn",
 				LoadingScreenClass.PhaseType.LOAD_SAVE)
 		"quick_combat":
-			GlobalState.is_loading_save = false
-			GlobalState.is_quick_game = false
+			GlobalState.IsLoadingSave = false
+			GlobalState.IsQuickGame = false
 			LoadingScreenClass.load_scene("res://src/scenes/combat/QuickCombatScene.tscn",
 				LoadingScreenClass.PhaseType.QUICK_COMBAT)
 		"settings":

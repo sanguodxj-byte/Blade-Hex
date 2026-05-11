@@ -12,13 +12,13 @@ config_version=5
 
 config/name="剑与六芒星 Sword & Hex"
 run/main_scene="res://src/ui/main_menu/main_menu.tscn"
-config/features=PackedStringArray("4.6", "Mobile")
+config/features=PackedStringArray("4.6", "C#", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]
 
-GlobalState="*res://src/core/data/GlobalState.gd"
-SkillTreeManager="*res://src/core/skill_tree/SkillTreeManager.gd"
+GlobalState="*res://src/core/data/GlobalState.cs"
+SkillTreeManager="*res://src/core/skill_tree/SkillTreeManager.cs"
 AudioManager="*res://src/core/audio/AudioManager.gd"
 
 [display]
@@ -27,6 +27,10 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[dotnet]
+
+project/assembly_name="剑与六芒星 Sword & Hex"
 
 [physics]
 

@@ -6,7 +6,7 @@
 extends CanvasLayer
 class_name LoadingScreen
 
-## 预加载依赖，避免 class_name 解析顺序问题
+## 预加载依赖
 const _TipsDisplayClass = preload("res://src/ui/loading/TipsDisplay.gd")
 const _TipsDataClass = preload("res://src/ui/loading/TipsData.gd")
 const _LoadingPhaseDataClass = preload("res://src/ui/loading/LoadingPhaseData.gd")

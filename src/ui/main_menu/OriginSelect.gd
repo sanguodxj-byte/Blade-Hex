@@ -619,9 +619,9 @@ func _on_reroll_traits():
 
 func _on_confirm_pressed():
 	var unit_data = _build_player_unit()
-	GlobalState.is_loading_save = false
-	GlobalState.is_quick_game = false
-	GlobalState.player_origin = {
+	GlobalState.IsLoadingSave = false
+	GlobalState.IsQuickGame = false
+	GlobalState.PlayerOrigin = {
 		"race": _selected_race,
 		"unit_data": unit_data,
 	}

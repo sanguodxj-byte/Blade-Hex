@@ -110,8 +110,8 @@ func _setup_ui():
 
 ## 打开法术选择面板
 func open(caster: Unit, spell_manager: SpellManager):
-	_caster = _caster
-	_spell_manager = _spell_manager
+	_caster = caster
+	_spell_manager = spell_manager
 	
 	# 清空旧按钮
 	for btn in _spell_buttons:

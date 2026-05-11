@@ -32,13 +32,13 @@ var current_mode: ThemeMode = ThemeMode.PROCEDURAL_DARK
 # ============================================================================
 
 ## 背景色
-var bg_primary: Color         = Color(0.08, 0.08, 0.10, 0.95)
-var bg_secondary: Color      = Color(0.12, 0.12, 0.14, 0.92)
-var bg_tertiary: Color       = Color(0.06, 0.06, 0.08, 0.90)
-var bg_panel: Color           = Color(0.10, 0.10, 0.12, 0.95)
-var bg_card: Color            = Color(0.15, 0.14, 0.18, 0.85)
+var bg_primary: Color         = Color(0.08, 0.08, 0.10, 0.85)
+var bg_secondary: Color      = Color(0.12, 0.12, 0.14, 0.80)
+var bg_tertiary: Color       = Color(0.06, 0.06, 0.08, 0.75)
+var bg_panel: Color           = Color(0.10, 0.10, 0.12, 0.85)
+var bg_card: Color            = Color(0.15, 0.14, 0.18, 0.75)
 var bg_card_hover: Color     = Color(0.25, 0.22, 0.30, 0.90)
-var bg_overlay: Color        = Color(0, 0, 0, 0.6)
+var bg_overlay: Color        = Color(0, 0, 0, 0.4)
 var bg_tooltip: Color        = Color(0.06, 0.05, 0.09, 0.95)
 
 ## 边框色
@@ -147,11 +147,11 @@ var spacing_xxxl: int      = 32
 # 圆角
 # ============================================================================
 
-var radius_sm: int         = 2
-var radius_md: int         = 4
-var radius_lg: int         = 6
-var radius_xl: int         = 8
-var radius_round: int      = 12
+var radius_sm: int         = 4
+var radius_md: int         = 8
+var radius_lg: int         = 12
+var radius_xl: int         = 16
+var radius_round: int      = 24
 
 # ============================================================================
 # 尺寸规范

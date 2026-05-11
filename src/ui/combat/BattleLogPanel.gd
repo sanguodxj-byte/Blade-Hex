@@ -16,6 +16,13 @@ signal log_hovered(entry_index: int)
 const MAX_ENTRIES := 200
 
 # ============================================================================
+# 日志详细度（与 GameSettings.combat_log_detail 对齐）
+# 0=简洁, 1=标准, 2=详细（含骰子）
+# ============================================================================
+var log_detail: int = 1:
+	set(v): log_detail = v
+
+# ============================================================================
 # 内部
 # ============================================================================
 var _log: RichTextLabel
@@ -25,14 +32,52 @@ var _factory: UIFactory
 var _theme: UITheme:
 	get: return UITheme.get_instance()
 
+
+var _fade_timer: Timer
+var _fade_tween: Tween
+var _is_hovered: bool = false
+
 func _ready():
 	_factory = UIFactory.new()
 	_setup()
+	
+	_fade_timer = Timer.new()
+	_fade_timer.wait_time = 4.0
+	_fade_timer.one_shot = true
+	_fade_timer.timeout.connect(_on_fade_timer_timeout)
+	add_child(_fade_timer)
+	
+	mouse_entered.connect(func():
+		_is_hovered = true
+		_wake_up()
+	)
+	mouse_exited.connect(func():
+		_is_hovered = false
+		_fade_timer.start()
+	)
+	
+	# 初始化不可见
+	modulate.a = 0.0
+
+func _wake_up():
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+	modulate.a = 1.0
+	if not _is_hovered:
+		_fade_timer.start()
+
+func _on_fade_timer_timeout():
+	if _is_hovered:
+		return
+	if _fade_tween and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(self, "modulate:a", 0.0, 1.0)
 
 func _setup():
 	custom_minimum_size = Vector2(0, 100)
 	add_theme_stylebox_override("panel", _theme.make_panel_style(
-		_theme.bg_tertiary, _theme.border_default, 1, _theme.radius_md, _theme.spacing_sm))
+		_theme.bg_tertiary, _theme.border_default, _theme.radius_md))
 	
 	_scroll = _factory.create_scroll_container(false)
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -53,6 +98,18 @@ func _setup():
 
 ## 添加日志条目
 func add_entry(text: String, category: String = "info"):
+	_wake_up()
+
+	# 日志详细度过滤
+	match log_detail:
+		0:  # 简洁：只显示回合、死亡、暴击
+			if category not in ["turn", "death_ally", "death_enemy", "critical"]:
+				return
+		1:  # 标准：隐藏移动日志
+			if category == "move":
+				return
+		# 2: 详细：显示所有
+	
 	var bbcode := _format_entry(text, category)
 	_entries.append(bbcode)
 	

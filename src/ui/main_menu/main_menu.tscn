@@ -1,6 +1,10 @@
-[gd_scene format=3 uid="uid://main_menu_scene"]
+[gd_scene format=3 uid="uid://dr5ewkoxy56af"]
 
-[ext_resource type="Script" path="res://src/ui/main_menu/MainMenu.gd" id="1_main"]
+[ext_resource type="Script" path="res://src/ui/main_menu/MainMenu.gd" id="1_2hyyg"]
+[ext_resource type="Script" path="res://src/core/character/CharacterGeneratorProxy.cs" id="2_cg"]
 
-[node name="MainMenu" type="CanvasLayer"]
-script = ExtResource("1_main")
+[node name="MainMenu" type="CanvasLayer" unique_id=71452053]
+script = ExtResource("1_2hyyg")
+
+[node name="CharacterGenerator" type="Node" parent="."]
+script = ExtResource("2_cg")

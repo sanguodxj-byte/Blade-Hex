@@ -436,18 +436,18 @@ func _init_speed_component():
 ## 从 GlobalState 或存档确定玩家种族
 func _determine_player_race() -> void:
 	# 优先从存档恢复
-	if GlobalState.is_loading_save and not GlobalState.loaded_data.is_empty():
-		var saved_race = GlobalState.loaded_data.get("character", {}).get("race_id", -1)
+	if GlobalState.IsLoadingSave and not GlobalState.LoadedData.is_empty():
+		var saved_race = GlobalState.LoadedData.get("character", {}).get("race_id", -1)
 		if saved_race >= 0:
 			player_race_id = int(saved_race)
 			return
 	# 从出身选择获取
-	if GlobalState.player_origin.has("race") and GlobalState.player_origin["race"] is RaceData:
-		player_race_id = GlobalState.player_origin["race"].race_id
+	if GlobalState.PlayerOrigin.has("race") and GlobalState.PlayerOrigin["race"] is RaceData:
+		player_race_id = GlobalState.PlayerOrigin["race"].race_id
 		return
 	# 快速游戏：使用已随机生成的角色种族
-	if GlobalState.player_origin.has("unit_data") and GlobalState.player_origin["unit_data"] is UnitData:
-		var ud: UnitData = GlobalState.player_origin["unit_data"]
+	if GlobalState.PlayerOrigin.has("unit_data") and GlobalState.PlayerOrigin["unit_data"] is UnitData:
+		var ud: UnitData = GlobalState.PlayerOrigin["unit_data"]
 		if ud.race is RaceData:
 			player_race_id = ud.race.race_id
 			return
@@ -461,8 +461,8 @@ func _init_fog_of_war() -> void:
 	var map_h := int(hex_grid.map_pixel_height)
 	var cell_sz := int(HexOverworldTile.HEX_SIZE * 2.0)
 	# 检查是否有存档中的迷雾数据
-	if GlobalState.is_loading_save and not GlobalState.loaded_data.is_empty():
-		var saved_fog = GlobalState.loaded_data.get("fog_of_war", {})
+	if GlobalState.IsLoadingSave and not GlobalState.LoadedData.is_empty():
+		var saved_fog = GlobalState.LoadedData.get("fog_of_war", {})
 		if saved_fog.size() > 0:
 			fog_of_war = FogOfWar.deserialize(saved_fog)
 			fog_of_war.map_width_px = map_w

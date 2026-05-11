@@ -145,13 +145,13 @@ Phase 2.3: 地图生成器
 
 ```
 Phase 3.1: 规则引擎
-    ├── RPGRuleEngine      # 依赖 UnitData
-    ├── SpellShapeResolver  # 依赖 HexUtils
-    └── CharacterGenerator  # 依赖 RPGRuleEngine, UnitData
+    ├── RPGRuleEngine      # 依赖 UnitData ✅ 已完成
+    ├── SpellShapeResolver  # 依赖 HexUtils ✅ 已完成
+    └── CharacterGenerator  # 依赖 RPGRuleEngine, UnitData ✅ 已完成 (676行)
 
 Phase 3.2: 存档系统
-    ├── SaveManager         # 依赖 Phase 1 全部数据类
-    └── EconomyManager      # 依赖 ItemData
+    ├── SaveManager         # 依赖 Phase 1 全部数据类 ✅ 已完成
+    └── EconomyManager      # 依赖 ItemData ✅ 已完成
 
 Phase 3.3: 战斗核心
     ├── CombatResolver      # 依赖 RPGRuleEngine, UnitData
@@ -210,8 +210,8 @@ Phase 5.2: 战略层逻辑
 
 Phase 5.3: 任务+技能树
     ├── QuestEncounterData, QuestTargetSite, QuestManager
-    ├── SkillTreeData, SkillNodeData, NodeFiller
-    ├── ClassTitleResolver, CharacterSkillTree, SkillTreeManager
+    ├── SkillTreeData, SkillNodeData, NodeFiller ✅ 已完成 (SkillTreeData.cs 728行, 含全部150+节点)
+    ├── ClassTitleResolver, CharacterSkillTree, SkillTreeManager ✅ 已完成
     └── InteractionManager, InteractionOption, InteractionType, NPCProfile, TownFacility
 ```
 

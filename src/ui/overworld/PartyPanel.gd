@@ -144,12 +144,17 @@ func refresh_ui():
 
 func _calculate_preview_ac() -> int:
 	if not selected_unit_data: return 10
-	var dex_mod = floor((selected_unit_data.dex - 10) / 2.0)
+	# AC = 10 + floor(sqrt(DEX/2)) + 盾牌，护甲不参与AC
 	var ac = 10
-	if selected_unit_data.armor:
-		ac = 10 + selected_unit_data.armor.ac_bonus
-		dex_mod = min(dex_mod, selected_unit_data.armor.max_dex_bonus)
-	return ac + dex_mod
+	var dex_ac = int(floor(sqrt(selected_unit_data.dex / 2.0)))
+	# 重甲限制DEX加成
+	if selected_unit_data.armor and selected_unit_data.armor.max_dex_bonus > 0:
+		dex_ac = mini(dex_ac, selected_unit_data.armor.max_dex_bonus)
+	# 盾牌AC加成
+	var off_hand = selected_unit_data.primary_off_hand if selected_unit_data.primary_off_hand else selected_unit_data.secondary_off_hand
+	if off_hand is ArmorData and off_hand.armor_type == ArmorData.ArmorType.SHIELD:
+		ac += off_hand.ac_bonus
+	return ac + dex_ac
 
 func _on_item_clicked(item: ItemData):
 	if selected_unit_data and economy_manager:

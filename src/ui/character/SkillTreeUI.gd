@@ -27,10 +27,10 @@ const REGION_NAMES := {
 	SkillNodeData.Region.NONE: "中心", SkillNodeData.Region.TRANSITION: "过渡",
 }
 
-const SkillTreeCoord = preload("res://src/core/skill_tree/SkillTreeCoord.gd")
 
-## 坐标转换组件
-var _coord: SkillTreeCoord = null
+## 坐标转换组件（C# 类运行时加载）
+var _SkillTreeCoord = load("res://src/core/skill_tree/SkillTreeCoord.cs")
+var _coord = null
 
 # ============================================================================
 # 内部
@@ -136,7 +136,7 @@ func _setup():
 
 func _ensure_coord():
 	if not _coord:
-		_coord = SkillTreeCoord.new()
+		_coord = _SkillTreeCoord.new()
 		_coord.hex_size = HEX_SIZE
 
 func _node_to_pixel(node: SkillNodeData) -> Vector2:

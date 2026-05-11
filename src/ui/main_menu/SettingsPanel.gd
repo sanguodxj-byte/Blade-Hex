@@ -7,8 +7,8 @@ class_name SettingsPanel
 
 signal settings_closed()
 
-## 预加载依赖
-const _GS = preload("res://src/core/data/GameSettings.gd")
+## GameSettings C# 类（运行时加载）
+var _GS = load("res://src/core/data/GameSettings.cs")
 
 ## 内部状态
 var _settings
