@@ -42,4 +42,4 @@ dist/
 *.x86_32
 *.app
 *.apk
-*.ipa
+*.ipa"/assets/"  

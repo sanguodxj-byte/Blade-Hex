@@ -43,6 +43,7 @@ public partial class OverworldScene : Node2D, IOverworldContext
     public HexOverworldGrid HexGrid { get; set; } = null!;
     public HexOverworldGenerator HexGen { get; set; } = null!;
     public HexOverworldRenderer HexRenderer { get; set; } = null!;
+    public HexOverworldRenderer3D? HexRenderer3D { get; set; }
     public HexOverworldAStar HexAStar { get; set; } = null!;
     public FogOfWar Fog { get; set; } = null!;
     public FogOfWarRenderer FogRenderer { get; set; } = null!;
@@ -52,6 +53,11 @@ public partial class OverworldScene : Node2D, IOverworldContext
     public BladeHex.View.Map.RoadRenderer RoadRenderer { get; set; } = null!;
     public BladeHex.View.UI.Overworld.ToastNotification Toast { get; set; } = null!;
     private BladeHex.View.UI.Overworld.MinimapPanel? _minimap;
+
+    /// <summary>3D 渲染子视口（嵌入式 3D 地面渲染）</summary>
+    private SubViewportContainer? _3dViewportContainer;
+    private SubViewport? _3dViewport;
+    private OverworldCamera3D? _3dCamera;
 
     // ========================================
     // 状态数据

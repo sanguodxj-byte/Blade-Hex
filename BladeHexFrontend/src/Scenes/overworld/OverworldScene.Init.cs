@@ -58,6 +58,67 @@ public partial class OverworldScene
         MainCamera.PositionSmoothingSpeed = 8.0f;
         AddChild(MainCamera);
         MainCamera.MakeCurrent();
+
+        // 初始化 3D 渲染子视口（地面渲染）
+        Setup3DViewport();
+    }
+
+    /// <summary>
+    /// 设置 3D 渲染子视口 — 在 2D 场景中嵌入 3D 地面渲染
+    /// SubViewportContainer 铺满屏幕，内部 SubViewport 包含 3D 相机和渲染器
+    /// </summary>
+    private void Setup3DViewport()
+    {
+        // SubViewportContainer 作为背景层（ZIndex 最低）
+        _3dViewportContainer = new SubViewportContainer();
+        _3dViewportContainer.Stretch = true;
+        _3dViewportContainer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _3dViewportContainer.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _3dViewportContainer.ZIndex = -100; // 在所有 2D 内容之下
+
+        // SubViewport
+        _3dViewport = new SubViewport();
+        _3dViewport.Size = new Vector2I(
+            (int)ProjectSettings.GetSetting("display/window/size/viewport_width", 1920),
+            (int)ProjectSettings.GetSetting("display/window/size/viewport_height", 1080)
+        );
+        _3dViewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
+        _3dViewport.TransparentBg = true; // 透明背景，让 2D 背景色透出
+        _3dViewportContainer.AddChild(_3dViewport);
+
+        // 3D 相机
+        _3dCamera = new OverworldCamera3D();
+        _3dViewport.AddChild(_3dCamera);
+
+        // 3D 渲染器
+        HexRenderer3D = new HexOverworldRenderer3D();
+        _3dViewport.AddChild(HexRenderer3D);
+        HexRenderer3D.Initialize();
+
+        // 3D 光照
+        var light = new DirectionalLight3D();
+        light.RotationDegrees = new Vector3(-45, -30, 0);
+        light.LightEnergy = 0.8f;
+        light.ShadowEnabled = false;
+        _3dViewport.AddChild(light);
+
+        var env = new WorldEnvironment();
+        var envRes = new Godot.Environment();
+        envRes.BackgroundMode = Godot.Environment.BGMode.Color;
+        envRes.BackgroundColor = new Color(0.12f, 0.15f, 0.20f);
+        envRes.AmbientLightSource = Godot.Environment.AmbientSource.Color;
+        envRes.AmbientLightColor = new Color(0.7f, 0.7f, 0.72f);
+        envRes.AmbientLightEnergy = 0.4f;
+        env.Environment = envRes;
+        _3dViewport.AddChild(env);
+
+        // 添加到场景树（作为 CanvasLayer 确保在最底层）
+        var bgLayer = new CanvasLayer();
+        bgLayer.Layer = -10; // 最底层
+        bgLayer.AddChild(_3dViewportContainer);
+        AddChild(bgLayer);
+
+        GD.Print("[OverworldScene] 3D 渲染子视口已初始化");
     }
 
     // ========================================
