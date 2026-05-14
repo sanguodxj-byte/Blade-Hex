@@ -340,8 +340,8 @@ public partial class OverworldScene
         }
 
         // 第2步: 村庄 (8-12 个)
-        string[] villageNames = ["柳溪村", "石桥村", "绿叶村", "河畔村", "山脚村", "枫林村",
-                                  "白杨村", "谷仓村", "松林村", "晨露村", "暮色村", "鹤鸣村"];
+        string[] villageNames = ["柳溪", "石桥", "绿荫", "河畔", "山脚", "枫丹",
+                                  "白杨", "谷仓", "松针", "晨露", "暮色", "鹤鸣"];
         int villageCount = 8 + (int)(GD.Randi() % 5);
         for (int i = 0; i < villageCount; i++)
         {
@@ -365,7 +365,7 @@ public partial class OverworldScene
         }
 
         // 第3步: 城堡 (1-2 个)
-        string[] castleNames = ["霜鹰堡", "龙脊要塞"];
+        string[] castleNames = ["霜鹰堡", "龙脊关"];
         int castleCount = 1 + (int)(GD.Randi() % 2);
         for (int i = 0; i < castleCount; i++)
         {

@@ -248,19 +248,34 @@ public partial class HexOverworldRenderer : Node2D
 
             var profile = TerrainVisualRegistry.Get((HexOverworldTile.TerrainType)terrainType);
 
-            // 应用六边形瓦片 shader（散列偏移 + SDF 裁剪 + 边缘柔化）
+            // 尝试加载地形纹理（有纹理则启用纹理模式，否则回退纯色）
+            var terrainTex = TryLoadOverworldTexture(profile);
+            bool hasTexture = terrainTex != null;
+
+            // 应用六边形瓦片 shader（SDF 裁剪 + 边缘羽化）
             var shader = GD.Load<Shader>("res://src/assets/shaders/overworld_hex_tile.gdshader");
             if (shader != null)
             {
                 var mat = new ShaderMaterial();
                 mat.Shader = shader;
-                mat.SetShaderParameter("use_texture", false); // 纯色模式（纹理资产完善后改为 true）
-                mat.SetShaderParameter("hex_edge_softness", 0.03f);
-                mat.SetShaderParameter("edge_darken_strength", 0.12f);
+                mat.SetShaderParameter("use_texture", hasTexture);
+                mat.SetShaderParameter("feather_width", 0.08f);
+                mat.SetShaderParameter("edge_darken", 0.06f);
+
+                if (hasTexture)
+                {
+                    mat.SetShaderParameter("terrain_texture", terrainTex!);
+                    mat.SetShaderParameter("texture_scale", 1.0f);
+                }
+
                 bucket.Instance.Material = mat;
             }
 
-            bucket.Instance.Modulate = profile.DominantColor;
+            // 纹理模式下不需要 Modulate 着色（纹理自带颜色），纯色模式仍用 DominantColor
+            bucket.Instance.Modulate = hasTexture ? Colors.White : profile.DominantColor;
+
+            if (hasTexture)
+                GD.Print($"[HexOverworldRenderer] 纹理模式: {profile.DisplayName} ({profile.OverworldKey})");
 
             AddChild(bucket.Instance);
             _buckets[terrainType] = bucket;
@@ -271,20 +286,13 @@ public partial class HexOverworldRenderer : Node2D
 
     /// <summary>
     /// 尝试加载大地图地形贴图（variant 0）。
-    /// 优先级：OverworldKey（新资产） → LegacyOverworldKey（现有 hex_terrain 资产） → 纯色回退
+    /// 仅从 overworld/ 目录加载新资产，不回退旧 hex_terrain 资产。
     /// </summary>
     private static Texture2D? TryLoadOverworldTexture(TerrainVisualProfile profile)
     {
-        // 新路径（首选）
-        string newPath = $"{HexOverworldTile.OverworldTextureBasePath}/{profile.OverworldKey}_0.png";
-        if (ResourceLoader.Exists(newPath))
-            return GD.Load<Texture2D>(newPath);
-
-        // 旧路径（现有资产）
-        string legacyPath = $"{HexOverworldTile.OverlayTextureBasePath}/{profile.LegacyOverworldKey}_0.png";
-        if (ResourceLoader.Exists(legacyPath))
-            return GD.Load<Texture2D>(legacyPath);
-
+        string path = $"{HexOverworldTile.OverworldTextureBasePath}/{profile.OverworldKey}_0.png";
+        if (ResourceLoader.Exists(path))
+            return GD.Load<Texture2D>(path);
         return null;
     }
 

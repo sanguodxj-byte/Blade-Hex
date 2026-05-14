@@ -50,7 +50,7 @@ public partial class GameSettings : Resource
     // ========================================
 
     [Export] public int Difficulty { get; set; } = 1;
-    [Export] public float GameSpeed { get; set; } = 2.0f;
+    [Export] public float GameSpeed { get; set; } = 0.5f;
     [Export] public bool AutoSave { get; set; } = true;
     [Export] public int AutoSaveInterval { get; set; } = 10;
     [Export] public float CombatAnimSpeed { get; set; } = 1.0f;
@@ -154,7 +154,7 @@ public partial class GameSettings : Resource
 
         var game = data.ContainsKey("game") ? (Godot.Collections.Dictionary)data["game"] : new Godot.Collections.Dictionary();
         Difficulty = game.ContainsKey("difficulty") ? (int)game["difficulty"] : 1;
-        GameSpeed = game.ContainsKey("game_speed") ? (float)game["game_speed"] : 2.0f;
+        GameSpeed = game.ContainsKey("game_speed") ? (float)game["game_speed"] : 0.5f;
         AutoSave = game.ContainsKey("auto_save") ? (bool)game["auto_save"] : true;
         AutoSaveInterval = game.ContainsKey("auto_save_interval") ? (int)game["auto_save_interval"] : 10;
         CombatAnimSpeed = game.ContainsKey("combat_anim_speed") ? (float)game["combat_anim_speed"] : 1.0f;

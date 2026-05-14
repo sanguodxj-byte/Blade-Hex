@@ -89,13 +89,18 @@ public static class CameraBoundsClamp
     public static float MaxOrthoSizeToFit(Aabb worldBounds, float tiltDegrees, float viewportAspect)
     {
         float tiltRad = Mathf.DegToRad(Mathf.Abs(tiltDegrees));
+        float cosT = Mathf.Cos(tiltRad);
 
         // 横向：bounds.X 宽必须 ≤ orthoSize * aspect
+        // → orthoSize ≥ bounds.X / aspect
         float sizeForWidth = worldBounds.Size.X / Mathf.Max(0.001f, viewportAspect);
 
-        // Z 方向：bounds.Z 深度 ≤ orthoSize / cos(tilt)
-        float sizeForDepth = worldBounds.Size.Z * Mathf.Cos(tiltRad);
+        // Z 方向：可见深度 = orthoSize / cos(tilt)
+        // 要让 bounds.Z ≤ orthoSize / cos(tilt)
+        // → orthoSize ≥ bounds.Z * cos(tilt)
+        float sizeForDepth = worldBounds.Size.Z * cosT;
 
+        // 取较大值确保两个方向都能完全容纳
         return Mathf.Max(sizeForWidth, sizeForDepth);
     }
 

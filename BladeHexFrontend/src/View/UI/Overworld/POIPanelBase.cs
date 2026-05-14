@@ -100,6 +100,9 @@ public abstract partial class POIPanelBase : CanvasLayer
     /// <summary>主面板容器（可用于设置自定义样式）</summary>
     protected PanelContainer MainPanel { get; private set; } = null!;
 
+    /// <summary>UI 组件工厂（统一创建接口）</summary>
+    protected BladeHex.UI.UIFactory Factory { get; private set; } = null!;
+
     // ============================================================================
     // 生命周期
     // ============================================================================
@@ -107,6 +110,7 @@ public abstract partial class POIPanelBase : CanvasLayer
     public override void _Ready()
     {
         Layer = PanelLayer;
+        Factory = new BladeHex.UI.UIFactory();
         BuildScaffold();
         BuildContent(ContentVBox);
     }
@@ -195,136 +199,40 @@ public abstract partial class POIPanelBase : CanvasLayer
     }
 
     // ============================================================================
-    // UI 工厂方法 — 子类直接调用
+    // UI 工厂方法 — 委托给 UIFactory 统一实现
     // ============================================================================
 
     /// <summary>创建标题标签（大号金色）</summary>
     protected Label CreateTitleLabel(string text)
-    {
-        var lbl = new Label();
-        lbl.Text = text;
-        lbl.AddThemeFontSizeOverride("font_size", FontSizeXl);
-        lbl.AddThemeColorOverride("font_color", ThemeTextAccent);
-        return lbl;
-    }
+        => Factory.CreateTitleLabel(text);
 
     /// <summary>创建正文标签</summary>
     protected Label CreateBodyLabel(string text, Color? color = null)
-    {
-        var lbl = new Label();
-        lbl.Text = text;
-        lbl.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        lbl.AddThemeColorOverride("font_color", color ?? ThemeTextPrimary);
-        return lbl;
-    }
+        => Factory.CreateBodyLabel(text, color);
 
     /// <summary>创建次要标签（小号灰色）</summary>
     protected Label CreateMutedLabel(string text)
-    {
-        var lbl = new Label();
-        lbl.Text = text;
-        lbl.AddThemeFontSizeOverride("font_size", FontSizeSm);
-        lbl.AddThemeColorOverride("font_color", ThemeTextMuted);
-        return lbl;
-    }
+        => Factory.CreateMutedLabel(text);
 
     /// <summary>创建富文本标签（支持 BBCode）</summary>
     protected RichTextLabel CreateRichText(Vector2? minSize = null)
-    {
-        var rtl = new RichTextLabel();
-        rtl.BbcodeEnabled = true;
-        rtl.ScrollActive = false;
-        rtl.FitContent = true;
-        if (minSize.HasValue)
-            rtl.CustomMinimumSize = minSize.Value;
-        rtl.AddThemeFontSizeOverride("normal_font_size", FontSizeMd);
-        rtl.AddThemeColorOverride("default_color", ThemeTextSecondary);
-        return rtl;
-    }
+        => Factory.CreateRichText(minSize ?? default);
 
     /// <summary>创建标准按钮（带 hover/pressed 样式）</summary>
     protected Button CreateButton(string text, Vector2? minSize = null)
-    {
-        var btn = new Button();
-        btn.Text = text;
-        if (minSize.HasValue)
-            btn.CustomMinimumSize = minSize.Value;
-        else
-            btn.CustomMinimumSize = new Vector2(0, 40);
-
-        btn.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        btn.AddThemeColorOverride("font_color", ThemeBtnFontColor);
-        btn.AddThemeColorOverride("font_hover_color", ThemeBtnFontHover);
-        btn.AddThemeColorOverride("font_disabled_color", ThemeBtnFontDisabled);
-
-        // Normal
-        var normal = new StyleBoxFlat { BgColor = ThemeBtnNormalBg };
-        normal.SetBorderWidthAll(1);
-        normal.BorderColor = ThemeBtnNormalBorder;
-        normal.SetCornerRadiusAll(RadiusMd);
-        normal.SetContentMarginAll(SpacingSm);
-        btn.AddThemeStyleboxOverride("normal", normal);
-
-        // Hover
-        var hover = new StyleBoxFlat { BgColor = ThemeBtnHoverBg };
-        hover.SetBorderWidthAll(1);
-        hover.BorderColor = ThemeBtnHoverBorder;
-        hover.SetCornerRadiusAll(RadiusMd);
-        hover.SetContentMarginAll(SpacingSm);
-        btn.AddThemeStyleboxOverride("hover", hover);
-
-        // Pressed
-        var pressed = new StyleBoxFlat { BgColor = ThemeBtnPressedBg };
-        pressed.SetBorderWidthAll(1);
-        pressed.BorderColor = ThemeBtnNormalBorder;
-        pressed.SetCornerRadiusAll(RadiusMd);
-        pressed.SetContentMarginAll(SpacingSm);
-        btn.AddThemeStyleboxOverride("pressed", pressed);
-
-        return btn;
-    }
+        => Factory.CreateButton(text, minSize ?? new Vector2(0, 40));
 
     /// <summary>创建卡片容器（用于列表项）</summary>
     protected PanelContainer CreateCard(Vector2? minSize = null, bool hoverable = false)
-    {
-        var card = new PanelContainer();
-        if (minSize.HasValue)
-            card.CustomMinimumSize = minSize.Value;
-
-        var style = new StyleBoxFlat { BgColor = ThemeBgCard };
-        style.SetBorderWidthAll(1);
-        style.BorderColor = ThemeBorderDefault;
-        style.SetCornerRadiusAll(RadiusSm);
-        style.SetContentMarginAll(SpacingMd);
-        card.AddThemeStyleboxOverride("panel", style);
-
-        if (hoverable)
-            card.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
-
-        return card;
-    }
+        => Factory.CreateCard(minSize ?? default, hoverable);
 
     /// <summary>创建水平分隔线</summary>
     protected HSeparator CreateSeparatorH()
-    {
-        var sep = new HSeparator();
-        var style = new StyleBoxFlat();
-        style.BgColor = ThemeBorderDefault;
-        style.SetContentMarginAll(1);
-        sep.AddThemeStyleboxOverride("separator", style);
-        return sep;
-    }
+        => Factory.CreateSeparatorH();
 
     /// <summary>创建垂直分隔线</summary>
     protected VSeparator CreateSeparatorV()
-    {
-        var sep = new VSeparator();
-        var style = new StyleBoxFlat();
-        style.BgColor = ThemeBorderDefault;
-        style.SetContentMarginAll(1);
-        sep.AddThemeStyleboxOverride("separator", style);
-        return sep;
-    }
+        => Factory.CreateSeparatorV();
 
     /// <summary>创建金币显示标签（右对齐）</summary>
     protected Label CreateGoldLabel(int gold = 0)

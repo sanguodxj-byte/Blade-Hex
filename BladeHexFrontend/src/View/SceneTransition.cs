@@ -22,6 +22,7 @@ public static class SceneTransition
         "AudioEventReactor",
         "UITheme",
         "DebugConsole",
+        "GameMenuManager",
         // 加载屏（singleton，跨场景复用）
         "LoadingScreen",
     };

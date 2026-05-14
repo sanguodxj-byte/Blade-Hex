@@ -165,7 +165,59 @@ public partial class MinimapPanel : PanelContainer
     {
         _collapsed = !_collapsed;
         _contentContainer.Visible = !_collapsed;
-        _toggleBtn.Text = _collapsed ? "▲" : "▼";
+        _toggleBtn.Text = _collapsed ? "🗺" : "▼";
+
+        if (_collapsed)
+        {
+            // 收起时：隐藏面板背景，只保留按钮，不拦截输入
+            MouseFilter = MouseFilterEnum.Ignore;
+            AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+            Modulate = new Color(1, 1, 1, 1.0f);
+            // 隐藏标题等，只留按钮
+            var vbox = _toggleBtn.GetParent().GetParent();
+            if (vbox is VBoxContainer v)
+            {
+                foreach (var child in v.GetChildren())
+                {
+                    if (child is HBoxContainer header)
+                    {
+                        foreach (var hChild in header.GetChildren())
+                        {
+                            if (hChild != _toggleBtn && hChild is Control c)
+                                c.Visible = false;
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // 展开时：恢复面板样式
+            MouseFilter = MouseFilterEnum.Stop;
+            var style = new StyleBoxFlat { BgColor = BgColor };
+            style.SetBorderWidthAll(2);
+            style.BorderColor = BorderColor;
+            style.SetCornerRadiusAll(4);
+            style.SetContentMarginAll(PANEL_MARGIN);
+            AddThemeStyleboxOverride("panel", style);
+            Modulate = new Color(1, 1, 1, PANEL_ALPHA);
+            // 恢复标题
+            var vbox = _toggleBtn.GetParent().GetParent();
+            if (vbox is VBoxContainer v)
+            {
+                foreach (var child in v.GetChildren())
+                {
+                    if (child is HBoxContainer header)
+                    {
+                        foreach (var hChild in header.GetChildren())
+                        {
+                            if (hChild is Control c)
+                                c.Visible = true;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ========================================

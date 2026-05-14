@@ -94,20 +94,25 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
     /// </summary>
     private void ComputeBattlefieldBounds()
     {
-        const float HexSize = 96.0f;
-        const float xSpacing = HexSize * 1.5f;
-        const float zSpacing = HexSize * 1.7320508f;
+        float xSpacing = HexUtils.HorizontalSpacing;
+        float zSpacing = HexUtils.VerticalSpacing;
 
         float battlefieldWidth = _mapWidth * xSpacing;
         float battlefieldDepth = _mapHeight * zSpacing;
 
-        // 加 200 单位边距
-        const float margin = 200f;
+        // 加 1 格边距确保边缘格子完全可见
+        float margin = HexUtils.Size * 1.5f;
         _battlefieldBounds = new Aabb(
             new Vector3(-margin, 0, -margin),
             new Vector3(battlefieldWidth + margin * 2, 1, battlefieldDepth + margin * 2));
 
         // 最大正交尺寸：能看见整个战场
+        RecalcMaxOrthoSize();
+    }
+
+    /// <summary>重新计算最大正交尺寸（视口大小变化时也应调用）</summary>
+    private void RecalcMaxOrthoSize()
+    {
         var viewport = GetViewport().GetVisibleRect().Size;
         float aspect = viewport.X / Mathf.Max(1f, viewport.Y);
         _maxOrthoSize = BladeHex.View.Camera.CameraBoundsClamp.MaxOrthoSizeToFit(
@@ -194,10 +199,31 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
         var pc = _hexGrid.GetCell(_activePlayerUnit.GridPos.X, _activePlayerUnit.GridPos.Y);
         if (pc != null && pc.Elevation >= 2) range += HighGroundVisionBonus;
 
-        var visible = new HashSet<Vector2I>(_hexGrid.GetCellsInRange(_activePlayerUnit.GridPos.X, _activePlayerUnit.GridPos.Y, range));
+        // 使用 LineOfSight 进行真实视线检查
+        var visibleCells = new HashSet<Vector2I>();
+        foreach (var coord in _hexGrid.GetCellsInRange(_activePlayerUnit.GridPos.X, _activePlayerUnit.GridPos.Y, range))
+        {
+            if (LineOfSight.HasLos(_activePlayerUnit.GridPos, coord, _hexGrid))
+                visibleCells.Add(coord);
+        }
+
+        // 同时收集所有玩家单位的视野（团队共享视野）
+        foreach (var ally in _combatManager.PlayerUnits)
+        {
+            if (!IsInstanceValid(ally) || ally.CurrentHp <= 0 || ally == _activePlayerUnit) continue;
+            int allyRange = BaseMaxVision;
+            var allyCell = _hexGrid.GetCell(ally.GridPos.X, ally.GridPos.Y);
+            if (allyCell != null && allyCell.Elevation >= 2) allyRange += HighGroundVisionBonus;
+            foreach (var coord in _hexGrid.GetCellsInRange(ally.GridPos.X, ally.GridPos.Y, allyRange))
+            {
+                if (LineOfSight.HasLos(ally.GridPos, coord, _hexGrid))
+                    visibleCells.Add(coord);
+            }
+        }
+
         foreach (var kvp in _hexGrid.Cells) kvp.Value.SetShrouded(true);
         foreach (var e in _combatManager.EnemyUnits) if (IsInstanceValid(e)) e.Visible = false;
-        foreach (var c in visible)
+        foreach (var c in visibleCells)
         {
             var cell = _hexGrid.GetCell(c.X, c.Y);
             if (cell == null) continue;
@@ -247,6 +273,8 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
         foreach (var coord in _hexGrid.GetCellsInRange(unit.GridPos.X, unit.GridPos.Y, atkRange))
         {
+            // 只高亮有视线的格子
+            if (!LineOfSight.HasLos(unit.GridPos, coord, _hexGrid)) continue;
             var cell = _hexGrid.GetCell(coord.X, coord.Y);
             if (cell != null) { cell.SetHighlight(true, new Color(1.0f, 0.2f, 0.2f, 0.4f)); _highlightedCells.Add(cell); }
         }
@@ -265,6 +293,7 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
         foreach (var coord in _hexGrid.GetCellsInRange(unit.GridPos.X, unit.GridPos.Y, atkRange))
         {
+            if (!LineOfSight.HasLos(unit.GridPos, coord, _hexGrid)) continue;
             var cell = _hexGrid.GetCell(coord.X, coord.Y);
             if (cell == null || _highlightedCells.Contains(cell)) continue;
             cell.SetHighlight(true, new Color(1.0f, 0.3f, 0.2f, 0.2f)); // 淡红色半透明
@@ -334,9 +363,23 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
         {
             _combatUi.SetTurnText("=== 玩家回合 ===", new Color(0.2f, 0.6f, 1));
             _combatUi.SetActionBarVisible(true);
+
+            // 自动选中第一个有行动力的玩家单位（确保不会因无选中而无法操作）
+            if (_activePlayerUnit == null || !IsInstanceValid(_activePlayerUnit) || _activePlayerUnit.CurrentHp <= 0)
+            {
+                _activePlayerUnit = _combatManager.PlayerUnits.FirstOrDefault(u => IsInstanceValid(u) && u.CurrentHp > 0);
+            }
+
             _combatUi.UpdateUnitInfo(_activePlayerUnit);
             _combatUi.LogMessage("轮到玩家行动。");
             _audioManager?.PlaySfxName("combat_turn_start");
+
+            // 显示选中单位的移动范围并更新视野
+            if (_activePlayerUnit != null)
+            {
+                ShowSelectedUnitHighlights();
+                UpdateFov();
+            }
         }
         else if (s == CombatManager.CombatState.EnemyTurn)
         {
@@ -508,6 +551,11 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
     protected void OnCellClicked(HexCell cell)
     {
         if (_combatManager.CurrentState != CombatManager.CombatState.PlayerTurn) return;
+
+        // 点击友方：选中（即使当前没有活跃单位也可以选择）
+        if (cell.Occupant != null && _combatManager.PlayerUnits.Contains(cell.Occupant) && cell.Occupant.CurrentHp > 0)
+        { SelectUnit(cell.Occupant); return; }
+
         if (_activePlayerUnit == null || !IsInstanceValid(_activePlayerUnit)) return;
 
         // 法术/物品瞄准模式
@@ -529,10 +577,6 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
             return;
         }
 
-        // 点击友方：选中
-        if (cell.Occupant != null && _combatManager.PlayerUnits.Contains(cell.Occupant) && cell.Occupant.CurrentHp > 0)
-        { SelectUnit(cell.Occupant); return; }
-
         // 点击敌方（非攻击模式）：直接发起攻击（如果在射程内且有行动力）
         if (cell.Occupant != null && _combatManager.EnemyUnits.Contains(cell.Occupant))
         {
@@ -547,7 +591,12 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
             if (dist <= effectiveRange && _activePlayerUnit.CurrentAp >= apCost)
             {
-                // 射程内且有行动力 → 直接攻击
+                // 射程内且有行动力 → 检查视线后直接攻击
+                if (!LineOfSight.HasLos(_activePlayerUnit.GridPos, cell.GridPos, _hexGrid))
+                {
+                    _combatUi.LogMessage($"视线被阻挡，无法攻击 {cell.Occupant.Data?.UnitName ?? "未知"}。");
+                    return;
+                }
                 _currentActionMode = "attack";
                 HighlightAttackRange(_activePlayerUnit);
                 _ = HandleAttack(cell);
@@ -571,6 +620,12 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
         {
             HandleMove(cell);
             return;
+        }
+
+        // 点击空地但不在高亮范围内：如果有行动力，尝试重新显示移动范围
+        if (cell.Occupant == null && _currentActionMode == "none" && _activePlayerUnit.CurrentAp >= 1)
+        {
+            ShowSelectedUnitHighlights();
         }
     }
 
@@ -614,11 +669,13 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
             var opts = new Godot.Collections.Dictionary();
             int range = weapon?.RangeCells ?? 1;
             int dist = HexUtils.AxialDistance(_activePlayerUnit.GridPos, cell.GridPos);
-            if (dist <= range) opts[$"攻击({weapon?.ItemName ?? "徒手"})"] = "radial_attack";
+            bool hasLos = LineOfSight.HasLos(_activePlayerUnit.GridPos, cell.GridPos, _hexGrid);
+            if (dist <= range && hasLos) opts[$"⚔ 攻击({weapon?.ItemName ?? "徒手"})"] = "radial_attack";
+            else if (!hasLos) opts["视线被阻挡"] = "none";
             else opts[$"超出射程({dist}/{range})"] = "none";
 
             if (_activePlayerUnit.Data?.KnownSpells != null && _activePlayerUnit.Data.KnownSpells.Count > 0)
-                opts["法术"] = "spell";
+                opts["✨ 法术"] = "spell";
 
             if (_activePlayerUnit.SkillTree != null)
             {
@@ -626,23 +683,26 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
                 foreach (var skillNode in activeSkills)
                 {
                     if (string.IsNullOrEmpty(skillNode.SkillEffect)) continue;
-                    opts[$"技能: {skillNode.NodeName}"] = $"skill_{skillNode.SkillEffect}";
+                    opts[$"⚡ {skillNode.NodeName}"] = $"skill_{skillNode.SkillEffect}";
                 }
                 var careerSkill = _activePlayerUnit.GetCareerSkill();
                 if (careerSkill != null && careerSkill.ApCost > 0)
-                    opts[$"职业: {careerSkill.DisplayName}"] = "career_skill";
+                    opts[$"🎯 {careerSkill.DisplayName}"] = "career_skill";
             }
 
-            opts["防御"] = "defend";
-            opts["取消"] = "none";
+            opts["🛡 防御"] = "defend";
+            opts["✕ 取消"] = "none";
 
             var screenPos = GetViewport().GetCamera3D()?.UnprojectPosition(cell.Occupant.Position + Vector3.Up * 80f) ?? Vector2.Zero;
             _combatUi.OpenRadialMenuCustom(screenPos, opts);
             return;
         }
 
-        // 右键空地：取消选中
-        ClearHighlights(); _currentActionMode = "none"; _activePlayerUnit = null;
+        // 右键空地：取消当前操作模式，但保持单位选中
+        _currentActionMode = "none";
+        ClearHighlights();
+        if (_activePlayerUnit != null && IsInstanceValid(_activePlayerUnit) && _activePlayerUnit.CurrentAp >= 1)
+            ShowSelectedUnitHighlights();
     }
 
     // ========== 移动/攻击/法术/物品处理 ==========
@@ -674,8 +734,21 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
     private async Task HandleAttack(HexCell cell)
     {
-        if (!_highlightedCells.Contains(cell) || cell.Occupant == null || cell.Occupant == _activePlayerUnit)
+        // 验证攻击目标有效性
+        if (cell.Occupant == null || cell.Occupant == _activePlayerUnit)
         { _combatUi.LogMessage("无效的攻击目标。"); return; }
+
+        // 如果不在高亮范围内，检查是否在实际射程内且有视线（支持轮盘直接攻击）
+        if (!_highlightedCells.Contains(cell))
+        {
+            var weapon = _activePlayerUnit!.GetMainHand() as WeaponData;
+            int weaponRange = weapon?.RangeCells ?? 1;
+            int dist = HexUtils.AxialDistance(_activePlayerUnit.GridPos, cell.GridPos);
+            if (dist > weaponRange)
+            { _combatUi.LogMessage("目标超出攻击射程。"); return; }
+            if (!LineOfSight.HasLos(_activePlayerUnit.GridPos, cell.GridPos, _hexGrid))
+            { _combatUi.LogMessage("视线被阻挡，无法攻击。"); return; }
+        }
 
         var target = cell.Occupant;
         var attackWeapon = _activePlayerUnit!.GetMainHand() as WeaponData;
@@ -965,8 +1038,20 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
         if (@event is InputEventMouseButton mb && mb.Pressed)
         {
-            if (mb.ButtonIndex == MouseButton.WheelUp) _camera.Size = Mathf.Clamp(_camera.Size * 0.9f, MinOrthoSize, _maxOrthoSize);
-            else if (mb.ButtonIndex == MouseButton.WheelDown) _camera.Size = Mathf.Clamp(_camera.Size * 1.1f, MinOrthoSize, _maxOrthoSize);
+            if (mb.ButtonIndex == MouseButton.WheelUp)
+            {
+                _camera.Size = Mathf.Clamp(_camera.Size * 0.9f, MinOrthoSize, _maxOrthoSize);
+            }
+            else if (mb.ButtonIndex == MouseButton.WheelDown)
+            {
+                _camera.Size = Mathf.Clamp(_camera.Size * 1.1f, MinOrthoSize, _maxOrthoSize);
+                // 缩小到最大时，自动居中相机到战场中心
+                if (_camera.Size >= _maxOrthoSize)
+                {
+                    var center = _battlefieldBounds.Position + _battlefieldBounds.Size * 0.5f;
+                    _camera.Position = new Vector3(center.X, _camera.Position.Y, center.Z + _camera.Position.Y);
+                }
+            }
             ClampCameraPosition();
         }
     }
@@ -974,6 +1059,10 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
     public override void _Process(double delta)
     {
         if (_camera == null) return;
+
+        // 当缩放到最大（整个地图可见）时，锁定 WASD 移动
+        if (_camera.Size >= _maxOrthoSize) return;
+
         float spd = 800 * (float)delta * (_camera.Size / 1000);
         var v = Vector3.Zero;
         if (Input.IsKeyPressed(Key.W)) v.Z -= 1;

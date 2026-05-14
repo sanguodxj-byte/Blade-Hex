@@ -6,6 +6,8 @@ using Godot;
 using Godot.Collections;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.Scenes.Overworld;
+using BladeHex.UI;
 
 namespace BladeHex.View.UI.Overworld;
 
@@ -90,6 +92,10 @@ public partial class OverworldUI : CanvasLayer
     public Node EconomyManager { get; set; } = null!;
     public SaveManagerV2 SaveMgr { get; private set; } = new();
 
+    // 强类型场景上下文（替代 GetParent().Get("...") 反射访问）
+    private IOverworldContext? _context;
+    private UIFactory _factory = null!;
+
     // 暂未迁移的子面板（保留为字段，等后续转换）
     private Node _characterDetail = null!;
     private Node _skillTreeUi = null!;
@@ -103,7 +109,19 @@ public partial class OverworldUI : CanvasLayer
     public override void _Ready()
     {
         Layer = 10;
+        _factory = new UIFactory();
         _SetupUi();
+    }
+
+    /// <summary>
+    /// 延迟获取场景上下文（父节点在 _Ready 时可能尚未就绪）。
+    /// 首次调用时缓存引用。
+    /// </summary>
+    private IOverworldContext? GetContext()
+    {
+        if (_context != null) return _context;
+        _context = GetParent() as IOverworldContext;
+        return _context;
     }
 
     // ============================================================================
@@ -244,12 +262,12 @@ public partial class OverworldUI : CanvasLayer
         bottomMargin.AddChild(_bottomBar);
 
         // 6 buttons — party/inventory/army merged into unified 军队 panel
-        _CreateBarButton("⚔️ 军队", "army", TextPrimary);
-        _CreateBarButton("👤 角色", "character", TextPrimary);
-        _CreateBarButton("✨ 技能盘", "skill_tree", TextMagic);
-        _CreateBarButton("📜 任务", "quests", TextWarning);
-        _CreateBarButton("⛺ 营地", "camp", TextPositive);
-        _CreateBarButton("🏰 领地", "territory", TextSecondary);
+        _CreateBarButton("⚔️ 军队 [I]", "army", TextPrimary);
+        _CreateBarButton("👤 角色 [C]", "character", TextPrimary);
+        _CreateBarButton("✨ 技能盘 [K]", "skill_tree", TextMagic);
+        _CreateBarButton("📜 任务 [J]", "quests", TextWarning);
+        _CreateBarButton("⛺ 营地 [T]", "camp", TextPositive);
+        _CreateBarButton("🏰 领地 [F]", "territory", TextSecondary);
 
         // ─── 3. 子面板初始化 ───
         _partyPanel = new PartyPanel();
@@ -385,15 +403,14 @@ public partial class OverworldUI : CanvasLayer
             case "save":
                 if (EconomyManager is BladeHex.Data.EconomyManager econ)
                 {
-                    var parent = GetParent();
-                    var playerUnit = parent?.Get("PlayerUnitData").As<BladeHex.Data.UnitData>();
-                    var playerParty = parent?.Get("PlayerParty").As<Node2D>();
-                    int raceId = parent?.Get("PlayerRaceId").AsInt32() ?? 0;
-                    var playerPos = playerParty?.Position ?? Vector2.Zero;
+                    var ctx = GetContext();
+                    var playerUnit = ctx?.PlayerUnitData;
+                    var playerPos = ctx?.PlayerParty?.Position ?? Vector2.Zero;
+                    int raceId = ctx?.PlayerRaceId ?? 0;
 
                     if (playerUnit != null)
                     {
-                        var entityMgr = parent?.Get("EntityMgr").As<OverworldEntityManager>();
+                        var entityMgr = ctx?.EntityMgr;
                         var gs = GetNode<BladeHex.Data.GlobalState>("/root/GlobalState");
                         var saveData = SaveManagerV2.BuildSaveData(
                             playerUnit, raceId, playerPos, econ, entityMgr,
@@ -402,8 +419,7 @@ public partial class OverworldUI : CanvasLayer
                     }
 
                     // 持久化世界 chunk 数据（只有手动保存时才写磁盘）
-                    if (parent != null && parent.HasMethod("SaveWorldData"))
-                        parent.Call("SaveWorldData");
+                    ctx?.SaveWorldData();
                 }
                 break;
             case "load":
@@ -425,20 +441,16 @@ public partial class OverworldUI : CanvasLayer
                 break;
             case "camp":
                 {
-                    var parent = GetParent();
-                    if (parent != null)
+                    var ctx = GetContext();
+                    if (ctx != null)
                     {
-                        var isWaitingVar = parent.Get("IsWaiting");
-                        bool isWaiting = isWaitingVar.VariantType != Variant.Type.Nil && isWaitingVar.AsBool();
-                        isWaiting = !isWaiting;
-                        parent.Set("IsWaiting", isWaiting);
-                        if (isWaiting)
+                        bool isWaiting = !ctx.IsWaiting;
+                        ctx.IsWaiting = isWaiting;
+                        if (isWaiting && ctx.PlayerParty != null)
                         {
-                            var ppVar = parent.Get("PlayerParty");
-                            if (ppVar.VariantType != Variant.Type.Nil)
-                                ppVar.AsGodotObject()?.Set("IsMoving", false);
+                            ctx.PlayerParty.IsMoving = false;
                         }
-                        _UpdateTopInfoStatus(isWaiting ? "\u6b63\u5728\u624e\u8425\u7b49\u5f85..." : "");
+                        _UpdateTopInfoStatus(isWaiting ? "正在扎营等待..." : "");
                     }
                 }
                 break;
@@ -498,6 +510,32 @@ public partial class OverworldUI : CanvasLayer
     public void UpdateWeatherDisplay(string weatherText)
     {
         _weatherLabel.Text = weatherText;
+    }
+
+    /// <summary>
+    /// 快捷键入口 — 由 OverworldScene 调用，触发对应面板操作。
+    /// 如果目标面板已打开则关闭（toggle 行为）。
+    /// </summary>
+    public void HandleHotkey(string action)
+    {
+        // 检查目标面板是否已打开 → toggle 关闭
+        bool targetOpen = action switch
+        {
+            "army" or "inventory" or "party" => _partyPanel != null && _partyPanel.Visible,
+            "character" => _characterDetail != null && _characterDetail.Get("visible").AsBool(),
+            "skill_tree" => _skillTreeUi != null && _skillTreeUi.Get("visible").AsBool(),
+            "quests" => _questLog is Control qlCtrl && qlCtrl.Visible,
+            "territory" => false,
+            _ => false,
+        };
+
+        if (targetOpen)
+        {
+            _CloseAllPanels();
+            return;
+        }
+
+        _OnButtonPressed(action);
     }
 
     /// <summary>
@@ -600,18 +638,14 @@ public partial class OverworldUI : CanvasLayer
     private void _OpenPartyPanel()
     {
         // 从 OverworldScene 的 PlayerParty 获取 roster 和 inventory
-        var scene = GetParent();
+        var ctx = GetContext();
         PartyRoster? roster = null;
         PartyInventory? inventory = null;
 
-        if (scene != null)
+        if (ctx?.PlayerParty != null)
         {
-            var partyVar = scene.Get("PlayerParty");
-            if (partyVar.Obj is OverworldParty party)
-            {
-                roster = party.Roster;
-                inventory = party.Inventory;
-            }
+            roster = ctx.PlayerParty.Roster;
+            inventory = ctx.PlayerParty.Inventory;
         }
 
         if (roster != null && inventory != null)
@@ -667,22 +701,18 @@ public partial class OverworldUI : CanvasLayer
 
         // 从 OverworldScene 获取队长数据
         CharacterSkillTree? charTree = null;
-        var scene = GetParent();
-        if (scene != null)
+        var ctx = GetContext();
+        if (ctx?.PlayerParty?.Roster != null && ctx.PlayerParty.Roster.Count > 0)
         {
-            var partyVar = scene.Get("PlayerParty");
-            if (partyVar.Obj is OverworldParty party && party.Roster != null && party.Roster.Count > 0)
-            {
-                var leader = party.Roster.Members[0];
-                long charId = (long)leader.GetInstanceId();
+            var leader = ctx.PlayerParty.Roster.Members[0];
+            long charId = (long)leader.GetInstanceId();
 
-                // 获取或创建角色技能盘
-                charTree = stm.GetSkillTree(charId);
-                if (charTree == null)
-                {
-                    charTree = stm.CreateSkillTree(charId, leader.Level);
-                    stm.InitCharacterLevel(charId, leader.Level);
-                }
+            // 获取或创建角色技能盘
+            charTree = stm.GetSkillTree(charId);
+            if (charTree == null)
+            {
+                charTree = stm.CreateSkillTree(charId, leader.Level);
+                stm.InitCharacterLevel(charId, leader.Level);
             }
         }
 
@@ -823,7 +853,7 @@ public partial class OverworldUI : CanvasLayer
     }
 
     // ============================================================================
-    // UI 组件工厂
+    // UI 组件工厂 — 委托给 UIFactory 统一实现
     // ============================================================================
 
     private static StyleBoxFlat MakePanelStyle(Color bg, Color border, int borderWidth = 1, int radius = 8, int margin = 8)
@@ -836,100 +866,24 @@ public partial class OverworldUI : CanvasLayer
         return s;
     }
 
-    private static Button _CreateButton(string text, Vector2 minSize)
-    {
-        var btn = new Button();
-        btn.Text = text;
-        btn.CustomMinimumSize = minSize;
+    private Button _CreateButton(string text, Vector2 minSize)
+        => _factory.CreateButton(text, minSize);
 
-        var normal = new StyleBoxFlat { BgColor = new Color(0.18f, 0.17f, 0.22f) };
-        normal.SetBorderWidthAll(1);
-        normal.BorderColor = new Color(0.3f, 0.3f, 0.35f, 0.6f);
-        normal.SetCornerRadiusAll(8);
-        normal.SetContentMarginAll(4);
-        btn.AddThemeStyleboxOverride("normal", normal);
+    private Label _CreateTitleLabel(string text, int fontSize = FontSizeXl)
+        => _factory.CreateTitleLabel(text, fontSize);
 
-        var hover = new StyleBoxFlat { BgColor = new Color(0.28f, 0.26f, 0.34f) };
-        hover.SetBorderWidthAll(1);
-        hover.BorderColor = new Color(0.5f, 0.45f, 0.3f, 0.8f);
-        hover.SetCornerRadiusAll(8);
-        hover.SetContentMarginAll(4);
-        btn.AddThemeStyleboxOverride("hover", hover);
+    private Label _CreateBodyLabel(string text, Color? color = null)
+        => _factory.CreateBodyLabel(text, color);
 
-        var pressed = new StyleBoxFlat { BgColor = new Color(0.12f, 0.11f, 0.15f) };
-        pressed.SetBorderWidthAll(1);
-        pressed.BorderColor = new Color(0.5f, 0.45f, 0.3f, 0.8f);
-        pressed.SetCornerRadiusAll(8);
-        pressed.SetContentMarginAll(4);
-        btn.AddThemeStyleboxOverride("pressed", pressed);
+    private Label _CreateMutedLabel(string text)
+        => _factory.CreateMutedLabel(text);
 
-        var disabled = new StyleBoxFlat { BgColor = new Color(0.12f, 0.12f, 0.12f, 0.5f) };
-        disabled.SetBorderWidthAll(1);
-        disabled.BorderColor = new Color(0.2f, 0.2f, 0.2f, 0.3f);
-        disabled.SetCornerRadiusAll(8);
-        disabled.SetContentMarginAll(4);
-        btn.AddThemeStyleboxOverride("disabled", disabled);
+    private RichTextLabel _CreateRichText(Vector2 minSize)
+        => _factory.CreateRichText(minSize);
 
-        btn.AddThemeColorOverride("font_color", new Color(0.95f, 0.93f, 0.88f));
-        btn.AddThemeColorOverride("font_hover_color", new Color(0.9f, 0.8f, 0.5f));
-        btn.AddThemeColorOverride("font_pressed_color", TextSecondary);
-        btn.AddThemeColorOverride("font_disabled_color", new Color(0.4f, 0.4f, 0.4f));
+    private HSeparator _CreateSeparatorH()
+        => _factory.CreateSeparatorH();
 
-        return btn;
-    }
-
-    private static Label _CreateTitleLabel(string text, int fontSize = FontSizeXl)
-    {
-        var lbl = new Label();
-        lbl.Text = text;
-        lbl.AddThemeFontSizeOverride("font_size", fontSize);
-        lbl.AddThemeColorOverride("font_color", TextAccent);
-        return lbl;
-    }
-
-    private static Label _CreateBodyLabel(string text, Color? color = null)
-    {
-        var lbl = new Label();
-        lbl.Text = text;
-        lbl.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        lbl.AddThemeColorOverride("font_color", color ?? TextPrimary);
-        return lbl;
-    }
-
-    private static Label _CreateMutedLabel(string text)
-    {
-        var lbl = new Label();
-        lbl.Text = text;
-        lbl.AddThemeFontSizeOverride("font_size", FontSizeSm);
-        lbl.AddThemeColorOverride("font_color", TextMuted);
-        return lbl;
-    }
-
-    private static RichTextLabel _CreateRichText(Vector2 minSize)
-    {
-        var rt = new RichTextLabel();
-        rt.CustomMinimumSize = minSize;
-        rt.BbcodeEnabled = true;
-        rt.ScrollActive = false;
-        rt.FitContent = true;
-        return rt;
-    }
-
-    private static HSeparator _CreateSeparatorH()
-    {
-        var sep = new HSeparator();
-        var style = new StyleBoxFlat { BgColor = BorderDefault };
-        style.SetContentMarginAll(1);
-        sep.AddThemeStyleboxOverride("separator", style);
-        return sep;
-    }
-
-    private static VSeparator _CreateSeparatorV()
-    {
-        var sep = new VSeparator();
-        var style = new StyleBoxFlat { BgColor = BorderDefault };
-        style.SetContentMarginAll(1);
-        sep.AddThemeStyleboxOverride("separator", style);
-        return sep;
-    }
+    private VSeparator _CreateSeparatorV()
+        => _factory.CreateSeparatorV();
 }

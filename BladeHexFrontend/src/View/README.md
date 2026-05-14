@@ -4,14 +4,21 @@
 
 ```
 BladeHexFrontend/src/View/
-├── Combat/          ← 战斗运行时（Manager、AI、Resolver、VFX）
-├── Data/            ← 全局状态、存档、资源注册表
-├── Events/          ← EventBus 类型化事件
-├── Map/             ← 六边形网格渲染（HexGrid、HexCell、Batcher）
-├── Quest/           ← 任务运行时管理器
-├── Strategic/       ← 战略层实体、渲染器
-└── Unit/            ← 单位节点与渲染流水线
-    └── Slots/       ← 装备分部位渲染配置
+├── Combat/              ← 战斗运行时
+│   ├── AI/             ← AI 策略与决策（Controller、Strategy、Evaluator）
+│   ├── commands/       ← 命令模式（ICommand、CommandHistory）
+│   ├── Equipment/      ← 装备/战利品/消耗品管理
+│   ├── Projectile/     ← 投射物系统（Pool、System、View）
+│   ├── Skills/         ← 技能处理器（Melee、Ranged、Magic、Support）
+│   ├── StatusEffect/   ← 状态效果管理
+│   └── Turn/           ← 回合管理（TurnManager、UnitRegistry）
+├── Data/               ← 全局状态、存档、资源注册表
+├── Events/             ← EventBus 类型化事件
+├── Map/                ← 六边形网格渲染（HexGrid、HexCell、Batcher）
+├── Quest/              ← 任务运行时管理器
+├── Strategic/          ← 战略层实体、渲染器
+└── Unit/               ← 单位节点与渲染流水线
+    └── Slots/          ← 装备分部位渲染配置
 ```
 
 ## Core / View 边界硬规则

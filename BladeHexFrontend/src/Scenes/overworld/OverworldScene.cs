@@ -14,7 +14,7 @@ using BladeHex.View.Environment;
 namespace BladeHex.Scenes.Overworld;
 
 [GlobalClass]
-public partial class OverworldScene : Node2D
+public partial class OverworldScene : Node2D, IOverworldContext
 {
     // ========================================
     // 常量
@@ -63,12 +63,12 @@ public partial class OverworldScene : Node2D
     /// <summary>永久可见的 POI 索引集合（出身种族领土 + 已探索到的）</summary>
     private HashSet<int> _discoveredPoiIndices = new();
 
-    public int PlayerRaceId = 0;
+    public int PlayerRaceId { get; set; } = 0;
     public UnitData PlayerUnitData { get; set; } = null!;
 
-    public float GameTimeScale = 2.0f;
+    public float GameTimeScale = 0.5f;
     public bool IsTimePaused = false;
-    public bool IsWaiting = false;
+    public bool IsWaiting { get; set; } = false;
 
     protected bool _poiEntered = false;
     protected int _poiLeaveCooldown = 0;
@@ -266,7 +266,7 @@ public partial class OverworldScene : Node2D
         if (shouldTimePass)
         {
             float deltaHours = (float)delta * GameTimeScale;
-            if (IsWaiting && !IsPlayerMoving()) deltaHours *= 4.0f;
+            if (IsWaiting && !IsPlayerMoving()) deltaHours *= 8.0f;
 
             EconomyMgr.AdvanceTime(deltaHours);
             EconomyMgr.ConsumeFood(deltaHours * 0.1f);
@@ -276,6 +276,7 @@ public partial class OverworldScene : Node2D
             if (WeatherMgr != null)
             {
                 int season = (int)EconomyMgr.GetSeason();
+                UpdateWeatherTerrainContext();
                 WeatherMgr.TickWeatherCycle(season, deltaHours);
             }
         }
@@ -314,6 +315,45 @@ public partial class OverworldScene : Node2D
                 DoCampRest();
                 GetViewport().SetInputAsHandled();
                 return;
+            }
+
+            // 大地图快捷键
+            if (UI is BladeHex.View.UI.Overworld.OverworldUI owUi)
+            {
+                string? action = keyEvent.Keycode switch
+                {
+                    Key.I => "army",          // I = Inventory/军队
+                    Key.C => "character",      // C = Character/角色
+                    Key.K => "skill_tree",     // K = sKill tree/技能盘
+                    Key.J => "quests",         // J = Journal/任务
+                    Key.T => "camp",           // T = Tent/营地
+                    Key.F => "territory",      // F = Fief/领地
+                    Key.H => "recenter",       // H = Home/镜头回到玩家
+                    Key.Space => "pause_time", // Space = 暂停/恢复时间
+                    _ => null,
+                };
+
+                if (action == "recenter")
+                {
+                    RecenterCameraOnPlayer();
+                    _isFollowingPlayer = true;
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
+
+                if (action == "pause_time")
+                {
+                    IsTimePaused = !IsTimePaused;
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
+
+                if (action != null)
+                {
+                    owUi.HandleHotkey(action);
+                    GetViewport().SetInputAsHandled();
+                    return;
+                }
             }
         }
 
@@ -432,6 +472,35 @@ public partial class OverworldScene : Node2D
     // ========================================
     // 互操作辅助
     // ========================================
+
+    /// <summary>更新天气管理器的地形上下文（雪地/沙漠判定）</summary>
+    private void UpdateWeatherTerrainContext()
+    {
+        if (WeatherMgr == null || PlayerParty == null) return;
+
+        BladeHex.Map.HexOverworldTile? tile = null;
+        if (_chunkManager != null)
+        {
+            var axial = BladeHex.Map.HexOverworldTile.PixelToAxial(PlayerParty.Position.X, PlayerParty.Position.Y);
+            tile = _chunkManager.GetTile(axial.X, axial.Y);
+        }
+        else if (HexGrid != null)
+        {
+            tile = HexGrid.GetTileAtPixel(PlayerParty.Position.X, PlayerParty.Position.Y);
+        }
+
+        if (tile == null) return;
+
+        var t = tile.Terrain;
+        WeatherMgr.IsInSnowTerrain = t == BladeHex.Map.HexOverworldTile.TerrainType.Snow
+            || t == BladeHex.Map.HexOverworldTile.TerrainType.Ice
+            || t == BladeHex.Map.HexOverworldTile.TerrainType.MountainSnow
+            || t == BladeHex.Map.HexOverworldTile.TerrainType.Taiga;
+
+        WeatherMgr.IsInDesertTerrain = t == BladeHex.Map.HexOverworldTile.TerrainType.Sand
+            || t == BladeHex.Map.HexOverworldTile.TerrainType.Wasteland
+            || t == BladeHex.Map.HexOverworldTile.TerrainType.Savanna;
+    }
 
     /// <summary>检查玩家队伍是否在移动</summary>
     private bool IsPlayerMoving()

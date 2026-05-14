@@ -26,13 +26,13 @@ public partial class WeatherManager : Node
     // ========================================
 
     /// <summary>天气过渡时长（秒）</summary>
-    [Export] public float TransitionDuration { get; set; } = 3.0f;
+    [Export] public float TransitionDuration { get; set; } = 2.0f;
 
     /// <summary>自动天气变化的最小间隔（游戏小时）</summary>
-    [Export] public float MinWeatherDurationHours { get; set; } = 4.0f;
+    [Export] public float MinWeatherDurationHours { get; set; } = 12.0f;
 
     /// <summary>自动天气变化的最大间隔（游戏小时）</summary>
-    [Export] public float MaxWeatherDurationHours { get; set; } = 12.0f;
+    [Export] public float MaxWeatherDurationHours { get; set; } = 36.0f;
 
     /// <summary>是否启用自动天气循环</summary>
     [Export] public bool AutoCycleEnabled { get; set; } = true;
@@ -64,17 +64,24 @@ public partial class WeatherManager : Node
 
     // 季节权重表：每个季节各天气的概率权重
     // [Clear, Rain, Snow, Sandstorm]
+    // 设计原则：大部分时间晴天，雨天占少部分，雪只在冬季+雪地出现，沙尘暴罕见
     private static readonly float[,] SeasonWeights = new float[4, 4]
     {
-        // Spring: 多雨，少雪
-        { 0.4f, 0.45f, 0.05f, 0.1f },
-        // Summer: 晴天为主，偶尔沙尘暴
-        { 0.6f, 0.15f, 0.0f, 0.25f },
-        // Fall: 多雨，偶尔雪
-        { 0.35f, 0.4f, 0.15f, 0.1f },
-        // Winter: 多雪，少雨
-        { 0.3f, 0.1f, 0.5f, 0.1f },
+        // Spring: 以晴天为主，偶尔下雨
+        { 0.75f, 0.22f, 0.0f, 0.03f },
+        // Summer: 大部分晴天，少量雷阵雨，极罕见沙尘暴
+        { 0.82f, 0.15f, 0.0f, 0.03f },
+        // Fall: 晴天为主，秋雨稍多
+        { 0.70f, 0.27f, 0.0f, 0.03f },
+        // Winter: 晴天为主，少量雨雪（雪需要地形配合才生效）
+        { 0.65f, 0.15f, 0.17f, 0.03f },
     };
+
+    /// <summary>当前玩家所在地形是否为雪地/冰原类型（由外部设置）</summary>
+    public bool IsInSnowTerrain { get; set; } = false;
+
+    /// <summary>当前玩家所在地形是否为沙漠/荒原类型（由外部设置）</summary>
+    public bool IsInDesertTerrain { get; set; } = false;
 
     // ========================================
     // 生命周期
@@ -90,13 +97,14 @@ public partial class WeatherManager : Node
     {
         float dt = (float)delta;
 
-        // 过渡动画
+        // 过渡动画（使用 SmoothStep 缓动曲线）
         if (IsTransitioning)
         {
             _transitionTimer += dt;
-            TransitionProgress = Mathf.Clamp(_transitionTimer / TransitionDuration, 0.0f, 1.0f);
+            float linear = Mathf.Clamp(_transitionTimer / TransitionDuration, 0.0f, 1.0f);
+            TransitionProgress = Mathf.SmoothStep(0.0f, 1.0f, linear);
 
-            if (TransitionProgress >= 1.0f)
+            if (linear >= 1.0f)
             {
                 IsTransitioning = false;
                 CurrentWeather = _targetWeather;
@@ -193,6 +201,7 @@ public partial class WeatherManager : Node
     public void TickWeatherCycle(int season, float elapsedHours)
     {
         if (!AutoCycleEnabled) return;
+        if (IsTransitioning) return; // 过渡中不触发新天气变化
 
         _nextChangeTimer -= elapsedHours;
         if (_nextChangeTimer <= 0.0f)
@@ -210,17 +219,61 @@ public partial class WeatherManager : Node
     {
         season = Mathf.Clamp(season, 0, 3);
 
+        // 构建有效权重（根据地形过滤不合理的天气）
+        float wClear = SeasonWeights[season, 0];
+        float wRain = SeasonWeights[season, 1];
+        float wSnow = SeasonWeights[season, 2];
+        float wSand = SeasonWeights[season, 3];
+
+        // 天气惯性：当前是雨/雪/沙尘暴时，有较高概率维持当前天气
+        // 这样雨天会连续下一段时间，而不是下一小会就停
+        if (CurrentWeather == WeatherType.Rain)
+        {
+            wRain += 0.35f; // 雨天→雨天额外 +35% 权重
+        }
+        else if (CurrentWeather == WeatherType.Snow)
+        {
+            wSnow += 0.30f;
+        }
+        else if (CurrentWeather == WeatherType.Sandstorm)
+        {
+            wSand += 0.25f;
+        }
+
+        // 雪：只有冬季 + 雪地/冰原/针叶林地形才允许下雪
+        if (!IsInSnowTerrain || season != 3)
+        {
+            wClear += wSnow; // 雪的概率归还给晴天
+            wSnow = 0.0f;
+        }
+
+        // 沙尘暴：只有沙漠/荒原地形才允许
+        if (!IsInDesertTerrain)
+        {
+            wClear += wSand;
+            wSand = 0.0f;
+        }
+
+        // 归一化
+        float total = wClear + wRain + wSnow + wSand;
+        if (total <= 0.0f) { TransitionTo(WeatherType.Clear); return; }
+
+        wClear /= total;
+        wRain /= total;
+        wSnow /= total;
+        wSand /= total;
+
         // 加权随机选择
         float roll = _rng.Randf();
         float cumulative = 0.0f;
 
-        // 天气候选：Clear, Rain, Snow, Sandstorm
         WeatherType[] candidates = { WeatherType.Clear, WeatherType.Rain, WeatherType.Snow, WeatherType.Sandstorm };
+        float[] weights = { wClear, wRain, wSnow, wSand };
 
         WeatherType chosen = WeatherType.Clear;
         for (int i = 0; i < 4; i++)
         {
-            cumulative += SeasonWeights[season, i];
+            cumulative += weights[i];
             if (roll <= cumulative)
             {
                 chosen = candidates[i];
@@ -228,11 +281,11 @@ public partial class WeatherManager : Node
             }
         }
 
-        // 随机强度
+        // 随机强度（偏向轻度和中度，重度较少）
         var intensityRoll = _rng.Randf();
-        WeatherIntensity chosenIntensity = intensityRoll < 0.3f
+        WeatherIntensity chosenIntensity = intensityRoll < 0.45f
             ? WeatherIntensity.Light
-            : intensityRoll < 0.7f
+            : intensityRoll < 0.85f
                 ? WeatherIntensity.Moderate
                 : WeatherIntensity.Heavy;
 

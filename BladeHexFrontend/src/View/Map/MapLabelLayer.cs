@@ -1,6 +1,6 @@
 // MapLabelLayer.cs
 // 多层级地图标签系统 — 根据摄像机缩放级别显示不同层级的地名
-// 特性：LOD 淡入淡出、标签避让、动态字号、缩放补偿
+// 特性：LOD 淡入淡出、标签避让、动态字号、缩放补偿、多阶段 POI 显示
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -13,21 +13,38 @@ namespace BladeHex.View.Map;
 
 /// <summary>
 /// 地图标签层 — 根据摄像机缩放显示不同层级的地名标签
+/// 6 层级缩放阶段：
+///   World → Region → Nation → Landmark(城堡/首都) → Town → Village
 /// </summary>
 [GlobalClass]
 public partial class MapLabelLayer : Node2D
 {
     // ========================================
-    // 缩放阈值
+    // 缩放阈值（6 阶段渐进显示）
     // ========================================
 
-    private const float ZoomWorldName = 0.12f;
-    private const float ZoomRegionNames = 0.22f;
-    private const float ZoomNationNames = 0.38f;
-    private const float ZoomPoiNames = 0.60f;
+    // 世界名：最远视角可见
+    private const float ZoomWorldMax = 0.12f;
+
+    // 地理区域（山脉、森林、海洋等大地标）
+    private const float ZoomRegionMin = 0.08f;
+    private const float ZoomRegionMax = 0.25f;
+
+    // 国家名
+    private const float ZoomNationMin = 0.18f;
+    private const float ZoomNationMax = 0.45f;
+
+    // 地标（城堡、首都等重要 POI）— 比普通城镇更早显示
+    private const float ZoomLandmarkMin = 0.30f;
+
+    // 城镇
+    private const float ZoomTownMin = 0.45f;
+
+    // 村庄 — 最近才显示
+    private const float ZoomVillageMin = 0.65f;
 
     // 淡入淡出范围（阈值 ± 这个值内做 alpha 过渡）
-    private const float FadeRange = 0.03f;
+    private const float FadeRange = 0.04f;
 
     // ========================================
     // 标签数据
@@ -72,7 +89,7 @@ public partial class MapLabelLayer : Node2D
         if (territories != null && nations != null)
             CreateNationLabels(territories, nations);
 
-        // POI 名
+        // POI 名（分层：Landmark / Town / Village）
         CreatePoiLabels(pois);
 
         // 标签避让（静态，初始化时一次性计算）
@@ -101,13 +118,6 @@ public partial class MapLabelLayer : Node2D
             float newAlpha = Mathf.Lerp(currentAlpha, targetAlpha, 0.15f);
             label.Node.Modulate = new Color(label.Node.Modulate.R, label.Node.Modulate.G, label.Node.Modulate.B, newAlpha);
             label.Node.Visible = newAlpha > 0.01f;
-
-            // 缩放补偿 — 标签在屏幕上保持固定大小
-            if (label.Node.Visible)
-            {
-                float s = (1.0f / zoom) * label.BaseScale;
-                label.Node.Scale = new Vector2(s, s);
-            }
         }
     }
 
@@ -118,16 +128,28 @@ public partial class MapLabelLayer : Node2D
         switch (tier)
         {
             case LabelTier.World:
-                showMin = 0f; showMax = ZoomWorldName;
+                showMin = 0f;
+                showMax = ZoomWorldMax;
                 break;
             case LabelTier.Region:
-                showMin = ZoomWorldName; showMax = ZoomRegionNames;
+                showMin = ZoomRegionMin;
+                showMax = ZoomRegionMax;
                 break;
             case LabelTier.Nation:
-                showMin = ZoomRegionNames; showMax = ZoomNationNames;
+                showMin = ZoomNationMin;
+                showMax = ZoomNationMax;
                 break;
-            case LabelTier.Poi:
-                showMin = ZoomNationNames; showMax = 2.0f; // 永远显示到最近
+            case LabelTier.Landmark:
+                showMin = ZoomLandmarkMin;
+                showMax = 2.0f; // 一旦显示就不消失
+                break;
+            case LabelTier.Town:
+                showMin = ZoomTownMin;
+                showMax = 2.0f;
+                break;
+            case LabelTier.Village:
+                showMin = ZoomVillageMin;
+                showMax = 2.0f;
                 break;
             default:
                 return 0f;
@@ -217,23 +239,61 @@ public partial class MapLabelLayer : Node2D
     {
         foreach (var poi in pois)
         {
+            // 跳过不需要标签的 POI 类型
             if (poi.PoiTypeEnum != OverworldPOI.POIType.Town &&
                 poi.PoiTypeEnum != OverworldPOI.POIType.Village &&
-                poi.PoiTypeEnum != OverworldPOI.POIType.Castle)
+                poi.PoiTypeEnum != OverworldPOI.POIType.Castle &&
+                poi.PoiTypeEnum != OverworldPOI.POIType.Port &&
+                poi.PoiTypeEnum != OverworldPOI.POIType.Outpost)
                 continue;
 
-            var color = poi.PoiTypeEnum switch
-            {
-                OverworldPOI.POIType.Town => new Color(1.0f, 0.95f, 0.8f),
-                OverworldPOI.POIType.Castle => new Color(0.9f, 0.8f, 0.5f),
-                _ => new Color(0.8f, 0.85f, 0.8f),
-            };
+            // 确定层级：城堡和港口作为地标更早显示
+            LabelTier tier;
+            Color color;
+            int fontSize;
+            float scale;
 
-            int fontSize = poi.PoiTypeEnum == OverworldPOI.POIType.Village ? 11 : 14;
-            float scale = poi.PoiTypeEnum == OverworldPOI.POIType.Village ? 0.8f : 1.0f;
+            switch (poi.PoiTypeEnum)
+            {
+                case OverworldPOI.POIType.Castle:
+                    tier = LabelTier.Landmark;
+                    color = new Color(0.95f, 0.8f, 0.4f); // 金色
+                    fontSize = 40;
+                    scale = 1.1f;
+                    break;
+
+                case OverworldPOI.POIType.Town:
+                    tier = LabelTier.Town;
+                    color = new Color(1.0f, 0.95f, 0.8f); // 暖白
+                    fontSize = 36;
+                    scale = 1.0f;
+                    break;
+
+                case OverworldPOI.POIType.Port:
+                    tier = LabelTier.Landmark;
+                    color = new Color(0.6f, 0.85f, 0.95f); // 浅蓝
+                    fontSize = 36;
+                    scale = 1.0f;
+                    break;
+
+                case OverworldPOI.POIType.Outpost:
+                    tier = LabelTier.Town;
+                    color = new Color(0.85f, 0.75f, 0.55f); // 土黄
+                    fontSize = 30;
+                    scale = 0.9f;
+                    break;
+
+                case OverworldPOI.POIType.Village:
+                default:
+                    tier = LabelTier.Village;
+                    color = new Color(0.8f, 0.85f, 0.8f); // 浅绿
+                    fontSize = 26;
+                    scale = 0.8f;
+                    break;
+            }
 
             var labelPos = poi.Position + new Vector2(0, 55);
-            AddLabel(poi.PoiName, labelPos, fontSize, color, LabelTier.Poi, scale);
+            AddLabel(poi.PoiName, labelPos, fontSize, color, tier, scale);
         }
     }
 
@@ -246,7 +306,7 @@ public partial class MapLabelLayer : Node2D
     /// </summary>
     private void ResolveOverlaps()
     {
-        var tiers = new[] { LabelTier.Region, LabelTier.Nation, LabelTier.Poi };
+        var tiers = new[] { LabelTier.Region, LabelTier.Nation, LabelTier.Landmark, LabelTier.Town, LabelTier.Village };
 
         foreach (var tier in tiers)
         {
@@ -255,7 +315,9 @@ public partial class MapLabelLayer : Node2D
             {
                 LabelTier.Region => 3000f,
                 LabelTier.Nation => 2000f,
-                LabelTier.Poi => 400f,
+                LabelTier.Landmark => 600f,
+                LabelTier.Town => 400f,
+                LabelTier.Village => 300f,
                 _ => 1000f,
             };
 
@@ -274,6 +336,34 @@ public partial class MapLabelLayer : Node2D
                         smaller.Node.Position += dir * push;
                         smaller.WorldPosition += dir * push;
                     }
+                }
+            }
+        }
+
+        // 跨层级避让：Landmark 与 Town 之间也不应重叠
+        CrossTierResolve(LabelTier.Landmark, LabelTier.Town, 350f);
+        CrossTierResolve(LabelTier.Town, LabelTier.Village, 250f);
+    }
+
+    /// <summary>跨层级标签避让</summary>
+    private void CrossTierResolve(LabelTier tierA, LabelTier tierB, float minDist)
+    {
+        var labelsA = _allLabels.Where(l => l.Tier == tierA && !l.IsBgRect).ToList();
+        var labelsB = _allLabels.Where(l => l.Tier == tierB && !l.IsBgRect).ToList();
+
+        foreach (var a in labelsA)
+        {
+            foreach (var b in labelsB)
+            {
+                float dist = a.WorldPosition.DistanceTo(b.WorldPosition);
+                if (dist < minDist && dist > 0.1f)
+                {
+                    // 推开较低层级的标签
+                    var dir = (b.WorldPosition - a.WorldPosition).Normalized();
+                    if (dir.Length() < 0.1f) dir = new Vector2(0, 1);
+                    float push = (minDist - dist) * 0.5f;
+                    b.Node.Position += dir * push;
+                    b.WorldPosition += dir * push;
                 }
             }
         }
@@ -313,8 +403,14 @@ public partial class MapLabelLayer : Node2D
         if (isOcean)
         {
             label.AddThemeColorOverride("font_color", new Color(color.R, color.G, color.B, 0.7f));
-            // Godot Label 不支持原生斜体，用 skew 模拟
             label.Rotation = -0.05f; // 微微倾斜
+        }
+
+        // 地标名加粗效果（通过 outline 模拟）
+        if (tier == LabelTier.Landmark)
+        {
+            label.AddThemeConstantOverride("outline_size", 2);
+            label.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 0.5f));
         }
 
         AddChild(label);
@@ -330,7 +426,6 @@ public partial class MapLabelLayer : Node2D
             bg.Modulate = new Color(1, 1, 1, 0);
             bg.Visible = false;
             AddChild(bg);
-            // 将 bg 存入标签列表以便同步 alpha
             _allLabels.Add(new MapLabel
             {
                 Node = bg,
@@ -356,7 +451,15 @@ public partial class MapLabelLayer : Node2D
     // 数据结构
     // ========================================
 
-    private enum LabelTier { World, Region, Nation, Poi }
+    private enum LabelTier
+    {
+        World,      // 世界名（最远）
+        Region,     // 大陆地标（山脉、森林、海洋）
+        Nation,     // 国家名
+        Landmark,   // 重要地标（城堡、港口、首都）
+        Town,       // 城镇
+        Village,    // 村庄（最近）
+    }
 
     private class MapLabel
     {
