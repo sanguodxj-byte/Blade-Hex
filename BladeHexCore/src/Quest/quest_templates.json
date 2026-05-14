@@ -1,0 +1,177 @@
+{
+  "extermination": [
+    {
+      "id_prefix": "kill_goblin",
+      "name": "清除哥布林营地",
+      "description": "{issuer}附近的树林中出现了一群哥布林，它们夜间袭击过路商旅，已有数人遇害。前去消灭它们的营地。",
+      "target_desc": "哥布林营地",
+      "enemy_template": "goblin_warrior",
+      "difficulty_range": [0, 1],
+      "base_count": [4, 8],
+      "base_reward": [30, 60],
+      "reputation": 5,
+      "time_limit_days": 7,
+      "ambush_narrative": "你循着脚印来到了一片密林深处。空气中弥漫着腐臭——哥布林特有的气味。突然，尖锐的嘶叫声从四面八方响起，绿色的身影从灌木丛中涌出。它们一直在等你。",
+      "terrain_override": "forest_ambush"
+    },
+    {
+      "id_prefix": "kill_bandit",
+      "name": "剿灭山贼据点",
+      "description": "一伙山贼在{issuer}通往{target_dir}的商路上设伏，已有多支商队遭劫。悬赏消灭他们的头目和手下。",
+      "target_desc": "山贼据点",
+      "enemy_template": "bandit_fighter",
+      "difficulty_range": [1, 2],
+      "base_count": [6, 12],
+      "base_reward": [50, 100],
+      "reputation": 8,
+      "time_limit_days": 10,
+      "ambush_narrative": "你找到了山贼的据点——一座废弃的瞭望塔。但当你靠近时，一声口哨划破了寂静。他们早就发现了你，这里才是真正的陷阱。弓弦声响起，箭矢从塔顶射下。",
+      "terrain_override": "ruins_ambush"
+    },
+    {
+      "id_prefix": "kill_wolves",
+      "name": "猎杀狼群",
+      "description": "{issuer}的牧民报告，一群异常凶猛的狼在夜间袭击羊圈。它们的巢穴似乎在{target_dir}方向的山谷中。",
+      "target_desc": "狼群巢穴",
+      "enemy_template": "dire_wolf",
+      "difficulty_range": [0, 1],
+      "base_count": [3, 6],
+      "base_reward": [25, 50],
+      "reputation": 4,
+      "time_limit_days": 5,
+      "ambush_narrative": "你在山谷中发现了散落的骨头和撕裂的皮毛——狼群的领地标记。一声低沉的嚎叫从岩石后传来，紧接着是更多的回应。它们从三个方向同时逼近，黄色的眼睛在暮色中闪烁。",
+      "terrain_override": "valley"
+    },
+    {
+      "id_prefix": "kill_undead",
+      "name": "净化亡灵墓穴",
+      "description": "古老的墓穴中传出不祥的动静。{issuer}的药师所长老请求冒险者前去调查并净化那里的亡灵。据说是某种邪恶的力量唤醒了沉睡的死者。",
+      "target_desc": "亡灵墓穴",
+      "enemy_template": "skeleton_warrior",
+      "difficulty_range": [1, 3],
+      "base_count": [5, 10],
+      "base_reward": [60, 120],
+      "reputation": 10,
+      "time_limit_days": 14,
+      "ambush_narrative": "墓穴的入口散发着腐朽的寒气。当你踏入第一间墓室时，地面上的符文突然亮起惨绿色的光芒。石棺的盖子被从内部推开，枯骨的手指攥着生锈的武器缓缓爬出。它们的眼眶中燃烧着不属于这个世界的火焰。",
+      "terrain_override": "dungeon"
+    },
+    {
+      "id_prefix": "kill_lizard",
+      "name": "驱逐蜥蜴人",
+      "description": "蜥蜴人部落从沼泽深处迁移到了{issuer}附近的水源地，污染了河流并攻击取水的村民。必须将它们赶回沼泽。",
+      "target_desc": "蜥蜴人窝点",
+      "enemy_template": "lizardman_warrior",
+      "difficulty_range": [1, 2],
+      "base_count": [5, 9],
+      "base_reward": [55, 90],
+      "reputation": 7,
+      "time_limit_days": 10,
+      "ambush_narrative": "沼泽的水面看似平静，但你注意到了水下的涟漪——那不是鱼。当你涉水前进时，蜥蜴人从水中猛然跃起，鳞片上的水珠在阳光下闪烁。它们的长矛指向你的胸口，嘶嘶的叫声是它们的战吼。",
+      "terrain_override": "swamp"
+    },
+    {
+      "id_prefix": "kill_orc_raid",
+      "name": "击退兽人掠夺队",
+      "description": "一支兽人掠夺队从北方山脉南下，已经洗劫了{issuer}附近的两个农庄。他们的营地在{target_dir}方向，必须在他们发动下一次袭击前将其消灭。",
+      "target_desc": "兽人营地",
+      "enemy_template": "orc_raider",
+      "difficulty_range": [2, 3],
+      "base_count": [8, 14],
+      "base_reward": [80, 150],
+      "reputation": 12,
+      "time_limit_days": 7,
+      "ambush_narrative": "兽人的营地比你预想的更加有组织。木栅栏围成的营寨中，篝火旁堆满了从村庄掠夺来的物资。当你的队伍接近时，一声震耳欲聋的战鼓响起——他们的哨兵发现了你。兽人们抄起武器冲出营寨，嘴里发出野兽般的咆哮。",
+      "terrain_override": "plains_camp"
+    },
+    {
+      "id_prefix": "kill_cultist",
+      "name": "铲除邪教徒",
+      "description": "{issuer}的居民最近频繁失踪。调查发现一个邪教组织在{target_dir}方向的洞穴中进行黑暗仪式。阻止他们，在更多人消失之前。",
+      "target_desc": "邪教祭坛",
+      "enemy_template": "cultist_mage",
+      "difficulty_range": [2, 3],
+      "base_count": [6, 10],
+      "base_reward": [90, 160],
+      "reputation": 15,
+      "time_limit_days": 10,
+      "ambush_narrative": "洞穴深处传来低沉的吟唱声，墙壁上的符文散发着不祥的紫光。当你闯入祭坛大厅时，邪教徒们停下了仪式，转过身来。他们的眼中没有恐惧——只有狂热。领头的法师举起手杖，黑暗的能量在他指尖凝聚。'又一个祭品，'他微笑着说。",
+      "terrain_override": "cave_ritual"
+    }
+  ],
+  "escort": [
+    {
+      "id_prefix": "escort_merchant",
+      "name": "护送商队至{destination}",
+      "description": "一支满载货物的商队需要从{issuer}前往{destination}。最近的商路不太平，他们需要可靠的护卫。",
+      "target_desc": "{destination}",
+      "base_reward": [50, 80],
+      "reputation": 8,
+      "time_limit_days": 14
+    },
+    {
+      "id_prefix": "escort_noble",
+      "name": "护送贵族至{destination}",
+      "description": "一位贵族小姐需要从{issuer}前往{destination}参加婚礼。她的家族愿意为安全抵达支付丰厚报酬。",
+      "target_desc": "{destination}",
+      "base_reward": [80, 130],
+      "reputation": 12,
+      "time_limit_days": 10
+    },
+    {
+      "id_prefix": "escort_refugee",
+      "name": "护送难民至{destination}",
+      "description": "一群从战火中逃离的难民聚集在{issuer}城外，他们想要前往{destination}投靠亲人。路上可能有劫匪觊觎他们仅剩的财物。",
+      "target_desc": "{destination}",
+      "base_reward": [30, 50],
+      "reputation": 15,
+      "time_limit_days": 14
+    }
+  ],
+  "exploration": [
+    {
+      "id_prefix": "explore_ruins",
+      "name": "探索远古废墟",
+      "description": "猎人在{issuer}{target_dir}方向发现了一处从未被记载的废墟。石壁上刻着古老的文字，也许里面藏着有价值的东西——或者危险。",
+      "target_desc": "远古废墟",
+      "base_reward": [40, 70],
+      "reputation": 10,
+      "time_limit_days": 0,
+      "ambush_chance": 0.4,
+      "ambush_narrative": "废墟比外表看起来更加完整。当你深入内部时，脚下的机关被触发——石门在身后轰然关闭。黑暗中传来金属摩擦的声音，某种古老的守卫者正在苏醒。"
+    },
+    {
+      "id_prefix": "explore_mine",
+      "name": "调查废弃矿洞",
+      "description": "{issuer}的矿工们报告，一座被废弃多年的矿洞中传出了奇怪的声响。也许是矿脉坍塌，也许是……别的什么。",
+      "target_desc": "废弃矿洞",
+      "base_reward": [35, 60],
+      "reputation": 6,
+      "time_limit_days": 0,
+      "ambush_chance": 0.5,
+      "ambush_narrative": "矿洞深处的空气潮湿而沉闷。你的火把照亮了墙壁上的爪痕——新鲜的。一声低沉的咆哮从黑暗中传来，紧接着是更多的回应。这里已经成了某种生物的巢穴。"
+    },
+    {
+      "id_prefix": "explore_monument",
+      "name": "调查神秘石碑",
+      "description": "旅人报告在{issuer}{target_dir}方向的荒野中发现了一块刻满符文的石碑。它在月光下会发出微弱的光芒。学者们愿意为任何发现支付报酬。",
+      "target_desc": "神秘石碑",
+      "base_reward": [45, 75],
+      "reputation": 8,
+      "time_limit_days": 0,
+      "ambush_chance": 0.3,
+      "ambush_narrative": "石碑确实存在——比描述中更加宏伟。但你不是唯一对它感兴趣的人。一群盗墓者已经在此扎营，他们显然不打算与你分享发现。"
+    },
+    {
+      "id_prefix": "explore_altar",
+      "name": "寻找失落祭坛",
+      "description": "古老的文献中提到{issuer}附近曾有一座献给被遗忘之神的祭坛。如果能找到它，药师所愿意支付丰厚的报酬。",
+      "target_desc": "古代祭坛",
+      "base_reward": [55, 90],
+      "reputation": 12,
+      "time_limit_days": 0,
+      "ambush_chance": 0.6,
+      "ambush_narrative": "祭坛隐藏在一片被魔力扭曲的树林中。当你触碰祭坛表面时，空气中的魔力突然暴涨——祭坛的守护者被唤醒了。它们从虚空中凝聚成形，半透明的身躯散发着冰冷的光芒。"
+    }
+  ]
+}

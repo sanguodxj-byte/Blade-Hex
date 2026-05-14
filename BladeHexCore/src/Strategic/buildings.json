@@ -1,0 +1,18 @@
+{
+  "buildings": [
+    { "id": "wood_fence", "name": "木栅栏", "desc": "简易的木制栅栏，可阻挡敌人移动。", "is_edge": true, "cost": 50, "days": 1, "base_hp": 20, "hp_per_level": 10, "attack": 0, "range": 0 },
+    { "id": "stone_wall", "name": "石墙", "desc": "坚固的石墙，提供半掩体防护。", "is_edge": true, "cost": 200, "days": 3, "base_hp": 60, "hp_per_level": 20, "attack": 0, "range": 0 },
+    { "id": "fortification", "name": "城墙", "desc": "厚重的城墙，提供全掩体防护。", "is_edge": true, "cost": 500, "days": 7, "base_hp": 100, "hp_per_level": 30, "attack": 0, "range": 0 },
+    { "id": "gate", "name": "城门", "desc": "可开关的城门，允许友军通过。", "is_edge": true, "cost": 100, "days": 2, "base_hp": 40, "hp_per_level": 15, "attack": 0, "range": 0 },
+    { "id": "barricade", "name": "拒马", "desc": "尖锐的拒马，使骑兵冲锋无效化。", "is_edge": true, "cost": 60, "days": 1, "base_hp": 30, "hp_per_level": 0, "attack": 0, "range": 0 },
+    { "id": "arrow_tower", "name": "箭塔", "desc": "每回合自动射击远程目标。", "is_edge": false, "cost": 300, "days": 5, "base_hp": 40, "hp_per_level": 10, "attack": 4, "attack_per_level": 2, "range": 5, "range_per_level": 1 },
+    { "id": "watch_tower", "name": "瞭望塔", "desc": "提供先攻+4，防止敌人突袭。", "is_edge": false, "cost": 150, "days": 2, "base_hp": 25, "hp_per_level": 0, "attack": 0, "range": 0 },
+    { "id": "magic_tower", "name": "魔法塔", "desc": "每回合释放范围法术，AOE 2格。", "is_edge": false, "cost": 800, "days": 10, "base_hp": 30, "hp_per_level": 10, "attack": 3, "attack_per_level": 2, "range": 4, "range_per_level": 0 },
+    { "id": "trap_pit", "name": "陷阱坑", "desc": "首个踏入的敌人受2d6伤害并倒地。", "is_edge": false, "cost": 80, "days": 1, "base_hp": 1, "hp_per_level": 0, "attack": 0, "range": 0 },
+    { "id": "farmland", "name": "农田", "desc": "每日产出5单位食物。", "is_edge": false, "cost": 100, "days": 3, "base_hp": 50, "hp_per_level": 0, "attack": 0, "range": 0, "food_bonus": 5 },
+    { "id": "market", "name": "市集", "desc": "每日产出10金币，繁荣度+5。", "is_edge": false, "cost": 500, "days": 7, "base_hp": 50, "hp_per_level": 0, "attack": 0, "range": 0, "gold_bonus": 10, "prosperity_bonus": 5 },
+    { "id": "barracks", "name": "兵营", "desc": "驻军上限+8，驻军每日恢复HP。", "is_edge": false, "cost": 400, "days": 7, "base_hp": 60, "hp_per_level": 0, "attack": 0, "range": 0, "garrison_bonus": 8 },
+    { "id": "smithy", "name": "铁匠坊", "desc": "驻军装备品质+1。", "is_edge": false, "cost": 350, "days": 5, "base_hp": 50, "hp_per_level": 0, "attack": 0, "range": 0 },
+    { "id": "lord_manor", "name": "领主宅邸", "desc": "封地核心，不可拆除。", "is_edge": false, "cost": 0, "days": 0, "base_hp": 100, "hp_per_level": 0, "attack": 0, "range": 0 }
+  ]
+}

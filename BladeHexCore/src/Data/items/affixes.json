@@ -1,0 +1,71 @@
+{
+  "prefixes": [
+    { "id": "flaming", "name": "烈焰", "desc": "附加火焰伤害", "target": "Weapon", "min_level": 3, "weight": 0.8, "cond_dice": 1, "cond_sides": 4, "cond_type": "fire", "condition": "on_hit" },
+    { "id": "frost", "name": "寒冰", "desc": "附加冰冷伤害", "target": "Weapon", "min_level": 3, "weight": 0.8, "cond_dice": 1, "cond_sides": 4, "cond_type": "cold", "condition": "on_hit" },
+    { "id": "shocking", "name": "电弧", "desc": "附加闪电伤害", "target": "Weapon", "min_level": 5, "weight": 0.6, "cond_dice": 1, "cond_sides": 6, "cond_type": "lightning", "condition": "on_hit" },
+    { "id": "venomous", "name": "剧毒", "desc": "命中时附加中毒(2回合)", "target": "Weapon", "min_level": 4, "weight": 0.5, "cond_dice": 1, "cond_sides": 4, "cond_type": "poison", "condition": "on_hit", "special": "apply_poison", "special_value": 2 },
+    { "id": "brutal", "name": "残暴", "desc": "伤害+2", "target": "Weapon", "min_level": 1, "weight": 1.0, "damage_bonus": 2 },
+    { "id": "savage", "name": "凶残", "desc": "伤害+4", "target": "Weapon", "min_level": 5, "weight": 0.6, "damage_bonus": 4 },
+    { "id": "precise", "name": "精准", "desc": "命中+1", "target": "Weapon", "min_level": 1, "weight": 1.0, "attack_bonus": 1 },
+    { "id": "masterwork", "name": "精工", "desc": "命中+2", "target": "Weapon", "min_level": 4, "weight": 0.7, "attack_bonus": 2 },
+    { "id": "piercing", "name": "穿甲", "desc": "穿透+2", "target": "Weapon", "min_level": 3, "weight": 0.8, "pen_bonus": 2 },
+    { "id": "sundering", "name": "破甲", "desc": "穿透+4", "target": "Weapon", "min_level": 7, "weight": 0.4, "pen_bonus": 4 },
+    { "id": "keen", "name": "锐利", "desc": "暴击范围+1", "target": "Weapon", "min_level": 5, "weight": 0.5, "crit_range_bonus": 1 },
+    { "id": "deadly", "name": "致命", "desc": "暴击倍率+0.2", "target": "Weapon", "min_level": 7, "weight": 0.3, "crit_mult_bonus": 1 },
+    { "id": "holy", "name": "净化", "desc": "对亡灵额外2d6奥术伤害", "target": "Weapon", "min_level": 5, "weight": 0.4, "cond_dice": 2, "cond_sides": 6, "cond_type": "arcane", "condition": "vs_undead" },
+    { "id": "cavalry_slayer", "name": "骑杀", "desc": "对骑兵额外1d8伤害", "target": "Weapon", "min_level": 3, "weight": 0.5, "cond_dice": 1, "cond_sides": 8, "cond_type": "pierce", "condition": "vs_cavalry" },
+    { "id": "giant_slayer", "name": "屠巨", "desc": "对大型目标额外1d10伤害", "target": "Weapon", "min_level": 6, "weight": 0.4, "cond_dice": 1, "cond_sides": 10, "cond_type": "slash", "condition": "vs_large" },
+    { "id": "sturdy", "name": "坚固", "desc": "DR阈值+2", "target": "Armor", "min_level": 1, "weight": 1.0, "ac_bonus": 1 },
+    { "id": "reinforced", "name": "强化", "desc": "DR阈值+4", "target": "Armor", "min_level": 5, "weight": 0.6, "ac_bonus": 2 },
+    { "id": "agile", "name": "灵巧", "desc": "DEX+2", "target": "Armor", "min_level": 1, "weight": 0.8, "dex_bonus": 2 },
+    { "id": "mighty", "name": "力量", "desc": "STR+2", "target": "Any", "min_level": 1, "weight": 1.0, "str_bonus": 2 },
+    { "id": "wise", "name": "睿智", "desc": "INT+2", "target": "Any", "min_level": 1, "weight": 1.0, "int_bonus": 2 },
+    { "id": "vital", "name": "生命", "desc": "HP+5", "target": "Any", "min_level": 1, "weight": 1.0, "hp_bonus": 5 },
+    { "id": "swift", "name": "迅捷", "desc": "移动+1", "target": "Any", "min_level": 1, "weight": 0.7, "move_bonus": 1 },
+    { "id": "warding", "name": "守护", "desc": "全豁免+1", "target": "Armor", "min_level": 4, "weight": 0.5, "special": "all_save_bonus", "special_value": 1 },
+    { "id": "bloodthirsty", "name": "嗜血", "desc": "击杀恢复1d6 HP", "target": "Weapon", "min_level": 6, "weight": 0.3, "special": "life_on_kill", "special_value": 6 }
+  ],
+  "suffixes": [
+    { "id": "of_power", "name": "力量", "desc": "STR+3", "target": "Any", "min_level": 1, "weight": 1.0, "str_bonus": 3 },
+    { "id": "of_agility", "name": "灵巧", "desc": "DEX+3", "target": "Any", "min_level": 1, "weight": 1.0, "dex_bonus": 3 },
+    { "id": "of_vitality", "name": "活力", "desc": "CON+3", "target": "Any", "min_level": 1, "weight": 1.0, "con_bonus": 3 },
+    { "id": "of_intellect", "name": "睿智", "desc": "INT+3", "target": "Any", "min_level": 1, "weight": 1.0, "int_bonus": 3 },
+    { "id": "of_wisdom", "name": "洞察", "desc": "WIS+3", "target": "Any", "min_level": 1, "weight": 1.0, "wis_bonus": 3 },
+    { "id": "of_command", "name": "统帅", "desc": "CHA+3", "target": "Any", "min_level": 1, "weight": 0.8, "cha_bonus": 3 },
+    { "id": "of_the_bear", "name": "巨熊", "desc": "STR+2 CON+2", "target": "Armor", "min_level": 3, "weight": 0.5, "str_bonus": 2, "con_bonus": 2 },
+    { "id": "of_the_eagle", "name": "苍鹰", "desc": "DEX+2 WIS+2", "target": "Armor", "min_level": 3, "weight": 0.5, "dex_bonus": 2, "wis_bonus": 2 },
+    { "id": "of_the_fox", "name": "灵狐", "desc": "DEX+2 INT+2", "target": "Armor", "min_level": 3, "weight": 0.5, "dex_bonus": 2, "int_bonus": 2 },
+    { "id": "of_the_lion", "name": "雄狮", "desc": "STR+2 CHA+2", "target": "Armor", "min_level": 3, "weight": 0.5, "str_bonus": 2, "cha_bonus": 2 },
+    { "id": "of_fire_resist", "name": "耐火", "desc": "火焰抗性", "target": "Armor", "min_level": 3, "weight": 0.6, "resistance": "fire" },
+    { "id": "of_cold_resist", "name": "耐寒", "desc": "冰冷抗性", "target": "Armor", "min_level": 3, "weight": 0.6, "resistance": "cold" },
+    { "id": "of_lightning_resist", "name": "避雷", "desc": "闪电抗性", "target": "Armor", "min_level": 3, "weight": 0.6, "resistance": "lightning" },
+    { "id": "of_poison_resist", "name": "解毒", "desc": "毒素抗性", "target": "Armor", "min_level": 2, "weight": 0.7, "resistance": "poison" },
+    { "id": "of_sharpness", "name": "锋利", "desc": "伤害+3", "target": "Weapon", "min_level": 1, "weight": 1.0, "damage_bonus": 3 },
+    { "id": "of_smiting", "name": "猛击", "desc": "额外1d4伤害", "target": "Weapon", "min_level": 5, "weight": 0.5, "damage_dice_bonus": 1, "damage_dice_sides": 4 },
+    { "id": "of_cleaving", "name": "劈斩", "desc": "额外1d6伤害", "target": "Weapon", "min_level": 8, "weight": 0.3, "damage_dice_bonus": 1, "damage_dice_sides": 6 },
+    { "id": "of_initiative", "name": "先机", "desc": "先攻+2", "target": "Accessory", "min_level": 1, "weight": 0.8, "init_bonus": 2 },
+    { "id": "of_life_steal", "name": "吸血", "desc": "攻击回复10%伤害为HP", "target": "Weapon", "min_level": 8, "weight": 0.3, "special": "life_steal", "special_value": 0.1 },
+    { "id": "of_armor_break", "name": "碎甲", "desc": "穿透+3", "target": "Weapon", "min_level": 4, "weight": 0.6, "pen_bonus": 3 },
+    { "id": "of_the_wind", "name": "疾风", "desc": "AP消耗-1(最低2)", "target": "Weapon", "min_level": 6, "weight": 0.3, "special": "ap_reduction", "special_value": 1 },
+    { "id": "of_fortitude", "name": "坚韧", "desc": "HP+10", "target": "Armor", "min_level": 3, "weight": 0.7, "hp_bonus": 10 },
+    { "id": "of_the_sentinel", "name": "哨兵", "desc": "先攻+3 移动+1", "target": "Armor", "min_level": 5, "weight": 0.4, "init_bonus": 3, "move_bonus": 1 }
+  ],
+  "rarity_weights": {
+    "easy": { "Common": 70, "Uncommon": 20, "Rare": 8, "Epic": 2, "Legendary": 0 },
+    "normal": { "Common": 55, "Uncommon": 28, "Rare": 12, "Epic": 4, "Legendary": 1 },
+    "hard": { "Common": 40, "Uncommon": 30, "Rare": 18, "Epic": 9, "Legendary": 3 },
+    "nightmare": { "Common": 25, "Uncommon": 30, "Rare": 25, "Epic": 14, "Legendary": 6 }
+  },
+  "rarity_affix_count": {
+    "Common": 0,
+    "Uncommon": 1,
+    "Rare": 2,
+    "Epic": 3,
+    "Legendary": 0
+  },
+  "shop_rarity_by_prosperity": {
+    "low": { "Common": 85, "Uncommon": 15, "Rare": 0, "Epic": 0, "Legendary": 0 },
+    "mid": { "Common": 65, "Uncommon": 30, "Rare": 5, "Epic": 0, "Legendary": 0 },
+    "high": { "Common": 45, "Uncommon": 35, "Rare": 20, "Epic": 0, "Legendary": 0 }
+  }
+}

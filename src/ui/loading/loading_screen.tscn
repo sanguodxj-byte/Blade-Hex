@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://loading_screen_scene"]
 
-[ext_resource type="Script" path="res://src/ui/loading/LoadingScreen.gd" id="1_load"]
+[ext_resource type="Script" path="res://BladeHexFrontend/src/View/UI/Loading/LoadingScreen.cs" id="1_load"]
 
 [node name="LoadingScreen" type="CanvasLayer"]
 layer = 100

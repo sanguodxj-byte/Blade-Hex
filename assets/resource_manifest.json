@@ -1,0 +1,7 @@
+{
+    "manifest_version": 1,
+    "description": "ResourceRegistry id → 资源路径映射表 (T-305)。由 T-302 migrator 工具或手动维护。",
+    "icons": {},
+    "sprite_frames": {},
+    "materials": {}
+}

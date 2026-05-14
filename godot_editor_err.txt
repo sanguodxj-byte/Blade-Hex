@@ -1,0 +1,6 @@
+ERROR: Failed to create an autoload, script 'res://BladeHexFrontend/src/View/Data/GlobalState.cs' is not compiling.
+   at: _create_autoload (editor/settings/editor_autoload_settings.cpp:409)
+ERROR: Failed to create an autoload, script 'res://BladeHexFrontend/src/View/SkillTreeManager.cs' is not compiling.
+   at: _create_autoload (editor/settings/editor_autoload_settings.cpp:409)
+ERROR: Failed to create an autoload, script 'res://BladeHexFrontend/src/View/Events/EventBus.cs' is not compiling.
+   at: _create_autoload (editor/settings/editor_autoload_settings.cpp:409)

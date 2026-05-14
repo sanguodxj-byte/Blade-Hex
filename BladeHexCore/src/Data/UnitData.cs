@@ -1,0 +1,522 @@
+﻿// UnitData.cs
+// 单位基础数据资源 (RPG 核心版本)
+// 对应策划案 05/06 — 完整装备槽位、敌方模板、词缀加成
+using Godot;
+
+namespace BladeHex.Data;
+
+[GlobalClass]
+public partial class UnitData : Resource
+{
+    // ========================================
+    // 敌方专属枚举
+    // ========================================
+
+    public enum EnemyType
+    {
+        Humanoid,  // 类人
+        Beast,     // 野兽
+        Undead,    // 亡灵
+        Demon,     // 魔物
+        Giant,     // 巨型
+        Construct, // 构造体
+        Dragon,    // 龙族
+        Legendary, // 传奇
+    }
+
+    public enum CreatureSize
+    {
+        Tiny,       // 微型
+        Small,      // 小型
+        Medium,     // 中型
+        Large,      // 大型
+        Huge,       // 巨型
+        Gargantuan, // 超巨型
+    }
+
+    public enum AIStrategy
+    {
+        Reckless,    // 鲁莽
+        Cautious,    // 谨慎
+        Tactical,    // 战术
+        Instinct,    // 本能
+        Territorial, // 领地
+        Cunning,     // 狡诈
+        Intimidate,  // 恐吓
+        Berserk,     // 狂暴
+    }
+
+    public enum MoraleLevel
+    {
+        High,    // 高昂 (+20~+40)
+        Normal,  // 正常 (-19~+19)
+        Low,     // 低落 (-39~-20)
+        Broken,  // 崩溃 (-59~-40)
+        Routing, // 溃逃 (-60)
+    }
+
+    // ========================================
+    // 基础信息
+    // ========================================
+
+    [Export] public string UnitName { get; set; } = "未命名单位";
+    [Export] public int Level { get; set; } = 1;
+
+    // ========================================
+    // 六维属性
+    // ========================================
+
+    [Export] public int Str { get; set; } = 10;
+    [Export] public int Dex { get; set; } = 10;
+    [Export] public int Con { get; set; } = 10;
+    [Export] public int Intel { get; set; } = 10;
+    [Export] public int Wis { get; set; } = 10;
+    [Export] public int Cha { get; set; } = 10;
+
+    // ========================================
+    // 技能盘数据
+    // ========================================
+
+    [Export] public Godot.Collections.Dictionary SkillTreeData = new();
+    [Export] public int CharacterId { get; set; } = -1;
+
+    // ========================================
+    // 基础战斗属性
+    // ========================================
+
+    [Export] public int BaseMaxHp { get; set; } = 10;
+    [Export] public int BaseAc { get; set; } = 10;
+    [Export] public int BaseAp { get; set; } = 12;
+    [Export] public int BaseMoveRange { get; set; } = 4;
+    [Export] public int BaseInitiative;
+
+    // ========================================
+    // 装甲系统 (Damage Reduction)
+    // ========================================
+
+    [Export] public int CurrentDr;
+    public int MaxDr;
+    [Export] public int NaturalDr;
+    [Export] public int NaturalDrThreshold;
+
+    // ========================================
+    // 种族与特质
+    // ========================================
+
+    [Export] public RaceData? Race { get; set; }
+    [Export] public Godot.Collections.Array<TraitData> CharacterTraits = new();
+
+    // ========================================
+    // 经验与等级
+    // ========================================
+
+    [Export] public int Xp;
+    [Export] public int SkillPoints;
+    public int UnspentAttrPoints;
+    [Export] public int JumpsUsed;
+
+    // ========================================
+    // 武器精通（运行时，不序列化）
+    // 按伤害类型×轻重共 9 条轨道，造成伤害即获得 XP
+    // ========================================
+
+    private WeaponMastery? _weaponMastery;
+    public WeaponMastery WeaponMastery => _weaponMastery ??= new WeaponMastery();
+
+    // ========================================
+    // 法术系统
+    // ========================================
+
+    [Export] public Godot.Collections.Array<SpellData> KnownSpells = new();
+    public int CurrentMana;
+    public Godot.Collections.Dictionary SpellCooldowns = new();
+    [Export] public string CastingAbility { get; set; } = "intel";
+
+    // ========================================
+    // 坐骑系统
+    // ========================================
+
+    [Export] public MountData? Mount { get; set; }
+    public int MountCurrentHp;
+    public bool IsMounted;
+
+    // ========================================
+    // 消耗品背包
+    // ========================================
+
+    [Export] public Godot.Collections.Array<ConsumableData> Consumables = new();
+
+    // ========================================
+    // 装备槽位
+    // ========================================
+
+    [Export] public ArmorData? Armor { get; set; }
+    [Export] public ArmorData? Shield { get; set; }
+    [Export] public ArmorData? Helmet { get; set; }
+    [Export] public ArmorData? Gauntlets { get; set; }       // 护手
+    [Export] public ArmorData? Boots { get; set; }           // 鞋子
+    [Export] public AccessoryData? Accessory1 { get; set; }
+    [Export] public AccessoryData? Accessory2 { get; set; }
+
+    // 武器组 A
+    [Export] public WeaponData? PrimaryMainHand { get; set; }
+    [Export] public ItemData? PrimaryOffHand;
+
+    // 武器组 B
+    [Export] public WeaponData? SecondaryMainHand { get; set; }
+    [Export] public ItemData? SecondaryOffHand;
+
+    // 技能额外武器栏（由特定技能/天赋解锁，如双持大师、武器收藏家等）
+    // 每个条目包含一个武器槽，运行时由技能系统动态添加/移除
+    [Export] public Godot.Collections.Array<WeaponData> ExtraWeaponSlots = new();
+
+    // ========================================
+    // 技能列表
+    // ========================================
+
+    [Export] public Godot.Collections.Array<SkillData> Skills = new();
+
+    [Export] public string PortraitId { get; set; } = "";
+    [Export] public string BattleSpriteId { get; set; } = "";
+    [Export] public string OverworldSpriteId { get; set; } = "";
+    [Export] public string SpriteFramesId { get; set; } = "";
+
+    // ========================================
+    // 敌方专属字段
+    // ========================================
+
+    [Export] public string EnemyTemplateId { get; set; } = "";
+    [Export] public bool IsEnemy;
+    [Export] public EnemyType enemyType = EnemyType.Humanoid;
+    [Export] public CreatureSize creatureSize = CreatureSize.Medium;
+    [Export] public float ThreatLevel;
+    [Export] public AIStrategy aiStrategy = AIStrategy.Instinct;
+    [Export] public int Morale;
+    [Export] public string[] Immunities = [];
+    [Export] public string[] Resistances = [];
+    [Export] public string[] Weaknesses = [];
+    [Export] public string[] Traits = [];
+
+    // 传奇专属
+    [Export] public int LegendaryResistanceUses;
+    [Export] public int LegendaryActionPoints;
+    [Export] public Godot.Collections.Array<Godot.Collections.Dictionary> LegendaryActions = new();
+    [Export] public Godot.Collections.Array<Godot.Collections.Dictionary> LairActions = new();
+    [Export] public Godot.Collections.Array<Godot.Collections.Dictionary> Phases = new();
+    [Export] public string UniqueDropId { get; set; } = "";
+
+    // ========================================
+    // 战斗运行时状态 — 已完全迁移至 UnitRuntimeState
+    // 访问方式：unit.Data.Runtime.Facing / .IsDefending / .ActiveStatusEffects 等
+    // ========================================
+
+    // （无残留字段 — 所有运行时状态均通过 Data.Runtime 访问）
+
+    // ========================================
+    // 词缀加成缓存
+    // ========================================
+
+    public int AccessoryStrBonus;
+    public int AccessoryDexBonus;
+    public int AccessoryConBonus;
+    public int AccessoryIntBonus;
+    public int AccessoryWisBonus;
+    public int AccessoryChaBonus;
+    public int AccessoryHpBonus;
+    public int AccessoryAcBonus;
+    public int AccessoryMoveBonus;
+    public int AccessoryInitiativeBonus;
+
+    // ========================================
+    // 枚举显示名方法
+    // ========================================
+
+    public MoraleLevel GetMoraleLevel() => Morale switch
+    {
+        >= 20 => MoraleLevel.High,
+        >= -19 => MoraleLevel.Normal,
+        >= -39 => MoraleLevel.Low,
+        >= -59 => MoraleLevel.Broken,
+        _ => MoraleLevel.Routing,
+    };
+
+    public string GetEnemyTypeName() => enemyType switch
+    {
+        EnemyType.Humanoid => "类人",
+        EnemyType.Beast => "野兽",
+        EnemyType.Undead => "亡灵",
+        EnemyType.Demon => "魔物",
+        EnemyType.Giant => "巨型",
+        EnemyType.Construct => "构造体",
+        EnemyType.Dragon => "龙族",
+        EnemyType.Legendary => "传奇",
+        _ => "未知",
+    };
+
+    public string GetAiStrategyName() => aiStrategy switch
+    {
+        AIStrategy.Reckless => "鲁莽",
+        AIStrategy.Cautious => "谨慎",
+        AIStrategy.Tactical => "战术",
+        AIStrategy.Instinct => "本能",
+        AIStrategy.Territorial => "领地",
+        AIStrategy.Cunning => "狡诈",
+        AIStrategy.Intimidate => "恐吓",
+        AIStrategy.Berserk => "狂暴",
+        _ => "未知",
+    };
+
+    public string GetSizeName() => creatureSize switch
+    {
+        CreatureSize.Tiny => "微型",
+        CreatureSize.Small => "小型",
+        CreatureSize.Medium => "中型",
+        CreatureSize.Large => "大型",
+        CreatureSize.Huge => "巨型",
+        CreatureSize.Gargantuan => "超巨型",
+        _ => "未知",
+    };
+
+    public string GetCrText()
+    {
+        if (ThreatLevel == 0) return "CR 0";
+        if (ThreatLevel < 1) return $"CR 1/{Mathf.RoundToInt(1.0f / ThreatLevel)}";
+        return $"CR {Mathf.RoundToInt(ThreatLevel)}";
+    }
+
+    // ========================================
+    // 装备逻辑
+    // ========================================
+
+    /// <summary>装备一个物品到对应槽位（纯数据操作，不涉及经济管理）</summary>
+    public void EquipItem(ItemData item)
+    {
+        if (item is ArmorData armorItem)
+        {
+            switch (armorItem.armorType)
+            {
+                case ArmorData.ArmorType.Shield:
+                    if (Shield != null) UnequipItem("shield");
+                    Shield = armorItem;
+                    break;
+                default:
+                    // 根据 EquipSlotTarget 区分头盔/护手/身体
+                    if (item.EquipSlotTarget == ItemData.EquipSlot.Helmet || item.EquipSlotTarget == ItemData.EquipSlot.Head)
+                    {
+                        if (Helmet != null) UnequipItem("helmet");
+                        Helmet = armorItem;
+                    }
+                    else if (item.EquipSlotTarget == ItemData.EquipSlot.Hands)
+                    {
+                        if (Gauntlets != null) UnequipItem("gauntlets");
+                        Gauntlets = armorItem;
+                    }
+                    else if (item.EquipSlotTarget == ItemData.EquipSlot.Feet)
+                    {
+                        if (Boots != null) UnequipItem("boots");
+                        Boots = armorItem;
+                    }
+                    else
+                    {
+                        if (Armor != null) UnequipItem("armor");
+                        Armor = armorItem;
+                    }
+                    break;
+            }
+        }
+        else if (item is WeaponData)
+        {
+            if (PrimaryMainHand != null) UnequipItem("primary_main");
+            PrimaryMainHand = (WeaponData)item;
+        }
+        else if (item is AccessoryData)
+        {
+            if (Accessory1 == null)
+                Accessory1 = (AccessoryData)item;
+            else if (Accessory2 == null)
+                Accessory2 = (AccessoryData)item;
+            else
+            {
+                UnequipItem("accessory_1");
+                Accessory1 = (AccessoryData)item;
+            }
+        }
+        RefreshAccessoryBonuses();
+    }
+
+    /// <summary>装备到指定槽位（显式指定槽位名）</summary>
+    public void EquipToSlot(ItemData item, string slotName)
+    {
+        UnequipItem(slotName);
+        switch (slotName)
+        {
+            case "helmet": Helmet = item as ArmorData; break;
+            case "armor": case "body": Armor = item as ArmorData; break;
+            case "gauntlets": Gauntlets = item as ArmorData; break;
+            case "boots": Boots = item as ArmorData; break;
+            case "shield": Shield = item as ArmorData; break;
+            case "primary_main": case "main_hand": PrimaryMainHand = item as WeaponData; break;
+            case "primary_off": case "off_hand": PrimaryOffHand = item; break;
+            case "secondary_main": SecondaryMainHand = item as WeaponData; break;
+            case "secondary_off": SecondaryOffHand = item; break;
+            case "accessory_1": Accessory1 = item as AccessoryData; break;
+            case "accessory_2": Accessory2 = item as AccessoryData; break;
+        }
+        RefreshAccessoryBonuses();
+    }
+
+    /// <summary>卸下指定槽位的装备，返回被卸下的物品（纯数据操作）</summary>
+    public ItemData? UnequipItem(string slot)
+    {
+        ItemData? removed = null;
+        switch (slot)
+        {
+            case "armor":
+                if (Armor != null) { removed = Armor; Armor = null; }
+                break;
+            case "shield":
+                if (Shield != null) { removed = Shield; Shield = null; }
+                break;
+            case "helmet":
+                if (Helmet != null) { removed = Helmet; Helmet = null; }
+                break;
+            case "gauntlets":
+                if (Gauntlets != null) { removed = Gauntlets; Gauntlets = null; }
+                break;
+            case "boots":
+                if (Boots != null) { removed = Boots; Boots = null; }
+                break;
+            case "accessory_1":
+                if (Accessory1 != null) { removed = Accessory1; Accessory1 = null; }
+                break;
+            case "accessory_2":
+                if (Accessory2 != null) { removed = Accessory2; Accessory2 = null; }
+                break;
+            case "primary_main":
+                if (PrimaryMainHand != null) { removed = PrimaryMainHand; PrimaryMainHand = null; }
+                break;
+            case "primary_off":
+                if (PrimaryOffHand != null) { removed = PrimaryOffHand; PrimaryOffHand = null; }
+                break;
+            case "secondary_main":
+                if (SecondaryMainHand != null) { removed = SecondaryMainHand; SecondaryMainHand = null; }
+                break;
+            case "secondary_off":
+                if (SecondaryOffHand != null) { removed = SecondaryOffHand; SecondaryOffHand = null; }
+                break;
+        }
+        RefreshAccessoryBonuses();
+        return removed;
+    }
+
+    /// <summary>刷新饰品加成缓存</summary>
+    public void RefreshAccessoryBonuses()
+    {
+        AccessoryStrBonus = 0;
+        AccessoryDexBonus = 0;
+        AccessoryConBonus = 0;
+        AccessoryIntBonus = 0;
+        AccessoryWisBonus = 0;
+        AccessoryChaBonus = 0;
+        AccessoryHpBonus = 0;
+        AccessoryAcBonus = 0;
+        AccessoryMoveBonus = 0;
+        AccessoryInitiativeBonus = 0;
+
+        foreach (var acc in new AccessoryData?[] { Accessory1, Accessory2 })
+        {
+            if (acc == null) continue;
+            AccessoryStrBonus += acc.StrBonus;
+            AccessoryDexBonus += acc.DexBonus;
+            AccessoryConBonus += acc.ConBonus;
+            AccessoryIntBonus += acc.IntBonus;
+            AccessoryWisBonus += acc.WisBonus;
+            AccessoryChaBonus += acc.ChaBonus;
+            AccessoryHpBonus += acc.HpBonus;
+            AccessoryAcBonus += acc.AcBonus;
+            AccessoryMoveBonus += acc.MoveBonus;
+            AccessoryInitiativeBonus += acc.InitiativeBonus;
+        }
+    }
+
+    // ========================================
+    // 装备加成计算接口
+    // 注意: 护甲对防御的贡献完全通过DR系统（max_dr / dr_threshold），不通过AC
+    // AC由 Unit.GetAc() 计算：10 + DEX修正 + 盾牌AC + sqrt(DR)
+    // ========================================
+
+    public int GetEquipmentHpBonus()
+    {
+        int bonus = 0;
+        if (Armor != null) bonus += Armor.BonusHp;
+        if (Helmet != null) bonus += Helmet.BonusHp;
+        bonus += AccessoryHpBonus;
+        return bonus;
+    }
+
+    public int GetEquipmentMoveBonus()
+    {
+        int bonus = 0;
+        if (Armor != null) bonus += Armor.BonusMove;
+        bonus += AccessoryMoveBonus;
+        if (Armor != null && Armor.MovementPenalty > 0)
+            bonus -= Armor.MovementPenalty;
+        return bonus;
+    }
+
+    public string[] GetEquipmentResistances()
+    {
+        var res = new System.Collections.Generic.List<string>();
+        if (Armor != null && Armor.BonusResistance != "" && !res.Contains(Armor.BonusResistance))
+            res.Add(Armor.BonusResistance);
+        if (Helmet != null && Helmet.BonusResistance != "" && !res.Contains(Helmet.BonusResistance))
+            res.Add(Helmet.BonusResistance);
+        foreach (var acc in new AccessoryData?[] { Accessory1, Accessory2 })
+            if (acc != null && acc.Resistance != "" && !res.Contains(acc.Resistance))
+                res.Add(acc.Resistance);
+        return res.ToArray();
+    }
+
+    public string[] GetEquipmentImmunities()
+    {
+        var imm = new System.Collections.Generic.List<string>();
+        if (Armor != null && Armor.BonusImmunity != "" && !imm.Contains(Armor.BonusImmunity))
+            imm.Add(Armor.BonusImmunity);
+        if (Helmet != null && Helmet.BonusImmunity != "" && !imm.Contains(Helmet.BonusImmunity))
+            imm.Add(Helmet.BonusImmunity);
+        foreach (var acc in new AccessoryData?[] { Accessory1, Accessory2 })
+            if (acc != null && acc.Immunity != "" && !imm.Contains(acc.Immunity))
+                imm.Add(acc.Immunity);
+        return imm.ToArray();
+    }
+
+    public ItemData[] GetAllEquippedItems()
+    {
+        var items = new System.Collections.Generic.List<ItemData>();
+        if (Armor != null) items.Add(Armor);
+        if (Shield != null) items.Add(Shield);
+        if (Helmet != null) items.Add(Helmet);
+        if (PrimaryMainHand != null) items.Add(PrimaryMainHand);
+        if (PrimaryOffHand != null) items.Add(PrimaryOffHand);
+        if (SecondaryMainHand != null) items.Add(SecondaryMainHand);
+        if (SecondaryOffHand != null) items.Add(SecondaryOffHand);
+        if (Accessory1 != null) items.Add(Accessory1);
+        if (Accessory2 != null) items.Add(Accessory2);
+        return items.ToArray();
+    }
+
+    // ========================================
+    // 运行时状态委托（新架构）
+    // ========================================
+
+    private Combat.UnitRuntimeState? _runtimeState;
+
+    /// <summary>获取运行时状态实例（懒初始化）</summary>
+    public Combat.UnitRuntimeState Runtime => _runtimeState ??= new Combat.UnitRuntimeState();
+
+    /// <summary>是否已创建运行时状态</summary>
+    public bool HasRuntimeState => _runtimeState != null;
+
+    /// <summary>清除运行时状态（战斗结束时调用）</summary>
+    public void ClearRuntimeState() => _runtimeState = null;
+}

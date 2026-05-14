@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://origin_select_scene"]
 
-[ext_resource type="Script" path="res://src/ui/main_menu/OriginSelect.gd" id="1_origin"]
+[ext_resource type="Script" path="res://BladeHexFrontend/src/View/UI/MainMenu/OriginSelect.cs" id="1_origin"]
 
 [node name="OriginSelect" type="CanvasLayer"]
 script = ExtResource("1_origin")

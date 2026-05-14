@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://unit_hud_scene"]
+
+[node name="UnitHud" type="Node3D"]
+
+[node name="HpLabel" type="Label3D" parent="."]
+unique_name_in_owner = true
+billboard = 1
+pixel_size = 3.0
+font_size = 12
+position = Vector3(0, 20, 0)
+
+[node name="HpBarBg" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+position = Vector3(0, 15, 0)
+
+[node name="HpBarFg" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+position = Vector3(0, 15, -0.1)
+
+[node name="StatusContainer" type="Node3D" parent="."]
+unique_name_in_owner = true
+position = Vector3(0, 24, 0)
+
+[node name="SelectionRing" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+visible = false
+position = Vector3(0, 2.5, 0)
+
+[node name="TurnIndicator" type="MeshInstance3D" parent="."]
+unique_name_in_owner = true
+visible = false
+position = Vector3(0, 45, 0)

@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://d9k6l4n3o5p7r"]
 
-[ext_resource type="Script" path="res://src/ui/quest/QuestLog.gd" id="1"]
+[ext_resource type="Script" path="res://BladeHexFrontend/src/View/UI/Quest/QuestLog.cs" id="1"]
 
 [node name="QuestLog" type="Control"]
 layout_mode = 3

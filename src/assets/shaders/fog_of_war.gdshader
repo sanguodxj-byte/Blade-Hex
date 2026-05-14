@@ -1,49 +1,44 @@
 shader_type canvas_item;
 
-// 战争迷雾柔化 — 给 FogOfWarRenderer._sprite 用的后处理着色器
-//
-// 输入: FogOfWarRenderer 生成的 ImageTexture（每格1像素，scale 到地图尺寸）
-//   - R 通道 = 可见度阶梯（0=未探索, 0.3=已揭示, 1.0=视野内）
-//   - 实际上输入是 RGBA 颜色，直接对 color 做模糊
-//
-// 作用:
-//   1. 多采样模糊 — 让格子边界不再锐利方块
-//   2. 时间扰动 — 迷雾边缘轻微飘动
-//
-// 使用: 在 FogOfWarRenderer.setup() 中给 _sprite 挂此材质
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║ 强制要求：未探索区域必须是纯黑、完全不可见。                      ║
+// ║ 任何修改此 shader 的人必须保证 visibility=0 时输出完全不透明黑色。 ║
+// ║ 禁止让未探索区域透出任何地形颜色。                                ║
+// ╚══════════════════════════════════════════════════════════════════╝
 
-group_uniforms FogBlur;
-uniform float blur_radius : hint_range(1.0, 8.0) = 3.0; // 模糊采样半径
-uniform float time_distortion : hint_range(0.0, 0.02) = 0.005; // 时间扰动强度
+// 战争迷雾 — Sprite2D 覆盖层着色器
+// 未探索区域完全不透明（黑色），已揭示区域完全透明。
+// 未探索区域边缘有柔和羽化过渡。
 
-// 9 点高斯模糊权重（简化版）
-const float KERNEL[9] = {
-	0.0625, 0.125, 0.0625,
-	0.125,  0.25,  0.125,
-	0.0625, 0.125, 0.0625
-};
+group_uniforms Fog;
+uniform vec4 fog_color : source_color = vec4(0.0, 0.0, 0.0, 1.0); // 迷雾颜色（纯黑）
+uniform float edge_softness : hint_range(0.0, 0.5) = 0.15;         // 边缘羽化宽度（UV 空间）
+uniform float fog_disabled = 0.0;                                    // 1.0 = 完全禁用迷雾
+uniform vec2 fog_texture_size = vec2(64.0, 64.0);                    // 迷雾纹理尺寸（由代码设置）
 
 void fragment() {
-	// 时间扰动
-	vec2 time_offset = vec2(
-		sin(TIME * 0.3 + UV.x * 10.0) * time_distortion,
-		cos(TIME * 0.2 + UV.y * 10.0) * time_distortion
-	);
+	// 从纹理读取可见度（R 通道）: 0=未探索（黑色）, 1=已揭示/视野内（透明）
+	float visibility = texture(TEXTURE, UV).r;
 
-	vec2 sample_uv = UV + time_offset;
+	// 采样周围像素实现边缘羽化（3x3 高斯模糊近似）
+	// 让黑色→透明的过渡像画笔边缘一样柔和
+	vec2 texel = 1.0 / fog_texture_size;
+	float blur = 0.0;
+	blur += texture(TEXTURE, UV + vec2(-texel.x, -texel.y)).r * 0.0625;
+	blur += texture(TEXTURE, UV + vec2( 0.0,     -texel.y)).r * 0.125;
+	blur += texture(TEXTURE, UV + vec2( texel.x, -texel.y)).r * 0.0625;
+	blur += texture(TEXTURE, UV + vec2(-texel.x,  0.0    )).r * 0.125;
+	blur += texture(TEXTURE, UV                           ).r * 0.25;
+	blur += texture(TEXTURE, UV + vec2( texel.x,  0.0    )).r * 0.125;
+	blur += texture(TEXTURE, UV + vec2(-texel.x,  texel.y)).r * 0.0625;
+	blur += texture(TEXTURE, UV + vec2( 0.0,      texel.y)).r * 0.125;
+	blur += texture(TEXTURE, UV + vec2( texel.x,  texel.y)).r * 0.0625;
 
-	// 3×3 高斯模糊采样
-	vec4 blurred = vec4(0.0);
-	vec2 texel = TEXTURE_PIXEL_SIZE * blur_radius;
+	// 柔和过渡：未探索(黑) → 已揭示(透明)，边缘像画笔抹开
+	float alpha = 1.0 - smoothstep(0.0, edge_softness, blur);
 
-	int i = 0;
-	for (int y = -1; y <= 1; y++) {
-		for (int x = -1; x <= 1; x++) {
-			vec2 offset = vec2(float(x), float(y)) * texel;
-			blurred += texture(TEXTURE, sample_uv + offset) * KERNEL[i];
-			i++;
-		}
-	}
+	// 迷雾完全禁用时透明
+	alpha = mix(alpha, 0.0, fog_disabled);
 
-	COLOR = blurred;
+	COLOR = vec4(fog_color.rgb, alpha);
 }

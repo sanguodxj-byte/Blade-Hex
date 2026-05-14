@@ -1,0 +1,667 @@
+﻿
+D:\123\Blade&Hex\BladeHexFrontend\src\Scenes\overworld\Ove
+rworldScene.Interaction.cs(123,49): error CS1503: 参数 2: 无法
+从“Godot.Collections.Array<BladeHex.Strategic.InteractionOp
+tion>”转换为“Godot.Collections.Array” [D:\123\Blade&Hex\Blade
+HexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\Scenes\overworld\Ove
+rworldScene.Interaction.cs(319,43): error CS1503: 参数 1: 无法
+从“BladeHex.Strategic.QuestGenerator”转换为“Godot.GodotObject”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\To
+wnUI.cs(208,25): error CS1061: “TownUI.TownTab”未包含“As”的定义，
+并且找不到可接受第一个“TownUI.TownTab”类型参数的可访问扩展方法“As”(是否缺少 using 指令或
+程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\To
+wnUI.cs(218,19): error CS1061: “Node”未包含“Visible”的定义，并且找不到
+可接受第一个“Node”类型参数的可访问扩展方法“Visible”(是否缺少 using 指令或程序集引用?) [D
+:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\UIFactory.cs
+(540,9): error CS0103: 当前上下文中不存在名称“phases” [D:\123\Blade&H
+ex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\UIFactory.cs
+(618,32): error CS0103: 当前上下文中不存在名称“phases” [D:\123\Blade&
+Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(79,25): error CS1061: “ItemList”未包含“SetItemCustomCol
+or”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomColo
+r”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFronten
+d\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(83,40): error CS1061: “QuestManager”未包含“CompletedQue
+sts”的定义，并且找不到可接受第一个“QuestManager”类型参数的可访问扩展方法“CompletedQue
+sts”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(87,28): error CS1061: “ItemList”未包含“SetItemCustomCol
+or”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomColo
+r”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFronten
+d\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(117,32): error CS1061: “char”未包含“IsCompleted”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“IsCompleted”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(118,32): error CS1061: “char”未包含“IsCompleted”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“IsCompleted”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(119,48): error CS1061: “char”未包含“Description”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“Description”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(119,67): error CS1061: “char”未包含“CurrentCount”的定义，并且
+找不到可接受第一个“char”类型参数的可访问扩展方法“CurrentCount”(是否缺少 using 指令或程序
+集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.
+csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(119,86): error CS1061: “char”未包含“TargetCount”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“TargetCount”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(122,89): error CS1061: “QuestData”未包含“RewardXp”的定义，并
+且找不到可接受第一个“QuestData”类型参数的可访问扩展方法“RewardXp”(是否缺少 using 指令或
+程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(128,48): error CS1061: “QuestData”未包含“IsAbandonable”
+的定义，并且找不到可接受第一个“QuestData”类型参数的可访问扩展方法“IsAbandonable”(是否缺少
+ using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\Blade
+HexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(135,50): error CS1061: “QuestData”未包含“Id”的定义，并且找不到可接
+受第一个“QuestData”类型参数的可访问扩展方法“Id”(是否缺少 using 指令或程序集引用?) [D:\
+123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(135,22): error CS1061: “QuestManager”未包含“AbandonQues
+t”的定义，并且找不到可接受第一个“QuestManager”类型参数的可访问扩展方法“AbandonQuest”(
+是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\B
+ladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(75,24): error CS1061: “ItemList”未包含“SetItemCustomC
+olor”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomCo
+lor”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(78,29): error CS0117: “GlobalState”未包含“Instance”的定
+义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspr
+oj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(80,42): error CS0117: “GlobalState”未包含“Instance”的定
+义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspr
+oj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(83,32): error CS1061: “ItemList”未包含“SetItemCustomC
+olor”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomCo
+lor”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(127,30): error CS0117: “GlobalState”未包含“Instance”的
+定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csp
+roj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(129,38): error CS0117: “GlobalState”未包含“Instance”的
+定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csp
+roj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(149,69): error CS1061: “QuestData”未包含“Id”的定义，并且找不到
+可接受第一个“QuestData”类型参数的可访问扩展方法“Id”(是否缺少 using 指令或程序集引用?) [D
+:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Ch
+aracterDetailPanel.cs(104,16): error CS1061: “VBoxContaine
+r”未包含“VerticalAlignment”的定义，并且找不到可接受第一个“VBoxContainer”类型参数
+的可访问扩展方法“VerticalAlignment”(是否缺少 using 指令或程序集引用?) [D:\123\
+Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Ch
+aracterDetailPanel.cs(161,59): error CS1503: 参数 2: 无法从“flo
+at”转换为“int” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFro
+ntend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Ch
+aracterDetailPanel.cs(333,124): error CS1061: “UnitRuntime
+State”未包含“MaxMana”的定义，并且找不到可接受第一个“UnitRuntimeState”类型参数的可访
+问扩展方法“MaxMana”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\Bla
+deHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(59,44): error CS0117: “Control”未包含“MouseFilterM
+ode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(67,39): error CS0117: “Control”未包含“MouseFilterM
+ode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(272,44): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(272,39): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,18): error CS0572: “NodeType”: 无法通过表达式引用类
+型；请尝试“SkillNodeData.NodeType” [D:\123\Blade&Hex\BladeHexFr
+ontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,13): error CS0119: “SkillNodeData.NodeTyp
+e”是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Bl
+adeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,44): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,70): error CS0572: “NodeType”: 无法通过表达式引用类
+型；请尝试“SkillNodeData.NodeType” [D:\123\Blade&Hex\BladeHexFr
+ontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,65): error CS0119: “SkillNodeData.NodeTyp
+e”是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Bl
+adeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,96): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(338,9): error CS0029: 无法将类型“System.Action<long>
+”隐式转换为“Godot.OptionButton.ItemSelectedEventHandler” [D:\12
+3\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(314,48): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(314,43): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(394,9): error CS0029: 无法将类型“System.Action<bool>
+”隐式转换为“Godot.BaseButton.ToggledEventHandler” [D:\123\Blade
+&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(381,19): error CS1061: “Dictionary”未包含“Succes
+s”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Success”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(385,29): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(391,50): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(401,19): error CS1061: “Dictionary”未包含“Succes
+s”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Success”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(405,29): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(411,50): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(437,82): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(437,77): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(438,26): error CS0572: “NodeType”: 无法通过表达式引用类
+型；请尝试“SkillNodeData.NodeType” [D:\123\Blade&Hex\BladeHexFr
+ontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(438,21): error CS0119: “SkillNodeData.NodeTyp
+e”是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Bl
+adeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(440,27): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(441,27): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(442,27): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(445,52): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(445,47): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\Ov
+erworldUI.cs(343,39): error CS0019: 运算符“??”无法应用于“Variant”和
+“Variant”类型的操作数 [D:\123\Blade&Hex\BladeHexFrontend\BladeHe
+xFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\Pa
+rtyPanel.cs(257,49): error CS0572: “ArmorType”: 无法通过表达式引用类
+型；请尝试“ArmorData.ArmorType” [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\Pa
+rtyPanel.cs(257,43): error CS0119: “ArmorData.ArmorType”是一
+个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\BladeH
+exFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\TurnO
+rderBar.cs(231,26): error CS1061: “Control”未包含“GetThemeSty
+leboxOverride”的定义，并且找不到可接受第一个“Control”类型参数的可访问扩展方法“GetThem
+eStyleboxOverride”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex
+\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Comba
+tUI.cs(93,23): error CS1061: “Script”未包含“New”的定义，并且找不到可接受第
+一个“Script”类型参数的可访问扩展方法“New”(是否缺少 using 指令或程序集引用?) [D:\123\
+Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+InfoPanel.cs(172,23): error CS1061: “ProgressBar”未包含“GetTh
+emeStyleboxOverride”的定义，并且找不到可接受第一个“ProgressBar”类型参数的可访问扩展
+方法“GetThemeStyleboxOverride”(是否缺少 using 指令或程序集引用?) [D:\123
+\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+InfoPanel.cs(193,27): error CS1061: “ProgressBar”未包含“GetTh
+emeStyleboxOverride”的定义，并且找不到可接受第一个“ProgressBar”类型参数的可访问扩展
+方法“GetThemeStyleboxOverride”(是否缺少 using 指令或程序集引用?) [D:\123
+\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+InfoPanel.cs(222,19): error CS1061: “PanelContainer”未包含“Ge
+tThemeStyleboxOverride”的定义，并且找不到可接受第一个“PanelContainer”类型参数
+的可访问扩展方法“GetThemeStyleboxOverride”(是否缺少 using 指令或程序集引用?) [
+D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsPanel.cs(61,44): error CS0117: “Control”未包含“MouseFilt
+erMode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFron
+tend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsPanel.cs(149,100): error CS0266: 无法将类型“int”隐式转换为“Blad
+eHex.Data.GameSettings.FullscreenModeEnum”。存在一个显式转换(是否缺少强制
+转换?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.c
+sproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsPanel.cs(198,9): error CS0029: 无法将类型“System.Action<bo
+ol>”隐式转换为“Godot.BaseButton.ToggledEventHandler” [D:\123\Bl
+ade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+UnitBar.cs(160,35): error CS1503: 参数 1: 无法从“BladeHex.Data.
+UnitData.MoraleLevel”转换为“BladeHex.Data.MoraleLevel” [D:\12
+3\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Loading\Load
+ingScreen.cs(139,62): error CS0103: 当前上下文中不存在名称“SizeFlags”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Qui
+ckCombatSetup.cs(50,37): error CS0117: “Control”未包含“MouseF
+ilterMode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexF
+rontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Mai
+nMenu.cs(153,17): error CS0103: 当前上下文中不存在名称“LoadingScreen”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Mai
+nMenu.cs(153,92): error CS0103: 当前上下文中不存在名称“LoadingScreen”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Ori
+ginSelect.cs(37,21): error CS0029: 无法将类型“BladeHex.Data.Rac
+eData[]”隐式转换为“System.Collections.Generic.List<BladeHex.Dat
+a.RaceData>” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFr
+ontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Ori
+ginSelect.cs(255,9): error CS0103: 当前上下文中不存在名称“LoadingScre
+en” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Ori
+ginSelect.cs(255,84): error CS0103: 当前上下文中不存在名称“LoadingScr
+een” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.c
+sproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\Scenes\overworld\Ove
+rworldScene.Interaction.cs(123,49): error CS1503: 参数 2: 无法
+从“Godot.Collections.Array<BladeHex.Strategic.InteractionOp
+tion>”转换为“Godot.Collections.Array” [D:\123\Blade&Hex\Blade
+HexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\Scenes\overworld\Ove
+rworldScene.Interaction.cs(319,43): error CS1503: 参数 1: 无法
+从“BladeHex.Strategic.QuestGenerator”转换为“Godot.GodotObject”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\To
+wnUI.cs(208,25): error CS1061: “TownUI.TownTab”未包含“As”的定义，
+并且找不到可接受第一个“TownUI.TownTab”类型参数的可访问扩展方法“As”(是否缺少 using 指令或
+程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\To
+wnUI.cs(218,19): error CS1061: “Node”未包含“Visible”的定义，并且找不到
+可接受第一个“Node”类型参数的可访问扩展方法“Visible”(是否缺少 using 指令或程序集引用?) [D
+:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\UIFactory.cs
+(540,9): error CS0103: 当前上下文中不存在名称“phases” [D:\123\Blade&H
+ex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\UIFactory.cs
+(618,32): error CS0103: 当前上下文中不存在名称“phases” [D:\123\Blade&
+Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(79,25): error CS1061: “ItemList”未包含“SetItemCustomCol
+or”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomColo
+r”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFronten
+d\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(83,40): error CS1061: “QuestManager”未包含“CompletedQue
+sts”的定义，并且找不到可接受第一个“QuestManager”类型参数的可访问扩展方法“CompletedQue
+sts”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(87,28): error CS1061: “ItemList”未包含“SetItemCustomCol
+or”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomColo
+r”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFronten
+d\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(117,32): error CS1061: “char”未包含“IsCompleted”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“IsCompleted”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(118,32): error CS1061: “char”未包含“IsCompleted”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“IsCompleted”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(119,48): error CS1061: “char”未包含“Description”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“Description”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(119,67): error CS1061: “char”未包含“CurrentCount”的定义，并且
+找不到可接受第一个“char”类型参数的可访问扩展方法“CurrentCount”(是否缺少 using 指令或程序
+集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.
+csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(119,86): error CS1061: “char”未包含“TargetCount”的定义，并且找
+不到可接受第一个“char”类型参数的可访问扩展方法“TargetCount”(是否缺少 using 指令或程序集引
+用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(122,89): error CS1061: “QuestData”未包含“RewardXp”的定义，并
+且找不到可接受第一个“QuestData”类型参数的可访问扩展方法“RewardXp”(是否缺少 using 指令或
+程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(128,48): error CS1061: “QuestData”未包含“IsAbandonable”
+的定义，并且找不到可接受第一个“QuestData”类型参数的可访问扩展方法“IsAbandonable”(是否缺少
+ using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\Blade
+HexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(135,50): error CS1061: “QuestData”未包含“Id”的定义，并且找不到可接
+受第一个“QuestData”类型参数的可访问扩展方法“Id”(是否缺少 using 指令或程序集引用?) [D:\
+123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestL
+og.cs(135,22): error CS1061: “QuestManager”未包含“AbandonQues
+t”的定义，并且找不到可接受第一个“QuestManager”类型参数的可访问扩展方法“AbandonQuest”(
+是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\B
+ladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(75,24): error CS1061: “ItemList”未包含“SetItemCustomC
+olor”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomCo
+lor”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(78,29): error CS0117: “GlobalState”未包含“Instance”的定
+义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspr
+oj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(80,42): error CS0117: “GlobalState”未包含“Instance”的定
+义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspr
+oj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(83,32): error CS1061: “ItemList”未包含“SetItemCustomC
+olor”的定义，并且找不到可接受第一个“ItemList”类型参数的可访问扩展方法“SetItemCustomCo
+lor”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(127,30): error CS0117: “GlobalState”未包含“Instance”的
+定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csp
+roj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(129,38): error CS0117: “GlobalState”未包含“Instance”的
+定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csp
+roj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Quest\QuestB
+oard.cs(149,69): error CS1061: “QuestData”未包含“Id”的定义，并且找不到
+可接受第一个“QuestData”类型参数的可访问扩展方法“Id”(是否缺少 using 指令或程序集引用?) [D
+:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Ch
+aracterDetailPanel.cs(104,16): error CS1061: “VBoxContaine
+r”未包含“VerticalAlignment”的定义，并且找不到可接受第一个“VBoxContainer”类型参数
+的可访问扩展方法“VerticalAlignment”(是否缺少 using 指令或程序集引用?) [D:\123\
+Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Ch
+aracterDetailPanel.cs(161,59): error CS1503: 参数 2: 无法从“flo
+at”转换为“int” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFro
+ntend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Ch
+aracterDetailPanel.cs(333,124): error CS1061: “UnitRuntime
+State”未包含“MaxMana”的定义，并且找不到可接受第一个“UnitRuntimeState”类型参数的可访
+问扩展方法“MaxMana”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex\Bla
+deHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(59,44): error CS0117: “Control”未包含“MouseFilterM
+ode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(67,39): error CS0117: “Control”未包含“MouseFilterM
+ode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFronten
+d.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(272,44): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(272,39): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,18): error CS0572: “NodeType”: 无法通过表达式引用类
+型；请尝试“SkillNodeData.NodeType” [D:\123\Blade&Hex\BladeHexFr
+ontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,13): error CS0119: “SkillNodeData.NodeTyp
+e”是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Bl
+adeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,44): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,70): error CS0572: “NodeType”: 无法通过表达式引用类
+型；请尝试“SkillNodeData.NodeType” [D:\123\Blade&Hex\BladeHexFr
+ontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,65): error CS0119: “SkillNodeData.NodeTyp
+e”是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Bl
+adeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(298,96): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(338,9): error CS0029: 无法将类型“System.Action<long>
+”隐式转换为“Godot.OptionButton.ItemSelectedEventHandler” [D:\12
+3\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(314,48): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(314,43): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsUI.cs(394,9): error CS0029: 无法将类型“System.Action<bool>
+”隐式转换为“Godot.BaseButton.ToggledEventHandler” [D:\123\Blade
+&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(381,19): error CS1061: “Dictionary”未包含“Succes
+s”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Success”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(385,29): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(391,50): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(401,19): error CS1061: “Dictionary”未包含“Succes
+s”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Success”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(405,29): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(411,50): error CS1061: “Dictionary”未包含“Messag
+e”的定义，并且找不到可接受第一个“Dictionary”类型参数的可访问扩展方法“Message”(是否缺少 us
+ing 指令或程序集引用?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(437,82): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(437,77): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(438,26): error CS0572: “NodeType”: 无法通过表达式引用类
+型；请尝试“SkillNodeData.NodeType” [D:\123\Blade&Hex\BladeHexFr
+ontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(438,21): error CS0119: “SkillNodeData.NodeTyp
+e”是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Bl
+adeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(440,27): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(441,27): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(442,27): error CS0117: “SkillNodeData”未包含“Ski
+llNodeType”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHex
+Frontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(445,52): error CS0572: “Region”: 无法通过表达式引用类型；
+请尝试“SkillNodeData.Region” [D:\123\Blade&Hex\BladeHexFronte
+nd\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Character\Sk
+illTreeUI.cs(445,47): error CS0119: “SkillNodeData.Region”
+是一个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\Blad
+eHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\Ov
+erworldUI.cs(343,39): error CS0019: 运算符“??”无法应用于“Variant”和
+“Variant”类型的操作数 [D:\123\Blade&Hex\BladeHexFrontend\BladeHe
+xFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\Pa
+rtyPanel.cs(257,49): error CS0572: “ArmorType”: 无法通过表达式引用类
+型；请尝试“ArmorData.ArmorType” [D:\123\Blade&Hex\BladeHexFront
+end\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Overworld\Pa
+rtyPanel.cs(257,43): error CS0119: “ArmorData.ArmorType”是一
+个 类型，这在给定的上下文中无效 [D:\123\Blade&Hex\BladeHexFrontend\BladeH
+exFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\TurnO
+rderBar.cs(231,26): error CS1061: “Control”未包含“GetThemeSty
+leboxOverride”的定义，并且找不到可接受第一个“Control”类型参数的可访问扩展方法“GetThem
+eStyleboxOverride”(是否缺少 using 指令或程序集引用?) [D:\123\Blade&Hex
+\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Comba
+tUI.cs(93,23): error CS1061: “Script”未包含“New”的定义，并且找不到可接受第
+一个“Script”类型参数的可访问扩展方法“New”(是否缺少 using 指令或程序集引用?) [D:\123\
+Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+InfoPanel.cs(172,23): error CS1061: “ProgressBar”未包含“GetTh
+emeStyleboxOverride”的定义，并且找不到可接受第一个“ProgressBar”类型参数的可访问扩展
+方法“GetThemeStyleboxOverride”(是否缺少 using 指令或程序集引用?) [D:\123
+\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+InfoPanel.cs(193,27): error CS1061: “ProgressBar”未包含“GetTh
+emeStyleboxOverride”的定义，并且找不到可接受第一个“ProgressBar”类型参数的可访问扩展
+方法“GetThemeStyleboxOverride”(是否缺少 using 指令或程序集引用?) [D:\123
+\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+InfoPanel.cs(222,19): error CS1061: “PanelContainer”未包含“Ge
+tThemeStyleboxOverride”的定义，并且找不到可接受第一个“PanelContainer”类型参数
+的可访问扩展方法“GetThemeStyleboxOverride”(是否缺少 using 指令或程序集引用?) [
+D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsPanel.cs(61,44): error CS0117: “Control”未包含“MouseFilt
+erMode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFron
+tend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsPanel.cs(149,100): error CS0266: 无法将类型“int”隐式转换为“Blad
+eHex.Data.GameSettings.FullscreenModeEnum”。存在一个显式转换(是否缺少强制
+转换?) [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.c
+sproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Set
+tingsPanel.cs(198,9): error CS0029: 无法将类型“System.Action<bo
+ol>”隐式转换为“Godot.BaseButton.ToggledEventHandler” [D:\123\Bl
+ade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Combat\Enemy
+UnitBar.cs(160,35): error CS1503: 参数 1: 无法从“BladeHex.Data.
+UnitData.MoraleLevel”转换为“BladeHex.Data.MoraleLevel” [D:\12
+3\Blade&Hex\BladeHexFrontend\BladeHexFrontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\Loading\Load
+ingScreen.cs(139,62): error CS0103: 当前上下文中不存在名称“SizeFlags”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Qui
+ckCombatSetup.cs(50,37): error CS0117: “Control”未包含“MouseF
+ilterMode”的定义 [D:\123\Blade&Hex\BladeHexFrontend\BladeHexF
+rontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Mai
+nMenu.cs(153,17): error CS0103: 当前上下文中不存在名称“LoadingScreen”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Mai
+nMenu.cs(153,92): error CS0103: 当前上下文中不存在名称“LoadingScreen”
+ [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cspro
+j]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Ori
+ginSelect.cs(37,21): error CS0029: 无法将类型“BladeHex.Data.Rac
+eData[]”隐式转换为“System.Collections.Generic.List<BladeHex.Dat
+a.RaceData>” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFr
+ontend.csproj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Ori
+ginSelect.cs(255,9): error CS0103: 当前上下文中不存在名称“LoadingScre
+en” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.cs
+proj]
+D:\123\Blade&Hex\BladeHexFrontend\src\View\UI\MainMenu\Ori
+ginSelect.cs(255,84): error CS0103: 当前上下文中不存在名称“LoadingScr
+een” [D:\123\Blade&Hex\BladeHexFrontend\BladeHexFrontend.c
+sproj]
+
+

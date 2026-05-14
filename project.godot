@@ -10,16 +10,21 @@ config_version=5
 
 [application]
 
-config/name="剑与六芒星 Sword & Hex"
+config/name="Blade & Hex"
 run/main_scene="res://src/ui/main_menu/main_menu.tscn"
 config/features=PackedStringArray("4.6", "C#", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]
 
-GlobalState="*res://src/core/data/GlobalState.cs"
-SkillTreeManager="*res://src/core/skill_tree/SkillTreeManager.cs"
-AudioManager="*res://src/core/audio/AudioManager.gd"
+GlobalState="*res://BladeHexFrontend/src/View/Data/GlobalState.cs"
+SkillTreeManager="*res://BladeHexFrontend/src/View/SkillTreeManager.cs"
+EventBus="*res://BladeHexFrontend/src/View/Events/EventBus.cs"
+AudioManager="*res://BladeHexFrontend/src/View/Audio/AudioManager.cs"
+AudioEventReactor="*res://BladeHexFrontend/src/View/Events/AudioEventReactor.cs"
+UITheme="*res://BladeHexFrontend/src/View/UI/UITheme.cs"
+DebugConsole="*res://BladeHexFrontend/src/View/Debug/DebugConsole.cs"
+GameMenuManager="*res://BladeHexFrontend/src/View/UI/Global/GameMenuManager.cs"
 
 [display]
 
@@ -30,7 +35,8 @@ window/stretch/aspect="expand"
 
 [dotnet]
 
-project/assembly_name="剑与六芒星 Sword & Hex"
+project/assembly_name="BladeHexFrontend"
+project/solution="BladeHex.sln"
 
 [physics]
 
@@ -40,3 +46,5 @@ project/assembly_name="剑与六芒星 Sword & Hex"
 
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true

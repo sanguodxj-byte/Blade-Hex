@@ -1,0 +1,15 @@
+<Project Sdk="Godot.NET.Sdk/4.6.2">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>BladeHex</RootNamespace>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BladeHexFrontend</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BladeHexCore\BladeHexCore.csproj" />
+    <Compile Include="src\**\*.cs" />
+  </ItemGroup>
+</Project>
