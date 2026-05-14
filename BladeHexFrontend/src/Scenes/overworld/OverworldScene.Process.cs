@@ -40,6 +40,14 @@ public partial class OverworldScene
         if (newChunks.Count > 0)
         {
             HexRenderer.OnChunksUpdated(newChunks);
+
+            // 3D 渲染器增量加载
+            if (HexRenderer3D != null)
+            {
+                foreach (var chunk in newChunks)
+                    HexRenderer3D.LoadTiles(chunk.Tiles.Values);
+            }
+
             // 道路已在初始化阶段一次性渲染，无需增量更新
             // 预计算代价网格
             if (_costGrid != null)

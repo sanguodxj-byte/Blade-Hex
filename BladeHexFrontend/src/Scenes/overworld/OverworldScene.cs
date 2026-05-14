@@ -300,6 +300,16 @@ public partial class OverworldScene : Node2D, IOverworldContext
         CheckQuestTargetProximity();
         CheckZocTransition();
         HandleCameraWASD((float)delta);
+
+        // 同步 3D 相机位置（跟随 2D 相机）
+        if (_3dCamera != null && MainCamera != null)
+        {
+            var pixelPos = MainCamera.Position;
+            _3dCamera.FocusOnXZ(
+                pixelPos.X * BladeHex.View.Map.CoordConverter.PixelToWorld,
+                pixelPos.Y * BladeHex.View.Map.CoordConverter.PixelToWorld
+            );
+        }
     }
 
     public override void _UnhandledInput(InputEvent @event)
