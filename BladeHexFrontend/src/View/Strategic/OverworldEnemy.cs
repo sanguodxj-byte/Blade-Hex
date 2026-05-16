@@ -9,7 +9,7 @@ namespace BladeHex.Strategic;
 /// 视觉用 CharacterView2D（与玩家队伍 / 战斗 / UI 头像共用同一套换装系统）
 /// </summary>
 [GlobalClass]
-public partial class OverworldEnemy : Node2D
+public partial class OverworldEnemy : Node2D, IOverworldMapEntity
 {
     private BladeHex.View.Unit.CharacterView2D? _characterView;
     private Polygon2D? _fallbackPoly;
@@ -28,7 +28,7 @@ public partial class OverworldEnemy : Node2D
     [Export] public string DescriptionText { get; set; } = "";
     [Export] public int EnemyType { get; set; } = 1; // 默认 BEAST=1
 
-    /// <summary>外部可注入的"代表角色数据"（领主/具名 NPC 时由 OverworldScene 设置）</summary>
+    /// <summary>外部可注入的"代表角色数据"（领主/具名 NPC 时由 OverworldScene3D 设置）</summary>
     public UnitData? RepresentativeUnit { get; set; }
 
     public override void _Ready()

@@ -1,0 +1,69 @@
+{
+  "title": "Weapon Item Array",
+  "description": "Schema for weapons_*.json files. Each entry defines one weapon prototype.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "subtype"],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$",
+        "description": "Unique snake_case identifier."
+      },
+      "subtype": {
+        "type": "string",
+        "enum": [
+          "Dagger", "Seax", "Kukri",
+          "ArmingSword", "BattleAxe", "NomadSaber",
+          "Greatsword", "GreatAxe", "Glaive",
+          "Stiletto", "SpikedDagger", "Rapier",
+          "InfantrySpear", "BroadSpear", "Awlpike",
+          "Lance", "Voulge", "Trident",
+          "Club", "LightHammer", "Cestus",
+          "WingedMace", "MilitaryHammer", "Flail",
+          "Maul", "Greatclub", "Polehammer",
+          "ThrowingKnife", "Dart", "Francisca",
+          "Javelin", "Pilum", "Harpoon",
+          "StoneThrow", "HeavyJavelin", "ThrowingHammer",
+          "Shortbow", "HuntingBow", "NomadBow",
+          "Strongbow", "RecurveBow", "WarBow",
+          "Longbow", "CompositeLongbow", "Greatbow",
+          "LightCrossbow", "HuntingCrossbow", "PistolCrossbow",
+          "StandardCrossbow", "StrongCrossbow", "SniperCrossbow",
+          "HeavyCrossbow", "SiegeCrossbow", "Ballista",
+          "Unarmed"
+        ]
+      },
+      "tier": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5,
+        "default": 1
+      },
+      "name": { "type": "string" },
+      "price": { "type": "integer", "minimum": 1, "default": 10 },
+      "desc": { "type": "string" },
+      "traits": {
+        "type": "array",
+        "description": "Preferred way to specify weapon properties. Multiple traits can be combined.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "two_handed", "dual_wield", "ranged", "throwing", "reach",
+            "finesse", "needs_reload", "blunt", "armor_piercing",
+            "anti_cavalry", "sweep", "catalyst", "longbow", "crossbow"
+          ]
+        },
+        "uniqueItems": true
+      },
+      "finesse": { "type": "boolean", "default": false, "description": "(Deprecated) Use traits array." },
+      "two_handed": { "type": "boolean", "default": false, "description": "(Deprecated) Use traits array." },
+      "reach": { "type": "boolean", "default": false, "description": "(Deprecated) Use traits array." },
+      "dual_wield": { "type": "boolean", "default": false, "description": "(Deprecated) Use traits array." },
+      "ranged": { "type": "boolean", "default": false, "description": "(Deprecated) Use traits array." },
+      "throwing": { "type": "boolean", "default": false, "description": "(Deprecated) Use traits array." }
+    }
+  }
+}

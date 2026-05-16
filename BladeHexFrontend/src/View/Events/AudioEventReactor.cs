@@ -1,15 +1,22 @@
 // AudioEventReactor.cs
 // 音频事件反应器 — 订阅 EventBus 信号，自动触发对应的 SFX / BGM
 // 解耦 gameplay 代码与音频系统：gameplay 只发信号，Reactor 负责映射到 AudioManager
+//
+// Sprint 5 (R6) 迁移：核心事件已切到强类型 API，剩余事件保留弱类型直到补 Payload。
 using Godot;
 using System;
 using BladeHex.Events;
+using BladeHex.Events.Payloads;
 
 namespace BladeHex.Audio;
 
 /// <summary>
-/// 全局音频事件反应器（作为 Autoload 或 CombatScene/OverworldScene 子节点使用）。
-/// 订阅 EventBus 中的战斗/进度/UI 事件，调用 AudioManager (autoload) 播放对应音效。
+/// [Autoload Singleton] 全局音频事件反应器。
+///
+/// <para>注册位置：<c>project.godot [autoload]</c> 段，名称 <c>AudioEventReactor</c>。</para>
+/// <para>生命周期：应用全局。</para>
+/// <para>访问方式：通常无需直接访问；自动订阅 <see cref="EventBus"/> 信号触发音效。</para>
+/// <para>职责：解耦 gameplay 与音频系统 — gameplay 只发事件，Reactor 负责映射到 <see cref="AudioManager"/>。</para>
 /// </summary>
 [GlobalClass]
 public partial class AudioEventReactor : Node
@@ -18,7 +25,7 @@ public partial class AudioEventReactor : Node
 
     public override void _Ready()
     {
-        _audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
+        _audio = BladeHex.Data.Globals.AudioOrNull;
         if (_audio == null)
         {
             GD.PushWarning("AudioEventReactor: 未找到 AudioManager autoload。");
@@ -32,14 +39,14 @@ public partial class AudioEventReactor : Node
             return;
         }
 
-        // 战斗事件
-        bus.Subscribe(EventBus.Signals.CombatStarted, OnCombatStarted);
+        // 战斗事件 — 5 个已迁移到强类型（CombatStarted / TurnStarted / UnitDamaged / UnitDied / SkillUsed）
+        bus.Subscribe<CombatStartedEvent>(OnCombatStarted);
         bus.Subscribe(EventBus.Signals.CombatEnded, OnCombatEnded);
-        bus.Subscribe(EventBus.Signals.TurnStarted, OnTurnStarted);
-        bus.Subscribe(EventBus.Signals.UnitDamaged, OnUnitDamaged);
-        bus.Subscribe(EventBus.Signals.UnitDied, OnUnitDied);
+        bus.Subscribe<TurnStartedEvent>(OnTurnStarted);
+        bus.Subscribe<UnitDamagedEvent>(OnUnitDamaged);
+        bus.Subscribe<UnitDiedEvent>(OnUnitDied);
         bus.Subscribe(EventBus.Signals.UnitHealed, OnUnitHealed);
-        bus.Subscribe(EventBus.Signals.SkillUsed, OnSkillUsed);
+        bus.Subscribe<SkillUsedEvent>(OnSkillUsed);
         bus.Subscribe(EventBus.Signals.StatusEffectApplied, OnStatusEffectApplied);
         bus.Subscribe(EventBus.Signals.StatusEffectRemoved, OnStatusEffectRemoved);
         bus.Subscribe(EventBus.Signals.ProjectileImpact, OnProjectileImpact);
@@ -57,13 +64,13 @@ public partial class AudioEventReactor : Node
         var bus = EventBus.Instance;
         if (bus == null) return;
 
-        bus.Unsubscribe(EventBus.Signals.CombatStarted, OnCombatStarted);
+        bus.Unsubscribe<CombatStartedEvent>(OnCombatStarted);
         bus.Unsubscribe(EventBus.Signals.CombatEnded, OnCombatEnded);
-        bus.Unsubscribe(EventBus.Signals.TurnStarted, OnTurnStarted);
-        bus.Unsubscribe(EventBus.Signals.UnitDamaged, OnUnitDamaged);
-        bus.Unsubscribe(EventBus.Signals.UnitDied, OnUnitDied);
+        bus.Unsubscribe<TurnStartedEvent>(OnTurnStarted);
+        bus.Unsubscribe<UnitDamagedEvent>(OnUnitDamaged);
+        bus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
         bus.Unsubscribe(EventBus.Signals.UnitHealed, OnUnitHealed);
-        bus.Unsubscribe(EventBus.Signals.SkillUsed, OnSkillUsed);
+        bus.Unsubscribe<SkillUsedEvent>(OnSkillUsed);
         bus.Unsubscribe(EventBus.Signals.StatusEffectApplied, OnStatusEffectApplied);
         bus.Unsubscribe(EventBus.Signals.StatusEffectRemoved, OnStatusEffectRemoved);
         bus.Unsubscribe(EventBus.Signals.ProjectileImpact, OnProjectileImpact);
@@ -78,7 +85,7 @@ public partial class AudioEventReactor : Node
     // 战斗事件处理
     // ========================================================================
 
-    private void OnCombatStarted(Godot.Collections.Dictionary data)
+    private void OnCombatStarted(CombatStartedEvent ev)
     {
         // BGM 由 CombatScene 自行处理（需要 threat 判断 boss/normal）
         // 这里只播放战斗开始的 stinger
@@ -94,34 +101,26 @@ public partial class AudioEventReactor : Node
             PlaySfx("combat_defeat");
     }
 
-    private void OnTurnStarted(Godot.Collections.Dictionary data)
+    private void OnTurnStarted(TurnStartedEvent ev)
     {
-        if (!data.ContainsKey("state")) return;
-        int state = data["state"].AsInt32();
         // CombatState: PlayerTurn=1, EnemyTurn=2
-        if (state == 1)
+        if (ev.State == 1)
             PlaySfx("combat_turn_start");
-        else if (state == 2)
+        else if (ev.State == 2)
             PlaySfx("combat_enemy_turn");
     }
 
-    private void OnUnitDamaged(Godot.Collections.Dictionary data)
+    private void OnUnitDamaged(UnitDamagedEvent ev)
     {
-        // 播放通用命中音效 — 具体伤害类型由 CombatResolver 结果决定
-        // EventBus.PublishUnitDamaged 只传 unit/damage/remaining_hp
-        // 我们播放一个通用的命中反馈音
-        int damage = data.ContainsKey("damage") ? data["damage"].AsInt32() : 0;
-        if (damage > 0)
-        {
-            // 根据伤害量选择音效强度
-            if (damage >= 20)
-                PlaySfx("combat_sword_crit"); // 重击
-            else
-                PlaySfx("combat_armor_hit"); // 普通命中反馈
-        }
+        // 根据伤害量选择音效强度
+        if (ev.Damage <= 0) return;
+        if (ev.Damage >= 20)
+            PlaySfx("combat_sword_crit");
+        else
+            PlaySfx("combat_armor_hit");
     }
 
-    private void OnUnitDied(Godot.Collections.Dictionary data)
+    private void OnUnitDied(UnitDiedEvent ev)
     {
         PlaySfx("combat_death");
     }
@@ -131,22 +130,16 @@ public partial class AudioEventReactor : Node
         PlaySfx("skill_heal");
     }
 
-    private void OnSkillUsed(Godot.Collections.Dictionary data)
+    private void OnSkillUsed(SkillUsedEvent ev)
     {
-        if (!data.ContainsKey("skill_effect")) return;
-        string skillEffect = data["skill_effect"].AsString();
+        if (string.IsNullOrEmpty(ev.SkillEffect)) return;
 
         // 尝试按 skill_<effect> 名称播放
-        string sfxName = "skill_" + skillEffect;
+        string sfxName = "skill_" + ev.SkillEffect;
         if (HasSfx(sfxName))
-        {
             PlaySfx(sfxName);
-        }
         else
-        {
-            // 回退：播放通用技能音效
-            PlaySfx("skill_melee_combo");
-        }
+            PlaySfx("skill_melee_combo"); // 回退：通用技能音效
     }
 
     private void OnStatusEffectApplied(Godot.Collections.Dictionary data)

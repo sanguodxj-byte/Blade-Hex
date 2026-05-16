@@ -12,7 +12,6 @@ namespace BladeHex.Strategic;
 /// 按 Chunk 模式重构：
 /// - AI 实体移动由 Core 层 DailyDecisionProcessor / MovementProcessor 处理（全图模式保留）
 /// - Chunk 模式下新增遭遇标记检测（CheckChunkEncounters）
-/// - 新增 WorldGenerator 关联（SetWorldGenerator）
 /// </summary>
 [GlobalClass]
 public partial class OverworldEntityManager : Node, ISiegeSignals
@@ -61,7 +60,6 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
     private ChunkAStar? _chunkAstar;
     private Vector2 _playerPosition = Vector2.Zero;
     private int _currentDay = 1;
-    private WorldGenerator? _worldGen;
 
     private const float SIEGE_APPROACH_DIST = 600.0f;
     private const float ENCOUNTER_MARKER_DIST = 300.0f;
@@ -169,7 +167,7 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
         }
     }
 
-    /// <summary>玩家等级（影响敌方等级缩放，由 OverworldScene 设置）</summary>
+    /// <summary>玩家等级（影响敌方等级缩放，由 OverworldScene3D 设置）</summary>
     public int PlayerLevel { get; set; } = 1;
 
     /// <summary>

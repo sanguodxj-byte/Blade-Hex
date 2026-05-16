@@ -6,9 +6,12 @@ using Godot;
 namespace BladeHex.UI.Global;
 
 /// <summary>
-/// 全局系统菜单管理器（Autoload）。
-/// 提供 ESC 菜单（返回游戏/设置/保存/加载/回主菜单/退出）和完整设置面板。
-/// 各场景通过 GetNode("/root/GameMenuManager").Toggle() 调用。
+/// [Autoload Singleton] 全局系统菜单管理器。
+///
+/// <para>注册位置：<c>project.godot [autoload]</c> 段，名称 <c>GameMenuManager</c>。</para>
+/// <para>生命周期：应用全局。</para>
+/// <para>访问方式：建议通过 <see cref="BladeHex.Data.Globals.GameMenu"/> 或 <see cref="BladeHex.Data.Globals.GameMenuOrNull"/>。</para>
+/// <para>职责：ESC 菜单（返回游戏 / 设置 / 保存 / 加载 / 回主菜单 / 退出）和完整设置面板。</para>
 /// </summary>
 [GlobalClass]
 public partial class GameMenuManager : CanvasLayer
@@ -86,6 +89,8 @@ public partial class GameMenuManager : CanvasLayer
 
     public void OpenSettings()
     {
+        Visible = true;
+        GetTree().Paused = true;
         _menuPanel.Visible = false;
         _settingsPanel.Visible = true;
     }
@@ -280,7 +285,20 @@ public partial class GameMenuManager : CanvasLayer
         // --- 返回按钮 ---
         var closeBtn = MakeBtn("返 回");
         closeBtn.CustomMinimumSize = new Vector2(180, 48);
-        closeBtn.Pressed += () => { _settingsPanel.Visible = false; _menuPanel.Visible = true; };
+        closeBtn.Pressed += () =>
+        {
+            _settingsPanel.Visible = false;
+            if (IsInMainMenu)
+            {
+                // 主菜单：关闭整个 GameMenu，返回主菜单
+                Close();
+            }
+            else
+            {
+                // 游戏中：返回 ESC 菜单
+                _menuPanel.Visible = true;
+            }
+        };
         outer.AddChild(closeBtn);
     }
 
@@ -298,7 +316,7 @@ public partial class GameMenuManager : CanvasLayer
 
     private void SetGlobal(string key, Variant value)
     {
-        var gs = GetNodeOrNull<BladeHex.Data.GlobalState>("/root/GlobalState");
+        var gs = BladeHex.Data.Globals.StateOrNull;
         gs?.Set(key, value);
     }
 

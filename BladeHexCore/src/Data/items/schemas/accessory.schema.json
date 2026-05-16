@@ -1,0 +1,70 @@
+{
+  "title": "Accessory Item Array",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "type"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+      "name": { "type": "string" },
+      "type": {
+        "type": "string",
+        "enum": ["Ring", "Amulet", "Cloak", "Belt", "Bracer"]
+      },
+      "rarity": {
+        "type": "string",
+        "enum": ["Common", "Uncommon", "Rare", "Epic", "Legendary"],
+        "default": "Common"
+      },
+      "price": { "type": "integer", "minimum": 1, "default": 10 },
+      "desc": { "type": "string" },
+
+      "str": { "type": "integer", "default": 0 },
+      "dex": { "type": "integer", "default": 0 },
+      "con": { "type": "integer", "default": 0 },
+      "int": { "type": "integer", "default": 0 },
+      "wis": { "type": "integer", "default": 0 },
+      "cha": { "type": "integer", "default": 0 },
+
+      "hp": { "type": "integer", "default": 0 },
+      "ac": { "type": "integer", "default": 0 },
+      "move": { "type": "integer", "default": 0 },
+      "initiative": { "type": "integer", "default": 0 },
+
+      "resistance": {
+        "type": "string",
+        "enum": ["", "fire", "cold", "lightning", "acid", "poison", "magic", "physical"],
+        "default": ""
+      },
+      "immunity": {
+        "type": "string",
+        "enum": ["", "stun", "poison", "fear", "charm"],
+        "default": ""
+      },
+      "special_effect": {
+        "type": "string",
+        "enum": ["", "life_steal", "thorns", "extra_hp_percent", "damage_reduction", "spell_dc_bonus", "shop_discount", "recruit_discount", "flanking_bonus"],
+        "default": "",
+        "description": "(Legacy) Single special effect. Prefer 'abilities' array for new items."
+      },
+      "special_value": { "type": "number", "default": 0 },
+      "abilities": {
+        "type": "array",
+        "description": "List of equipment abilities. Preferred over special_effect.",
+        "items": {
+          "type": "object",
+          "required": ["id"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": ["life_steal", "thorns", "extra_hp_percent", "damage_reduction", "spell_dc_bonus", "shop_discount", "recruit_discount", "flanking_bonus"]
+            },
+            "value": { "type": "number", "default": 0 }
+          }
+        }
+      }
+    }
+  }
+}

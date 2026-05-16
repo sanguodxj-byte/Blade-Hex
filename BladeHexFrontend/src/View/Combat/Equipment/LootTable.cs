@@ -71,7 +71,7 @@ public static class LootTable
         // 盾牌
         if (rand.NextDouble() < BaseDropChance["shield"] * crMult * bias.GetValueOrDefault("shield", 1.0f))
         {
-            var s = EquipmentGenerator.GenerateRandomArmor(new[] { "shield" }, (ItemData.Rarity)(-1), EquipmentGenerator.GetItemLevelFromCr(cr), EquipmentGenerator.GetDifficultyFromCr(cr));
+            var s = EquipmentGenerator.GenerateRandomArmor(new[] { "light_wooden_shield", "infantry_round_shield", "infantry_heavy_shield", "knight_shield", "legion_tower_shield" }, (ItemData.Rarity)(-1), EquipmentGenerator.GetItemLevelFromCr(cr), EquipmentGenerator.GetDifficultyFromCr(cr));
             if (s != null) loot.Add(s);
         }
 
@@ -86,6 +86,17 @@ public static class LootTable
                 ItemRarity = (ItemData.Rarity)(-1)
             };
             loot.Add(acc);
+        }
+
+        // 箭筒（15% 掉率）
+        if (rand.NextDouble() < 0.15f * crMult)
+        {
+            var quivers = PrototypeData.GetQuivers();
+            if (quivers.Count > 0)
+            {
+                var quiverList = new System.Collections.Generic.List<ItemData>(quivers.Values);
+                loot.Add(quiverList[rand.Next(quiverList.Count)]);
+            }
         }
 
         // 消耗品

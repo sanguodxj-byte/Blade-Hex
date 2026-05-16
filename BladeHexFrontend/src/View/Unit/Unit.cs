@@ -128,85 +128,59 @@ public partial class Unit : Node3D, IFightable
 
     public void SetupVisuals()
     {
-        RenderNode = new CharacterRenderNode();
-        RenderNode.Name = "CharacterRenderNode";
-        AddChild(RenderNode);
-        RenderNode.Setup(this);
+        try
+        {
+            RenderNode = new CharacterRenderNode();
+            RenderNode.Name = "CharacterRenderNode";
+            AddChild(RenderNode);
+            RenderNode.Setup(this);
 
-        if (RenderBus != null)
-            RenderBus.Register(this, RenderNode);
+            if (RenderBus != null)
+                RenderBus.Register(this, RenderNode);
+        }
+        catch (System.Exception ex)
+        {
+            GD.PushError($"[Unit] SetupVisuals CharacterRenderNode failed: {ex.Message}");
+        }
 
-        // 添加头顶HP条
+        // HP/装甲条独立于 CharacterRenderNode — 始终创建
         SetupHpBar();
     }
 
     // ==========================================
-    // 头顶HP条
+    // 头顶 HP 条 + 装甲条 — 委托给 UnitHealthBarComponent（架构优化 spec R10）
     // ==========================================
-    private Sprite3D? _hpBarBg;
-    private Sprite3D? _hpBarFill;
-    private const float HpBarWidth = 0.8f;
-    private const float HpBarHeight = 0.06f;
-    private const float HpBarYOffset = 1.8f;
+    private BladeHex.View.Unit.Components.UnitHealthBarComponent? _healthBar;
 
     private void SetupHpBar()
     {
-        // 背景条（深灰）
-        _hpBarBg = new Sprite3D();
-        _hpBarBg.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
-        _hpBarBg.PixelSize = 0.01f;
-        _hpBarBg.Position = new Vector3(0, HpBarYOffset, 0);
-        var bgTex = CreateColorTexture(new Color(0.15f, 0.15f, 0.15f, 0.8f), 80, 6);
-        _hpBarBg.Texture = bgTex;
-        _hpBarBg.Modulate = new Color(1, 1, 1, 0.9f);
-        AddChild(_hpBarBg);
-
-        // 填充条（绿色→红色）
-        _hpBarFill = new Sprite3D();
-        _hpBarFill.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
-        _hpBarFill.PixelSize = 0.01f;
-        _hpBarFill.Position = new Vector3(0, HpBarYOffset, -0.01f);
-        var fillTex = CreateColorTexture(new Color(0.2f, 0.85f, 0.2f), 80, 6);
-        _hpBarFill.Texture = fillTex;
-        AddChild(_hpBarFill);
-
-        UpdateHpBar();
+        _healthBar = new BladeHex.View.Unit.Components.UnitHealthBarComponent();
+        _healthBar.Name = "HealthBar";
+        AddChild(_healthBar);
+        // _Ready 时 _healthBar 还未触发 _Ready（子节点 _Ready 在父之后），
+        // 所以延迟 SetState 一帧
+        CallDeferred(nameof(InitHealthBarState));
     }
 
-    /// <summary>更新HP条显示（血量变化时调用）</summary>
+    private void InitHealthBarState()
+    {
+        if (_healthBar == null || !IsInstanceValid(_healthBar)) return;
+        _healthBar.SetState(CurrentHp, GetMaxHp(), Data?.Armor);
+    }
+
+    /// <summary>更新 HP 条显示（血量变化时调用，向后兼容入口）。</summary>
     public void UpdateHpBar()
     {
-        if (_hpBarFill == null) return;
-        int maxHp = GetMaxHp();
-        if (maxHp <= 0) maxHp = 1;
-        float ratio = Mathf.Clamp((float)CurrentHp / maxHp, 0f, 1f);
-
-        // 缩放X轴表示血量比例
-        _hpBarFill.Scale = new Vector3(ratio, 1f, 1f);
-        // 左对齐偏移
-        float fullWidth = HpBarWidth;
-        _hpBarFill.Position = new Vector3(-(1f - ratio) * fullWidth * 0.5f * 0.01f * 80f * 0.5f, HpBarYOffset, -0.01f);
-
-        // 颜色：绿→黄→红
-        Color barColor;
-        if (ratio > 0.6f) barColor = new Color(0.2f, 0.85f, 0.2f);
-        else if (ratio > 0.3f) barColor = new Color(0.9f, 0.8f, 0.1f);
-        else barColor = new Color(0.9f, 0.15f, 0.1f);
-        _hpBarFill.Modulate = barColor;
-
-        // 死亡时隐藏
-        if (CurrentHp <= 0)
-        {
-            if (_hpBarBg != null) _hpBarBg.Visible = false;
-            _hpBarFill.Visible = false;
-        }
+        _healthBar?.SetHp(CurrentHp, GetMaxHp());
     }
 
-    private static ImageTexture CreateColorTexture(Color color, int width, int height)
+    /// <summary>更新装甲条显示（护甲值变化时调用，向后兼容入口）。</summary>
+    public void UpdateArmorBar()
     {
-        var img = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
-        img.Fill(color);
-        return ImageTexture.CreateFromImage(img);
+        if (_healthBar == null) return;
+        int maxArmor = Data?.Armor?.MaxArmorPoints ?? 0;
+        int currentArmor = Data?.Armor?.CurrentArmorPoints ?? 0;
+        _healthBar.SetArmor(currentArmor, maxArmor);
     }
 
     // ==========================================
@@ -216,6 +190,16 @@ public partial class Unit : Node3D, IFightable
     public void PlayAnim(string animName)
     {
         RenderNode?.PlayAnimation(animName);
+    }
+
+    /// <summary>攻击微动画 — 纹理朝目标方向突进 20px 后弹回</summary>
+    public void PlayAttackLunge(Vector3 targetWorldPos)
+    {
+        if (RenderNode == null) return;
+        var direction = (targetWorldPos - GlobalPosition);
+        direction.Y = 0; // 只在 XZ 平面移动
+        if (direction.LengthSquared() < 0.01f) return;
+        RenderNode.PlayAttackLunge(direction.Normalized());
     }
 
 // ==========================================
@@ -273,6 +257,10 @@ public partial class Unit : Node3D, IFightable
     public void SwitchWeaponSet()
     {
         UsingPrimaryWeapon = !UsingPrimaryWeapon;
+        // 同步到 Model（确保 GetMainHand/GetAttackBonus/RollDamage 使用正确武器）
+        Model.Runtime.UsingPrimaryWeapon = UsingPrimaryWeapon;
+        // 刷新渲染外观
+        RenderNode?.RefreshAllEquipment();
     }
 
     // ==========================================

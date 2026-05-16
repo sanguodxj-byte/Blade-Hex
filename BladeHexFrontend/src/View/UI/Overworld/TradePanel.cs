@@ -137,6 +137,16 @@ public partial class TradePanel : POIPanelBase
                 _shopStock.Add(c);
         }
 
+        // 箭筒：每个商店固定上架1-2个
+        var quivers = PrototypeData.GetQuivers().Values.ToList();
+        int quiverCount = 1 + (_prosperity >= 50 ? 1 : 0);
+        for (int i = 0; i < System.Math.Min(quiverCount, quivers.Count); i++)
+        {
+            var q = quivers[rand.Next(quivers.Count)];
+            if (!_shopStock.Any(s => s.ItemId == q.ItemId))
+                _shopStock.Add(q);
+        }
+
         // 按价格排序
         _shopStock.Sort((a, b) => a.Price.CompareTo(b.Price));
     }

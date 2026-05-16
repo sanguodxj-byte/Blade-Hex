@@ -180,14 +180,29 @@ public class EncounterEntitySpawner
             IsAlive = true,
         };
 
-        // RaidingParty 需要 SourceSettlement 来选模板
+        // RaidingParty 根据名称设置对应的怪物种族
         if (entityType == OverworldEntity.EntityType.RaidingParty)
         {
+            var race = entity.EntityName switch
+            {
+                "哥布林掠夺队" => OverworldPOI.SettlementRace.Goblin,
+                "狗头人小队" => OverworldPOI.SettlementRace.Kobold,
+                "牛头人战团" => OverworldPOI.SettlementRace.Minotaur,
+                _ => OverworldPOI.SettlementRace.Goblin,
+            };
             entity.SourceSettlement = new OverworldPOI
             {
-                PoiName = "野外营地",
-                SettlementRaceValue = OverworldPOI.SettlementRace.Goblin,
+                PoiName = entity.EntityName,
+                SettlementRaceValue = race,
                 ThreatLevel = playerLevel * 0.3f,
+            };
+            // 怪物类型标记（用于描述和战斗模板选择）
+            entity.MonsterType = entity.EntityName switch
+            {
+                "亡灵游荡者" => "undead",
+                "野兽群" => "beast",
+                "巨魔" => "troll",
+                _ => "goblinoid",
             };
         }
 
@@ -229,13 +244,19 @@ public class EncounterEntitySpawner
 
     private OverworldEntity.EntityType PickEntityType()
     {
-        // 加权随机：掠夺队 50% / 山贼 25% / 冒险者 15% / 史诗怪物 5% / 商队 5%
+        // 加权随机 — 人类系和怪物系分离
+        // 注意：LordArmy 不在野外随机生成（领主军队由国家系统派遣，不是随机遭遇）
+        // 人类系: BanditParty(25%) + RobberParty(10%) = 35%
+        // 怪物系: RaidingParty(35%) = 35%（内部再按种族细分）
+        // 中立: Adventurer(15%) + Caravan(10%) = 25%
+        // 稀有: EpicMonster(5%) = 5%
         int roll = _rng.Next(100);
-        if (roll < 50) return OverworldEntity.EntityType.RaidingParty;
-        if (roll < 75) return OverworldEntity.EntityType.BanditParty;
-        if (roll < 90) return OverworldEntity.EntityType.Adventurer;
-        if (roll < 95) return OverworldEntity.EntityType.EpicMonster;
-        return OverworldEntity.EntityType.Caravan; // 不敌对，视觉点缀
+        if (roll < 35) return OverworldEntity.EntityType.RaidingParty;   // 怪物掠夺队
+        if (roll < 60) return OverworldEntity.EntityType.BanditParty;    // 人类山贼
+        if (roll < 70) return OverworldEntity.EntityType.RobberParty;    // 人类劫匪
+        if (roll < 85) return OverworldEntity.EntityType.Adventurer;     // 中立冒险者
+        if (roll < 95) return OverworldEntity.EntityType.Caravan;        // 中立商队
+        return OverworldEntity.EntityType.EpicMonster;                    // 稀有巨兽
     }
 
     private (string name, int partySize, float combatPower, string faction)
@@ -243,18 +264,58 @@ public class EncounterEntitySpawner
     {
         return type switch
         {
+            // 怪物系 — 名称由 SettlementRace 决定（在 TrySpawnEntity 中设置）
             OverworldEntity.EntityType.RaidingParty =>
-                ($"掠夺队", 3 + _rng.Next(3), 10f + playerLevel * 5f, "hostile"),
+                (PickMonsterPartyName(), 3 + _rng.Next(4), 10f + playerLevel * 5f, "monster"),
+
+            // 人类系 — 明确的人类敌对势力
             OverworldEntity.EntityType.BanditParty =>
-                ($"山贼", 2 + _rng.Next(3), 8f + playerLevel * 4f, "bandit"),
+                (PickHumanBanditName(), 3 + _rng.Next(3), 8f + playerLevel * 4f, "bandit"),
+            OverworldEntity.EntityType.RobberParty =>
+                (PickHumanRobberName(), 2 + _rng.Next(2), 7f + playerLevel * 3f, "bandit"),
+            OverworldEntity.EntityType.LordArmy =>
+                ("敌对巡逻队", 5 + _rng.Next(4), 15f + playerLevel * 6f, "hostile_lord"),
+            OverworldEntity.EntityType.PirateCrew =>
+                ("海寇", 3 + _rng.Next(3), 9f + playerLevel * 4f, "pirate"),
+
+            // 中立
             OverworldEntity.EntityType.Adventurer =>
-                ($"冒险者队伍", 4, 15f + playerLevel * 6f, "neutral"),
-            OverworldEntity.EntityType.EpicMonster =>
-                ($"巨兽", 1, 30f + playerLevel * 10f, "monster"),
+                ("冒险者队伍", 3 + _rng.Next(2), 15f + playerLevel * 6f, "neutral"),
             OverworldEntity.EntityType.Caravan =>
-                ($"商队", 3, 5f, "merchant"),
-            _ => ($"流浪者", 2, 5f, "neutral"),
+                ("商队", 3 + _rng.Next(2), 5f, "merchant"),
+
+            // 稀有
+            OverworldEntity.EntityType.EpicMonster =>
+                ("巨兽", 1, 30f + playerLevel * 10f, "monster"),
+
+            _ => ("流浪者", 2, 5f, "neutral"),
         };
+    }
+
+    /// <summary>随机选择怪物掠夺队种族和名称</summary>
+    private string PickMonsterPartyName()
+    {
+        int roll = _rng.Next(100);
+        if (roll < 40) return "哥布林掠夺队";
+        if (roll < 60) return "狗头人小队";
+        if (roll < 75) return "牛头人战团";
+        if (roll < 85) return "亡灵游荡者";
+        if (roll < 95) return "野兽群";
+        return "巨魔";
+    }
+
+    /// <summary>随机选择人类山贼名称</summary>
+    private string PickHumanBanditName()
+    {
+        string[] names = ["黑鸦团", "断刃帮", "荒野劫匪", "落魄佣兵", "逃兵小队", "亡命之徒"];
+        return names[_rng.Next(names.Length)];
+    }
+
+    /// <summary>随机选择人类劫匪名称</summary>
+    private string PickHumanRobberName()
+    {
+        string[] names = ["路霸", "拦路贼", "流寇", "马贼"];
+        return names[_rng.Next(names.Length)];
     }
 
     /// <summary>

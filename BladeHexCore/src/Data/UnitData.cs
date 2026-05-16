@@ -85,7 +85,7 @@ public partial class UnitData : Resource
     // ========================================
 
     [Export] public int BaseMaxHp { get; set; } = 10;
-    [Export] public int BaseAc { get; set; } = 10;
+    [Export] public int BaseAc { get; set; } = 8;
     [Export] public int BaseAp { get; set; } = 12;
     [Export] public int BaseMoveRange { get; set; } = 4;
     [Export] public int BaseInitiative;
@@ -226,6 +226,14 @@ public partial class UnitData : Resource
     public int AccessoryAcBonus;
     public int AccessoryMoveBonus;
     public int AccessoryInitiativeBonus;
+
+    /// <summary>
+    /// 角色自身能力（与装备能力分离）—
+    /// 技能树解锁、种族特性、职业天赋等永久能力放这里。
+    /// 战斗能力聚合时由 UnitAbilities.GetAll 自动包含。
+    /// </summary>
+    public System.Collections.Generic.List<BladeHex.Combat.Abilities.EquipmentAbility> IntrinsicAbilities { get; }
+        = new();
 
     // ========================================
     // 枚举显示名方法

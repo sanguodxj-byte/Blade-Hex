@@ -1,168 +1,83 @@
-// SaveManager.cs
-// ⚠️ DEPRECATED — 已被 SaveManagerV2.cs (JSON 格式) 替代
-// 保留此文件仅用于读取 V1 旧存档（.dat 二进制格式）
-// 新存档全部使用 SaveManagerV2 的 JSON 格式
-// 处理游戏的序列化与持久化存储（V1 legacy）
+// SaveManager.cs — 统一存档管理器（JSON 格式）
+//
+// 历史：项目初期有 V1 二进制版本（已移除）；本类原名 SaveManagerV2，
+// 在架构优化 spec R9 期间正式接管 SaveManager 名字。
+// 仍保留 V1 旧存档（.dat StoreVar 格式）的迁移读取能力（LoadLegacySave / ConvertLegacyData），
+// 但目前没有 UI 入口调用，需要时由 UI 层显式触发。
 using Godot;
 using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using BladeHex.Data;
 using BladeHex.Strategic;
 
 namespace BladeHex.Data;
 
 /// <summary>
-/// 存档管理器 — Autoload 单例
+/// 统一存档管理器 — JSON 格式 + 自动备份
 /// </summary>
 [GlobalClass]
 public partial class SaveManager : Node
 {
-    private const string SavePath = "user://sword_and_hex_save.dat";
+    private const string SavePath = "user://sword_and_hex_save.json";
+    private const string BackupPath = "user://sword_and_hex_save_backup.json";
+    private const string LegacyPath = "user://sword_and_hex_save.dat";
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
 
     // ========================================
     // 存档检查
     // ========================================
 
-    /// <summary>检查是否存在有效存档</summary>
-    public bool HasSave() => FileAccess.FileExists(SavePath);
+    /// <summary>检查是否存在有效存档（V2 JSON 或 V1 legacy）</summary>
+    public bool HasSave() => FileAccess.FileExists(SavePath) || FileAccess.FileExists(LegacyPath);
+
+    /// <summary>检查是否存在 V1 旧存档（需要迁移）</summary>
+    public bool HasLegacySave() => !FileAccess.FileExists(SavePath) && FileAccess.FileExists(LegacyPath);
 
     // ========================================
     // 保存
     // ========================================
 
-    /// <summary>
-    /// 执行保存逻辑
-    /// context 结构:
-    ///   "economy"        → EconomyManager node
-    ///   "player_pos"     → Vector2 (position)
-    ///   "player_unit"    → UnitData
-    ///   "fog_of_war"     → FogOfWar serialized data (optional)
-    ///   "player_race_id" → int (optional)
-    /// </summary>
-    public bool SaveGame(Godot.Collections.Dictionary context)
+    /// <summary>保存游戏 — 从运行时数据构建存档并写入 JSON</summary>
+    public bool SaveGame(GameSaveData saveData)
     {
-        var econ = (EconomyManager)context["economy"];
-        var partyPos = (Vector2)context["player_pos"];
-        var unit = (UnitData)context["player_unit"];
-
-        var data = new Godot.Collections.Dictionary
+        saveData.Timestamp = (long)Time.GetUnixTimeFromSystem();
+        try
         {
-            { "version", "0.3.0" },
-            { "timestamp", Time.GetDatetimeDictFromSystem() },
-        };
-
-        // 经济数据
-        var econData = new Godot.Collections.Dictionary
-        {
-            { "gold", econ.Gold },
-            { "food", econ.Food },
-            { "days", econ.DaysPassed },
-            { "month", econ.Month },
-            { "year", econ.Year },
-            { "current_hour", econ.CurrentHour },
-        };
-        data["economy"] = econData;
-
-        // 世界数据
-        data["world"] = new Godot.Collections.Dictionary
-        {
-            { "player_pos_x", partyPos.X },
-            { "player_pos_y", partyPos.Y },
-        };
-
-        // 角色完整数据
-        var charData = new Godot.Collections.Dictionary
-        {
-            { "name", unit.UnitName },
-            { "str", unit.Str },
-            { "dex", unit.Dex },
-            { "con", unit.Con },
-            { "intel", unit.Intel },
-            { "wis", unit.Wis },
-            { "cha", unit.Cha },
-            { "base_hp", unit.BaseMaxHp },
-            { "current_hp", context.ContainsKey("current_hp") ? context["current_hp"] : unit.BaseMaxHp },
-            { "xp", unit.Xp },
-            { "level", unit.Level },
-            { "morale", unit.Morale },
-            { "current_mana", unit.CurrentMana },
-            { "race_id", context.ContainsKey("player_race_id") ? context["player_race_id"] : 0 },
-        };
-
-        // 装备
-        charData["primary_weapon"] = SerializeItem(unit.PrimaryMainHand);
-        charData["secondary_weapon"] = SerializeItem(unit.SecondaryMainHand);
-        charData["armor"] = SerializeItem(unit.Armor);
-        charData["shield"] = SerializeItem(unit.Shield);
-        charData["helmet"] = SerializeItem(unit.Helmet);
-        charData["accessory_1"] = SerializeItem(unit.Accessory1);
-        charData["accessory_2"] = SerializeItem(unit.Accessory2);
-        charData["mount"] = SerializeItem(unit.Mount);
-
-        // 已学法术
-        var spells = new Godot.Collections.Array();
-        if (unit.KnownSpells != null)
-            foreach (var spell in unit.KnownSpells)
-                spells.Add(SerializeSpell(spell));
-        charData["known_spells"] = spells;
-
-        // 法术冷却
-        charData["spell_cooldowns"] = unit.SpellCooldowns;
-
-        // 武器精通
-        var masteryData = new Godot.Collections.Dictionary();
-        foreach (WeaponData.WeaponSubtype subtype in Enum.GetValues(typeof(WeaponData.WeaponSubtype)))
-        {
-            int level = unit.WeaponMastery.GetLevelBySubtype(subtype);
-            int xp = unit.WeaponMastery.GetXpBySubtype(subtype);
-            if (level > 0 || xp > 0)
-                masteryData[subtype.ToString()] = new Godot.Collections.Dictionary { { "level", level }, { "xp", xp } };
-        }
-        charData["weapon_mastery"] = masteryData;
-
-        // 消耗品背包
-        var consumables = new Godot.Collections.Array();
-        if (unit.Consumables != null)
-            foreach (var c in unit.Consumables)
-                consumables.Add(SerializeItem(c));
-        charData["consumables"] = consumables;
-
-        data["character"] = charData;
-
-        // 战争迷雾
-        if (context.ContainsKey("fog_of_war"))
-            data["fog_of_war"] = context["fog_of_war"];
-
-        // 背包物品（完整序列化）
-        var invItems = new Godot.Collections.Array();
-        foreach (var item in econ.PlayerInventory)
-            invItems.Add(SerializeItem(item));
-        data["inventory"] = invItems;
-
-        // 大地图 POI 与实体序列化
-        if (context.ContainsKey("overworld_entity_manager"))
-        {
-            var oem = context["overworld_entity_manager"].As<OverworldEntityManager>();
-            if (oem != null)
+            // 备份旧存档
+            if (FileAccess.FileExists(SavePath))
             {
-                var poisData = new Godot.Collections.Array();
-                foreach (var poi in oem.Pois)
-                    poisData.Add(poi.Serialize());
-                data["overworld_pois"] = poisData;
+                var src = FileAccess.Open(SavePath, FileAccess.ModeFlags.Read);
+                if (src != null)
+                {
+                    var content = src.GetAsText();
+                    src.Close();
+                    var backup = FileAccess.Open(BackupPath, FileAccess.ModeFlags.Write);
+                    if (backup != null) { backup.StoreString(content); backup.Close(); }
+                }
+            }
 
-                var entitiesData = new Godot.Collections.Array();
-                foreach (var entity in oem.Entities)
-                    entitiesData.Add(entity.Serialize());
-                data["overworld_entities"] = entitiesData;
+            // 写入新存档
+            var json = JsonSerializer.Serialize(saveData, JsonOpts);
+            var file = FileAccess.Open(SavePath, FileAccess.ModeFlags.Write);
+            if (file != null)
+            {
+                file.StoreString(json);
+                file.Close();
+                GD.Print($"[SaveV2] 游戏已保存: {ProjectSettings.GlobalizePath(SavePath)}");
+                return true;
             }
         }
-
-        // 写入文件
-        var file = FileAccess.Open(SavePath, FileAccess.ModeFlags.Write);
-        if (file != null)
+        catch (Exception e)
         {
-            file.StoreVar(data);
-            file.Close();
-            GD.Print("游戏已成功保存到: ", ProjectSettings.GlobalizePath(SavePath));
-            return true;
+            GD.PrintErr($"[SaveV2] 保存失败: {e.Message}");
         }
         return false;
     }
@@ -171,85 +86,290 @@ public partial class SaveManager : Node
     // 读取
     // ========================================
 
-    /// <summary>执行读取逻辑</summary>
-    public Godot.Collections.Dictionary LoadGameData()
+    /// <summary>读取存档 — 优先 V2 JSON，回退到备份</summary>
+    public GameSaveData? LoadGame()
     {
-        if (!HasSave()) return new();
-
-        var file = FileAccess.Open(SavePath, FileAccess.ModeFlags.Read);
-        if (file != null)
+        if (FileAccess.FileExists(SavePath))
         {
-            var data = (Godot.Collections.Dictionary)file.GetVar();
-            file.Close();
-            return data;
+            var data = LoadFromPath(SavePath);
+            if (data != null) return data;
         }
-        return new();
+        // 尝试备份
+        return LoadFromPath(BackupPath);
+    }
+
+    /// <summary>读取 V1 旧存档并转换为 V2 格式</summary>
+    public GameSaveData? LoadLegacySave()
+    {
+        if (!FileAccess.FileExists(LegacyPath)) return null;
+        try
+        {
+            var file = FileAccess.Open(LegacyPath, FileAccess.ModeFlags.Read);
+            if (file == null) return null;
+            var raw = (Godot.Collections.Dictionary)file.GetVar();
+            file.Close();
+            return ConvertLegacyData(raw);
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[SaveV2] V1 旧存档读取失败: {e.Message}");
+            return null;
+        }
+    }
+
+    private GameSaveData? LoadFromPath(string path)
+    {
+        if (!FileAccess.FileExists(path)) return null;
+        try
+        {
+            var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+            if (file == null) return null;
+            var json = file.GetAsText();
+            file.Close();
+            return JsonSerializer.Deserialize<GameSaveData>(json, JsonOpts);
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"[SaveV2] 读取 {path} 失败: {e.Message}");
+            return null;
+        }
     }
 
     // ========================================
     // 删除
     // ========================================
 
-    /// <summary>删除存档</summary>
+    /// <summary>删除所有存档（V2 + 备份 + V1 legacy）</summary>
     public void DeleteSave()
     {
-        if (HasSave())
-            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(SavePath));
+        DeleteFileIfExists(SavePath);
+        DeleteFileIfExists(BackupPath);
+        DeleteFileIfExists(LegacyPath);
+    }
+
+    private static void DeleteFileIfExists(string path)
+    {
+        if (FileAccess.FileExists(path))
+            DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
     }
 
     // ========================================
-    // 序列化辅助
+    // 数据构建 — 从运行时状态构建 GameSaveData
     // ========================================
 
-    private static Godot.Collections.Dictionary SerializeItem(Resource? item)
+    /// <summary>从 OverworldScene3D 运行时状态构建完整存档数据</summary>
+    public static GameSaveData BuildSaveData(
+        UnitData playerUnit,
+        int playerRaceId,
+        Vector2 playerPos,
+        EconomyManager economy,
+        OverworldEntityManager? entityMgr = null,
+        int worldSeed = 0,
+        int worldSize = 1,
+        string? saveId = null)
     {
-        if (item == null) return new Godot.Collections.Dictionary { { "is_null", true } };
-        var dict = new Godot.Collections.Dictionary
+        var save = new GameSaveData();
+
+        // 世界数据
+        save.World.PlayerPosX = playerPos.X;
+        save.World.PlayerPosY = playerPos.Y;
+        save.World.Seed = worldSeed;
+        save.World.WorldSize = worldSize;
+        save.World.SaveId = saveId;
+
+        // 经济数据
+        save.Economy.Gold = economy.Gold;
+        save.Economy.Food = economy.Food;
+        save.Economy.DaysPassed = economy.DaysPassed;
+        save.Economy.Month = economy.Month;
+        save.Economy.Year = economy.Year;
+        save.Economy.CurrentHour = (int)economy.CurrentHour;
+
+        // 玩家角色
+        save.Party.PlayerRaceId = playerRaceId;
+        save.Party.Units.Add(BuildUnitSaveData(playerUnit, isLeader: true));
+
+        // 背包
+        foreach (var item in economy.PlayerInventory)
         {
-            { "is_null", false },
-            { "item_name", (item as ItemData)?.ItemName ?? (item as MountData)?.MountName ?? "" },
-            { "item_id", (item as ItemData)?.ItemId ?? (item as MountData)?.MountId ?? "" },
-        };
-        if (item is WeaponData w)
-        {
-            dict["item_type"] = "weapon";
-            dict["damage_dice_count"] = w.DamageDiceCount;
-            dict["damage_dice_sides"] = w.DamageDiceSides;
-            dict["is_ranged"] = w.IsRanged;
-            dict["range_cells"] = w.RangeCells;
-            dict["ap_cost"] = w.ApCost;
+            save.Inventory.Add(new InventoryItemSaveData
+            {
+                ItemId = item.ItemId,
+                ItemName = item.ItemName,
+                ItemType = item switch
+                {
+                    WeaponData => "weapon",
+                    ArmorData => "armor",
+                    ConsumableData => "consumable",
+                    _ => "misc"
+                },
+            });
         }
-        else if (item is ArmorData a)
+
+        // POI 与实体
+        if (entityMgr != null)
         {
-            dict["item_type"] = "armor";
-            dict["armor_type"] = (int)a.armorType;
-            dict["ac_bonus"] = a.AcBonus;
-            dict["dr_threshold"] = a.DrThreshold;
-            dict["max_armor_points"] = a.MaxArmorPoints;
-            dict["current_armor_points"] = a.CurrentArmorPoints;
+            foreach (var poi in entityMgr.Pois)
+            {
+                save.World.Pois.Add(new PoiSaveData
+                {
+                    PoiName = poi.PoiName,
+                    PoiType = poi.PoiTypeEnum.ToString(),
+                    PosX = poi.Position.X,
+                    PosY = poi.Position.Y,
+                    Prosperity = poi.Prosperity,
+                    GarrisonSize = poi.GarrisonCurrent,
+                });
+            }
+
+            foreach (var entity in entityMgr.Entities)
+            {
+                save.World.Entities.Add(new EntitySaveData
+                {
+                    EntityName = entity.EntityName,
+                    EntityType = entity.EntityTypeEnum.ToString(),
+                    PosX = entity.Position.X,
+                    PosY = entity.Position.Y,
+                    Faction = entity.Faction,
+                    IsAlive = entity.IsAlive,
+                });
+            }
         }
-        else if (item is MountData m)
-        {
-            dict["item_type"] = "mount";
-            dict["mount_id"] = m.MountId;
-        }
-        else if (item is ConsumableData c)
-        {
-            dict["item_type"] = "consumable";
-            dict["consumable_type"] = (int)c.consumableType;
-        }
-        return dict;
+
+        return save;
     }
 
-    private static Godot.Collections.Dictionary SerializeSpell(SpellData spell)
+    /// <summary>从 UnitData 构建单位存档数据</summary>
+    public static UnitSaveData BuildUnitSaveData(UnitData unit, bool isLeader = false)
     {
-        return new Godot.Collections.Dictionary
+        var data = new UnitSaveData
         {
-            { "spell_id", spell.SpellId },
-            { "spell_name", spell.SpellName },
-            { "school", (int)spell.spellSchool },
-            { "tier", (int)spell.tier },
-            { "mana_cost", spell.ManaCost },
+            UnitName = unit.UnitName,
+            Level = unit.Level,
+            CurrentHp = unit.BaseMaxHp, // 运行时 HP 由调用方覆盖
+            Xp = unit.Xp,
+            Str = unit.Str,
+            Dex = unit.Dex,
+            Con = unit.Con,
+            Intel = unit.Intel,
+            Wis = unit.Wis,
+            Cha = unit.Cha,
+            BaseMaxHp = unit.BaseMaxHp,
+            Morale = unit.Morale,
+            CurrentMana = unit.CurrentMana,
+            IsLeader = isLeader,
+
+            // 装备
+            PrimaryMainHandId = (unit.PrimaryMainHand as WeaponData)?.ItemId,
+            SecondaryMainHandId = (unit.SecondaryMainHand as WeaponData)?.ItemId,
+            ArmorId = unit.Armor?.ItemId,
+            ShieldId = unit.Shield?.ItemId,
+            HelmetId = unit.Helmet?.ItemId,
+            Accessory1Id = unit.Accessory1?.ItemId,
+            Accessory2Id = unit.Accessory2?.ItemId,
+            MountId = unit.Mount?.MountId,
         };
+
+        // 法术
+        if (unit.KnownSpells != null)
+        {
+            foreach (var spell in unit.KnownSpells)
+            {
+                data.KnownSpells.Add(new SpellSaveData
+                {
+                    SpellId = spell.SpellId,
+                    SpellName = spell.SpellName,
+                    School = (int)spell.spellSchool,
+                    Tier = (int)spell.tier,
+                    ManaCost = spell.ManaCost,
+                });
+            }
+        }
+
+        // 法术冷却
+        if (unit.SpellCooldowns != null)
+        {
+            foreach (var key in unit.SpellCooldowns.Keys)
+                data.SpellCooldowns[key.AsString()] = unit.SpellCooldowns[key].AsInt32();
+        }
+
+        // 武器精通
+        if (unit.WeaponMastery != null)
+        {
+            foreach (WeaponData.WeaponSubtype subtype in Enum.GetValues(typeof(WeaponData.WeaponSubtype)))
+            {
+                int level = unit.WeaponMastery.GetLevelBySubtype(subtype);
+                int xp = unit.WeaponMastery.GetXpBySubtype(subtype);
+                if (level > 0 || xp > 0)
+                {
+                    data.WeaponMastery[subtype.ToString()] = new MasterySaveData { Level = level, Xp = xp };
+                }
+            }
+        }
+
+        // 消耗品
+        if (unit.Consumables != null)
+        {
+            foreach (var c in unit.Consumables)
+                if (c is ConsumableData cd) data.ConsumableIds.Add(cd.ItemId);
+        }
+
+        return data;
+    }
+
+    // ========================================
+    // V1 旧存档转换
+    // ========================================
+
+    private static GameSaveData ConvertLegacyData(Godot.Collections.Dictionary raw)
+    {
+        var save = new GameSaveData { Version = "2.0.0-migrated" };
+
+        // 经济
+        if (raw.ContainsKey("economy"))
+        {
+            var econ = raw["economy"].AsGodotDictionary();
+            save.Economy.Gold = econ.ContainsKey("gold") ? econ["gold"].AsInt32() : 0;
+            save.Economy.Food = econ.ContainsKey("food") ? econ["food"].AsInt32() : 0;
+            save.Economy.DaysPassed = econ.ContainsKey("days") ? econ["days"].AsInt32() : 0;
+            save.Economy.Month = econ.ContainsKey("month") ? econ["month"].AsInt32() : 1;
+            save.Economy.Year = econ.ContainsKey("year") ? econ["year"].AsInt32() : 1;
+            save.Economy.CurrentHour = econ.ContainsKey("current_hour") ? econ["current_hour"].AsInt32() : 8;
+        }
+
+        // 世界位置
+        if (raw.ContainsKey("world"))
+        {
+            var world = raw["world"].AsGodotDictionary();
+            save.World.PlayerPosX = world.ContainsKey("player_pos_x") ? world["player_pos_x"].AsSingle() : 0;
+            save.World.PlayerPosY = world.ContainsKey("player_pos_y") ? world["player_pos_y"].AsSingle() : 0;
+        }
+
+        // 角色
+        if (raw.ContainsKey("character"))
+        {
+            var ch = raw["character"].AsGodotDictionary();
+            var unit = new UnitSaveData
+            {
+                IsLeader = true,
+                UnitName = ch.ContainsKey("name") ? ch["name"].AsString() : "Unknown",
+                Level = ch.ContainsKey("level") ? ch["level"].AsInt32() : 1,
+                CurrentHp = ch.ContainsKey("current_hp") ? ch["current_hp"].AsInt32() : 10,
+                Xp = ch.ContainsKey("xp") ? ch["xp"].AsInt32() : 0,
+                Str = ch.ContainsKey("str") ? ch["str"].AsInt32() : 10,
+                Dex = ch.ContainsKey("dex") ? ch["dex"].AsInt32() : 10,
+                Con = ch.ContainsKey("con") ? ch["con"].AsInt32() : 10,
+                Intel = ch.ContainsKey("intel") ? ch["intel"].AsInt32() : 10,
+                Wis = ch.ContainsKey("wis") ? ch["wis"].AsInt32() : 10,
+                Cha = ch.ContainsKey("cha") ? ch["cha"].AsInt32() : 10,
+                BaseMaxHp = ch.ContainsKey("base_hp") ? ch["base_hp"].AsInt32() : 10,
+                Morale = ch.ContainsKey("morale") ? ch["morale"].AsInt32() : 50,
+                CurrentMana = ch.ContainsKey("current_mana") ? ch["current_mana"].AsInt32() : 0,
+            };
+            save.Party.PlayerRaceId = ch.ContainsKey("race_id") ? ch["race_id"].AsInt32() : 0;
+            save.Party.Units.Add(unit);
+        }
+
+        return save;
     }
 }

@@ -1,5 +1,5 @@
 // HexOverworldRenderer3D.cs
-// 3D 大地图六边形渲染器 — 替代 HexOverworldRenderer (2D)
+// 3D 大地图六边形渲染器 — 替代旧 2D 版本
 // MultiMeshInstance3D 按地形类型分桶批处理
 // 世界坐标 UV shader 消除接缝，边缘羽化实现柔和过渡
 using Godot;
@@ -29,8 +29,8 @@ public partial class HexOverworldRenderer3D : Node3D
     /// </remarks>
     private const float PixelToWorld = 1.0f / 156.0f;
 
-    /// <summary>Shader 路径</summary>
-    private const string ShaderPath = "res://src/assets/shaders/overworld_hex_3d.gdshader";
+    /// <summary>Shader 路径 — 程序化生成，不依赖纹理</summary>
+    private const string ShaderPath = "res://src/assets/shaders/overworld_hex_procedural.gdshader";
 
     // ========================================
     // 桶结构
@@ -145,27 +145,22 @@ public partial class HexOverworldRenderer3D : Node3D
 
         var profile = TerrainVisualRegistry.Get((HexOverworldTile.TerrainType)terrainType);
 
-        // 创建 shader material
+        // 创建 shader material — 程序化纹理（不再加载PNG）
         if (_shader != null)
         {
             var mat = new ShaderMaterial();
             mat.Shader = _shader;
             mat.SetShaderParameter("feather_width", 0.08f);
-            mat.SetShaderParameter("texture_scale", 0.5f);
+            mat.SetShaderParameter("noise_scale", 0.6f);
+            mat.SetShaderParameter("warp_strength", 0.8f);
+            mat.SetShaderParameter("ink_amount", 0.30f);
+            mat.SetShaderParameter("ink_threshold", 0.42f);
             mat.SetShaderParameter("fog_amount", 0.0f);
 
-            // 尝试加载纹理
-            var tex = TryLoadTexture(profile);
-            if (tex != null)
-            {
-                mat.SetShaderParameter("use_texture", true);
-                mat.SetShaderParameter("terrain_texture", tex);
-            }
-            else
-            {
-                mat.SetShaderParameter("use_texture", false);
-                mat.SetShaderParameter("fallback_color", profile.DominantColor);
-            }
+            // 三色调色板（来自 TerrainVisualProfile）
+            mat.SetShaderParameter("color_base", profile.DominantColor);
+            mat.SetShaderParameter("color_dark", profile.PaletteDark);
+            mat.SetShaderParameter("color_light", profile.PaletteLight);
 
             bucket.Instance.MaterialOverride = mat;
         }
@@ -195,19 +190,30 @@ public partial class HexOverworldRenderer3D : Node3D
         var mm = mmi.Multimesh;
         if (mm == null || mm.InstanceCount != count)
         {
-            mm = new MultiMesh();
-            mm.Mesh = _sharedHexMesh;
-            mm.TransformFormat = MultiMesh.TransformFormatEnum.Transform3D;
-            mm.UseColors = false;
-            mm.InstanceCount = count;
-            mmi.Multimesh = mm;
+            // 创建新 MultiMesh，先填充数据再赋值（减少闪烁）
+            var newMm = new MultiMesh();
+            newMm.Mesh = _sharedHexMesh;
+            newMm.TransformFormat = MultiMesh.TransformFormatEnum.Transform3D;
+            newMm.UseColors = false;
+            newMm.InstanceCount = count;
+
+            int idx = 0;
+            foreach (var kvp in bucket.TilePositions)
+            {
+                newMm.SetInstanceTransform(idx, new Transform3D(Basis.Identity, kvp.Value));
+                idx++;
+            }
+
+            // 数据就绪后一次性赋值
+            mmi.Multimesh = newMm;
+            return;
         }
 
+        // 数量不变时直接更新 transform（零闪烁）
         int i = 0;
         foreach (var kvp in bucket.TilePositions)
         {
-            var xform = new Transform3D(Basis.Identity, kvp.Value);
-            mm.SetInstanceTransform(i, xform);
+            mm.SetInstanceTransform(i, new Transform3D(Basis.Identity, kvp.Value));
             i++;
         }
     }

@@ -42,4 +42,13 @@ dist/
 *.x86_32
 *.app
 *.apk
-*.ipa"/assets/"  
+*.ipa
+
+# Build / debug logs (one-off troubleshooting artifacts)
+build_*.txt
+godot_*.txt
+remaining_errors*.txt
+
+# Game assets (large binaries, distributed separately)
+assets/
+sl.txt

@@ -1,6 +1,7 @@
 // SkillTreeData.cs
 // 技能盘完整图数据 — 150+ 节点，axial 坐标 (q, r)
 using Godot;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,10 +17,16 @@ public partial class SkillTreeData : RefCounted
     public const string StartNodeId = "start";
     public int GetNodeCount() => Nodes.Count;
 
-    static readonly Vector2I[] Dirs = {
+    internal static readonly Vector2I[] Dirs = {
         new(1, 0), new(0, 1), new(-1, 1), new(-1, 0), new(0, -1), new(1, -1),
     };
 
+    /// <summary>
+    /// 节点位置映射：
+    /// dirIdx 0-5 对应 6 个区域方向（STR/DEX/CON/INT/WIS/CHA）
+    /// ring: 距 start 的距离（沿 dirIdx 方向移动 ring 格）
+    /// slot: 横向偏移（沿 dirIdx+1 方向）
+    /// </summary>
     static Vector2I Mp(int di, int ring, int slot) =>
         Dirs[di % 6] * ring + Dirs[(di + 1) % 6] * slot;
 
@@ -36,6 +43,205 @@ public partial class SkillTreeData : RefCounted
         BuildChaRegion();
         BuildTransitionNodes();
         BuildCrossRegionLoops();
+
+        // 注：节点位置由各 Build*Region 中的 Mp(dir, ring, slot) 手工指定
+        // 节点连线由各 Build*Region 中的 n.Neighbors 列表显式定义（星座式拓扑）
+        // 网格仅作为坐标系，不参与连接判定
+    }
+
+    /// <summary>
+    /// 自动布局：清除所有手动 GridPosition / Neighbors，
+    /// 按区域+深度重新分配位置，再按几何相邻关系自动连线
+    /// 使用"内向扩散"BFS：从 start 节点开始，6 个区域同时向外扩散，确保所有节点均与至少一个已放置节点相邻
+    /// </summary>
+    void AutoLayoutAndConnect()
+    {
+        const int HexagonRadius = 20;
+
+        // 1. start 固定原点
+        if (Nodes.TryGetValue(StartNodeId, out var startNode))
+            startNode.GridPosition = Vector2I.Zero;
+
+        // 2. 6 个区域按 dirIdx 0-5 分布到六边形 6 个轴线
+        var regionToDir = new Dictionary<SkillNodeData.Region, int>
+        {
+            { SkillNodeData.Region.Str, 0 },
+            { SkillNodeData.Region.Dex, 1 },
+            { SkillNodeData.Region.Con, 2 },
+            { SkillNodeData.Region.Int, 3 },
+            { SkillNodeData.Region.Wis, 4 },
+            { SkillNodeData.Region.Cha, 5 },
+        };
+
+        // 占用记录：所有已放置节点的位置
+        var occupied = new HashSet<Vector2I> { Vector2I.Zero };
+
+        // 各区域填充其 60° 扇区
+        // BFS 起点：扇区内距 start 最近的轴向格点
+        // 这保证每个新节点至少有一个已放置邻居（来自已放置的扇区内节点 + start 节点）
+        foreach (var (region, dirIdx) in regionToDir)
+        {
+            var regionNodes = Nodes.Values
+                .Where(n => n.CurrentRegion == region)
+                .OrderBy(n => n.Depth)
+                .ThenBy(n => n.NodeId)
+                .ToList();
+
+            if (regionNodes.Count == 0) continue;
+
+            var mainDir = Dirs[dirIdx];
+            var sideDir = Dirs[(dirIdx + 5) % 6]; // dirIdx-1，朝前一区域偏移
+
+            // 预计算扇区内所有合法位置
+            var sectorSet = new HashSet<Vector2I>();
+            for (int a = 1; a <= HexagonRadius; a++)
+                for (int b = 0; b <= a; b++)
+                {
+                    var pos = mainDir * a + sideDir * b;
+                    if (IsValidPosition(pos, HexagonRadius))
+                        sectorSet.Add(pos);
+                }
+
+            // BFS：从扇区种子开始，按距离扩散
+            var seed = mainDir;
+            var queue = new Queue<Vector2I>();
+            var visited = new HashSet<Vector2I>();
+            if (sectorSet.Contains(seed))
+            {
+                queue.Enqueue(seed);
+                visited.Add(seed);
+            }
+
+            foreach (var node in regionNodes)
+            {
+                Vector2I targetPos = mainDir * (HexagonRadius - 1); // fallback
+                bool placed = false;
+
+                while (queue.Count > 0)
+                {
+                    var p = queue.Dequeue();
+                    if (occupied.Contains(p)) continue;
+                    if (!sectorSet.Contains(p)) continue;
+                    targetPos = p;
+                    placed = true;
+
+                    // 入队 6 邻居
+                    foreach (var d in Dirs)
+                    {
+                        var nb = p + d;
+                        if (!visited.Contains(nb) && sectorSet.Contains(nb))
+                        {
+                            visited.Add(nb);
+                            queue.Enqueue(nb);
+                        }
+                    }
+                    break;
+                }
+
+                if (!placed)
+                {
+                    // 队列耗尽：回退到主轴最远空位
+                    for (int r = HexagonRadius; r >= 1; r--)
+                    {
+                        var p = mainDir * r;
+                        if (sectorSet.Contains(p) && !occupied.Contains(p))
+                        {
+                            targetPos = p;
+                            break;
+                        }
+                    }
+                }
+
+                node.GridPosition = targetPos;
+                occupied.Add(targetPos);
+            }
+        }
+
+        // 3. Transition / 其他特殊节点放置在已占用区域的边界（保证邻接连通）
+        var transitionNodes = Nodes.Values
+            .Where(n => n.CurrentRegion == SkillNodeData.Region.Transition || n.CurrentRegion == SkillNodeData.Region.None)
+            .Where(n => n.NodeId != StartNodeId)
+            .OrderBy(n => n.Depth)
+            .ThenBy(n => n.NodeId)
+            .ToList();
+
+        foreach (var n in transitionNodes)
+        {
+            // 寻找紧邻已占用区域的空位
+            Vector2I targetPos = Vector2I.Zero;
+            bool placed = false;
+
+            // 收集所有"紧邻已占用"的空位
+            var candidates = new HashSet<Vector2I>();
+            foreach (var p in occupied)
+            {
+                foreach (var d in Dirs)
+                {
+                    var nb = p + d;
+                    if (occupied.Contains(nb)) continue;
+                    if (!IsValidPosition(nb, HexagonRadius)) continue;
+                    candidates.Add(nb);
+                }
+            }
+
+            if (candidates.Count > 0)
+            {
+                // 选第一个（按位置稳定排序）
+                targetPos = candidates.OrderBy(p => Math.Max(Math.Max(Math.Abs(p.X), Math.Abs(p.Y)), Math.Abs(-p.X - p.Y)))
+                    .ThenBy(p => p.X).ThenBy(p => p.Y).First();
+                placed = true;
+            }
+
+            if (!placed) targetPos = Vector2I.Zero;
+            n.GridPosition = targetPos;
+            occupied.Add(targetPos);
+        }
+
+        // 4. 清除所有手动 Neighbors，按几何相邻自动连线
+        foreach (var n in Nodes.Values)
+            n.Neighbors.Clear();
+
+        // 建立位置 -> 节点查找表（位置冲突时保留第一个）
+        var posToNode = new Dictionary<Vector2I, SkillNodeData>();
+        var collisions = 0;
+        foreach (var n in Nodes.Values)
+        {
+            if (posToNode.ContainsKey(n.GridPosition))
+            {
+                collisions++;
+                continue;
+            }
+            posToNode[n.GridPosition] = n;
+        }
+
+        // 对每个节点，查找 6 个相邻方向上的节点并连线
+        int totalEdges = 0;
+        foreach (var n in Nodes.Values)
+        {
+            foreach (var dir in Dirs)
+            {
+                var neighbor = n.GridPosition + dir;
+                if (posToNode.TryGetValue(neighbor, out var nb) && nb != n)
+                {
+                    if (!n.Neighbors.Contains(nb.NodeId))
+                    {
+                        n.Neighbors.Add(nb.NodeId);
+                        totalEdges++;
+                    }
+                }
+            }
+        }
+
+        GD.Print($"[SkillTree] AutoLayout: 节点={Nodes.Count}, 边={totalEdges / 2}, 冲突={collisions}");
+        if (Nodes.TryGetValue(StartNodeId, out var sn))
+            GD.Print($"[SkillTree] start.GridPos={sn.GridPosition}, Neighbors=[{string.Join(",", sn.Neighbors)}]");
+    }
+
+    /// <summary>判断位置是否在六边形内</summary>
+    static bool IsValidPosition(Vector2I pos, int radius)
+    {
+        int z = -pos.X - pos.Y;
+        return Math.Abs(pos.X) <= radius && Math.Abs(pos.Y) <= radius && Math.Abs(z) <= radius;
     }
 
     // ========================================================================
@@ -133,6 +339,9 @@ public partial class SkillTreeData : RefCounted
         }
     }
 
+    /// <summary>幂等添加双向连线 — 供 ConstellationBuilder 等外部 DSL 使用。</summary>
+    internal void AddEdge(string a, string b) => Ac(a, b);
+
     static Godot.Collections.Dictionary D(params (string, Variant)[] pairs)
     {
         var d = new Godot.Collections.Dictionary();
@@ -153,81 +362,172 @@ public partial class SkillTreeData : RefCounted
     }
 
     // ========================================================================
-    // STR 力量区域 — dir_idx=0, E(1,0)
+    // STR 力量区域 — 「双刃剑」星座（DSL 绘制）
+    // 沿 dir_idx=0 主轴延伸，30 个节点构成一柄竖立的双刃剑：
+    //
+    //                axial(ring)→  1   2   3   4   5   6   7   8   9   10
+    //                                                              
+    //   lateral  0:  s01 s02 s03 s15 s04
+    //   lateral -1:      s10 s06 b01 s05 b03 s16
+    //   lateral -2:          s11 b02 s07 s09 b06 s17
+    //   lateral -3:              s08 s12 s13 b05 b07 s19
+    //   lateral -4:                  s14 b04 s18 s20 b08 ks01
+    //   lateral -5:                                  s21
+    //
+    // 整体形状：1→2→3→4 节点逐级展宽（剑柄→剑格）
+    //          5 节点最宽（剑刃基部，ring 5 共 5 个节点）
+    //          后续 4→4→3→3 收窄到剑尖（ring 10 单点 keystone）
+    // 大节点（b01..b08）位于剑格与剑刃中央对称位置
+    // 全部 30 节点严格落在 STR 60° 扇区内（lateral ∈ [-(ring-1)..0]）
     // ========================================================================
 
     void BuildStrRegion()
     {
-        SkillNodeData n;
-        // Ring 1
-        n = Ms("str_s01", "强健体魄", 1, ["start"], D(("max_hp", 3)), Mp(0,1,0));
-        n.Neighbors = new List<string> { "start", "str_s02", "str_s10" };
-        // Ring 2
-        n = Ms("str_s02", "近战训练", 2, ["str_s01"], D(("melee_hit", 1)), Mp(0,2,0));
-        n.Neighbors = new List<string> { "str_s01", "str_b01" };
-        n = Ms("str_s10", "战斗直觉", 2, ["str_s01"], D(("melee_damage", 1)), Mp(0,2,-1));
-        n.Neighbors = new List<string> { "str_s01", "str_s06" };
-        // Ring 3
-        n = Mb("str_b01", "基础剑术", 3, [], ["str_s02"], "melee_hit_plus_1", false, "被动: 近战命中+1", Mp(0,3,0));
-        n.Neighbors = new List<string> { "str_s02", "str_s03", "str_s06", "str_s04" };
-        n = Ms("str_s03", "战斗节奏", 3, ["str_b01"], D(("melee_damage", 1)), Mp(0,3,-1));
-        n.Neighbors = new List<string> { "str_b01", "str_b02" };
-        n = Ms("str_s06", "武器掌握", 3, ["str_s10"], D(("melee_damage", 1)), Mp(0,3,-2));
-        n.Neighbors = new List<string> { "str_s10", "str_b01", "str_s07" };
-        // Ring 4
-        n = Ms("str_s04", "迅猛之力", 4, ["str_b01"], D(("melee_damage", 2)), Mp(0,4,0));
-        n.Neighbors = new List<string> { "str_b01", "str_b03" };
-        n = Mb("str_b02", "连击", 4, [], ["str_s03"], "double_attack", true, "主动: 攻击2次, 第二次-3命中", Mp(0,4,-1));
-        n.Neighbors = new List<string> { "str_s03", "str_s05", "str_s08" };
-        n = Ms("str_s08", "战斗韧性", 4, ["str_b02"], D(("max_hp", 5)), Mp(0,4,-2));
-        n.Neighbors = new List<string> { "str_b02", "str_b04" };
-        n = Ms("str_s07", "致命精准", 4, ["str_s06"], D(("critical_rate", 0.03)), Mp(0,4,-3));
-        n.Neighbors = new List<string> { "str_s06", "str_b04" };
-        // Ring 5
-        n = Mb("str_b03", "旋风斩", 5, [], ["str_s04"], "whirlwind", true, "主动: 攻击周围所有敌人", Mp(0,5,0));
-        n.Neighbors = new List<string> { "str_s04", "str_s12", "str_s05" };
-        n = Ms("str_s05", "狂战士之怒", 5, ["str_b02"], D(("critical_rate", 0.05), ("melee_damage", 1)), Mp(0,5,-1));
-        n.Neighbors = new List<string> { "str_b02", "str_b03" };
-        n = Mb("str_b04", "重甲精通", 5, [], ["str_s08"], "heavy_armor", false, "被动: 护甲+3, 速度-1", Mp(0,5,-2));
-        n.Neighbors = new List<string> { "str_s08", "str_s07", "str_s11" };
-        n = Ms("str_s11", "铁壁防御", 5, ["str_b04"], D(("ac", 2)), Mp(0,5,-3));
-        n.Neighbors = new List<string> { "str_b04", "str_s15" };
-        n = Ms("str_s15", "盾墙", 5, ["str_s11"], D(("ac", 1), ("all_save", 1)), Mp(0,5,-4));
-        n.Neighbors = new List<string> { "str_s11" };
-        // Ring 6
-        n = Ms("str_s12", "战意高昂", 6, ["str_b03"], D(("melee_damage", 2), ("max_hp", 5)), Mp(0,6,0));
-        n.Neighbors = new List<string> { "str_b03", "str_b05" };
-        n = Mb("str_b05", "暴击大师", 6, [], ["str_s05"], "critical_master", false, "被动: 暴击伤害×3", Mp(0,6,-1));
-        n.Neighbors = new List<string> { "str_s05", "str_s14" };
-        n = Mb("str_b06", "嗜血", 6, [5], ["str_b04"], "bloodthirst", true, "主动: 近战击杀敌人后立即获得额外行动", Mp(0,6,-2));
-        n.Neighbors = new List<string> { "str_b04", "str_s16" };
-        n = Ms("str_s14", "战场怒吼", 6, ["str_b05"], D(("morale", 1), ("melee_hit", 1)), Mp(0,6,-3));
-        n.Neighbors = new List<string> { "str_b05", "str_ks01" };
-        n = Ms("str_s16", "无畏冲锋", 6, ["str_b06"], D(("melee_damage", 2), ("speed", 1)), Mp(0,6,-4));
-        n.Neighbors = new List<string> { "str_b06", "str_s09" };
-        n = Ms("str_s09", "巨力挥击", 7, ["str_s16"], D(("melee_damage", 3)), Mp(0,7,-5));
-        n.Neighbors = new List<string> { "str_s16" };
-        // Ring 7
-        n = Ms("str_s13", "武器大师", 7, ["str_s12"], D(("melee_hit", 2), ("melee_damage", 2)), Mp(0,7,0));
-        n.Neighbors = new List<string> { "str_s12", "str_s17" };
-        n = Ms("str_s17", "不屈意志", 7, ["str_s13"], D(("max_hp", 8), ("all_save", 2)), Mp(0,7,-1));
-        n.Neighbors = new List<string> { "str_s13" };
-        n = Mk("str_ks01", "狂暴之力", 7, ["str_s14"], "berserk_power", "近战伤害+50%", "AC-3, 不能使用盾牌", D(("ac", -3)), Mp(0,7,-2));
-        n.Neighbors = new List<string> { "str_s14" };
-        n = Ms("str_s18", "战场本能", 7, ["str_b06"], D(("max_hp", 5), ("melee_hit", 1)), Mp(0,7,1));
-        n.Neighbors = new List<string> { "str_b06", "str_b07" };
-        // Ring 8-9
-        n = Mb("str_b07", "战斗怒吼", 8, [7], ["str_s18"], "battle_cry", true, "主动: 怒吼震慑周围敌人使其下回合攻击-2, 同时友军士气+3", Mp(0,8,1));
-        n.Neighbors = new List<string> { "str_s18", "str_s19" };
-        n = Ms("str_s19", "血性狂热", 9, ["str_b07"], D(("melee_damage", 2), ("max_hp", 5)), Mp(0,9,1));
-        n.Neighbors = new List<string> { "str_b07" };
-        // 血腥漩涡分支
-        n = Ms("str_s20", "战争践踏", 6, ["str_b03"], D(("melee_damage", 2), ("ac", -1)), Mp(0,6,3));
-        n.Neighbors = new List<string> { "str_b03", "str_b08" };
-        n = Mb("str_b08", "血腥漩涡", 7, [7], ["str_s20"], "blood_vortex", true, "主动: 横扫周围所有敌人, 每命中1个敌人恢复自身1d6HP", Mp(0,7,2));
-        n.Neighbors = new List<string> { "str_s20", "str_s21" };
-        n = Ms("str_s21", "杀戮本能", 8, ["str_b08"], D(("critical_rate", 0.05), ("melee_damage", 1)), Mp(0,8,2));
-        n.Neighbors = new List<string> { "str_b08", "str_s19" };
+        // 1) 创建所有 30 个节点（坐标由 DSL 在第 2 步覆盖）
+        Ms("str_s01", "强健体魄", 1, ["start"], D(("max_hp", 3)), Vector2I.Zero);
+
+        Ms("str_s02", "近战训练", 2, ["str_s01"], D(("melee_hit", 1)), Vector2I.Zero);
+        Ms("str_s10", "战斗直觉", 2, ["str_s01"], D(("melee_damage", 1)), Vector2I.Zero);
+
+        Ms("str_s03", "战斗节奏", 3, ["str_s02"], D(("melee_damage", 1)), Vector2I.Zero);
+        Ms("str_s06", "武器掌握", 3, ["str_s10"], D(("melee_damage", 1)), Vector2I.Zero);
+        Ms("str_s11", "铁壁防御", 3, ["str_s10"], D(("ac", 2)), Vector2I.Zero);
+
+        Ms("str_s15", "盾墙", 4, ["str_s03"], D(("ac", 1), ("all_save", 1)), Vector2I.Zero);
+        Mb("str_b01", "基础剑术", 4, [], ["str_s03"], "melee_hit_plus_1", false, "被动: 近战命中+1", Vector2I.Zero);
+        Mb("str_b02", "连击", 4, [], ["str_s06"], "double_attack", true, "主动: 攻击2次, 第二次-3命中", Vector2I.Zero);
+        Ms("str_s08", "战斗韧性", 4, ["str_s11"], D(("max_hp", 5)), Vector2I.Zero);
+
+        Ms("str_s04", "迅猛之力", 5, ["str_s15"], D(("melee_damage", 2)), Vector2I.Zero);
+        Ms("str_s05", "狂战士之怒", 5, ["str_b01"], D(("critical_rate", 0.05), ("melee_damage", 1)), Vector2I.Zero);
+        Ms("str_s07", "致命精准", 5, ["str_b02"], D(("critical_rate", 0.03)), Vector2I.Zero);
+        Ms("str_s12", "战意高昂", 5, ["str_b02"], D(("melee_damage", 2), ("max_hp", 5)), Vector2I.Zero);
+        Ms("str_s14", "战场怒吼", 5, ["str_s08"], D(("morale", 1), ("melee_hit", 1)), Vector2I.Zero);
+
+        Mb("str_b03", "旋风斩", 6, [], ["str_s05"], "whirlwind", true, "主动: 攻击周围所有敌人", Vector2I.Zero);
+        Ms("str_s09", "巨力挥击", 6, ["str_s07"], D(("melee_damage", 3)), Vector2I.Zero);
+        Ms("str_s13", "武器大师", 6, ["str_s12"], D(("melee_hit", 2), ("melee_damage", 2)), Vector2I.Zero);
+        Mb("str_b04", "重甲精通", 6, [], ["str_s14"], "heavy_armor", false, "被动: 护甲+3, 速度-1", Vector2I.Zero);
+
+        Ms("str_s16", "无畏冲锋", 7, ["str_b03"], D(("melee_damage", 2), ("speed", 1)), Vector2I.Zero);
+        Mb("str_b06", "嗜血", 7, [5], ["str_s09"], "bloodthirst", true, "主动: 近战击杀敌人后立即获得额外行动", Vector2I.Zero);
+        Mb("str_b05", "暴击大师", 7, [], ["str_s13"], "critical_master", false, "被动: 暴击伤害×3", Vector2I.Zero);
+        Ms("str_s18", "战场本能", 7, ["str_b04"], D(("max_hp", 5), ("melee_hit", 1)), Vector2I.Zero);
+
+        Ms("str_s17", "不屈意志", 8, ["str_b06"], D(("max_hp", 8), ("all_save", 2)), Vector2I.Zero);
+        Mb("str_b07", "战斗怒吼", 8, [7], ["str_b05"], "battle_cry", true, "主动: 怒吼震慑周围敌人使其下回合攻击-2, 同时友军士气+3", Vector2I.Zero);
+        Ms("str_s20", "战争践踏", 8, ["str_s18"], D(("melee_damage", 2), ("ac", -1)), Vector2I.Zero);
+
+        Ms("str_s19", "血性狂热", 9, ["str_b07"], D(("melee_damage", 2), ("max_hp", 5)), Vector2I.Zero);
+        Mb("str_b08", "血腥漩涡", 9, [7], ["str_b07"], "blood_vortex", true, "主动: 横扫周围所有敌人, 每命中1个敌人恢复自身1d6HP", Vector2I.Zero);
+        Ms("str_s21", "杀戮本能", 9, ["str_s20"], D(("critical_rate", 0.05), ("melee_damage", 1)), Vector2I.Zero);
+
+        Mk("str_ks01", "狂暴之力", 10, ["str_b08"], "berserk_power",
+            "近战伤害+50%", "AC-3, 不能使用盾牌", D(("ac", -3)), Vector2I.Zero);
+
+        // 2) 用 DSL 描述「双刃剑」几何图案
+        // 坐标 At(id, axial, lateral)：axial=ring 距 start 的距离，lateral=向 CHA 一侧偏移
+        // 严格守约束 lateral ∈ [-(axial-1)..0] 保证不出 STR 扇区。
+        new ConstellationBuilder(0)
+            // ─── 剑柄底（ring 1）───
+            .At("str_s01", 1, 0)
+
+            // ─── 握柄（ring 2，2 节点）───
+            .At("str_s02", 2, 0)
+            .At("str_s10", 2, -1)
+            .Triangle("str_s01", "str_s02", "str_s10")
+
+            // ─── 剑格内层（ring 3，3 节点）───
+            .At("str_s03", 3, 0)
+            .At("str_s06", 3, -1)
+            .At("str_s11", 3, -2)
+            .Triangle("str_s02", "str_s03", "str_s06")
+            .Triangle("str_s02", "str_s06", "str_s10")
+            .Triangle("str_s10", "str_s06", "str_s11")
+
+            // ─── 剑格主体（ring 4，4 节点 — 大节点 b01/b02 位于中心）───
+            .At("str_s15", 4, 0)
+            .At("str_b01", 4, -1)
+            .At("str_b02", 4, -2)
+            .At("str_s08", 4, -3)
+            .Triangle("str_s03", "str_s15", "str_b01")
+            .Triangle("str_s03", "str_b01", "str_s06")
+            .Triangle("str_s06", "str_b01", "str_b02")
+            .Triangle("str_s06", "str_b02", "str_s11")
+            .Triangle("str_s11", "str_b02", "str_s08")
+
+            // ─── 剑刃基部（ring 5，5 节点 — 全宽）───
+            .At("str_s04", 5, 0)
+            .At("str_s05", 5, -1)
+            .At("str_s07", 5, -2)
+            .At("str_s12", 5, -3)
+            .At("str_s14", 5, -4)
+            .Triangle("str_s15", "str_s04", "str_b01")
+            .Triangle("str_s04", "str_s05", "str_b01")
+            .Triangle("str_b01", "str_s05", "str_b02")
+            .Triangle("str_s05", "str_s07", "str_b02")
+            .Triangle("str_b02", "str_s07", "str_s12")
+            .Triangle("str_b02", "str_s12", "str_s08")
+            .Triangle("str_s08", "str_s12", "str_s14")
+
+            // ─── 剑刃身段（ring 6，4 节点 — 大节点 b03/b04 居两端）───
+            .At("str_b03", 6, -1)
+            .At("str_s09", 6, -2)
+            .At("str_s13", 6, -3)
+            .At("str_b04", 6, -4)
+            .Triangle("str_s04", "str_b03", "str_s05")
+            .Triangle("str_s05", "str_b03", "str_s09")
+            .Triangle("str_s05", "str_s09", "str_s07")
+            .Triangle("str_s07", "str_s09", "str_s13")
+            .Triangle("str_s07", "str_s13", "str_s12")
+            .Triangle("str_s12", "str_s13", "str_b04")
+            .Triangle("str_s12", "str_b04", "str_s14")
+
+            // ─── 剑刃中段（ring 7，4 节点）───
+            .At("str_s16", 7, -1)
+            .At("str_b06", 7, -2)
+            .At("str_b05", 7, -3)
+            .At("str_s18", 7, -4)
+            .Triangle("str_b03", "str_s16", "str_s09")
+            .Triangle("str_s09", "str_s16", "str_b06")
+            .Triangle("str_s09", "str_b06", "str_s13")
+            .Triangle("str_s13", "str_b06", "str_b05")
+            .Triangle("str_s13", "str_b05", "str_b04")
+            .Triangle("str_b04", "str_b05", "str_s18")
+
+            // ─── 剑刃尖端（ring 8，3 节点）───
+            .At("str_s17", 8, -2)
+            .At("str_b07", 8, -3)
+            .At("str_s20", 8, -4)
+            .Triangle("str_s16", "str_s17", "str_b06")
+            .Triangle("str_b06", "str_s17", "str_b07")
+            .Triangle("str_b06", "str_b07", "str_b05")
+            .Triangle("str_b05", "str_b07", "str_s20")
+            .Triangle("str_b05", "str_s20", "str_s18")
+
+            // ─── 剑尖三角（ring 9，3 节点）───
+            .At("str_s19", 9, -3)
+            .At("str_b08", 9, -4)
+            .At("str_s21", 9, -5)
+            .Triangle("str_s17", "str_s19", "str_b07")
+            .Triangle("str_b07", "str_s19", "str_b08")
+            .Triangle("str_b07", "str_b08", "str_s20")
+            .Triangle("str_s20", "str_b08", "str_s21")
+
+            // ─── 剑尖（ring 10 keystone）───
+            .At("str_ks01", 10, -4)
+            .Triangle("str_s19", "str_ks01", "str_b08")
+            .Triangle("str_b08", "str_ks01", "str_s21")
+
+            // ─── 入口与起始节点连线 ───
+            .Edge("start", "str_s01")
+
+            .Apply(this);
+
+        // 调试：验证 DSL 是否真正写入了 GridPosition
+        GD.Print($"[STR DSL] str_s01.GridPos={Nodes["str_s01"].GridPosition}, " +
+                 $"str_ks01.GridPos={Nodes["str_ks01"].GridPosition}, " +
+                 $"str_s14.GridPos={Nodes["str_s14"].GridPosition}");
     }
 
     // ========================================================================
@@ -644,7 +944,8 @@ public partial class SkillTreeData : RefCounted
         n.IsBridge = true;
 
         // STR <-> CHA 深层
-        n = Ms("trans_sc03", "战神信仰", 7, ["str_b07", "cha_b10"], D(("melee_hit", 1), ("morale", 2)), new Vector2I(5, -3));
+        // 位于 STR(b07@8,-3) 与 CHA(b10@5,7,-2 → grid(7,-7) 之间, 偏向 STR-CHA 交界)
+        n = Ms("trans_sc03", "战神信仰", 7, ["str_b07", "cha_b10"], D(("melee_hit", 1), ("morale", 2)), new Vector2I(7, -5));
         n.IsBridge = true;
 
         // CON <-> WIS 深层

@@ -1,0 +1,31 @@
+{
+  "title": "Armor Item Array",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+      "name": { "type": "string" },
+      "type": {
+        "type": "string",
+        "enum": ["Cloth", "Light", "Medium", "Heavy", "Shield"],
+        "default": "Light"
+      },
+      "slot": {
+        "type": "string",
+        "enum": ["Body", "Helmet", "Head", "Hands", "Feet"],
+        "default": "Body"
+      },
+      "dr": { "type": "integer", "minimum": 0, "default": 0 },
+      "max_dex": { "type": "integer", "minimum": 0, "default": 99 },
+      "ap_penalty": { "type": "integer", "minimum": 0, "default": 0 },
+      "str_req": { "type": "integer", "minimum": 0, "default": 0 },
+      "stealth_disadvantage": { "type": "boolean", "default": false },
+      "destroyable": { "type": "boolean", "default": false },
+      "price": { "type": "integer", "minimum": 1, "default": 10 },
+      "desc": { "type": "string" }
+    }
+  }
+}

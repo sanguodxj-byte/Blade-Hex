@@ -43,16 +43,16 @@ public static class FactionNameGenerator
 
     private static readonly Dictionary<RaceData.Race, string[]> FactionSuffixesZH = new()
     {
-        [RaceData.Race.Human] = ["王国", "公国", "联邦", "领地"],
-        [RaceData.Race.Elf] = ["王庭", "领地", "议会", "林地"],
+        [RaceData.Race.Human] = ["王国", "公国", "联邦", "帝国"],
+        [RaceData.Race.Elf] = ["王庭", "议会", "林地", "仙境"],
         [RaceData.Race.Dwarf] = ["联盟", "城邦", "矿主会", "要塞群"],
         [RaceData.Race.HalfOrc] = ["部落", "氏族", "战团", "盟约"],
     };
 
     private static readonly Dictionary<RaceData.Race, string[]> FactionSuffixesEN = new()
     {
-        [RaceData.Race.Human] = ["Kingdom", "Duchy", "Federation", "Domain"],
-        [RaceData.Race.Elf] = ["Court", "Domain", "Council", "Woodland"],
+        [RaceData.Race.Human] = ["Kingdom", "Duchy", "Federation", "Empire"],
+        [RaceData.Race.Elf] = ["Court", "Council", "Woodland", "Realm"],
         [RaceData.Race.Dwarf] = ["Alliance", "City-States", "Combine", "Strongholds"],
         [RaceData.Race.HalfOrc] = ["Tribe", "Clan", "Warband", "Covenant"],
     };

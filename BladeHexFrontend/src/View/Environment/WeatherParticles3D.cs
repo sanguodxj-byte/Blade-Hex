@@ -1,177 +1,204 @@
 ﻿// WeatherParticles3D.cs
-// 3D 战斗场景天气 — 使用 2D 粒子覆盖层（已验证可用）+ 3D 积水平面
+// 3D 天气粒子系统 — GPUParticles3D 实现雨/雪/沙尘暴
+// 跟随相机位置，在玩家头顶生成粒子
 using Godot;
-using System;
 
 namespace BladeHex.View.Environment;
 
 /// <summary>
-/// 3D 战斗场景天气系统。
-/// 粒子效果使用 CPUParticles2D 在 CanvasLayer 上渲染（和大地图相同方案，已验证可用）。
-/// 积水使用 3D MeshInstance3D + StandardMaterial3D。
+/// 3D 天气粒子系统 — GPUParticles3D 方案。
+/// 比 CpuParticles2D CanvasLayer 方案更自然：粒子在 3D 世界中，
+/// 有深度感，与光照交互。
 /// </summary>
 [GlobalClass]
 public partial class WeatherParticles3D : Node3D
 {
-    private CpuParticles2D? _rain;
-    private CpuParticles2D? _snow;
-    private CpuParticles2D? _sand;
-    private MeshInstance3D? _puddle;
-    private CanvasLayer? _layer;
-    private StandardMaterial3D? _puddleMat;
-    private WeatherType _active = WeatherType.Clear;
-    private float _puddleAlpha;
+    private GpuParticles3D? _rain;
+    private GpuParticles3D? _snow;
+    private GpuParticles3D? _sand;
+
+    private WeatherType _activeWeather = WeatherType.Clear;
+
+    // 粒子发射区域大小（跟随相机覆盖可见区域）
+    private const float EmitAreaWidth = 30.0f;
+    private const float EmitAreaDepth = 20.0f;
+    private const float EmitHeight = 12.0f;
 
     public override void _Ready()
     {
-        // CanvasLayer 加到自身（Node3D 的子 CanvasLayer 会正确渲染在 3D 之上）
-        _layer = new CanvasLayer { Layer = 2, Name = "WeatherOverlay3D" };
-        _layer.FollowViewportEnabled = false;
-        AddChild(_layer);
+        _rain = CreateRainParticles();
+        _snow = CreateSnowParticles();
+        _sand = CreateSandParticles();
 
-        // 使用固定的设计分辨率
-        var vp = new Vector2(1920, 1080);
+        AddChild(_rain);
+        AddChild(_snow);
+        AddChild(_sand);
 
-        _rain = MakeRain(vp);
-        _snow = MakeSnow(vp);
-        _sand = MakeSand(vp);
-        _layer.AddChild(_rain);
-        _layer.AddChild(_snow);
-        _layer.AddChild(_sand);
-
-        _puddle = MakePuddle();
-        AddChild(_puddle);
-
-        StopAll();
-        GD.Print("[WeatherParticles3D] 初始化完成 (2D覆盖+3D积水)");
+        _rain.Emitting = false;
+        _snow.Emitting = false;
+        _sand.Emitting = false;
     }
 
-    public override void _Process(double delta)
-    {
-        float target = _active == WeatherType.Rain ? 0.45f : 0.0f;
-        _puddleAlpha = Mathf.MoveToward(_puddleAlpha, target, (float)delta * 0.08f);
-        if (_puddleMat != null)
-            _puddleMat.AlbedoColor = new Color(0.08f, 0.12f, 0.25f, _puddleAlpha);
-        if (_puddle != null)
-            _puddle.Visible = _puddleAlpha > 0.01f;
-    }
+    // ========================================
+    // 公共 API
+    // ========================================
 
+    /// <summary>设置天气类型和强度</summary>
     public void SetWeather(WeatherType weather, float intensity)
     {
-        _active = weather;
-        GD.Print($"[WeatherParticles3D] SetWeather: {weather}, intensity={intensity:F2}");
+        _activeWeather = weather;
+
         _rain!.Emitting = weather == WeatherType.Rain;
         _snow!.Emitting = weather == WeatherType.Snow;
         _sand!.Emitting = weather == WeatherType.Sandstorm;
-        if (weather == WeatherType.Rain) _rain.Amount = (int)(250 * intensity);
-        else if (weather == WeatherType.Snow) _snow.Amount = (int)(150 * intensity);
-        else if (weather == WeatherType.Sandstorm) _sand.Amount = (int)(200 * intensity);
+
+        // 通过 Amount 控制密度
+        if (weather == WeatherType.Rain)
+            _rain.Amount = (int)(800 * intensity);
+        else if (weather == WeatherType.Snow)
+            _snow.Amount = (int)(400 * intensity);
+        else if (weather == WeatherType.Sandstorm)
+            _sand.Amount = (int)(600 * intensity);
     }
 
+    /// <summary>停止所有粒子</summary>
     public void StopAll()
     {
-        _active = WeatherType.Clear;
+        _activeWeather = WeatherType.Clear;
         if (_rain != null) _rain.Emitting = false;
         if (_snow != null) _snow.Emitting = false;
         if (_sand != null) _sand.Emitting = false;
     }
 
-    public override void _ExitTree()
+    /// <summary>更新粒子位置（跟随相机/玩家）</summary>
+    public void UpdatePosition(Vector3 followTarget)
     {
-        // CanvasLayer 是子节点，会随父节点自动释放
+        Position = followTarget + new Vector3(0, EmitHeight, 0);
     }
 
     // ========================================
+    // 粒子创建
+    // ========================================
 
-    private static CpuParticles2D MakeRain(Vector2 vp)
+    private GpuParticles3D CreateRainParticles()
     {
-        var p = new CpuParticles2D { Name = "Rain", Amount = 250, Lifetime = 0.6f, Preprocess = 0.3f };
-        p.EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle;
-        p.EmissionRectExtents = new Vector2(vp.X / 2, 5);
-        p.Position = new Vector2(vp.X / 2, -10);
-        p.Direction = new Vector2(0.05f, 1);
-        p.Spread = 5;
-        p.InitialVelocityMin = 900;
-        p.InitialVelocityMax = 1300;
-        p.Gravity = new Vector2(20, 200);
-        p.ScaleAmountMin = 1;
-        p.ScaleAmountMax = 1.5f;
-        p.Color = new Color(0.7f, 0.82f, 1, 0.45f);
-        p.Texture = Tex(2, 12, new Color(0.8f, 0.88f, 1, 0.6f));
-        p.Emitting = false;
-        return p;
+        var particles = new GpuParticles3D();
+        particles.Name = "Rain3D";
+        particles.Amount = 800;
+        particles.Lifetime = 0.8f;
+        particles.Preprocess = 0.5f;
+        particles.SpeedScale = 1.0f;
+        particles.VisibilityAabb = new Aabb(
+            new Vector3(-EmitAreaWidth, -EmitHeight * 2, -EmitAreaDepth),
+            new Vector3(EmitAreaWidth * 2, EmitHeight * 3, EmitAreaDepth * 2));
+
+        var mat = new ParticleProcessMaterial();
+        mat.Direction = new Vector3(0.05f, -1.0f, 0.02f);
+        mat.Spread = 3.0f;
+        mat.InitialVelocityMin = 25.0f;
+        mat.InitialVelocityMax = 35.0f;
+        mat.Gravity = new Vector3(0.5f, -15.0f, 0);
+        mat.EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Box;
+        mat.EmissionBoxExtents = new Vector3(EmitAreaWidth * 0.5f, 0.2f, EmitAreaDepth * 0.5f);
+
+        // 缩放：细长条
+        mat.ScaleMin = 0.8f;
+        mat.ScaleMax = 1.2f;
+
+        particles.ProcessMaterial = mat;
+
+        // 绘制材质：细长白色条
+        var drawMat = new StandardMaterial3D();
+        drawMat.AlbedoColor = new Color(0.75f, 0.82f, 0.95f, 0.5f);
+        drawMat.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+        drawMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        drawMat.BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles;
+
+        var mesh = new QuadMesh();
+        mesh.Size = new Vector2(0.02f, 0.25f);
+        mesh.Material = drawMat;
+        particles.DrawPass1 = mesh;
+
+        return particles;
     }
 
-    private static CpuParticles2D MakeSnow(Vector2 vp)
+    private GpuParticles3D CreateSnowParticles()
     {
-        var p = new CpuParticles2D { Name = "Snow", Amount = 150, Lifetime = 5, Preprocess = 2 };
-        p.EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle;
-        p.EmissionRectExtents = new Vector2(vp.X / 2, 5);
-        p.Position = new Vector2(vp.X / 2, -10);
-        p.Direction = new Vector2(0.1f, 1);
-        p.Spread = 30;
-        p.InitialVelocityMin = 30;
-        p.InitialVelocityMax = 80;
-        p.Gravity = new Vector2(10, 20);
-        p.ScaleAmountMin = 1.5f;
-        p.ScaleAmountMax = 3;
-        p.Color = new Color(1, 1, 1, 0.7f);
-        p.Texture = Circle(4, new Color(1, 1, 1, 0.85f));
-        p.Emitting = false;
-        return p;
+        var particles = new GpuParticles3D();
+        particles.Name = "Snow3D";
+        particles.Amount = 400;
+        particles.Lifetime = 5.0f;
+        particles.Preprocess = 2.0f;
+        particles.SpeedScale = 1.0f;
+        particles.VisibilityAabb = new Aabb(
+            new Vector3(-EmitAreaWidth, -EmitHeight * 2, -EmitAreaDepth),
+            new Vector3(EmitAreaWidth * 2, EmitHeight * 3, EmitAreaDepth * 2));
+
+        var mat = new ParticleProcessMaterial();
+        mat.Direction = new Vector3(0.1f, -1.0f, 0.05f);
+        mat.Spread = 25.0f;
+        mat.InitialVelocityMin = 1.0f;
+        mat.InitialVelocityMax = 3.0f;
+        mat.Gravity = new Vector3(0.3f, -1.5f, 0);
+        mat.EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Box;
+        mat.EmissionBoxExtents = new Vector3(EmitAreaWidth * 0.5f, 0.5f, EmitAreaDepth * 0.5f);
+        mat.AngularVelocityMin = -45.0f;
+        mat.AngularVelocityMax = 45.0f;
+        mat.ScaleMin = 0.8f;
+        mat.ScaleMax = 2.0f;
+
+        particles.ProcessMaterial = mat;
+
+        var drawMat = new StandardMaterial3D();
+        drawMat.AlbedoColor = new Color(1.0f, 1.0f, 1.0f, 0.8f);
+        drawMat.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+        drawMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        drawMat.BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles;
+
+        var mesh = new QuadMesh();
+        mesh.Size = new Vector2(0.08f, 0.08f);
+        mesh.Material = drawMat;
+        particles.DrawPass1 = mesh;
+
+        return particles;
     }
 
-    private static CpuParticles2D MakeSand(Vector2 vp)
+    private GpuParticles3D CreateSandParticles()
     {
-        var p = new CpuParticles2D { Name = "Sand", Amount = 200, Lifetime = 1.5f, Preprocess = 0.5f };
-        p.EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle;
-        p.EmissionRectExtents = new Vector2(5, vp.Y / 2);
-        p.Position = new Vector2(-10, vp.Y / 2);
-        p.Direction = new Vector2(1, 0.15f);
-        p.Spread = 12;
-        p.InitialVelocityMin = 400;
-        p.InitialVelocityMax = 800;
-        p.Gravity = new Vector2(0, 30);
-        p.ScaleAmountMin = 0.5f;
-        p.ScaleAmountMax = 1.5f;
-        p.Color = new Color(0.85f, 0.72f, 0.45f, 0.45f);
-        p.Texture = Tex(4, 2, new Color(0.9f, 0.78f, 0.5f, 0.6f));
-        p.Emitting = false;
-        return p;
-    }
+        var particles = new GpuParticles3D();
+        particles.Name = "Sand3D";
+        particles.Amount = 600;
+        particles.Lifetime = 2.0f;
+        particles.Preprocess = 0.5f;
+        particles.SpeedScale = 1.0f;
+        particles.VisibilityAabb = new Aabb(
+            new Vector3(-EmitAreaWidth * 2, -EmitHeight, -EmitAreaDepth),
+            new Vector3(EmitAreaWidth * 4, EmitHeight * 2, EmitAreaDepth * 2));
 
-    private MeshInstance3D MakePuddle()
-    {
-        var m = new MeshInstance3D { Name = "Puddle" };
-        var plane = new PlaneMesh { Size = new Vector2(25, 25) };
-        m.Mesh = plane;
-        _puddleMat = new StandardMaterial3D();
-        _puddleMat.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
-        _puddleMat.AlbedoColor = new Color(0.08f, 0.12f, 0.25f, 0);
-        _puddleMat.Metallic = 0.3f;
-        _puddleMat.Roughness = 0.05f;
-        m.MaterialOverride = _puddleMat;
-        m.Position = new Vector3(0, 0.02f, 0);
-        m.Visible = false;
-        return m;
-    }
+        var mat = new ParticleProcessMaterial();
+        mat.Direction = new Vector3(1.0f, -0.1f, 0.2f); // 水平为主
+        mat.Spread = 15.0f;
+        mat.InitialVelocityMin = 8.0f;
+        mat.InitialVelocityMax = 18.0f;
+        mat.Gravity = new Vector3(0, -0.5f, 0);
+        mat.EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Box;
+        mat.EmissionBoxExtents = new Vector3(2.0f, EmitHeight * 0.4f, EmitAreaDepth * 0.5f);
+        mat.ScaleMin = 0.3f;
+        mat.ScaleMax = 1.0f;
 
-    private static Texture2D Tex(int w, int h, Color c)
-    {
-        var img = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
-        img.Fill(c);
-        return ImageTexture.CreateFromImage(img);
-    }
+        particles.ProcessMaterial = mat;
 
-    private static Texture2D Circle(int s, Color c)
-    {
-        var img = Image.CreateEmpty(s, s, false, Image.Format.Rgba8);
-        img.Fill(Colors.Transparent);
-        float r = (s - 1) / 2.0f;
-        for (int y = 0; y < s; y++)
-            for (int x = 0; x < s; x++)
-                if ((x - r) * (x - r) + (y - r) * (y - r) <= r * r)
-                    img.SetPixel(x, y, c);
-        return ImageTexture.CreateFromImage(img);
+        var drawMat = new StandardMaterial3D();
+        drawMat.AlbedoColor = new Color(0.85f, 0.72f, 0.45f, 0.4f);
+        drawMat.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+        drawMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        drawMat.BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles;
+
+        var mesh = new QuadMesh();
+        mesh.Size = new Vector2(0.06f, 0.03f);
+        mesh.Material = drawMat;
+        particles.DrawPass1 = mesh;
+
+        return particles;
     }
 }

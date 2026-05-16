@@ -61,10 +61,10 @@ public partial class BattleLogPanel : PanelContainer
         MouseExited += () =>
         {
             _isHovered = false;
-            _fadeTimer.Start();
+            // 不再启动淡出计时器 — 战斗日志始终可见
         };
 
-        // 初始化可见（战斗日志始终显示）
+        // 战斗日志始终可见
         Modulate = new Color(Modulate, 0.85f);
     }
 
@@ -73,17 +73,11 @@ public partial class BattleLogPanel : PanelContainer
         if (_fadeTween != null && _fadeTween.IsValid())
             _fadeTween.Kill();
         Modulate = new Color(Modulate, 0.85f);
-        // 不再自动淡出 — 战斗日志始终可见
     }
 
     private void OnFadeTimerTimeout()
     {
-        if (_isHovered)
-            return;
-        if (_fadeTween != null && _fadeTween.IsValid())
-            _fadeTween.Kill();
-        _fadeTween = CreateTween();
-        _fadeTween.TweenProperty(this, "modulate:a", 0.0f, 1.0f);
+        // 不再淡出 — 战斗日志始终可见
     }
 
     private void Setup()

@@ -74,10 +74,10 @@ public partial class QuestBoard : Control
             _questList.SetItemCustomFgColor(idx, Theme.TextPrimary);
             
             // 如果玩家等级不足，变灰
-            var gs = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs?.PlayerOrigin.ContainsKey("unit_data") == true)
+            var gs = BladeHex.Data.Globals.StateOrNull;
+            if (gs?.OriginContext.Data.ContainsKey("unit_data") == true)
             {
-                var player = gs.PlayerOrigin["unit_data"].As<UnitData>();
+                var player = gs.OriginContext.Data["unit_data"].As<UnitData>();
                 if (player != null && player.Level < quest.RecommendedLevel)
                 {
                     _questList.SetItemCustomFgColor(idx, Theme.TextMuted);
@@ -126,10 +126,10 @@ public partial class QuestBoard : Control
         }
         else
         {
-            var gs2 = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs2?.PlayerOrigin.ContainsKey("unit_data") == true)
+            var gs2 = BladeHex.Data.Globals.StateOrNull;
+            if (gs2?.OriginContext.Data.ContainsKey("unit_data") == true)
             {
-                var player = gs2.PlayerOrigin["unit_data"].As<UnitData>();
+                var player = gs2.OriginContext.Data["unit_data"].As<UnitData>();
                 if (player != null && player.Level < _selectedQuest.RecommendedLevel - 2)
                 {
                     canAccept = false;

@@ -119,89 +119,18 @@ public partial class AccessoryData : ItemData
     };
 
     // ========================================
-    // 静态工厂：预定义饰品
+    // 静态工厂：从 JSON 加载（accessories.json）
     // ========================================
 
-    public static AccessoryData[] GetAllAccessories() =>
-    [
-        CreateRingOfPower(),
-        CreateAmuletOfVitality(),
-        CreateCloakOfProtection(),
-        CreateBeltOfGiantStrength(),
-        CreateBracerOfArchery(),
-    ];
-
-    public static AccessoryData GetRingOfPower() => CreateRingOfPower();
-    public static AccessoryData GetAmuletOfVitality() => CreateAmuletOfVitality();
-    public static AccessoryData GetCloakOfProtection() => CreateCloakOfProtection();
-    public static AccessoryData GetBeltOfGiantStrength() => CreateBeltOfGiantStrength();
-    public static AccessoryData GetBracerOfArchery() => CreateBracerOfArchery();
-
-    private static AccessoryData CreateRingOfPower()
+    public static AccessoryData[] GetAllAccessories()
     {
-        var a = new AccessoryData();
-        a.ItemId = "ring_of_power";
-        a.ItemName = "力量戒指";
-        a.accessoryType = AccessoryType.Ring;
-        a.StrBonus = 2;
-        a.Price = 120;
-        a.ItemRarity = Rarity.Uncommon;
-        a.Description = "一枚镶嵌红宝石的戒指，佩戴者感到力量涌动。";
-        return a;
+        var dict = ItemDataLoader.GetAccessories();
+        var arr = new AccessoryData[dict.Count];
+        int i = 0;
+        foreach (var v in dict.Values) arr[i++] = v;
+        return arr;
     }
 
-    private static AccessoryData CreateAmuletOfVitality()
-    {
-        var a = new AccessoryData();
-        a.ItemId = "amulet_of_vitality";
-        a.ItemName = "活力项链";
-        a.accessoryType = AccessoryType.Amulet;
-        a.ConBonus = 2;
-        a.HpBonus = 5;
-        a.Price = 150;
-        a.ItemRarity = Rarity.Uncommon;
-        a.Description = "一条散发着温暖光芒的项链。";
-        return a;
-    }
-
-    private static AccessoryData CreateCloakOfProtection()
-    {
-        var a = new AccessoryData();
-        a.ItemId = "cloak_of_protection";
-        a.ItemName = "防护斗篷";
-        a.accessoryType = AccessoryType.Cloak;
-        a.AcBonus = 1;
-        a.Resistance = "magic";
-        a.Price = 250;
-        a.ItemRarity = Rarity.Rare;
-        a.Description = "一层薄薄的魔法防护环绕着穿戴者。";
-        return a;
-    }
-
-    private static AccessoryData CreateBeltOfGiantStrength()
-    {
-        var a = new AccessoryData();
-        a.ItemId = "belt_of_giant_strength";
-        a.ItemName = "巨人力量腰带";
-        a.accessoryType = AccessoryType.Belt;
-        a.StrBonus = 4;
-        a.Price = 800;
-        a.ItemRarity = Rarity.Epic;
-        a.Description = "蕴含巨人力量的腰带，佩戴者力大无穷。";
-        return a;
-    }
-
-    private static AccessoryData CreateBracerOfArchery()
-    {
-        var a = new AccessoryData();
-        a.ItemId = "bracer_of_archery";
-        a.ItemName = "射术护腕";
-        a.accessoryType = AccessoryType.Bracer;
-        a.DexBonus = 2;
-        a.InitiativeBonus = 2;
-        a.Price = 180;
-        a.ItemRarity = Rarity.Uncommon;
-        a.Description = "为射手设计的精致护腕，增强灵活性和反应速度。";
-        return a;
-    }
+    public static AccessoryData? GetById(string id)
+        => ItemDataLoader.GetAccessories().TryGetValue(id, out var a) ? a : null;
 }

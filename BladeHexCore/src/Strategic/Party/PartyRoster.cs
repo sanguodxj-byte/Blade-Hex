@@ -250,7 +250,7 @@ public partial class PartyRoster : Resource
                 unit.Wis = memberDict.ContainsKey("wis") ? memberDict["wis"].AsInt32() : 10;
                 unit.Cha = memberDict.ContainsKey("cha") ? memberDict["cha"].AsInt32() : 10;
                 unit.BaseMaxHp = memberDict.ContainsKey("base_max_hp") ? memberDict["base_max_hp"].AsInt32() : 10;
-                unit.BaseAc = memberDict.ContainsKey("base_ac") ? memberDict["base_ac"].AsInt32() : 10;
+                unit.BaseAc = memberDict.ContainsKey("base_ac") ? memberDict["base_ac"].AsInt32() : 8;
                 unit.Xp = memberDict.ContainsKey("xp") ? memberDict["xp"].AsInt32() : 0;
                 unit.Morale = memberDict.ContainsKey("morale") ? memberDict["morale"].AsInt32() : 50;
                 unit.PortraitId = memberDict.ContainsKey("portrait_id") ? memberDict["portrait_id"].AsString() : "";

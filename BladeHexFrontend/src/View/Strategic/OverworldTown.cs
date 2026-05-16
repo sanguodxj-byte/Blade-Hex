@@ -8,7 +8,7 @@ namespace BladeHex.Strategic;
 /// 大地图上的城镇/据点实体 — 扩展支持城镇设施列表、繁荣度等交互数据
 /// </summary>
 [GlobalClass]
-public partial class OverworldTown : Node2D
+public partial class OverworldTown : Node2D, IOverworldMapEntity
 {
     [Export] public Texture2D? TownSprite { get; set; }
     [Export] public SpriteFrames? TownFrames { get; set; }
@@ -158,6 +158,9 @@ public partial class OverworldTown : Node2D
 
     /// <summary>放置城镇到大地图坐标（调用）</summary>
     public void PlaceAt(float px, float py) => Position = new Vector2(px, py);
+
+    /// <summary>获取显示名称（IOverworldMapEntity）</summary>
+    public string GetDisplayName() => TownName;
 
     public string GetDescription()
     {

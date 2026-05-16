@@ -1,6 +1,6 @@
 // EnvironmentEffectsLayer.cs
 // 环境特效渲染层 — 管理天气粒子覆盖层 + 地面特效覆盖层
-// 作为 CanvasLayer 添加到 OverworldScene，跟随摄像机
+// 作为 CanvasLayer 添加到 OverworldScene3D，跟随摄像机
 using Godot;
 using System;
 

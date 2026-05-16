@@ -1,5 +1,22 @@
 // ItemDataLoader.cs
-// 从 items.json 加载武器、护甲、消耗品原型数据
+// 物品数据加载器 — 100% JSON 驱动
+//
+// 数据源（res://BladeHexCore/src/Data/items/）：
+//   weapons_melee_slash.json   武器（斩击系）
+//   weapons_melee_pierce.json  武器（穿刺系）
+//   weapons_melee_crush.json   武器（钝击系）
+//   weapons_ranged_bow.json    武器（弓系）
+//   weapons_ranged_crossbow.json 武器（弩系）
+//   weapons_ranged_thrown.json   武器（投掷系）
+//   armors.json                 护甲、盾、头盔
+//   consumables.json            消耗品
+//   quivers.json                箭筒
+//
+// 设计原则：
+//   - 加载失败 = 硬错误（GD.PushError），不再回退到硬编码
+//   - 子类型枚举（WeaponSubtype）的基础数值由 WeaponRegistry 提供
+//   - JSON 只覆盖差异（id/name/price/flag/tier）
+//   - 纹理ID 与网格尺寸由 PostProcessItems 自动推断（约定 > 配置）
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -7,338 +24,508 @@ using System.Collections.Generic;
 namespace BladeHex.Data;
 
 /// <summary>
-/// 物品数据加载器 — 从 res://BladeHexCore/src/Data/items/items.json 加载
-/// 失败时回退到硬编码数据
+/// 物品数据加载器 — 全 JSON 驱动，无硬编码兜底。
+/// JSON 加载失败将记录 PushError 但不会崩溃（Items 集合为空）。
 /// </summary>
 public static class ItemDataLoader
 {
+    private const string BasePath = "res://BladeHexCore/src/Data/items/";
+
+    private static readonly string[] WeaponFiles =
+    {
+        "weapons_melee_slash.json",
+        "weapons_melee_pierce.json",
+        "weapons_melee_crush.json",
+        "weapons_ranged_bow.json",
+        "weapons_ranged_crossbow.json",
+        "weapons_ranged_thrown.json",
+    };
+
     private static bool _loaded = false;
     private static readonly Dictionary<string, WeaponData> _weapons = new();
     private static readonly Dictionary<string, ArmorData> _armors = new();
     private static readonly Dictionary<string, ConsumableData> _consumables = new();
+    private static readonly Dictionary<string, ItemData> _quivers = new();
+    private static readonly Dictionary<string, AccessoryData> _accessories = new();
 
-    public static Dictionary<string, WeaponData> GetWeapons()
-    {
-        EnsureLoaded();
-        return _weapons;
-    }
+    public static Dictionary<string, WeaponData> GetWeapons() { EnsureLoaded(); return _weapons; }
+    public static Dictionary<string, ArmorData> GetArmors() { EnsureLoaded(); return _armors; }
+    public static Dictionary<string, ConsumableData> GetConsumables() { EnsureLoaded(); return _consumables; }
+    public static Dictionary<string, ItemData> GetQuivers() { EnsureLoaded(); return _quivers; }
+    public static Dictionary<string, AccessoryData> GetAccessories() { EnsureLoaded(); return _accessories; }
 
-    public static Dictionary<string, ArmorData> GetArmors()
+    /// <summary>强制重新加载（开发热重载用）</summary>
+    public static void Reload()
     {
+        _weapons.Clear();
+        _armors.Clear();
+        _consumables.Clear();
+        _quivers.Clear();
+        _accessories.Clear();
+        _loaded = false;
         EnsureLoaded();
-        return _armors;
-    }
-
-    public static Dictionary<string, ConsumableData> GetConsumables()
-    {
-        EnsureLoaded();
-        return _consumables;
     }
 
     private static void EnsureLoaded()
     {
         if (_loaded) return;
         _loaded = true;
-        LoadFromJson();
+        LoadAll();
     }
 
-    private static void LoadFromJson()
+    private static void LoadAll()
     {
-        string path = "res://BladeHexCore/src/Data/items/items.json";
-        if (!FileAccess.FileExists(path)) { LoadFallback(); return; }
+        int totalLoaded = 0;
+        int totalFailed = 0;
+
+        // 武器：分文件加载
+        foreach (var wf in WeaponFiles)
+        {
+            var (loaded, failed) = LoadJsonArray(BasePath + wf, ParseWeaponEntry);
+            totalLoaded += loaded;
+            totalFailed += failed;
+        }
+
+        // 护甲、消耗品、箭筒
+        var armorRes = LoadJsonArray(BasePath + "armors.json", ParseArmorEntry);
+        var consumableRes = LoadJsonArray(BasePath + "consumables.json", ParseConsumableEntry);
+        var quiverRes = LoadJsonArray(BasePath + "quivers.json", ParseQuiverEntry);
+        var accessoryRes = LoadJsonArray(BasePath + "accessories.json", ParseAccessoryEntry);
+
+        totalLoaded += armorRes.loaded + consumableRes.loaded + quiverRes.loaded + accessoryRes.loaded;
+        totalFailed += armorRes.failed + consumableRes.failed + quiverRes.failed + accessoryRes.failed;
+
+        PostProcessItems();
+
+        if (totalFailed > 0)
+            GD.PushError($"[ItemDataLoader] {totalFailed} item entries failed to parse — check JSON for errors");
+
+        GD.Print($"[ItemDataLoader] Loaded {_weapons.Count} weapons, {_armors.Count} armors, " +
+            $"{_consumables.Count} consumables, {_quivers.Count} quivers, {_accessories.Count} accessories " +
+            $"({totalLoaded} entries, {totalFailed} failed)");
+
+        if (_weapons.Count == 0 && _armors.Count == 0 && _consumables.Count == 0)
+            GD.PushError("[ItemDataLoader] CRITICAL: No items loaded! Check that JSON files exist in " + BasePath);
+
+        // 跨文件一致性校验
+        ItemDataValidator.Validate();
+    }
+
+    // ========================================
+    // 后处理：图标 ID + 网格尺寸
+    // ========================================
+
+    /// <summary>
+    /// 自动分配纹理ID和背包网格尺寸。
+    /// 纹理ID = PascalCase 的 ItemId（约定 res://assets/generated_*/FileName.png）。
+    /// 网格尺寸根据物品类型/子类型自动推断（除非 JSON 显式覆盖）。
+    /// </summary>
+    private static void PostProcessItems()
+    {
+        foreach (var (id, w) in _weapons)
+        {
+            if (string.IsNullOrEmpty(w.EquipTextureId)) w.EquipTextureId = ToPascalCase(id);
+            if (string.IsNullOrEmpty(w.IconId)) w.IconId = w.EquipTextureId;
+            if (w.InvWidth == 1 && w.InvHeight == 1)
+                (w.InvWidth, w.InvHeight) = GetWeaponGridSize(w);
+        }
+
+        foreach (var (id, a) in _armors)
+        {
+            if (string.IsNullOrEmpty(a.EquipTextureId)) a.EquipTextureId = ToPascalCase(id);
+            if (string.IsNullOrEmpty(a.IconId)) a.IconId = a.EquipTextureId;
+            if (a.InvWidth == 1 && a.InvHeight == 1)
+                (a.InvWidth, a.InvHeight) = GetArmorGridSize(a);
+        }
+
+        foreach (var (id, c) in _consumables)
+        {
+            if (string.IsNullOrEmpty(c.EquipTextureId)) c.EquipTextureId = ToPascalCase(id);
+            if (string.IsNullOrEmpty(c.IconId)) c.IconId = c.EquipTextureId;
+            // 消耗品默认 1×1
+        }
+
+        foreach (var (id, q) in _quivers)
+        {
+            if (string.IsNullOrEmpty(q.EquipTextureId)) q.EquipTextureId = ToPascalCase(id);
+            if (string.IsNullOrEmpty(q.IconId)) q.IconId = q.EquipTextureId;
+            if (q.InvWidth == 1 && q.InvHeight == 1) { q.InvWidth = 1; q.InvHeight = 2; }
+        }
+
+        foreach (var (id, ac) in _accessories)
+        {
+            if (string.IsNullOrEmpty(ac.EquipTextureId)) ac.EquipTextureId = ToPascalCase(id);
+            if (string.IsNullOrEmpty(ac.IconId)) ac.IconId = ac.EquipTextureId;
+            // 饰品默认 1×1
+        }
+    }
+
+    /// <summary>snake_case → PascalCase</summary>
+    private static string ToPascalCase(string snakeCase)
+    {
+        var parts = snakeCase.Split('_');
+        var sb = new System.Text.StringBuilder();
+        foreach (var part in parts)
+        {
+            if (part.Length == 0) continue;
+            sb.Append(char.ToUpper(part[0]));
+            if (part.Length > 1) sb.Append(part.AsSpan(1));
+        }
+        return sb.ToString();
+    }
+
+    private static (int w, int h) GetWeaponGridSize(WeaponData weapon)
+    {
+        if (weapon.IsThrowing || weapon.Subtype is
+            WeaponData.WeaponSubtype.Dagger or
+            WeaponData.WeaponSubtype.Stiletto or
+            WeaponData.WeaponSubtype.SpikedDagger or
+            WeaponData.WeaponSubtype.ThrowingKnife or
+            WeaponData.WeaponSubtype.Dart or
+            WeaponData.WeaponSubtype.Cestus or
+            WeaponData.WeaponSubtype.StoneThrow)
+            return (1, 1);
+
+        if (!weapon.IsTwoHanded && !weapon.IsRanged && weapon.Subtype is
+            WeaponData.WeaponSubtype.Seax or
+            WeaponData.WeaponSubtype.Kukri or
+            WeaponData.WeaponSubtype.Club or
+            WeaponData.WeaponSubtype.LightHammer or
+            WeaponData.WeaponSubtype.Francisca or
+            WeaponData.WeaponSubtype.Javelin or
+            WeaponData.WeaponSubtype.Pilum or
+            WeaponData.WeaponSubtype.Harpoon or
+            WeaponData.WeaponSubtype.HeavyJavelin or
+            WeaponData.WeaponSubtype.ThrowingHammer)
+            return (1, 2);
+
+        if (!weapon.IsTwoHanded && !weapon.IsRanged) return (1, 3);
+        if (weapon.IsRanged) return (2, 3);
+        return (2, 4);
+    }
+
+    private static (int w, int h) GetArmorGridSize(ArmorData armor)
+    {
+        if (armor.EquipSlotTarget == ItemData.EquipSlot.Helmet) return (2, 2);
+        if (armor.armorType == ArmorData.ArmorType.Shield) return (2, 2);
+
+        return armor.armorType switch
+        {
+            ArmorData.ArmorType.Light => (2, 3),
+            ArmorData.ArmorType.Medium => (3, 3),
+            ArmorData.ArmorType.Heavy => (3, 4),
+            _ => (2, 3),
+        };
+    }
+
+    // ========================================
+    // JSON 加载
+    // ========================================
+
+    private static (int loaded, int failed) LoadJsonArray(string path, Action<Godot.Collections.Dictionary> parseEntry)
+    {
+        if (!FileAccess.FileExists(path))
+        {
+            GD.PushError($"[ItemDataLoader] Missing JSON file: {path}");
+            return (0, 0);
+        }
+
         using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        if (file == null) { LoadFallback(); return; }
+        if (file == null)
+        {
+            GD.PushError($"[ItemDataLoader] Cannot open: {path}");
+            return (0, 0);
+        }
+
         var json = new Json();
         if (json.Parse(file.GetAsText()) != Error.Ok)
         {
-            GD.PrintErr($"[ItemDataLoader] JSON parse error: {json.GetErrorMessage()}");
-            LoadFallback();
-            return;
+            GD.PushError($"[ItemDataLoader] JSON parse error in {path}: {json.GetErrorMessage()} (line {json.GetErrorLine()})");
+            return (0, 0);
         }
-        var data = json.Data.AsGodotDictionary();
-        ParseWeapons(data);
-        ParseArmors(data);
-        ParseConsumables(data);
-        GD.Print($"[ItemDataLoader] Loaded {_weapons.Count} weapons, {_armors.Count} armors, {_consumables.Count} consumables from JSON");
-    }
 
-    // ========================================
-    // 武器解析
-    // ========================================
-    private static void ParseWeapons(Godot.Collections.Dictionary root)
-    {
-        if (!root.ContainsKey("weapons")) return;
-        var arr = root["weapons"].AsGodotArray();
-        foreach (var item in arr)
+        if (json.Data.VariantType != Variant.Type.Array)
         {
-            var dict = item.AsGodotDictionary();
-            string id = dict["id"].AsString();
-            string subtypeStr = dict.ContainsKey("subtype") ? dict["subtype"].AsString() : "";
-            int price = dict.ContainsKey("price") ? dict["price"].AsInt32() : 10;
-            bool finesse = dict.ContainsKey("finesse") && dict["finesse"].AsBool();
-            bool twoHanded = dict.ContainsKey("two_handed") && dict["two_handed"].AsBool();
-            bool reach = dict.ContainsKey("reach") && dict["reach"].AsBool();
-            bool dualWield = dict.ContainsKey("dual_wield") && dict["dual_wield"].AsBool();
-            bool ranged = dict.ContainsKey("ranged") && dict["ranged"].AsBool();
-            bool throwing = dict.ContainsKey("throwing") && dict["throwing"].AsBool();
+            GD.PushError($"[ItemDataLoader] {path} is not a JSON array");
+            return (0, 0);
+        }
 
-            if (!Enum.TryParse<WeaponData.WeaponSubtype>(subtypeStr, out var subtype))
+        var arr = json.Data.AsGodotArray();
+        int loaded = 0;
+        int failed = 0;
+
+        for (int i = 0; i < arr.Count; i++)
+        {
+            if (arr[i].VariantType != Variant.Type.Dictionary)
             {
-                GD.PrintErr($"[ItemDataLoader] Unknown weapon subtype: {subtypeStr}");
+                GD.PushError($"[ItemDataLoader] {path}[{i}] is not an object");
+                failed++;
                 continue;
             }
-
-            var cfg = WeaponRegistry.GetConfig(subtype);
-            var w = new WeaponData
+            try
             {
-                ItemId = id,
-                ItemName = cfg.Name,
-                Subtype = subtype,
-                DamageDiceCount = cfg.DiceCount,
-                DamageDiceSides = cfg.DiceSides,
-                ApCost = cfg.BaseApCost,
-                RangeCells = cfg.Range,
-                Price = price,
-                IsFinesse = finesse,
-                IsTwoHanded = twoHanded,
-                IsReach = reach,
-                IsDualWieldable = dualWield,
-                IsRanged = ranged,
-                IsThrowing = throwing,
-                WeaponDamageType = cfg.DamageType,
-            };
-            _weapons[id] = w;
+                parseEntry(arr[i].AsGodotDictionary());
+                loaded++;
+            }
+            catch (Exception ex)
+            {
+                GD.PushError($"[ItemDataLoader] Failed to parse {path}[{i}]: {ex.Message}");
+                failed++;
+            }
         }
+
+        return (loaded, failed);
     }
 
     // ========================================
-    // 护甲解析
+    // 条目解析
     // ========================================
-    private static void ParseArmors(Godot.Collections.Dictionary root)
+
+    private static void ParseWeaponEntry(Godot.Collections.Dictionary dict)
     {
-        if (!root.ContainsKey("armors")) return;
-        var arr = root["armors"].AsGodotArray();
-        foreach (var item in arr)
-        {
-            var dict = item.AsGodotDictionary();
-            string id = dict["id"].AsString();
-            string name = dict.ContainsKey("name") ? dict["name"].AsString() : id;
-            string typeStr = dict.ContainsKey("type") ? dict["type"].AsString() : "Light";
-            int dr = dict.ContainsKey("dr") ? dict["dr"].AsInt32() : 0;
-            int price = dict.ContainsKey("price") ? dict["price"].AsInt32() : 10;
-            int maxDex = dict.ContainsKey("max_dex") ? dict["max_dex"].AsInt32() : 99;
-            int apPenalty = dict.ContainsKey("ap_penalty") ? dict["ap_penalty"].AsInt32() : 0;
-            int strReq = dict.ContainsKey("str_req") ? dict["str_req"].AsInt32() : 0;
-            bool stealthDisadv = dict.ContainsKey("stealth_disadvantage") && dict["stealth_disadvantage"].AsBool();
-            bool destroyable = dict.ContainsKey("destroyable") && dict["destroyable"].AsBool();
-            string slotStr = dict.ContainsKey("slot") ? dict["slot"].AsString() : "";
+        string id = RequireString(dict, "id");
+        string subtypeStr = RequireString(dict, "subtype");
 
-            // AC is now computed from DR: floor(sqrt(DR))
-            int ac = (int)Math.Floor(Math.Sqrt(dr));
+        if (!Enum.TryParse<WeaponData.WeaponSubtype>(subtypeStr, out var subtype))
+            throw new Exception($"Unknown weapon subtype: {subtypeStr}");
 
-            var armorType = typeStr switch
-            {
-                "Cloth" => ArmorData.ArmorType.Light,
-                "Light" => ArmorData.ArmorType.Light,
-                "Medium" => ArmorData.ArmorType.Medium,
-                "Heavy" => ArmorData.ArmorType.Heavy,
-                "Shield" => ArmorData.ArmorType.Shield,
-                _ => ArmorData.ArmorType.Light,
-            };
+        if (_weapons.ContainsKey(id))
+            throw new Exception($"Duplicate weapon ID: {id}");
 
-            var equipSlot = slotStr switch
-            {
-                "Helmet" => ItemData.EquipSlot.Helmet,
-                _ => ItemData.EquipSlot.Body,
-            };
-
-            var a = new ArmorData
-            {
-                ItemId = id,
-                ItemName = name,
-                armorType = armorType,
-                AcBonus = ac,
-                DrThreshold = dr,
-                MaxDexBonus = maxDex,
-                ApPenalty = apPenalty,
-                MovementPenalty = apPenalty, // keep MovementPenalty in sync
-                StrRequired = strReq,
-                StealthDisadvantage = stealthDisadv,
-                IsDestroyable = destroyable,
-                Price = price,
-                EquipSlotTarget = equipSlot,
-            };
-            _armors[id] = a;
-        }
-    }
-
-    // ========================================
-    // 消耗品解析
-    // ========================================
-    private static void ParseConsumables(Godot.Collections.Dictionary root)
-    {
-        if (!root.ContainsKey("consumables")) return;
-        var arr = root["consumables"].AsGodotArray();
-        foreach (var item in arr)
-        {
-            var dict = item.AsGodotDictionary();
-            string id = dict["id"].AsString();
-            string name = dict.ContainsKey("name") ? dict["name"].AsString() : id;
-            string desc = dict.ContainsKey("desc") ? dict["desc"].AsString() : "";
-            int price = dict.ContainsKey("price") ? dict["price"].AsInt32() : 10;
-
-            var c = new ConsumableData
-            {
-                ItemId = id,
-                ItemName = name,
-                Description = desc,
-                Price = price,
-            };
-            _consumables[id] = c;
-        }
-    }
-
-    // ========================================
-    // 回退：硬编码数据
-    // ========================================
-    private static void LoadFallback()
-    {
-        GD.PrintErr("[ItemDataLoader] Failed to load items.json, using fallback data");
-        LoadFallbackWeapons();
-        LoadFallbackArmors();
-        LoadFallbackConsumables();
-    }
-
-    private static void LoadFallbackWeapons()
-    {
-        // Slash - Light
-        AddFallbackWeapon("dagger", WeaponData.WeaponSubtype.Dagger, 15, true, false, false, true);
-        AddFallbackWeapon("seax", WeaponData.WeaponSubtype.Seax, 25, false, false, false, true);
-        AddFallbackWeapon("kukri", WeaponData.WeaponSubtype.Kukri, 30, true, false, false, true);
-        // Slash - Medium
-        AddFallbackWeapon("arming_sword", WeaponData.WeaponSubtype.ArmingSword, 80, false, false, false, false);
-        AddFallbackWeapon("battle_axe", WeaponData.WeaponSubtype.BattleAxe, 90, false, false, false, false);
-        AddFallbackWeapon("nomad_saber", WeaponData.WeaponSubtype.NomadSaber, 75, true, false, false, false);
-        // Slash - Heavy
-        AddFallbackWeapon("greatsword", WeaponData.WeaponSubtype.Greatsword, 180, false, true, false, false);
-        AddFallbackWeapon("great_axe", WeaponData.WeaponSubtype.GreatAxe, 170, false, true, false, false);
-        AddFallbackWeapon("glaive", WeaponData.WeaponSubtype.Glaive, 160, false, true, true, false);
-        // Pierce - Light
-        AddFallbackWeapon("stiletto", WeaponData.WeaponSubtype.Stiletto, 20, true, false, false, true);
-        AddFallbackWeapon("spiked_dagger", WeaponData.WeaponSubtype.SpikedDagger, 35, true, false, false, true);
-        AddFallbackWeapon("rapier", WeaponData.WeaponSubtype.Rapier, 100, true, false, false, false);
-        // Pierce - Medium
-        AddFallbackWeapon("infantry_spear", WeaponData.WeaponSubtype.InfantrySpear, 60, false, false, true, false);
-        AddFallbackWeapon("broad_spear", WeaponData.WeaponSubtype.BroadSpear, 85, false, false, false, false);
-        AddFallbackWeapon("awlpike", WeaponData.WeaponSubtype.Awlpike, 95, false, false, true, false);
-        // Pierce - Heavy
-        AddFallbackWeapon("lance", WeaponData.WeaponSubtype.Lance, 200, false, true, true, false);
-        AddFallbackWeapon("voulge", WeaponData.WeaponSubtype.Voulge, 175, false, true, true, false);
-        AddFallbackWeapon("trident", WeaponData.WeaponSubtype.Trident, 165, false, true, true, false);
-        // Crush - Light
-        AddFallbackWeapon("club", WeaponData.WeaponSubtype.Club, 5, false, false, false, false);
-        AddFallbackWeapon("light_hammer", WeaponData.WeaponSubtype.LightHammer, 40, false, false, false, false);
-        AddFallbackWeapon("cestus", WeaponData.WeaponSubtype.Cestus, 20, false, false, false, true);
-        // Crush - Medium
-        AddFallbackWeapon("winged_mace", WeaponData.WeaponSubtype.WingedMace, 70, false, false, false, false);
-        AddFallbackWeapon("military_hammer", WeaponData.WeaponSubtype.MilitaryHammer, 110, false, false, false, false);
-        AddFallbackWeapon("flail", WeaponData.WeaponSubtype.Flail, 85, false, false, false, false);
-        // Crush - Heavy
-        AddFallbackWeapon("maul", WeaponData.WeaponSubtype.Maul, 150, false, true, false, false);
-        AddFallbackWeapon("greatclub", WeaponData.WeaponSubtype.Greatclub, 120, false, true, false, false);
-        AddFallbackWeapon("polehammer", WeaponData.WeaponSubtype.Polehammer, 190, false, true, true, false);
-        // Thrown
-        AddFallbackWeapon("throwing_knife", WeaponData.WeaponSubtype.ThrowingKnife, 10, false, false, false, true, false, true);
-        AddFallbackWeapon("dart", WeaponData.WeaponSubtype.Dart, 8, false, false, false, false, false, true);
-        AddFallbackWeapon("francisca", WeaponData.WeaponSubtype.Francisca, 25, false, false, false, false, false, true);
-        AddFallbackWeapon("javelin", WeaponData.WeaponSubtype.Javelin, 15, false, false, false, false, false, true);
-        AddFallbackWeapon("pilum", WeaponData.WeaponSubtype.Pilum, 30, false, false, false, false, false, true);
-        AddFallbackWeapon("harpoon", WeaponData.WeaponSubtype.Harpoon, 25, false, false, false, false, false, true);
-        AddFallbackWeapon("stone_throw", WeaponData.WeaponSubtype.StoneThrow, 2, false, false, false, false, false, true);
-        AddFallbackWeapon("heavy_javelin", WeaponData.WeaponSubtype.HeavyJavelin, 40, false, false, false, false, false, true);
-        AddFallbackWeapon("throwing_hammer", WeaponData.WeaponSubtype.ThrowingHammer, 35, false, false, false, false, false, true);
-        // Bows
-        AddFallbackWeapon("shortbow", WeaponData.WeaponSubtype.Shortbow, 50, false, false, false, false, true);
-        AddFallbackWeapon("hunting_bow", WeaponData.WeaponSubtype.HuntingBow, 80, false, false, false, false, true);
-        AddFallbackWeapon("nomad_bow", WeaponData.WeaponSubtype.NomadBow, 65, false, false, false, false, true);
-        AddFallbackWeapon("strongbow", WeaponData.WeaponSubtype.Strongbow, 100, false, false, false, false, true);
-        AddFallbackWeapon("recurve_bow", WeaponData.WeaponSubtype.RecurveBow, 180, false, false, false, false, true);
-        AddFallbackWeapon("war_bow", WeaponData.WeaponSubtype.WarBow, 130, false, false, false, false, true);
-        AddFallbackWeapon("longbow", WeaponData.WeaponSubtype.Longbow, 150, false, true, false, false, true);
-        AddFallbackWeapon("composite_longbow", WeaponData.WeaponSubtype.CompositeLongbow, 220, false, true, false, false, true);
-        AddFallbackWeapon("greatbow", WeaponData.WeaponSubtype.Greatbow, 200, false, true, false, false, true);
-        // Crossbows
-        AddFallbackWeapon("pistol_crossbow", WeaponData.WeaponSubtype.PistolCrossbow, 75, false, false, false, false, true);
-        AddFallbackWeapon("light_crossbow", WeaponData.WeaponSubtype.LightCrossbow, 100, false, false, false, false, true);
-        AddFallbackWeapon("hunting_crossbow", WeaponData.WeaponSubtype.HuntingCrossbow, 120, false, false, false, false, true);
-        AddFallbackWeapon("standard_crossbow", WeaponData.WeaponSubtype.StandardCrossbow, 140, false, false, false, false, true);
-        AddFallbackWeapon("strong_crossbow", WeaponData.WeaponSubtype.StrongCrossbow, 180, false, false, false, false, true);
-        AddFallbackWeapon("sniper_crossbow", WeaponData.WeaponSubtype.SniperCrossbow, 200, false, false, false, false, true);
-        AddFallbackWeapon("heavy_crossbow", WeaponData.WeaponSubtype.HeavyCrossbow, 220, false, true, false, false, true);
-        AddFallbackWeapon("siege_crossbow", WeaponData.WeaponSubtype.SiegeCrossbow, 350, false, true, false, false, true);
-        AddFallbackWeapon("ballista", WeaponData.WeaponSubtype.Ballista, 500, false, true, false, false, true);
-    }
-
-    private static void AddFallbackWeapon(string id, WeaponData.WeaponSubtype subtype, int price,
-        bool finesse, bool twoHanded, bool reach, bool dualWield,
-        bool ranged = false, bool throwing = false)
-    {
         var cfg = WeaponRegistry.GetConfig(subtype);
-        var w = new WeaponData
+        int tier = OptInt(dict, "tier", 1);
+        int diceCount = cfg.DiceCount + (tier - 1); // Tier 缩放
+
+        string weaponName = OptString(dict, "name", "")
+            ?? (tier > 1 ? $"{cfg.Name} +{tier - 1}" : cfg.Name);
+        if (string.IsNullOrEmpty(weaponName))
+            weaponName = tier > 1 ? $"{cfg.Name} +{tier - 1}" : cfg.Name;
+
+        // ── 武器特性收集（统一通过 Traits flags） ──
+        var traits = WeaponTraits.None;
+
+        // 1) 旧风格 bool 字段（向后兼容）
+        if (OptBool(dict, "finesse", false)) traits |= WeaponTraits.Finesse;
+        if (OptBool(dict, "two_handed", false)) traits |= WeaponTraits.TwoHanded;
+        if (OptBool(dict, "reach", false)) traits |= WeaponTraits.Reach;
+        if (OptBool(dict, "dual_wield", false)) traits |= WeaponTraits.DualWieldable;
+        if (OptBool(dict, "ranged", false)) traits |= WeaponTraits.Ranged;
+        if (OptBool(dict, "throwing", false)) traits |= WeaponTraits.Throwing;
+        if (OptBool(dict, "needs_reload", false)) traits |= WeaponTraits.NeedsReload;
+        if (OptBool(dict, "blunt", false)) traits |= WeaponTraits.Blunt;
+        if (OptBool(dict, "armor_piercing", false)) traits |= WeaponTraits.ArmorPiercing;
+        if (OptBool(dict, "anti_cavalry", false)) traits |= WeaponTraits.AntiCavalry;
+        if (OptBool(dict, "sweep", false)) traits |= WeaponTraits.Sweep;
+        if (OptBool(dict, "catalyst", false)) traits |= WeaponTraits.Catalyst;
+
+        // 2) 新风格 traits 数组（首选）
+        if (dict.ContainsKey("traits") && dict["traits"].VariantType == Variant.Type.Array)
+        {
+            var arr = dict["traits"].AsGodotArray();
+            foreach (var v in arr)
+            {
+                if (v.VariantType != Variant.Type.String) continue;
+                var t = WeaponTraitsExtensions.ParseId(v.AsString());
+                if (t == WeaponTraits.None)
+                    throw new Exception($"Unknown weapon trait: '{v.AsString()}' in weapon '{id}'");
+                traits |= t;
+            }
+        }
+
+        _weapons[id] = new WeaponData
         {
             ItemId = id,
-            ItemName = cfg.Name,
+            ItemName = weaponName,
             Subtype = subtype,
-            DamageDiceCount = cfg.DiceCount,
+            Tier = tier,
+            DamageDiceCount = diceCount,
             DamageDiceSides = cfg.DiceSides,
             ApCost = cfg.BaseApCost,
             RangeCells = cfg.Range,
-            Price = price,
-            IsFinesse = finesse,
-            IsTwoHanded = twoHanded,
-            IsReach = reach,
-            IsDualWieldable = dualWield,
-            IsRanged = ranged,
-            IsThrowing = throwing,
+            Price = OptInt(dict, "price", 10),
+            Traits = traits,
             WeaponDamageType = cfg.DamageType,
+            Description = OptString(dict, "desc", "") ?? "",
         };
-        _weapons[id] = w;
     }
 
-    private static void LoadFallbackArmors()
+    private static void ParseArmorEntry(Godot.Collections.Dictionary dict)
     {
-        // Body armors — AC = floor(sqrt(DR))
-        _armors["cloth"] = new ArmorData { ItemId = "cloth", ItemName = "布衣", armorType = ArmorData.ArmorType.Light, AcBonus = 0, DrThreshold = 0, ApPenalty = 0, Price = 5 };
-        _armors["mage_robe"] = new ArmorData { ItemId = "mage_robe", ItemName = "法师长袍", armorType = ArmorData.ArmorType.Light, AcBonus = 1, DrThreshold = 3, ApPenalty = 0, Price = 50 };
-        _armors["leather"] = new ArmorData { ItemId = "leather", ItemName = "皮甲", armorType = ArmorData.ArmorType.Light, AcBonus = 2, DrThreshold = 6, ApPenalty = 0, Price = 45 };
-        _armors["studded_leather"] = new ArmorData { ItemId = "studded_leather", ItemName = "镶钉皮甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 2, DrThreshold = 8, MaxDexBonus = 4, ApPenalty = 1, Price = 80 };
-        _armors["chain_mail"] = new ArmorData { ItemId = "chain_mail", ItemName = "链甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 3, DrThreshold = 11, MaxDexBonus = 3, ApPenalty = 2, Price = 150 };
-        _armors["half_plate"] = new ArmorData { ItemId = "half_plate", ItemName = "半板甲", armorType = ArmorData.ArmorType.Heavy, AcBonus = 3, DrThreshold = 15, MaxDexBonus = 1, ApPenalty = 4, Price = 300 };
-        _armors["full_plate"] = new ArmorData { ItemId = "full_plate", ItemName = "全板甲", armorType = ArmorData.ArmorType.Heavy, AcBonus = 4, DrThreshold = 18, MaxDexBonus = 0, ApPenalty = 5, Price = 600 };
-        // Shields
-        _armors["light_wooden_shield"] = new ArmorData { ItemId = "light_wooden_shield", ItemName = "轻木盾", armorType = ArmorData.ArmorType.Shield, AcBonus = 1, DrThreshold = 3, ApPenalty = 0, Price = 25 };
-        _armors["infantry_round_shield"] = new ArmorData { ItemId = "infantry_round_shield", ItemName = "步兵圆盾", armorType = ArmorData.ArmorType.Shield, AcBonus = 2, DrThreshold = 4, ApPenalty = 0, Price = 50 };
-        _armors["infantry_heavy_shield"] = new ArmorData { ItemId = "infantry_heavy_shield", ItemName = "步兵重盾", armorType = ArmorData.ArmorType.Shield, AcBonus = 2, DrThreshold = 5, ApPenalty = 1, Price = 80 };
-        _armors["knight_shield"] = new ArmorData { ItemId = "knight_shield", ItemName = "骑士盾", armorType = ArmorData.ArmorType.Shield, AcBonus = 2, DrThreshold = 6, ApPenalty = 1, Price = 120 };
-        _armors["legion_tower_shield"] = new ArmorData { ItemId = "legion_tower_shield", ItemName = "军团塔盾", armorType = ArmorData.ArmorType.Shield, AcBonus = 2, DrThreshold = 8, ApPenalty = 2, Price = 200 };
-        // Helmets
-        _armors["leather_cap"] = new ArmorData { ItemId = "leather_cap", ItemName = "皮帽", armorType = ArmorData.ArmorType.Light, AcBonus = 1, DrThreshold = 2, ApPenalty = 0, Price = 15, EquipSlotTarget = ItemData.EquipSlot.Helmet };
-        _armors["iron_helm"] = new ArmorData { ItemId = "iron_helm", ItemName = "铁盔", armorType = ArmorData.ArmorType.Medium, AcBonus = 2, DrThreshold = 4, ApPenalty = 0, Price = 60, EquipSlotTarget = ItemData.EquipSlot.Helmet };
-        _armors["great_helm"] = new ArmorData { ItemId = "great_helm", ItemName = "大头盔", armorType = ArmorData.ArmorType.Heavy, AcBonus = 2, DrThreshold = 6, ApPenalty = 1, Price = 120, EquipSlotTarget = ItemData.EquipSlot.Helmet };
-        _armors["knight_helm"] = new ArmorData { ItemId = "knight_helm", ItemName = "骑士全盔", armorType = ArmorData.ArmorType.Heavy, AcBonus = 2, DrThreshold = 8, ApPenalty = 1, Price = 200, EquipSlotTarget = ItemData.EquipSlot.Helmet };
+        string id = RequireString(dict, "id");
+        if (_armors.ContainsKey(id))
+            throw new Exception($"Duplicate armor ID: {id}");
+
+        string typeStr = OptString(dict, "type", "Light") ?? "Light";
+        var armorType = typeStr switch
+        {
+            "Cloth" or "Light" => ArmorData.ArmorType.Light,
+            "Medium" => ArmorData.ArmorType.Medium,
+            "Heavy" => ArmorData.ArmorType.Heavy,
+            "Shield" => ArmorData.ArmorType.Shield,
+            _ => throw new Exception($"Unknown armor type: {typeStr}"),
+        };
+
+        string slotStr = OptString(dict, "slot", "") ?? "";
+        var equipSlot = slotStr switch
+        {
+            "Helmet" or "Head" => ItemData.EquipSlot.Helmet,
+            "Hands" => ItemData.EquipSlot.Hands,
+            "Feet" => ItemData.EquipSlot.Feet,
+            _ => ItemData.EquipSlot.Body,
+        };
+
+        int dr = OptInt(dict, "dr", 0);
+        // AC 由 DR 派生：floor(sqrt(DR))
+        int ac = (int)Math.Floor(Math.Sqrt(dr));
+
+        _armors[id] = new ArmorData
+        {
+            ItemId = id,
+            ItemName = OptString(dict, "name", id) ?? id,
+            armorType = armorType,
+            AcBonus = ac,
+            DrThreshold = dr,
+            MaxDexBonus = OptInt(dict, "max_dex", 99),
+            ApPenalty = OptInt(dict, "ap_penalty", 0),
+            MovementPenalty = OptInt(dict, "ap_penalty", 0),
+            StrRequired = OptInt(dict, "str_req", 0),
+            StealthDisadvantage = OptBool(dict, "stealth_disadvantage", false),
+            IsDestroyable = OptBool(dict, "destroyable", false),
+            Price = OptInt(dict, "price", 10),
+            EquipSlotTarget = equipSlot,
+            Description = OptString(dict, "desc", "") ?? "",
+        };
     }
 
-    private static void LoadFallbackConsumables()
+    private static void ParseConsumableEntry(Godot.Collections.Dictionary dict)
     {
-        _consumables["health_potion"] = new ConsumableData { ItemId = "health_potion", ItemName = "治疗药水", Description = "恢复2d4+2 HP", Price = 25 };
-        _consumables["mana_potion"] = new ConsumableData { ItemId = "mana_potion", ItemName = "魔力药水", Description = "恢复2d4 MP", Price = 30 };
-        _consumables["antidote"] = new ConsumableData { ItemId = "antidote", ItemName = "解毒剂", Description = "解除中毒状态", Price = 20 };
-        _consumables["bandage"] = new ConsumableData { ItemId = "bandage", ItemName = "绷带", Description = "恢复1d6 HP", Price = 10 };
-        _consumables["rations"] = new ConsumableData { ItemId = "rations", ItemName = "干粮", Description = "恢复5食物", Price = 8 };
-        _consumables["whetstone"] = new ConsumableData { ItemId = "whetstone", ItemName = "磨刀石", Description = "下次战斗武器伤害+1", Price = 40 };
-        _consumables["fire_oil"] = new ConsumableData { ItemId = "fire_oil", ItemName = "火油", Description = "投掷造成1d6火焰伤害", Price = 35 };
-        _consumables["holy_water"] = new ConsumableData { ItemId = "holy_water", ItemName = "净化药水", Description = "对亡灵造成2d6奥术伤害", Price = 50 };
-        _consumables["elixir"] = new ConsumableData { ItemId = "elixir", ItemName = "万灵药", Description = "恢复全部HP和MP", Price = 200 };
-        _consumables["camp_kit"] = new ConsumableData { ItemId = "camp_kit", ItemName = "野营工具", Description = "野外休息恢复效果+50%", Price = 60 };
+        string id = RequireString(dict, "id");
+        if (_consumables.ContainsKey(id))
+            throw new Exception($"Duplicate consumable ID: {id}");
+
+        _consumables[id] = new ConsumableData
+        {
+            ItemId = id,
+            ItemName = OptString(dict, "name", id) ?? id,
+            Description = OptString(dict, "desc", "") ?? "",
+            Price = OptInt(dict, "price", 10),
+        };
     }
+
+    private static void ParseQuiverEntry(Godot.Collections.Dictionary dict)
+    {
+        string id = RequireString(dict, "id");
+        if (_quivers.ContainsKey(id))
+            throw new Exception($"Duplicate quiver ID: {id}");
+
+        _quivers[id] = new ItemData
+        {
+            ItemId = id,
+            ItemName = OptString(dict, "name", id) ?? id,
+            QuiverDamageBonus = OptInt(dict, "damage_bonus", 0),
+            Price = OptInt(dict, "price", 10),
+            Description = OptString(dict, "desc", "") ?? "",
+        };
+    }
+
+    private static void ParseAccessoryEntry(Godot.Collections.Dictionary dict)
+    {
+        string id = RequireString(dict, "id");
+        if (_accessories.ContainsKey(id))
+            throw new Exception($"Duplicate accessory ID: {id}");
+
+        string typeStr = OptString(dict, "type", "Ring") ?? "Ring";
+        var accType = typeStr switch
+        {
+            "Ring" => AccessoryData.AccessoryType.Ring,
+            "Amulet" => AccessoryData.AccessoryType.Amulet,
+            "Cloak" => AccessoryData.AccessoryType.Cloak,
+            "Belt" => AccessoryData.AccessoryType.Belt,
+            "Bracer" => AccessoryData.AccessoryType.Bracer,
+            _ => throw new Exception($"Unknown accessory type: {typeStr}"),
+        };
+
+        var rarity = ParseRarity(OptString(dict, "rarity", "Common") ?? "Common");
+
+        _accessories[id] = new AccessoryData
+        {
+            ItemId = id,
+            ItemName = OptString(dict, "name", id) ?? id,
+            accessoryType = accType,
+            ItemRarity = rarity,
+            Price = OptInt(dict, "price", 10),
+            Description = OptString(dict, "desc", "") ?? "",
+
+            StrBonus = OptInt(dict, "str", 0),
+            DexBonus = OptInt(dict, "dex", 0),
+            ConBonus = OptInt(dict, "con", 0),
+            IntBonus = OptInt(dict, "int", 0),
+            WisBonus = OptInt(dict, "wis", 0),
+            ChaBonus = OptInt(dict, "cha", 0),
+
+            HpBonus = OptInt(dict, "hp", 0),
+            AcBonus = OptInt(dict, "ac", 0),
+            MoveBonus = OptInt(dict, "move", 0),
+            InitiativeBonus = OptInt(dict, "initiative", 0),
+
+            Resistance = OptString(dict, "resistance", "") ?? "",
+            Immunity = OptString(dict, "immunity", "") ?? "",
+            SpecialEffect = OptString(dict, "special_effect", "") ?? "",
+            SpecialValue = (float)(dict.ContainsKey("special_value") ? dict["special_value"].AsDouble() : 0.0),
+        };
+
+        // 装备能力组件：从 special_effect/value 创建
+        var acc = _accessories[id];
+        if (!string.IsNullOrEmpty(acc.SpecialEffect))
+        {
+            var ability = BladeHex.Combat.Abilities.EquipmentAbilityRegistry.Create(
+                acc.SpecialEffect, acc.SpecialValue);
+            if (ability != null) acc.Abilities.Add(ability);
+        }
+
+        // 还可读取 abilities 数组（未来扩展：一个物品多个能力）
+        if (dict.ContainsKey("abilities") && dict["abilities"].VariantType == Variant.Type.Array)
+        {
+            var abArr = dict["abilities"].AsGodotArray();
+            foreach (var v in abArr)
+            {
+                if (v.VariantType != Variant.Type.Dictionary) continue;
+                var abDict = v.AsGodotDictionary();
+                string abId = abDict.ContainsKey("id") ? abDict["id"].AsString() : "";
+                float mag = (float)(abDict.ContainsKey("value") ? abDict["value"].AsDouble() : 0.0);
+                var ability = BladeHex.Combat.Abilities.EquipmentAbilityRegistry.Create(abId, mag);
+                if (ability != null) acc.Abilities.Add(ability);
+            }
+        }
+    }
+
+    private static ItemData.Rarity ParseRarity(string s) => s switch
+    {
+        "Common" => ItemData.Rarity.Common,
+        "Uncommon" => ItemData.Rarity.Uncommon,
+        "Rare" => ItemData.Rarity.Rare,
+        "Epic" => ItemData.Rarity.Epic,
+        "Legendary" => ItemData.Rarity.Legendary,
+        _ => ItemData.Rarity.Common,
+    };
+
+    // ========================================
+    // 字段读取辅助
+    // ========================================
+
+    private static string RequireString(Godot.Collections.Dictionary dict, string key)
+    {
+        if (!dict.ContainsKey(key))
+            throw new Exception($"Missing required field: '{key}'");
+        return dict[key].AsString();
+    }
+
+    private static string? OptString(Godot.Collections.Dictionary dict, string key, string? defaultValue)
+        => dict.ContainsKey(key) ? dict[key].AsString() : defaultValue;
+
+    private static int OptInt(Godot.Collections.Dictionary dict, string key, int defaultValue)
+        => dict.ContainsKey(key) ? dict[key].AsInt32() : defaultValue;
+
+    private static bool OptBool(Godot.Collections.Dictionary dict, string key, bool defaultValue)
+        => dict.ContainsKey(key) ? dict[key].AsBool() : defaultValue;
 }

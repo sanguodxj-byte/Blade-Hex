@@ -309,6 +309,24 @@ public partial class CharacterRenderNode : Node3D
         Schedule(HitFlashDuration, () => { if (!_isDead) PlayAnimation("default"); });
     }
 
+    /// <summary>
+    /// 攻击微动画 — 将 _bodyRoot 朝目标方向突进 20px 后弹回。
+    /// direction 为攻击者指向目标的归一化方向向量（世界 XZ 平面）。
+    /// </summary>
+    public void PlayAttackLunge(Vector3 direction)
+    {
+        if (_isDead || _bodyRoot == null) return;
+        // 20px 偏移量（像素单位 × pixelSize 转世界坐标）
+        float lungeDistance = 20.0f * _cachedPixelSize;
+        var offset = direction.Normalized() * lungeDistance;
+
+        var tween = GetTree().CreateTween();
+        tween.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+        tween.TweenProperty(_bodyRoot, "position", offset, 0.12f);
+        tween.TweenProperty(_bodyRoot, "position", Vector3.Zero, 0.18f)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
+    }
+
     public void PlayDeath()
     {
         _isDead = true;
@@ -496,6 +514,8 @@ public partial class CharacterRenderNode : Node3D
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
+            NoDepthTest = true,
+            RenderPriority = 10,
             AlbedoColor = color,
         };
     }

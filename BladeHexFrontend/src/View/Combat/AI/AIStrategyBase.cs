@@ -173,8 +173,9 @@ public abstract class AIStrategyBase
         int maxVision = BaseMaxVision;
         int atkRange = Math.Min(weaponRange, maxVision);
 
-        int moveRange = actor.Model.GetMoveRange();
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveRange);
+        // 使用当前 AP 计算实际可达范围
+        int movePoints = (int)actor.CurrentAp;
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, movePoints);
 
         Vector2I bestPos = actor.GridPos;
         float bestScore = -999.0f;
@@ -220,8 +221,8 @@ public abstract class AIStrategyBase
         int maxVision = BaseMaxVision;
         int atkRange = Math.Min(weaponRange, maxVision);
 
-        int moveRange = actor.Model.GetMoveRange();
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveRange);
+        int movePoints = (int)actor.CurrentAp;
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, movePoints);
 
         Vector2I bestPos = actor.GridPos;
         int bestDist = 999;

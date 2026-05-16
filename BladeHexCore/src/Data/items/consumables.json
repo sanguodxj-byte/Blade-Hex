@@ -1,0 +1,12 @@
+[
+  { "id": "health_potion", "name": "治疗药水", "desc": "恢复2d4+2 HP", "price": 25 },
+  { "id": "mana_potion", "name": "魔力药水", "desc": "恢复2d4 MP", "price": 30 },
+  { "id": "antidote", "name": "解毒剂", "desc": "解除中毒状态", "price": 20 },
+  { "id": "bandage", "name": "绷带", "desc": "恢复1d6 HP", "price": 10 },
+  { "id": "rations", "name": "干粮", "desc": "恢复5食物", "price": 8 },
+  { "id": "whetstone", "name": "磨刀石", "desc": "下次战斗武器伤害+1", "price": 40 },
+  { "id": "fire_oil", "name": "火油", "desc": "投掷造成1d6火焰伤害", "price": 35 },
+  { "id": "holy_water", "name": "净化药水", "desc": "对亡灵造成2d6奥术伤害", "price": 50 },
+  { "id": "elixir", "name": "万灵药", "desc": "恢复全部HP和MP", "price": 200 },
+  { "id": "camp_kit", "name": "野营工具", "desc": "野外休息恢复效果+50%", "price": 60 }
+]

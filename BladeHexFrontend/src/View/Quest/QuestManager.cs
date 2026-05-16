@@ -7,7 +7,11 @@ using BladeHex.Data;
 namespace BladeHex.Strategic;
 
 /// <summary>
-/// 委托管理器 — 管理所有任务的状态、进度和奖励发放
+/// [Scene Service] 委托管理器 — 管理所有任务的状态、进度和奖励发放。
+///
+/// <para>所属场景：<see cref="BladeHex.View.OverworldScene3D"/>（在 OverworldScene3D.Entities.cs 中由父场景创建并 AddChild）。</para>
+/// <para>生命周期：随 Overworld 场景创建与销毁。</para>
+/// <para>访问方式：父场景持有引用；CombatScene 通过 <c>GetParent().GetNodeOrNull("QuestManager")</c> 跨场景查找。</para>
 /// </summary>
 [GlobalClass]
 public partial class QuestManager : Node
@@ -33,7 +37,6 @@ public partial class QuestManager : Node
     public List<QuestData> AvailableQuests = new();
     private static readonly Random _random = new();
 
-    public static QuestManager Instance { get; private set; } = new();
     public List<QuestData> ActiveQuests = new();
     public List<string> CompletedQuestIds = new();
     public Dictionary<string, QuestTargetSite> ActiveTargetSites = new();

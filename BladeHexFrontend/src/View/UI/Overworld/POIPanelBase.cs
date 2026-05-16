@@ -119,14 +119,37 @@ public abstract partial class POIPanelBase : CanvasLayer
     protected abstract void BuildContent(VBoxContainer container);
 
     // ============================================================================
-    // 公共 API — 统一 Show/Hide
+    // 公共 API — 统一 Show/Hide（带 Tween 动画）
     // ============================================================================
 
-    /// <summary>显示面板</summary>
-    public void ShowPanel() => Root.Visible = true;
+    private Tween? _showTween;
 
-    /// <summary>隐藏面板</summary>
-    public virtual void HidePanel() => Root.Visible = false;
+    /// <summary>显示面板（淡入 + 缩放动画）</summary>
+    public void ShowPanel()
+    {
+        _showTween?.Kill();
+        Root.Visible = true;
+        MainPanel.Scale = new Vector2(0.92f, 0.92f);
+        MainPanel.Modulate = new Color(1, 1, 1, 0);
+        MainPanel.PivotOffset = MainPanel.Size * 0.5f;
+
+        _showTween = CreateTween();
+        _showTween.SetParallel(true);
+        _showTween.TweenProperty(MainPanel, "modulate:a", 1.0f, 0.15f)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+        _showTween.TweenProperty(MainPanel, "scale", Vector2.One, 0.18f)
+            .SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+    }
+
+    /// <summary>隐藏面板（淡出动画）</summary>
+    public virtual void HidePanel()
+    {
+        _showTween?.Kill();
+        _showTween = CreateTween();
+        _showTween.TweenProperty(MainPanel, "modulate:a", 0.0f, 0.1f)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
+        _showTween.TweenCallback(Callable.From(() => Root.Visible = false));
+    }
 
     /// <summary>面板是否可见</summary>
     public bool IsPanelVisible() => Root.Visible;

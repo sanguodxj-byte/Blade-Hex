@@ -99,8 +99,7 @@ public partial class RadialMenu : Control
 
             btn.Pressed += () =>
             {
-                var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
-                audio?.PlaySfxName("ui_click");
+                BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_click");
                 EmitSignal(SignalName.ActionSelected, actionName);
                 Hide();
             };

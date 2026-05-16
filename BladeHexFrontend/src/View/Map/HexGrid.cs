@@ -18,7 +18,7 @@ public partial class HexGrid : Node3D
     // 存储单元格数据: { Vector2I(q, r): HexCell }
     public Godot.Collections.Dictionary<Vector2I, HexCell> Cells { get; set; } = new();
 
-    /// <summary>合批渲染管理器 — 由 _Ready 创建并注册到全局单例</summary>
+    /// <summary>合批渲染管理器 — 由 _Ready 创建，作为子节点存在</summary>
     private HexCellMultiMeshBatcher? _batcher;
 
     public override void _Ready()
@@ -26,7 +26,6 @@ public partial class HexGrid : Node3D
         // 创建合批器作为子节点（一个 HexGrid 一个 Batcher）
         _batcher = new HexCellMultiMeshBatcher();
         AddChild(_batcher);
-        HexCellMultiMeshBatcher.Instance = _batcher;
     }
 
     public void CreateCell(int q, int r, int elevation = 1, int cover = 0)
@@ -55,7 +54,6 @@ public partial class HexGrid : Node3D
         {
             _batcher = new HexCellMultiMeshBatcher();
             AddChild(_batcher);
-            HexCellMultiMeshBatcher.Instance = _batcher;
         }
 
         // 清空现有格子
@@ -127,6 +125,10 @@ public partial class HexGrid : Node3D
                 if (!Cells.ContainsKey(nextPos)) continue;
 
                 var nextCell = Cells[nextPos];
+
+                // 不可通行的格子不可进入
+                if (nextCell.Data != null && !nextCell.Data.isPassable) continue;
+
                 int elevDiff = nextCell.Elevation - currentCell.Elevation;
 
                 // 规则：高度差 >= 2 视为不可通行，上移最多一层

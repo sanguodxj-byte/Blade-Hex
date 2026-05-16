@@ -54,8 +54,8 @@ public partial class ArmyManagementUI : PanelContainer
     private const int SlotSize = 40;
     private const int CellSize = 44;        // 网格背包每格像素
     private const int CellGap = 2;          // 格间距
-    private const int PanelWidth = 1000;
-    private const int PanelHeight = 720;
+    private const int PanelWidth = 900;
+    private const int PanelHeight = 640;
     private const int Spacing2 = 4;
     private const int Spacing3 = 6;
     private const int Spacing4 = 8;
@@ -152,7 +152,7 @@ public partial class ArmyManagementUI : PanelContainer
         // 上半主体：左1/3 + 右2/3（不含背包）
         var body = new HBoxContainer();
         body.AddThemeConstantOverride("separation", Spacing6);
-        body.CustomMinimumSize = new Vector2(0, 280);
+        body.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         mainVbox.AddChild(body);
 
         BuildLeftColumn(body);
@@ -427,7 +427,7 @@ public partial class ArmyManagementUI : PanelContainer
             // 尝试加载图标
             if (iconRect != null && !string.IsNullOrEmpty(item.IconId))
             {
-                var tex = GD.Load<Texture2D>(item.IconId);
+                var tex = BladeHex.View.Data.ResourceRegistry.GetIcon(item.IconId);
                 if (tex != null) iconRect.Texture = tex;
             }
 
@@ -738,6 +738,7 @@ public partial class ArmyManagementUI : PanelContainer
         control.MouseFilter = Control.MouseFilterEnum.Stop;
         control.ZIndex = 1;
         control.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        control.ClipContents = true;
 
         // 物品背景 — 根据稀有度渐变底色
         var rarityColor = gridItem.Item.GetRarityColor();
@@ -761,14 +762,18 @@ public partial class ArmyManagementUI : PanelContainer
         iconRect.OffsetRight = -3;
         iconRect.OffsetBottom = -14; // 留出底部名称空间
         iconRect.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-        iconRect.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+        // 根据格子宽高比选择拉伸模式
+        float cellAspect = (float)gridItem.Width / gridItem.Height;
+        iconRect.StretchMode = (cellAspect < 0.6f || cellAspect > 1.7f)
+            ? TextureRect.StretchModeEnum.KeepAspectCovered
+            : TextureRect.StretchModeEnum.KeepAspectCentered;
         iconRect.MouseFilter = Control.MouseFilterEnum.Ignore;
         control.AddChild(iconRect);
 
         // 尝试加载图标
         if (!string.IsNullOrEmpty(gridItem.Item.IconId))
         {
-            var tex = GD.Load<Texture2D>(gridItem.Item.IconId);
+            var tex = BladeHex.View.Data.ResourceRegistry.GetIcon(gridItem.Item.IconId);
             if (tex != null) iconRect.Texture = tex;
         }
 
@@ -970,7 +975,14 @@ public partial class ArmyManagementUI : PanelContainer
         if (ev is InputEventMouseMotion motion && _dragGhost != null)
             _dragGhost.GlobalPosition = motion.GlobalPosition + _dragOffset;
         else if (ev is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
-            CancelDrag();
+        {
+            var localPos = _gridArea.GetLocalMousePosition();
+            var cell = PositionToCell(localPos);
+            if (cell.X >= 0 && cell.Y >= 0)
+                CompleteDrag(cell.X, cell.Y);
+            else
+                CancelDrag();
+        }
         else if (ev is InputEventKey { Pressed: true, Keycode: Key.Escape })
             CancelDrag();
     }

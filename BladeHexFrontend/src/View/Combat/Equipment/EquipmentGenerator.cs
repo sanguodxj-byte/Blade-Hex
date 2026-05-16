@@ -63,7 +63,7 @@ public static class EquipmentGenerator
 
         if (candidates.Count == 0)
         {
-            candidates.Add(allWeapons.ContainsKey("longsword") ? allWeapons["longsword"] : new WeaponData { ItemName = "练习剑" });
+            candidates.Add(allWeapons.ContainsKey("arming_sword") ? allWeapons["arming_sword"] : new WeaponData { ItemName = "练习剑" });
         }
 
         var rand = new Random();

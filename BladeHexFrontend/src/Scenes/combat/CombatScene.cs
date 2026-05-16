@@ -21,13 +21,13 @@ public partial class CombatScene : CombatSceneBase
 {
     // ========== 大地图传入数据 ==========
 
-    /// <summary>战斗上下文 — 由 OverworldScene 传入</summary>
+    /// <summary>战斗上下文 — 由 OverworldScene3D 传入</summary>
     public BattleContext? BattleContextRef;
 
-    /// <summary>玩家队伍名册 — 由 OverworldScene 传入</summary>
+    /// <summary>玩家队伍名册 — 由 OverworldScene3D 传入</summary>
     public PartyRoster? PlayerRoster;
 
-    /// <summary>遭遇敌方单位列表 — 由 OverworldScene 传入</summary>
+    /// <summary>遭遇敌方单位列表 — 由 OverworldScene3D 传入</summary>
     public List<UnitData>? EncounterEnemies;
 
     /// <summary>战斗结果（战斗结束后填充，供大地图回调读取）</summary>
@@ -57,10 +57,19 @@ public partial class CombatScene : CombatSceneBase
 
         if (_audioManager == null || !IsInstanceValid(_audioManager)) return;
 
+        // 根据威胁等级和天气选择战斗BGM变体
+        string variant;
         if (totalThreat >= 3.0f)
-            _audioManager.PlayScenarioBgm(BladeHex.Audio.AudioManager.Scenario.Combat, "boss", 1.0f);
+            variant = "boss"; // 领主/传奇生物
         else
-            _audioManager.PlayScenarioBgm(BladeHex.Audio.AudioManager.Scenario.Combat, "normal", 1.0f);
+        {
+            // 检查是否雨中战斗
+            var gs = BladeHex.Data.Globals.StateOrNull;
+            bool isRaining = gs != null && gs.Weather.Type == 0; // 0 = Rain
+            variant = isRaining ? "rain" : "normal";
+        }
+
+        _audioManager.PlayScenarioBgm(BladeHex.Audio.AudioManager.Scenario.Combat, variant, 1.0f);
     }
 
     // ============================================================
@@ -154,7 +163,7 @@ public partial class CombatScene : CombatSceneBase
     {
         var playerData = new UnitData
         {
-            UnitName = "战士", Str = 16, Dex = 14, Con = 15, BaseMaxHp = 10, BaseAc = 10,
+            UnitName = "战士", Str = 16, Dex = 14, Con = 15, BaseMaxHp = 10, BaseAc = 8,
             Armor = new ArmorData { ItemName = "链甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 4, MaxDexBonus = 2 },
             PrimaryMainHand = new WeaponData { ItemName = "长剑", DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Slash },
             SecondaryMainHand = new WeaponData { ItemName = "长弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Pierce },
@@ -172,10 +181,10 @@ public partial class CombatScene : CombatSceneBase
     {
         var enemies = new List<UnitData>
         {
-            new() { UnitName = "哥布林射手_1", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 0.25f, aiStrategy = UnitData.AIStrategy.Cautious, Str = 8, Dex = 16, Con = 10, BaseMaxHp = 7, BaseAc = 13, PrimaryMainHand = new WeaponData { ItemName = "短弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Traits = new[] { "敏捷撤退" } },
-            new() { UnitName = "哥布林射手_2", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 0.25f, aiStrategy = UnitData.AIStrategy.Cautious, Str = 8, Dex = 16, Con = 10, BaseMaxHp = 7, BaseAc = 13, PrimaryMainHand = new WeaponData { ItemName = "短弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Traits = new[] { "敏捷撤退" } },
-            new() { UnitName = "骷髅战士", IsEnemy = true, enemyType = UnitData.EnemyType.Undead, ThreatLevel = 0.5f, aiStrategy = UnitData.AIStrategy.Instinct, Str = 10, Dex = 14, Con = 10, BaseMaxHp = 13, BaseAc = 13, PrimaryMainHand = new WeaponData { ItemName = "锈蚀短剑", DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Immunities = new[] { "毒素" }, Resistances = new[] { "穿刺" } },
-            new() { UnitName = "兽人狂战", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 1.0f, aiStrategy = UnitData.AIStrategy.Reckless, Morale = 10, Str = 16, Dex = 12, Con = 14, BaseMaxHp = 15, BaseAc = 13, PrimaryMainHand = new WeaponData { ItemName = "巨斧", DamageDiceCount = 1, DamageDiceSides = 12 }, Traits = new[] { "鲁莽攻击" } },
+            new() { UnitName = "哥布林射手_1", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 0.25f, aiStrategy = UnitData.AIStrategy.Cautious, Str = 8, Dex = 16, Con = 10, BaseMaxHp = 7, BaseAc = 8, Armor = new ArmorData { ItemName = "皮甲", armorType = ArmorData.ArmorType.Light, AcBonus = 2, MaxDexBonus = 99 }, PrimaryMainHand = new WeaponData { ItemName = "短弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Traits = new[] { "敏捷撤退" } },
+            new() { UnitName = "哥布林射手_2", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 0.25f, aiStrategy = UnitData.AIStrategy.Cautious, Str = 8, Dex = 16, Con = 10, BaseMaxHp = 7, BaseAc = 8, Armor = new ArmorData { ItemName = "皮甲", armorType = ArmorData.ArmorType.Light, AcBonus = 2, MaxDexBonus = 99 }, PrimaryMainHand = new WeaponData { ItemName = "短弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Traits = new[] { "敏捷撤退" } },
+            new() { UnitName = "骷髅战士", IsEnemy = true, enemyType = UnitData.EnemyType.Undead, ThreatLevel = 0.5f, aiStrategy = UnitData.AIStrategy.Instinct, Str = 10, Dex = 14, Con = 10, BaseMaxHp = 13, BaseAc = 8, Armor = new ArmorData { ItemName = "锈蚀锁甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 3, MaxDexBonus = 2 }, PrimaryMainHand = new WeaponData { ItemName = "锈蚀短剑", DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Immunities = new[] { "毒素" }, Resistances = new[] { "穿刺" } },
+            new() { UnitName = "兽人狂战", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 1.0f, aiStrategy = UnitData.AIStrategy.Reckless, Morale = 10, Str = 16, Dex = 12, Con = 14, BaseMaxHp = 15, BaseAc = 8, Armor = new ArmorData { ItemName = "兽皮甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 4, MaxDexBonus = 2 }, PrimaryMainHand = new WeaponData { ItemName = "巨斧", DamageDiceCount = 1, DamageDiceSides = 12 }, Traits = new[] { "鲁莽攻击" } },
         };
 
         int deployed = 0;
@@ -232,13 +241,25 @@ public partial class CombatScene : CombatSceneBase
             totalCr += data.ThreatLevel;
 
             if (data.Armor != null)
+            {
                 outcome.LootEntries.Add(new LootEntry(data.Armor.GetFullName(), LootEntry.LootType.Armor, 1, data.Armor.GetSellPrice(), data.Armor.GetArmorDescription()));
+                outcome.LootItems.Add(data.Armor);
+            }
             if (data.Shield != null)
+            {
                 outcome.LootEntries.Add(new LootEntry(data.Shield.GetFullName(), LootEntry.LootType.Shield, 1, data.Shield.GetSellPrice(), data.Shield.GetArmorDescription()));
+                outcome.LootItems.Add(data.Shield);
+            }
             if (data.Helmet != null)
+            {
                 outcome.LootEntries.Add(new LootEntry(data.Helmet.GetFullName(), LootEntry.LootType.Helmet, 1, data.Helmet.GetSellPrice(), data.Helmet.GetArmorDescription()));
+                outcome.LootItems.Add(data.Helmet);
+            }
             if (data.PrimaryMainHand != null && GD.Randf() < 0.5f)
+            {
                 outcome.LootEntries.Add(new LootEntry(data.PrimaryMainHand.GetFullName(), LootEntry.LootType.Weapon, 1, data.PrimaryMainHand.GetSellPrice(), data.PrimaryMainHand.GetWeaponDescription()));
+                outcome.LootItems.Add(data.PrimaryMainHand);
+            }
         }
 
         string difficulty = EquipmentGenerator.GetDifficultyFromCr(totalCr);
@@ -254,6 +275,7 @@ public partial class CombatScene : CombatSceneBase
                     : (ItemData)EquipmentGenerator.GenerateRandomArmor(null, (ItemData.Rarity)(-1), itemLevel, difficulty);
                 var lootType = generated is WeaponData ? LootEntry.LootType.Weapon : LootEntry.LootType.Armor;
                 outcome.LootEntries.Add(new LootEntry(generated.GetFullName(), lootType, 1, generated.GetSellPrice(), $"{generated.GetRarityName()} | {generated.GetAffixDescriptions()}"));
+                outcome.LootItems.Add(generated);
             }
         }
 
@@ -265,6 +287,7 @@ public partial class CombatScene : CombatSceneBase
             {
                 var c = consumableList[(int)(GD.Randf() * consumableList.Count)];
                 outcome.LootEntries.Add(new LootEntry(c.ItemName, LootEntry.LootType.Consumable, 1, c.Price, c.Description));
+                outcome.LootItems.Add(c);
             }
         }
     }

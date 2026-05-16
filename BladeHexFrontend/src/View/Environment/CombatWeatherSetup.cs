@@ -13,10 +13,10 @@ public static class CombatWeatherSetup
 {
     public static void Setup(Node3D scene, int mapWidth, int mapHeight)
     {
-        var gs = scene.GetNodeOrNull<BladeHex.Data.GlobalState>("/root/GlobalState");
-        if (gs == null || gs.CurrentWeatherType < 0) return;
+        var gs = BladeHex.Data.Globals.StateOrNull;
+        if (gs == null || gs.Weather.Type < 0) return;
 
-        var weather = (WeatherType)gs.CurrentWeatherType;
+        var weather = (WeatherType)gs.Weather.Type;
         if (weather == WeatherType.Clear) return;
 
         if (weather == WeatherType.Sandstorm)

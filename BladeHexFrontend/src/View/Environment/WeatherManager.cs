@@ -1,6 +1,6 @@
 // WeatherManager.cs
 // 天气管理器 — 控制天气状态、过渡动画、地面特效联动
-// 集成到 OverworldScene，根据季节/地形/时间驱动天气变化
+// 集成到 OverworldScene3D，根据季节/地形/时间驱动天气变化
 using Godot;
 using System;
 
@@ -8,7 +8,7 @@ namespace BladeHex.View.Environment;
 
 /// <summary>
 /// 天气管理器：管理天气状态机、过渡动画、shader uniform 更新。
-/// 作为 Node 添加到 OverworldScene 场景树中。
+/// 作为 Node 添加到 OverworldScene3D 场景树中。
 /// </summary>
 [GlobalClass]
 public partial class WeatherManager : Node

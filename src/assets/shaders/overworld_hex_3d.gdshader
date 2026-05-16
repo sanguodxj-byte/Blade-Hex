@@ -3,7 +3,7 @@
 // 世界坐标连续 UV（消除接缝和重复感）+ 六边形边缘羽化
 
 shader_type spatial;
-render_mode unshaded, cull_disabled;
+render_mode cull_disabled;
 
 // --- 地形纹理 ---
 uniform sampler2D terrain_texture : source_color, filter_linear_mipmap, repeat_enable;

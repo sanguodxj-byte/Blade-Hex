@@ -53,6 +53,9 @@ public readonly struct DamageResult
     /// <summary>攻击者武器精通升级后的新等级（未升级为 0）</summary>
     public int MasteryNewLevel { get; init; }
 
+    /// <summary>由防御方装备能力（如 thorns）反弹给攻击方的伤害</summary>
+    public int ReflectDamageToAttacker { get; init; }
+
     /// <summary>总伤害（HP + DR）— 精通 XP 以该值归因</summary>
     public int TotalDealt => HpDamage + DrDamage;
 

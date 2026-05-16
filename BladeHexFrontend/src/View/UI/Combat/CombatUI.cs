@@ -38,17 +38,27 @@ public partial class CombatUI : CanvasLayer
     private Node _spellSelect = null!;
     private CanvasLayer? _battleResult;
     private RadialMenu _radialMenu = null!;
+    private UnitInspectPanel _unitInspect = null!;
 
     // ============================================================================
     // 底部面板控件
     // ============================================================================
     private PanelContainer? _bottomPanel;
+    private HBoxContainer? _bottomHBox;
     private BladeHex.View.Unit.CharacterAvatarControl? _avatarControl;
     private Label? _weaponPrimaryLabel;
     private Label? _weaponSecondaryLabel;
     private Label? _topInfoLabel;
     private Label? _phaseLabel;
     private PanelContainer? _escMenu;
+
+    // ============================================================================
+    // 过渡动画用引用
+    // ============================================================================
+    /// <summary>底部角色面板（过渡动画用）</summary>
+    public Control? BottomPanel => _bottomPanel;
+    /// <summary>回合顺序栏（过渡动画用）</summary>
+    public Control? TurnOrderBarControl => _turnOrderBar;
 
     // ============================================================================
     // 索引字典
@@ -149,14 +159,12 @@ public partial class CombatUI : CanvasLayer
         endTurnBtn.CustomMinimumSize = new Vector2(100, 45);
         endTurnBtn.Pressed += () =>
         {
-            var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
-            audio?.PlaySfxName("ui_click");
+            BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_click");
             EmitSignal(SignalName.ActionSelected, "end_turn");
         };
         endTurnBtn.MouseEntered += () =>
         {
-            var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
-            audio?.PlaySfxName("ui_hover", -6.0f);
+            BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_hover", -6.0f);
         };
         var btnStyle = Theme.MakePanelStyle(Theme.BgSecondary, Theme.BorderFriendly, 1, Theme.RadiusMd);
         endTurnBtn.AddThemeStyleboxOverride("normal", btnStyle);
@@ -184,6 +192,7 @@ public partial class CombatUI : CanvasLayer
         var bottomHBox = new HBoxContainer();
         bottomHBox.AddThemeConstantOverride("separation", Theme.SpacingLg);
         bottomMargin.AddChild(bottomHBox);
+        _bottomHBox = bottomHBox;
 
         // 5a. 头像
         var avatarBg = _CreateCard(new Vector2(80, 80), false);
@@ -252,7 +261,7 @@ public partial class CombatUI : CanvasLayer
         mainHand.GuiInput += (ev) =>
         {
             if (ev is InputEventMouseButton mb && mb.Pressed)
-                EmitSignal(SignalName.ActionSelected, "swap_weapon");
+                EmitSignal(SignalName.ActionSelected, "switch_to_primary");
         };
         weaponVBox.AddChild(mainHand);
         _weaponPrimaryLabel = _CreateMutedLabel("主手");
@@ -263,7 +272,7 @@ public partial class CombatUI : CanvasLayer
         offHand.GuiInput += (ev) =>
         {
             if (ev is InputEventMouseButton mb && mb.Pressed)
-                EmitSignal(SignalName.ActionSelected, "swap_weapon");
+                EmitSignal(SignalName.ActionSelected, "switch_to_secondary");
         };
         weaponVBox.AddChild(offHand);
         _weaponSecondaryLabel = _CreateMutedLabel("副手");
@@ -310,6 +319,9 @@ public partial class CombatUI : CanvasLayer
         _radialMenu.ActionHovered += _OnRadialMenuActionHovered;
         AddChild(_radialMenu);
 
+        _unitInspect = new UnitInspectPanel();
+        AddChild(_unitInspect);
+
         _SetupEscMenu();
     }
 
@@ -319,6 +331,11 @@ public partial class CombatUI : CanvasLayer
         _escMenu = new PanelContainer();
         _escMenu.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _escMenu.Visible = false;
+        // 显式设置半透明背景（仅在 Visible=true 时可见）
+        var bg = new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0.5f) };
+        bg.SetBorderWidthAll(0);
+        _escMenu.AddThemeStyleboxOverride("panel", bg);
+        _escMenu.MouseFilter = Control.MouseFilterEnum.Stop;
         AddChild(_escMenu);
 
         var center = new CenterContainer();
@@ -697,6 +714,28 @@ public partial class CombatUI : CanvasLayer
             }
             _turnOrderBar?.SetUnitOrder(unitList, active);
         }
+    }
+
+    /// <summary>将小地图嵌入底部面板最右侧</summary>
+    public void EmbedMinimap(Control minimap)
+    {
+        if (_bottomHBox != null && minimap != null)
+        {
+            minimap.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+            _bottomHBox.AddChild(minimap);
+        }
+    }
+
+    /// <summary>在指定位置显示单位检视面板</summary>
+    public void ShowUnitInspect(Unit unit, Vector2 screenPos)
+    {
+        _unitInspect?.ShowForUnit(unit, screenPos);
+    }
+
+    /// <summary>隐藏单位检视面板</summary>
+    public void HideUnitInspect()
+    {
+        _unitInspect?.HidePanel();
     }
 
     // ============================================================================

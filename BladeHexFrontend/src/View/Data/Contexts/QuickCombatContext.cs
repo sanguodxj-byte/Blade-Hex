@@ -1,0 +1,33 @@
+using Godot;
+
+namespace BladeHex.Data.Contexts;
+
+/// <summary>
+/// 快速战斗配置 — 由主菜单的 QuickCombatSetup 面板写入，QuickCombatScene 读取。
+///
+/// 该上下文不参与正式存档流程，仅在主菜单 → 快速战斗这条路径上传递参数。
+/// </summary>
+[GlobalClass]
+public partial class QuickCombatContext : Resource
+{
+    /// <summary>地图模板键名，空字符串表示随机。</summary>
+    [Export] public string Template { get; set; } = "";
+
+    /// <summary>战斗规模档位（0=Mercenary, 1=Knight, 2=Lord, 3=Stronghold）。</summary>
+    [Export] public int Size { get; set; }
+
+    /// <summary>玩家方单位数量（1-6）。</summary>
+    [Export] public int PlayerCount { get; set; } = 2;
+
+    /// <summary>敌方单位数量（1-10）。</summary>
+    [Export] public int EnemyCount { get; set; } = 3;
+
+    /// <summary>敌方难度档（0=Easy, 1=Normal, 2=Hard）。</summary>
+    [Export] public int Difficulty { get; set; } = 1;
+
+    /// <summary>玩家方等级（1-120）。</summary>
+    [Export] public int PlayerLevel { get; set; } = 1;
+
+    /// <summary>敌方种类（0=人形, 1=亡灵, 2=野兽, 3=混合）。</summary>
+    [Export] public int EnemyType { get; set; }
+}

@@ -80,27 +80,92 @@ public partial class WeaponData : ItemData
         return cfg;
     }
 
-    [Export] public bool IsTwoHanded;
-    [Export] public bool IsFinesse;           // 灵巧武器：可使用敏捷替代力量
-    [Export] public bool IsRanged;            // 远程武器
     [Export] public int RangeCells { get; set; } = 1;       // 射程/触及范围
-    [Export] public bool IsLongbow;           // 长弓：高AP消耗
-    [Export] public bool IsCrossbow;          // 十字弩：高AP消耗 + 需要装填
-    [Export] public bool IsThrowing;          // 投掷武器
     [Export] public int ThrowRange { get; set; } = 3;       // 投掷射程
-    [Export] public int MaxAmmo { get; set; } = 0;          // 最大弹药/携带数 (针对投掷)
-    [Export] public bool NeedsReload;         // 需要装填
+    [Export] public int MaxAmmo { get; set; } = 0;          // 最大弹药/携带数 (0=无限)
+    [Export] public int CurrentAmmo { get; set; } = 0;      // 当前弹药数 (运行时)
     [Export] public int ApCost { get; set; } = 4;           // 攻击消耗 AP
     [Export] public int ReloadCost { get; set; } = 6;       // 装填消耗 AP
-    [Export] public bool IsBlunt;             // 钝击伤害（对亡灵全额）
-    [Export] public bool IsArmorPiercing;     // 破甲（计算命中时目标AC-2）
-    [Export] public bool IsReach;             // 长柄（近战攻击范围2格）
-    [Export] public bool IsAntiCavalry;       // 反骑兵（对冲锋目标伤害×2）
-    [Export] public bool IsSweep;             // 横扫（攻击相邻2个敌人时各-2命中）
-    [Export] public int StrRequired;          // 最低力量需求
-    [Export] public bool IsCatalyst;          // 法术触媒（法杖/魔导书）
-    [Export] public int SpellDcBonus;         // 法术DC加成（魔导书+1）
-    [Export] public bool IsDualWieldable;     // 可双持（轻巧武器）
+    [Export] public int StrRequired;                        // 最低力量需求
+    [Export] public int SpellDcBonus;                       // 法术DC加成（魔导书+1）
+
+    /// <summary>武器特性 Flags — 取代 13 个独立 bool 字段</summary>
+    [Export] public WeaponTraits Traits = WeaponTraits.None;
+
+    // ========================================
+    // 兼容性 Bool 属性（从 Traits 派生，旧代码无需修改）
+    // ========================================
+
+    public bool IsTwoHanded
+    {
+        get => Traits.Has(WeaponTraits.TwoHanded);
+        set => Traits = value ? Traits.With(WeaponTraits.TwoHanded) : Traits.Without(WeaponTraits.TwoHanded);
+    }
+    public bool IsFinesse
+    {
+        get => Traits.Has(WeaponTraits.Finesse);
+        set => Traits = value ? Traits.With(WeaponTraits.Finesse) : Traits.Without(WeaponTraits.Finesse);
+    }
+    public bool IsRanged
+    {
+        get => Traits.Has(WeaponTraits.Ranged);
+        set => Traits = value ? Traits.With(WeaponTraits.Ranged) : Traits.Without(WeaponTraits.Ranged);
+    }
+    public bool IsLongbow
+    {
+        get => Traits.Has(WeaponTraits.Longbow);
+        set => Traits = value ? Traits.With(WeaponTraits.Longbow) : Traits.Without(WeaponTraits.Longbow);
+    }
+    public bool IsCrossbow
+    {
+        get => Traits.Has(WeaponTraits.Crossbow);
+        set => Traits = value ? Traits.With(WeaponTraits.Crossbow) : Traits.Without(WeaponTraits.Crossbow);
+    }
+    public bool IsThrowing
+    {
+        get => Traits.Has(WeaponTraits.Throwing);
+        set => Traits = value ? Traits.With(WeaponTraits.Throwing) : Traits.Without(WeaponTraits.Throwing);
+    }
+    public bool NeedsReload
+    {
+        get => Traits.Has(WeaponTraits.NeedsReload);
+        set => Traits = value ? Traits.With(WeaponTraits.NeedsReload) : Traits.Without(WeaponTraits.NeedsReload);
+    }
+    public bool IsBlunt
+    {
+        get => Traits.Has(WeaponTraits.Blunt);
+        set => Traits = value ? Traits.With(WeaponTraits.Blunt) : Traits.Without(WeaponTraits.Blunt);
+    }
+    public bool IsArmorPiercing
+    {
+        get => Traits.Has(WeaponTraits.ArmorPiercing);
+        set => Traits = value ? Traits.With(WeaponTraits.ArmorPiercing) : Traits.Without(WeaponTraits.ArmorPiercing);
+    }
+    public bool IsReach
+    {
+        get => Traits.Has(WeaponTraits.Reach);
+        set => Traits = value ? Traits.With(WeaponTraits.Reach) : Traits.Without(WeaponTraits.Reach);
+    }
+    public bool IsAntiCavalry
+    {
+        get => Traits.Has(WeaponTraits.AntiCavalry);
+        set => Traits = value ? Traits.With(WeaponTraits.AntiCavalry) : Traits.Without(WeaponTraits.AntiCavalry);
+    }
+    public bool IsSweep
+    {
+        get => Traits.Has(WeaponTraits.Sweep);
+        set => Traits = value ? Traits.With(WeaponTraits.Sweep) : Traits.Without(WeaponTraits.Sweep);
+    }
+    public bool IsCatalyst
+    {
+        get => Traits.Has(WeaponTraits.Catalyst);
+        set => Traits = value ? Traits.With(WeaponTraits.Catalyst) : Traits.Without(WeaponTraits.Catalyst);
+    }
+    public bool IsDualWieldable
+    {
+        get => Traits.Has(WeaponTraits.DualWieldable);
+        set => Traits = value ? Traits.With(WeaponTraits.DualWieldable) : Traits.Without(WeaponTraits.DualWieldable);
+    }
 
     // ========================================
     // 词缀加成（运行时累加）
@@ -165,6 +230,54 @@ public partial class WeaponData : ItemData
     public int GetCritRange() => 20 - BonusCritRange;
     public int GetCritMultiplier() => 2 + BonusCritMultiplier;
     public Godot.Collections.Array<Godot.Collections.Dictionary> GetConditionalEffects() => BonusConditionalEffects;
+
+    // ========================================
+    // 弹药系统
+    // ========================================
+
+    /// <summary>该武器是否需要弹药（弓/弩/投掷）</summary>
+    public bool NeedsAmmo => IsRanged && (IsBow || IsCrossbow || IsThrowing);
+
+    /// <summary>是否为弓类武器</summary>
+    public bool IsBow => !IsCrossbow && !IsThrowing && IsRanged && !IsCatalyst;
+
+    /// <summary>获取该武器类型的默认最大弹药量</summary>
+    public int GetDefaultMaxAmmo()
+    {
+        if (IsThrowing) return 5;
+        if (IsBow) return 20;
+        if (IsCrossbow) return 18;
+        return 0;
+    }
+
+    /// <summary>获取装备箭筒后的最大弹药量（箭筒将弹药提升至固定值）</summary>
+    public int GetMaxAmmoWithQuiver()
+    {
+        if (IsBow) return 30;
+        if (IsCrossbow) return 24;
+        return GetDefaultMaxAmmo();
+    }
+
+    /// <summary>初始化弹药（hasQuiver=true 时使用箭筒提升后的弹药量）</summary>
+    public void InitializeAmmo(bool hasQuiver = false)
+    {
+        if (!NeedsAmmo) return;
+        MaxAmmo = hasQuiver ? GetMaxAmmoWithQuiver() : GetDefaultMaxAmmo();
+        CurrentAmmo = MaxAmmo;
+    }
+
+    /// <summary>消耗一发弹药，返回是否成功</summary>
+    public bool ConsumeAmmo()
+    {
+        if (!NeedsAmmo) return true;
+        if (MaxAmmo <= 0) return true; // 未初始化弹药 = 无限
+        if (CurrentAmmo <= 0) return false;
+        CurrentAmmo--;
+        return true;
+    }
+
+    /// <summary>是否还有弹药可用</summary>
+    public bool HasAmmo => !NeedsAmmo || MaxAmmo <= 0 || CurrentAmmo > 0;
 
     /// <summary>获取完整武器描述（含词缀）</summary>
     public string GetWeaponDescription()

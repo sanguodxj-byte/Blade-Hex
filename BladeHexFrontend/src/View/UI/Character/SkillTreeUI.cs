@@ -23,6 +23,12 @@ public partial class SkillTreeUI : PanelContainer
     private const float HexSize = 48.0f;
     private const float PanSpeed = 500.0f;
 
+    /// <summary>方格网格间距（节点之间的距离）</summary>
+    private const float GridSpacing = 22.0f;
+
+    /// <summary>正六边形半径（以网格单位计）— 决定六边形大小</summary>
+    private const int HexagonRadius = 20;
+
     /// <summary>节点圆半径（按类型）</summary>
     private const float RadiusSmall = 8.0f;
     private const float RadiusBig = 13.0f;
@@ -231,8 +237,62 @@ public partial class SkillTreeUI : PanelContainer
 
     private Vector2 NodeToPixel(SkillNodeData node)
     {
-        var px = _coord.HexToPixel(node.GridPosition.X, node.GridPosition.Y);
-        return _center + px * _zoom + _panOffset;
+        return GridToPixel(node.GridPosition);
+    }
+
+    /// <summary>
+    /// 网格坐标 → 像素坐标
+    /// 使用三角形格点变换：将整数 (x, y) 映射到形成正六边形的位置
+    /// X 间距 = S, Y 行高 = S * √3/2, 奇数行 X 偏移 S/2
+    /// 这样所有相邻点等距（正三角形格），整体形状为正六边形
+    /// </summary>
+    private Vector2 GridToPixel(Vector2I gridPos)
+    {
+        float px = gridPos.X * GridSpacing + gridPos.Y * GridSpacing * 0.5f;
+        float py = gridPos.Y * GridSpacing * Mathf.Sqrt(3.0f) / 2.0f;
+        return _center + new Vector2(px, py) * _zoom + _panOffset;
+    }
+
+    /// <summary>
+    /// 判断网格点 (x, y) 是否在以原点为中心、半径 radius 的正六边形内
+    /// 使用 cube 坐标距离：max(|x|, |y|, |x+y|) ≤ radius
+    /// 配合 GridToPixel 的三角形格变换，几何上是正六边形
+    /// </summary>
+    private static bool IsInsideHexagon(int x, int y, int radius)
+    {
+        int z = -x - y;
+        return Math.Abs(x) <= radius && Math.Abs(y) <= radius && Math.Abs(z) <= radius;
+    }
+
+    /// <summary>获取所有在正六边形内的网格点</summary>
+    private static List<Vector2I> GetHexagonGridPoints(int radius)
+    {
+        var points = new List<Vector2I>();
+        for (int x = -radius; x <= radius; x++)
+            for (int y = -radius; y <= radius; y++)
+                if (IsInsideHexagon(x, y, radius))
+                    points.Add(new Vector2I(x, y));
+        return points;
+    }
+
+    /// <summary>三角形格的 6 个相邻方向（每对相邻点等距）</summary>
+    private static readonly Vector2I[] GridDirections =
+    {
+        new(1, 0),   new(-1, 0),    // 水平
+        new(0, 1),   new(0, -1),    // 斜下/斜上
+        new(1, -1),  new(-1, 1),    // 反斜
+    };
+
+    private static List<Vector2I> GetGridNeighbors(Vector2I pos, int radius)
+    {
+        var result = new List<Vector2I>();
+        foreach (var dir in GridDirections)
+        {
+            var nb = pos + dir;
+            if (IsInsideHexagon(nb.X, nb.Y, radius))
+                result.Add(nb);
+        }
+        return result;
     }
 
     private void RebuildPositions()
@@ -382,6 +442,10 @@ public partial class SkillTreeUI : PanelContainer
 
     private void DrawConnections()
     {
+        // 1. 绘制六边形外轮廓（坐标系边界，不画内部网格连线）
+        _DrawHexagonOutline();
+
+        // 2. 绘制实际节点之间的技能连线（手工定义的 Neighbors）
         foreach (var pair in _treeData!.Nodes)
         {
             string nodeId = pair.Key;
@@ -399,22 +463,79 @@ public partial class SkillTreeUI : PanelContainer
                 float lineWidth;
                 if (fa && ta)
                 {
-                    lineColor = new Color(0.8f, 0.85f, 1.0f, 0.8f);
-                    lineWidth = 2.0f * _zoom;
+                    lineColor = new Color(0.8f, 0.85f, 1.0f, 0.9f);
+                    lineWidth = 2.5f * _zoom;
                 }
                 else if (fa || ta)
                 {
-                    lineColor = new Color(0.5f, 0.5f, 0.6f, 0.5f);
-                    lineWidth = 1.5f * _zoom;
+                    lineColor = new Color(0.5f, 0.5f, 0.6f, 0.6f);
+                    lineWidth = 1.8f * _zoom;
                 }
                 else
                 {
-                    lineColor = new Color(0.25f, 0.25f, 0.3f, 0.35f);
-                    lineWidth = 1.0f * _zoom;
+                    lineColor = new Color(0.35f, 0.35f, 0.42f, 0.5f);
+                    lineWidth = 1.2f * _zoom;
                 }
 
                 _drawContainer.DrawLine(from, to, lineColor, lineWidth);
             }
+        }
+    }
+
+    /// <summary>绘制方格网格点阵（仅六边形内部），所有相邻点用细线相连</summary>
+    private void _DrawGridLattice()
+    {
+        var points = GetHexagonGridPoints(HexagonRadius);
+        var pointSet = new HashSet<Vector2I>(points);
+        var latticeColor = new Color(0.18f, 0.2f, 0.25f, 0.35f);
+        float lineWidth = 0.8f * _zoom;
+
+        // 用 HashSet 避免重复绘制（每条边只画一次）
+        var drawnEdges = new HashSet<(Vector2I, Vector2I)>();
+
+        foreach (var p in points)
+        {
+            var pPx = GridToPixel(p);
+            foreach (var dir in GridDirections)
+            {
+                var nb = p + dir;
+                if (!pointSet.Contains(nb)) continue;
+                // 规范化边的两端避免重复
+                var edge = string.Compare($"{p.X},{p.Y}", $"{nb.X},{nb.Y}") < 0
+                    ? (p, nb) : (nb, p);
+                if (drawnEdges.Contains(edge)) continue;
+                drawnEdges.Add(edge);
+
+                var nbPx = GridToPixel(nb);
+                _drawContainer.DrawLine(pPx, nbPx, latticeColor, lineWidth);
+            }
+        }
+
+        // 绘制六边形外轮廓（粗线突出边界）
+        _DrawHexagonOutline();
+    }
+
+    /// <summary>绘制正六边形的外轮廓（以六边形顶点连线）</summary>
+    private void _DrawHexagonOutline()
+    {
+        // 六边形 6 个顶点（以方格坐标表示）
+        Vector2I[] vertices = new[]
+        {
+            new Vector2I(HexagonRadius, 0),
+            new Vector2I(0, HexagonRadius),
+            new Vector2I(-HexagonRadius, HexagonRadius),
+            new Vector2I(-HexagonRadius, 0),
+            new Vector2I(0, -HexagonRadius),
+            new Vector2I(HexagonRadius, -HexagonRadius),
+        };
+
+        var outlineColor = new Color(0.4f, 0.4f, 0.5f, 0.6f);
+        float lineWidth = 1.5f * _zoom;
+        for (int i = 0; i < 6; i++)
+        {
+            var a = GridToPixel(vertices[i]);
+            var b = GridToPixel(vertices[(i + 1) % 6]);
+            _drawContainer.DrawLine(a, b, outlineColor, lineWidth);
         }
     }
 
@@ -517,8 +638,7 @@ public partial class SkillTreeUI : PanelContainer
         var r = _characterTree.TryActivateNode(_selectedNodeId);
         if ((bool)r["success"])
         {
-            var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
-            audio?.PlaySfxName("char_node_activate");
+            BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("char_node_activate");
             RefreshAfterChange((string)r["message"]);
         }
         else
@@ -533,8 +653,7 @@ public partial class SkillTreeUI : PanelContainer
         var r = _characterTree.TryJumpActivate(_selectedNodeId);
         if ((bool)r["success"])
         {
-            var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
-            audio?.PlaySfxName("char_node_activate");
+            BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("char_node_activate");
             RefreshAfterChange((string)r["message"]);
         }
         else

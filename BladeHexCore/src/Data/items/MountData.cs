@@ -25,25 +25,60 @@ public partial class MountData : Resource
     [Export] public int Price { get; set; } = 20;
     [Export] public string Description { get; set; } = "";
 
+    /// <summary>
+    /// 装备能力组件 — 从 SpecialTraits 字符串数组转换而来。
+    /// 加新坐骑能力时只需在 BuildAbilitiesFromTraits 中添加映射。
+    /// </summary>
+    public System.Collections.Generic.List<BladeHex.Combat.Abilities.EquipmentAbility> Abilities { get; }
+        = new();
+
+    /// <summary>从 SpecialTraits 字符串构建能力组件（在工厂方法或 JSON 加载后调用一次）</summary>
+    public void BuildAbilitiesFromTraits()
+    {
+        Abilities.Clear();
+        if (SpecialTraits == null) return;
+
+        foreach (var trait in SpecialTraits)
+        {
+            BladeHex.Combat.Abilities.EquipmentAbility? ab = trait switch
+            {
+                "immune_fear" => new BladeHex.Combat.Abilities.ImmunityAbility { AbilityId = "immune_fear", ImmunityType = "fear" },
+                "forest_walk" => new BladeHex.Combat.Abilities.TerrainTraitAbility { AbilityId = "forest_walk", TerrainTrait = "forest_walk" },
+                "stealth_no_break" => new BladeHex.Combat.Abilities.TerrainTraitAbility { AbilityId = "stealth_no_break", TerrainTrait = "stealth_no_break" },
+                "extra_damage_1d4" => new BladeHex.Combat.Abilities.ExtraDamageDiceAbility { AbilityId = "extra_damage_1d4", DiceCount = 1, DiceSides = 4 },
+                "flanking_bonus" => BladeHex.Combat.Abilities.EquipmentAbilityRegistry.Create("flanking_bonus", 1),
+                _ => null,
+            };
+            if (ab != null) Abilities.Add(ab);
+        }
+    }
+
     // ========================================
     // 预定义坐骑工厂
     // ========================================
 
-    public static MountData[] GetAllMounts() =>
-    [
-        CreatePackHorse(),
-        CreateWarHorse(),
-        CreateEliteWarHorse(),
-        CreateElfStag(),
-        CreateDwarfWarBear(),
-        CreateWolf(),
-    ];
+    public static MountData[] GetAllMounts()
+    {
+        var arr = new MountData[]
+        {
+            CreatePackHorse(),
+            CreateWarHorse(),
+            CreateEliteWarHorse(),
+            CreateElfStag(),
+            CreateDwarfWarBear(),
+            CreateWolf(),
+        };
+        foreach (var m in arr) m.BuildAbilitiesFromTraits();
+        return arr;
+    }
 
     public static MountData GetMountById(string id)
     {
         foreach (var m in GetAllMounts())
             if (m.MountId == id) return m;
-        return CreatePackHorse();
+        var fallback = CreatePackHorse();
+        fallback.BuildAbilitiesFromTraits();
+        return fallback;
     }
 
     private static MountData CreatePackHorse() => new()

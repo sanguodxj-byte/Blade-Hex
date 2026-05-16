@@ -29,7 +29,7 @@ public static class CombatStats
     // ========================================
 
     /// <summary>
-    /// 最大 HP = 基础HP + CON修正 × 等级 + 装备HP加成 + 饰品HP加成
+    /// 最大 HP = 基础HP + CON修正 × 等级 + 装备HP加成 + 饰品HP加成 + 能力百分比加成
     /// </summary>
     public static int GetMaxHp(UnitData data)
     {
@@ -37,6 +37,12 @@ public static class CombatStats
         int hp = RPGRuleEngine.CalculateMaxHp(data.BaseMaxHp, data.Con, data.Level);
         hp += data.GetEquipmentHpBonus();
         hp += data.AccessoryHpBonus;
+
+        // 装备能力组件：HP 百分比加成（如 extra_hp_percent）
+        float hpMultBonus = BladeHex.Combat.Abilities.UnitAbilities.GetTotalMaxHpMultiplierBonus(data);
+        if (hpMultBonus > 0f)
+            hp = (int)(hp * (1f + hpMultBonus));
+
         return Math.Max(1, hp);
     }
 
@@ -119,7 +125,7 @@ public static class CombatStats
     /// </summary>
     public static int GetAc(UnitData data, bool usingPrimaryWeapon)
     {
-        if (data == null) return 10;
+        if (data == null) return 8;
         int ac = data.BaseAc;
 
         // DEX 修正（受护甲 MaxDexBonus 限制）

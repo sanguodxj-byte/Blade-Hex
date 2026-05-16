@@ -1,6 +1,6 @@
 // HexOverworldGrid.cs
 // 六边形大地图网格管理器 — 存储和查询整个大地图的瓦片数据
-// 纯数据容器, 渲染由 HexOverworldRenderer 负责
+// 纯数据容器, 渲染由 HexOverworldRenderer3D 负责
 using Godot;
 using System.Collections.Generic;
 

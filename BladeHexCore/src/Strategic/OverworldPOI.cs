@@ -304,153 +304,26 @@ public void OnRaidPartyDestroyed()
     }
 
     // ========================================
-    // 战斗桥梁方法 — POI 防御与围攻
+    // 战斗桥梁方法 — POI 防御与围攻（委托到 POICombatBridge）
     // ========================================
 
     /// <summary>
     /// 生成防御部署 — 根据 POI 类型和驻军配置生成防御战斗单位
     /// </summary>
     public BattleUnitDeployment[] GenerateDefenseDeployment()
-    {
-        var deployments = new System.Collections.Generic.List<BattleUnitDeployment>();
-
-        switch (PoiTypeEnum)
-        {
-            case POIType.Town:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "town_militia",
-                    Count = Math.Max(1, GarrisonCurrent / 5),
-                    LevelOverride = 1,
-                    DeployZone = "front_line",
-                });
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "town_guard",
-                    Count = Math.Max(1, GarrisonCurrent / 10),
-                    LevelOverride = 2,
-                    DeployZone = "back_line",
-                });
-                break;
-
-            case POIType.Village:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "village_militia",
-                    Count = Math.Max(1, GarrisonCurrent / 5),
-                    LevelOverride = 1,
-                    DeployZone = "front_line",
-                });
-                break;
-
-            case POIType.Castle:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "castle_knight",
-                    Count = Math.Max(1, GarrisonCurrent / 10),
-                    LevelOverride = CastleDefenseLevel + 2,
-                    DeployZone = "front_line",
-                });
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "castle_archer",
-                    Count = Math.Max(1, GarrisonCurrent / 5),
-                    LevelOverride = CastleDefenseLevel,
-                    DeployZone = "back_line",
-                });
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "castle_infantry",
-                    Count = Math.Max(1, GarrisonCurrent / 3),
-                    LevelOverride = CastleDefenseLevel + 1,
-                    DeployZone = "front_line",
-                });
-                break;
-
-            case POIType.Settlement:
-                var race = SettlementRaceValue;
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = race switch
-                    {
-                        SettlementRace.Goblin => "goblin_warrior",
-                        SettlementRace.Kobold => "kobold_trapper",
-                        SettlementRace.Minotaur => "minotaur_warrior",
-                        SettlementRace.ShadowCult => "cultist",
-                        _ => "goblin_warrior",
-                    },
-                    Count = Math.Max(1, (int)(ThreatLevel * 10)),
-                    LevelOverride = (int)(ThreatLevel * 3),
-                    DeployZone = "front_line",
-                });
-                break;
-
-            case POIType.Lair:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = LairTypeValue switch
-                    {
-                        LairType.DragonLair => "dragon",
-                        LairType.AncientTomb => "undead_guardian",
-                        LairType.Ruins => "construct",
-                        LairType.GolemForge => "iron_golem",
-                        _ => "unknown_boss",
-                    },
-                    Count = 1,
-                    LevelOverride = LairLevel,
-                    DeployZone = "front_line",
-                });
-                break;
-        }
-
-        return deployments.ToArray();
-    }
+        => POICombatBridge.GenerateDefenseDeployment(this);
 
     /// <summary>
     /// 应用围攻结果 — 更新 POI 状态
     /// </summary>
     public void ApplySiegeOutcome(BattleOutcome outcome)
-    {
-        if (outcome == null) return;
-
-        // 结束围攻状态
-        EndSiege();
-
-        if (outcome.AttackerWon)
-        {
-            // POI 被攻占
-            OwningFaction = "hostile"; // 或由 BattleOutcome 指定
-            Prosperity = Math.Max(10, outcome.NewProsperity);
-            GarrisonCurrent = outcome.NewGarrisonSize;
-        }
-        else
-        {
-            // 防御成功，但驻军受损
-            int losses = (int)(GarrisonCurrent * outcome.DefenderLossPercent);
-            GarrisonCurrent = Math.Max(0, GarrisonCurrent - losses);
-        }
-    }
+        => POICombatBridge.ApplySiegeOutcome(this, outcome);
 
     /// <summary>
     /// 获取 POI 的防御力量（用于 AI 评估）
     /// </summary>
     public float GetDefensePower()
-    {
-        float basePower = PoiTypeEnum switch
-        {
-            POIType.Castle => CastleDefenseLevel * 10 + GarrisonCurrent * 2.0f,
-            POIType.Town => GarrisonCurrent * 1.5f,
-            POIType.Village => GarrisonCurrent * 1.0f,
-            POIType.Settlement => ThreatLevel * 15,
-            POIType.Lair => LairLevel * 20,
-            _ => 5.0f,
-        };
-
-        // 围攻加成
-        if (IsUnderSiege) basePower *= 0.8f;
-
-        return basePower;
-}
+        => POICombatBridge.GetDefensePower(this);
 
 // ========================================
 // 序列化

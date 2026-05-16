@@ -19,6 +19,10 @@ public partial class QuickCombatSetup : CanvasLayer
     private Label _enemyCountLabel = null!;
     private OptionButton _difficultyOption = null!;
     private OptionButton _weatherOption = null!;
+    private HSlider _levelSlider = null!;
+    private Label _levelLabel = null!;
+    private OptionButton _enemyTypeOption = null!;
+    private OptionButton _templateOption = null!;
 
     public override void _Ready()
     {
@@ -130,6 +134,45 @@ public partial class QuickCombatSetup : CanvasLayer
         _difficultyOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_difficultyOption);
 
+        // 等级
+        AddLabel(grid, "角色等级");
+        var lvlHbox = new HBoxContainer();
+        lvlHbox.AddThemeConstantOverride("separation", 10);
+        _levelSlider = new HSlider { MinValue = 1, MaxValue = 120, Value = 1, Step = 1, CustomMinimumSize = new Vector2(180, 0) };
+        _levelLabel = new Label { Text = "1" };
+        _levelLabel.AddThemeFontSizeOverride("font_size", 16);
+        _levelSlider.ValueChanged += (v) => _levelLabel.Text = ((int)v).ToString();
+        lvlHbox.AddChild(_levelSlider);
+        lvlHbox.AddChild(_levelLabel);
+        grid.AddChild(lvlHbox);
+
+        // 敌方种类
+        AddLabel(grid, "敌方种类");
+        _enemyTypeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
+        _enemyTypeOption.AddItem("人形", 0);
+        _enemyTypeOption.AddItem("亡灵", 1);
+        _enemyTypeOption.AddItem("野兽", 2);
+        _enemyTypeOption.AddItem("混合", 3);
+        _enemyTypeOption.Selected = 0;
+        _enemyTypeOption.AddThemeFontSizeOverride("font_size", 15);
+        grid.AddChild(_enemyTypeOption);
+
+        // 地形模板
+        AddLabel(grid, "战斗地形");
+        _templateOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
+        _templateOption.AddItem("随机", 0);
+        _templateOption.AddItem("平原旷野", 1);
+        _templateOption.AddItem("森林伏击", 2);
+        _templateOption.AddItem("山间隘口", 3);
+        _templateOption.AddItem("沼泽遭遇", 4);
+        _templateOption.AddItem("海岸伏击", 5);
+        _templateOption.AddItem("沙漠冲突", 6);
+        _templateOption.AddItem("村庄防御", 7);
+        _templateOption.AddItem("遗迹探索", 8);
+        _templateOption.Selected = 0;
+        _templateOption.AddThemeFontSizeOverride("font_size", 15);
+        grid.AddChild(_templateOption);
+
         // 天气
         AddLabel(grid, "天气");
         _weatherOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
@@ -160,17 +203,30 @@ public partial class QuickCombatSetup : CanvasLayer
         buttons.AddChild(start);
     }
 
+    private static readonly string[] TemplateKeys =
+    {
+        "", "plain_field", "forest_ambush", "mountain_pass",
+        "swamp_battle", "coastal_ambush", "desert_skirmish",
+        "village_defense", "ruins_exploration",
+    };
+
     private void OnStartPressed()
     {
-        var gs = GetNode<GlobalState>("/root/GlobalState");
-        gs.QuickCombatSize = _sizeOption.Selected;
-        gs.QuickCombatPlayerCount = (int)_playerCountSlider.Value;
-        gs.QuickCombatEnemyCount = (int)_enemyCountSlider.Value;
-        gs.QuickCombatDifficulty = _difficultyOption.Selected;
+        var gs = BladeHex.Data.Globals.State;
+        gs.QuickCombat.Size = _sizeOption.Selected;
+        gs.QuickCombat.PlayerCount = (int)_playerCountSlider.Value;
+        gs.QuickCombat.EnemyCount = (int)_enemyCountSlider.Value;
+        gs.QuickCombat.Difficulty = _difficultyOption.Selected;
+        gs.QuickCombat.PlayerLevel = (int)_levelSlider.Value;
+        gs.QuickCombat.EnemyType = _enemyTypeOption.Selected;
 
-        // 天气：0=晴, 1=雨, 2=雪, 3=沙暴 → 映射到 WeatherType (-1, 0, 1, 2)
-        gs.CurrentWeatherType = _weatherOption.Selected - 1;
-        gs.CurrentWeatherIntensity = _weatherOption.Selected > 0 ? 0.7f : 0.0f;
+        // 地形模板
+        int tplIdx = _templateOption.Selected;
+        gs.QuickCombat.Template = tplIdx < TemplateKeys.Length ? TemplateKeys[tplIdx] : "";
+
+        // 天气
+        gs.Weather.Type = _weatherOption.Selected - 1;
+        gs.Weather.Intensity = _weatherOption.Selected > 0 ? 0.7f : 0.0f;
 
         HidePanel();
         EmitSignal(SignalName.StartCombat);

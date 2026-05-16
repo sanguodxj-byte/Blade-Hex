@@ -12,14 +12,16 @@ using BladeHex.Map;
 namespace BladeHex.View.Map;
 
 /// <summary>
-/// 战斗网格 MultiMesh 合批管理器 — 单例模式
+/// [Scene Service] 战斗网格 MultiMesh 合批管理器。
+///
+/// <para>所属场景：<see cref="BladeHex.Map.HexGrid"/>（每个 HexGrid 持有一个）。</para>
+/// <para>生命周期：随 HexGrid 创建与销毁。</para>
+/// <para>访问方式：<see cref="HexCell.Batcher"/> 注入引用。</para>
+/// <para>职责：按 (TerrainType, Elevation) 将 HexCell 合并到 MultiMeshInstance3D，draw call 从 N×格子数 降到 桶数 (&lt; 30)。</para>
 /// </summary>
 [GlobalClass]
 public partial class HexCellMultiMeshBatcher : Node3D
 {
-    /// <summary>全局单例实例，由 HexGrid 在创建时赋值</summary>
-    public static HexCellMultiMeshBatcher? Instance { get; set; }
-
     // ============================================================================
     // 内部数据结构
     // ============================================================================

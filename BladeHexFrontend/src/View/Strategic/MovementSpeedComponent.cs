@@ -38,6 +38,9 @@ public partial class MovementSpeedComponent : Resource
     /// <summary>玩家阵营 ID（用于 ZoC 敌对判定）</summary>
     public string PlayerFaction { get; set; } = "";
 
+    /// <summary>天气移速修正因子（由外部天气系统设置，1.0=无影响）</summary>
+    public float WeatherSpeedFactor { get; set; } = 1.0f;
+
     // ========================================
     // 速度计算
     // ========================================
@@ -65,7 +68,10 @@ public partial class MovementSpeedComponent : Resource
         // 6. 技能盘修正
         speed *= GetSkillFactor();
 
-        // 7. 敌对 ZoC 惩罚（最后施加，不叠加）
+        // 7. 天气修正
+        speed *= WeatherSpeedFactor;
+
+        // 8. 敌对 ZoC 惩罚（最后施加，不叠加）
         speed *= GetZocFactor(position);
 
         // 保底：最低不低于基础速度的20%
@@ -84,6 +90,7 @@ public partial class MovementSpeedComponent : Resource
             { "encumbrance", GetEncumbranceFactor() },
             { "mount", GetMountFactor() },
             { "skill", GetSkillFactor() },
+            { "weather", WeatherSpeedFactor },
             { "zoc_penalty", GetZocFactor(position) },
             { "final", CalculateSpeed(position) }
         };

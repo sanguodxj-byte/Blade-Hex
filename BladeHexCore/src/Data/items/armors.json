@@ -1,0 +1,18 @@
+[
+  { "id": "cloth", "name": "布衣", "type": "Light", "dr": 0, "max_dex": 99, "ap_penalty": 0, "price": 5 },
+  { "id": "mage_robe", "name": "法师长袍", "type": "Light", "dr": 3, "max_dex": 99, "ap_penalty": 0, "price": 50 },
+  { "id": "leather", "name": "皮甲", "type": "Light", "dr": 6, "max_dex": 99, "ap_penalty": 0, "price": 45 },
+  { "id": "studded_leather", "name": "镶钉皮甲", "type": "Medium", "dr": 8, "max_dex": 4, "ap_penalty": 1, "price": 80 },
+  { "id": "chain_mail", "name": "链甲", "type": "Medium", "dr": 11, "max_dex": 3, "ap_penalty": 2, "price": 150 },
+  { "id": "half_plate", "name": "半板甲", "type": "Heavy", "dr": 15, "max_dex": 1, "ap_penalty": 4, "price": 300 },
+  { "id": "full_plate", "name": "全板甲", "type": "Heavy", "dr": 18, "max_dex": 0, "ap_penalty": 5, "price": 600 },
+  { "id": "light_wooden_shield", "name": "轻木盾", "type": "Shield", "dr": 3, "ap_penalty": 0, "price": 25 },
+  { "id": "infantry_round_shield", "name": "步兵圆盾", "type": "Shield", "dr": 4, "ap_penalty": 0, "price": 50 },
+  { "id": "infantry_heavy_shield", "name": "步兵重盾", "type": "Shield", "dr": 5, "ap_penalty": 1, "price": 80 },
+  { "id": "knight_shield", "name": "骑士盾", "type": "Shield", "dr": 6, "ap_penalty": 1, "price": 120 },
+  { "id": "legion_tower_shield", "name": "军团塔盾", "type": "Shield", "dr": 8, "ap_penalty": 2, "price": 200 },
+  { "id": "leather_cap", "name": "皮帽", "type": "Light", "dr": 2, "ap_penalty": 0, "price": 15, "slot": "Helmet" },
+  { "id": "iron_helm", "name": "铁盔", "type": "Medium", "dr": 4, "ap_penalty": 0, "price": 60, "slot": "Helmet" },
+  { "id": "great_helm", "name": "大头盔", "type": "Heavy", "dr": 6, "ap_penalty": 1, "price": 120, "slot": "Helmet" },
+  { "id": "knight_helm", "name": "骑士全盔", "type": "Heavy", "dr": 8, "ap_penalty": 1, "price": 200, "slot": "Helmet" }
+]

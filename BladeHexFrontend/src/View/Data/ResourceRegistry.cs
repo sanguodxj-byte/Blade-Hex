@@ -216,6 +216,18 @@ public static class ResourceRegistry
 
     private static readonly string[] DefaultIconDirs =
     {
+        // 新资产目录（res://assets/generated_*）
+        "res://assets/generated_weapons",
+        "res://assets/generated_armor",
+        "res://assets/generated_helmets",
+        "res://assets/generated_shields",
+        "res://assets/generated_staves",
+        "res://assets/generated_spellbooks",
+        "res://assets/generated_consumables",
+        "res://assets/generated_class_icons",
+        "res://assets/generated_skill_icons",
+        "res://assets/generated_ui_icons",
+        // 旧路径（兼容）
         "res://src/assets/generated/class_icons",
         "res://src/assets/generated/accessories",
         "res://src/assets/generated/armor",

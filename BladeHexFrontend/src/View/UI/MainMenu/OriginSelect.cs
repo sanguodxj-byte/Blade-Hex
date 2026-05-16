@@ -2,9 +2,15 @@
 // 玩家出身选择 — 两阶段：
 // 阶段1：左插图+右侧"你是谁？"（种族+名字+性别）
 // 阶段2：左插图+右侧问答
+//
+// 数据外置：问答内容、属性修正、物品奖励、插图 ID 全部来自
+// res://BladeHexCore/src/Data/origin/origin_questions.json
+// 加载器：BladeHex.Data.Origin.OriginQuestionLoader
 using Godot;
 using System.Collections.Generic;
+using System.Linq;
 using BladeHex.Data;
+using BladeHex.Data.Origin;
 using BladeHex.Strategic;
 using BladeHex.UI.Loading;
 
@@ -37,9 +43,9 @@ public partial class OriginSelect : CanvasLayer
     private readonly List<string> _items = new();
 
     private record AnswerRecord(string Question, string Choice, Dictionary<string, int> Mods);
-    private List<QuestionData> _questions = new();
-    private record QuestionData(string Text, List<ChoiceData> Choices);
-    private record ChoiceData(string Text, string Summary, Dictionary<string, int> Mods);
+
+    /// <summary>加载自 origin_questions.json 的题目列表，按种族切换时刷新。</summary>
+    private List<OriginQuestion> _questions = new();
 
     // ── 常量 ──
     private const string IllustBase = "res://assets/generated_origin_illust/";
@@ -207,7 +213,7 @@ public partial class OriginSelect : CanvasLayer
                 _selectedRace = captured;
                 _UpdateRaceIllust();
                 // 播放种族专属 BGM
-                var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
+                var audio = BladeHex.Data.Globals.AudioOrNull;
                 audio?.PlayRaceBgm(_GetRaceId(captured), 1.5f);
             };
             _AttachSfx(btn);
@@ -474,218 +480,51 @@ public partial class OriginSelect : CanvasLayer
         _itemLabel.Text = _items.Count == 0 ? "（空）" : string.Join("\n", _items);
     }
 
-    private void _OnChoiceSelected(ChoiceData choice)
+    private void _OnChoiceSelected(OriginChoice choice)
     {
-        foreach (var kv in choice.Mods)
-            _attrs[kv.Key] += kv.Value;
-        _answers.Add(new AnswerRecord(_questions[_currentQuestion].Text, choice.Summary, choice.Mods));
+        foreach (var kv in choice.AttrMods)
+            if (_attrs.ContainsKey(kv.Key))
+                _attrs[kv.Key] += kv.Value;
+        _answers.Add(new AnswerRecord(_questions[_currentQuestion].Text, choice.Summary, choice.AttrMods));
 
-        // 添加选项对应的物品
-        if (ChoiceItems.TryGetValue(choice.Summary, out var item))
-            _items.Add(item);
+        // 添加选项对应的物品（从 JSON 配置直接读，不再依赖 Summary 查表）
+        if (!string.IsNullOrEmpty(choice.ItemReward))
+            _items.Add(choice.ItemReward);
 
-        _UpdateChoiceIllust(choice.Summary);
+        // 记录伙伴选择（companion 题目的选项标记 IsCompanion=true）
+        if (choice.IsCompanion)
+            _companionChoice = choice.Summary;
+
+        _UpdateChoiceIllust(choice);
         _currentQuestion++;
         _RefreshQuestion();
     }
 
-    // 选项 → 起始物品 映射
-    private static readonly Dictionary<string, string> ChoiceItems = new()
-    {
-        // 人类童年
-        ["田间劳作"] = "镰刀",
-        ["师从学者"] = "羊皮纸笔记",
-        ["街巷求生"] = "破旧匕首",
-        ["神殿侍奉"] = "圣水瓶",
-        // 人类城镇
-        ["港口城市"] = "海图",
-        ["边境要塞"] = "锁子甲片",
-        ["学院城"] = "古籍",
-        ["偏远山村"] = "猎弓",
-        // 人类职业
-        ["铁匠学徒"] = "铁锤",
-        ["猎人向导"] = "兽皮",
-        ["商队护卫"] = "短剑",
-        ["抄写员"] = "墨水瓶",
-        // 精灵童年
-        ["林间嬉戏"] = "木叶护符",
-        ["聆听史诗"] = "精灵歌谣集",
-        ["星辰之术"] = "星象盘",
-        ["月下剑舞"] = "训练用细剑",
-        // 精灵青春
-        ["剑舞修行"] = "精灵细剑",
-        ["奥术研究"] = "奥术卷轴",
-        ["世界树冥想"] = "世界树叶",
-        ["游历人间"] = "人类货币若干",
-        // 精灵族人评价
-        ["天赋弓手"] = "精灵长弓",
-        ["离经叛道"] = "破损徽记",
-        ["沉默观察者"] = "观察笔记",
-        ["精灵工匠"] = "魔法工具",
-        // 矮人童年
-        ["炉旁学徒"] = "小铁锤",
-        ["矿洞拣石"] = "矿石样本",
-        ["抄录卢恩"] = "卢恩石板",
-        ["酒窖偷酒"] = "酒囊",
-        // 矮人氏族
-        ["铸造氏族"] = "氏族战锤",
-        ["矿工氏族"] = "矿工镐",
-        ["符文氏族"] = "符文护符",
-        ["酿酒氏族"] = "上等矮人麦酒",
-        // 矮人战斧
-        ["自幼习武"] = "短斧",
-        ["成年礼"] = "战斧",
-        ["知识为刃"] = "石板典籍",
-        ["被迫应战"] = "实用工兵斧",
-        // 半兽人童年
-        ["拳头立威"] = "兽牙项链",
-        ["荒野独行"] = "粗制猎弓",
-        ["藏身村庄"] = "母亲的护身符",
-        ["自小流浪"] = "破布包袱",
-        // 半兽人地位
-        ["拳斗胜者"] = "战斗护腕",
-        ["猎熊者"] = "熊皮披风",
-        ["诡计者"] = "毒药小瓶",
-        ["被驱逐者"] = "残破图腾",
-        // 半兽人血脉
-        ["克制怒火"] = "冥想念珠",
-        ["拥抱狂暴"] = "战吼号角",
-        ["融入社会"] = "整洁衣服",
-        ["血脉冲突"] = "双面徽章",
-        // 半精灵童年
-        ["精灵森林"] = "精灵护身符",
-        ["人类村庄"] = "人类护身符",
-        ["两边轮住"] = "双语手册",
-        ["独自长大"] = "自制弹弓",
-        // 半精灵亲近
-        ["精灵血脉"] = "精灵短弓",
-        ["人类血脉"] = "人类短剑",
-        ["独行者"] = "孤狼徽记",
-        ["调停者"] = "双族信物",
-        // 半精灵天赋
-        ["双重体质"] = "夜行斗篷",
-        ["读心直觉"] = "占卜骨签",
-        ["跨文化魅力"] = "鲁特琴",
-        ["灵巧创造"] = "工艺工具",
-        // 离别（各种族都有）
-        ["战火驱逐"] = "破损盾牌",
-        ["求知欲望"] = "旅行笔记",
-        ["复仇之路"] = "目标画像",
-        ["命运召唤"] = "神秘符记",
-        ["古林之债"] = "焦黑树枝",
-        ["追寻真相"] = "残篇手稿",
-        ["渴望炽烈"] = "人类纪念品",
-        ["星辰指引"] = "星辰罗盘",
-        ["圣物失窃"] = "圣物拓本",
-        ["失落矿脉"] = "古老矿图",
-        ["长老指引"] = "长老信物",
-        ["追讨仇家"] = "通缉令",
-        ["血染草原"] = "酋长牙坠",
-        ["图腾召唤"] = "祖灵骨笛",
-        ["厌倦争斗"] = "和平烟杆",
-        ["传说猎物"] = "猎物足印拓本",
-        ["因爱仇恨"] = "信物残片",
-        ["寻找归宿"] = "旅行地图",
-        ["血脉召唤"] = "古老吊坠",
-        ["证明自己"] = "干粮包",
-    };
+    // 选项数据（题目、属性修正、物品奖励、插图 ID）来自
+    // res://BladeHexCore/src/Data/origin/origin_questions.json
+    // 加载器：BladeHex.Data.Origin.OriginQuestionLoader
 
-    // ════════════════════════════════════════════════════════════════
-    // 插图
-    // ════════════════════════════════════════════════════════════════
-    private static readonly Dictionary<string, string> ChoiceIllust = new()
+    private void _UpdateChoiceIllust(OriginChoice choice)
     {
-        // ── 人类 ──
-        ["田间劳作"] = "human_childhood_farm",
-        ["师从学者"] = "human_childhood_scholar",
-        ["街巷求生"] = "human_childhood_street",
-        ["神殿侍奉"] = "human_childhood_temple",
-        ["港口城市"] = "human_port_city",
-        ["边境要塞"] = "human_frontier_fort",
-        ["学院城"] = "human_academy",
-        ["偏远山村"] = "human_village",
-        ["铁匠学徒"] = "human_blacksmith",
-        ["猎人向导"] = "human_hunter",
-        ["商队护卫"] = "human_caravan",
-        ["抄写员"] = "human_scribe",
-        ["战火驱逐"] = "human_departure_war",
-        ["求知欲望"] = "human_departure_knowledge",
-        ["复仇之路"] = "human_departure_revenge",
-        ["命运召唤"] = "human_departure_fate",
-        // ── 精灵 ──
-        ["林间嬉戏"] = "elf_childhood_play",
-        ["聆听史诗"] = "elf_childhood_epic",
-        ["星辰之术"] = "elf_childhood_stars",
-        ["月下剑舞"] = "elf_childhood_dance",
-        ["剑舞修行"] = "elf_sword_dance",
-        ["奥术研究"] = "elf_library",
-        ["世界树冥想"] = "elf_world_tree",
-        ["游历人间"] = "elf_among_humans",
-        ["天赋弓手"] = "elf_archer",
-        ["离经叛道"] = "elf_rebel",
-        ["沉默观察者"] = "elf_observer",
-        ["精灵工匠"] = "elf_artisan",
-        ["古林之债"] = "elf_departure_war",
-        ["追寻真相"] = "elf_departure_knowledge",
-        ["渴望炽烈"] = "elf_departure_yearning",
-        ["星辰指引"] = "elf_departure_fate",
-        // ── 矮人 ──
-        ["炉旁学徒"] = "dwarf_childhood_forge",
-        ["矿洞拣石"] = "dwarf_childhood_mine",
-        ["抄录卢恩"] = "dwarf_childhood_rune",
-        ["酒窖偷酒"] = "dwarf_childhood_brewery",
-        ["铸造氏族"] = "dwarf_forge_clan",
-        ["矿工氏族"] = "dwarf_mine",
-        ["符文氏族"] = "dwarf_rune",
-        ["酿酒氏族"] = "dwarf_brewery",
-        ["自幼习武"] = "dwarf_young_warrior",
-        ["成年礼"] = "dwarf_coming_of_age",
-        ["知识为刃"] = "dwarf_scholar",
-        ["被迫应战"] = "dwarf_forced_fight",
-        ["圣物失窃"] = "dwarf_departure_relic",
-        ["失落矿脉"] = "dwarf_departure_mine",
-        ["长老指引"] = "dwarf_departure_elder",
-        ["追讨仇家"] = "dwarf_departure_revenge",
-        // ── 半兽人 ──
-        ["拳头立威"] = "halforc_childhood_fight",
-        ["荒野独行"] = "halforc_childhood_wild",
-        ["藏身村庄"] = "halforc_childhood_hidden",
-        ["自小流浪"] = "halforc_childhood_wander",
-        ["拳斗胜者"] = "halforc_arena",
-        ["猎熊者"] = "halforc_hunt",
-        ["诡计者"] = "halforc_cunning",
-        ["被驱逐者"] = "halforc_outcast",
-        ["克制怒火"] = "halforc_calm",
-        ["拥抱狂暴"] = "halforc_rage",
-        ["融入社会"] = "halforc_blend",
-        ["血脉冲突"] = "halforc_conflict",
-        ["血染草原"] = "halforc_departure_war",
-        ["图腾召唤"] = "halforc_departure_totem",
-        ["厌倦争斗"] = "halforc_departure_weary",
-        ["传说猎物"] = "halforc_departure_hunt",
-        // ── 半精灵 ──
-        ["精灵森林"] = "halfelf_childhood_elven",
-        ["人类村庄"] = "halfelf_childhood_human",
-        ["两边轮住"] = "halfelf_childhood_split",
-        ["独自长大"] = "halfelf_childhood_alone",
-        ["精灵血脉"] = "halfelf_elven_side",
-        ["人类血脉"] = "halfelf_human_side",
-        ["独行者"] = "halfelf_loner",
-        ["调停者"] = "halfelf_diplomat",
-        ["双重体质"] = "halfelf_endurance",
-        ["读心直觉"] = "halfelf_intuition",
-        ["跨文化魅力"] = "halfelf_charm",
-        ["灵巧创造"] = "halfelf_craft",
-        ["因爱仇恨"] = "halfelf_departure_revenge",
-        ["寻找归宿"] = "halfelf_departure_home",
-        ["血脉召唤"] = "halfelf_departure_blood",
-        ["证明自己"] = "halfelf_departure_prove",
-    };
+        string id = choice.IllustId;
+        if (string.IsNullOrEmpty(id)) return;
 
-    private void _UpdateChoiceIllust(string summary)
-    {
-        if (ChoiceIllust.TryGetValue(summary, out var id))
-            _ShowIllust(_phase2Illust, id);
+        // 少女伙伴根据种族切换插图
+        if (id == "companion_girl" && _selectedRace != null)
+        {
+            string raceKey = _GetRaceId(_selectedRace);
+            string raceGirlId = $"companion_girl_{raceKey}";
+            string raceGirlPath = $"{IllustBase}{raceGirlId}.png";
+            if (ResourceLoader.Exists(raceGirlPath))
+                id = raceGirlId;
+        }
+
+        bool isFemale = (_genderGroup.GetPressedButton() as Button)?.Text == "女";
+        string finalId = isFemale ? id + "_f" : id;
+        // 如果女性版本不存在，回退到通用版本
+        string path = $"{IllustBase}{finalId}.png";
+        if (!ResourceLoader.Exists(path)) finalId = id;
+        _ShowIllust(_phase2Illust, finalId);
     }
 
     private void _ShowIllust(TextureRect rect, string id)
@@ -707,179 +546,41 @@ public partial class OriginSelect : CanvasLayer
         unit.Str = _attrs["str"]; unit.Dex = _attrs["dex"]; unit.Con = _attrs["con"];
         unit.Intel = _attrs["intel"]; unit.Wis = _attrs["wis"]; unit.Cha = _attrs["cha"];
 
-        var gs = GetNode<GlobalState>("/root/GlobalState");
-        gs.IsLoadingSave = false;
-        gs.WorldSize = 1;
-        gs.PlayerOrigin = new Godot.Collections.Dictionary
+        var gs = BladeHex.Data.Globals.State;
+        gs.Save.IsLoadingSave = false;
+        gs.WorldGen.Size = 1;
+        gs.OriginContext.Data = new Godot.Collections.Dictionary
         {
             { "race", _selectedRace! },
             { "unit_data", unit },
             { "gender", (_genderGroup.GetPressedButton() as Button)?.Text == "女" ? "female" : "male" },
+            { "companion", _companionChoice },
+            { "items", _items.ToArray() },
         };
-        LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene.tscn", LoadingScreen.PhaseType.NewWorld);
+        LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.NewWorld);
     }
 
     // ════════════════════════════════════════════════════════════════
-    // 问题生成
+    // 问题生成（从 JSON 加载）
     // ════════════════════════════════════════════════════════════════
+    private string _companionChoice = "";
+
     private void _BuildQuestions()
     {
         _questions.Clear();
         if (_selectedRace == null) return;
-        switch (_selectedRace.raceId)
-        {
-            case RaceData.Race.Human: _BuildHumanQuestions(); break;
-            case RaceData.Race.Elf: _BuildElfQuestions(); break;
-            case RaceData.Race.Dwarf: _BuildDwarfQuestions(); break;
-            case RaceData.Race.HalfOrc: _BuildHalfOrcQuestions(); break;
-            case RaceData.Race.HalfElf: _BuildHalfElfQuestions(); break;
-        }
-    }
 
-    // ─── 人类（独立4问） ───
-    private void _BuildHumanQuestions()
-    {
-        // 童年
-        _questions.Add(new("你的人类童年是怎样度过的？", new List<ChoiceData> {
-            new("在田间劳作，帮父母收割庄稼", "田间劳作", new() { ["str"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-            new("跟随一位老学者识字读书", "师从学者", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("在街巷中摸爬滚打，学会了察言观色", "街巷求生", new() { ["dex"] = 2, ["con"] = -1, ["wis"] = -1 }),
-            new("在神殿中侍奉祭司，聆听神谕", "神殿侍奉", new() { ["wis"] = 2, ["dex"] = -1, ["str"] = -1 }),
-        }));
-        _questions.Add(new("你在哪座城镇长大？", new List<ChoiceData> {
-            new("繁华的港口城市，商贾云集", "港口城市", new() { ["cha"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("边境要塞，时刻警惕蛮族入侵", "边境要塞", new() { ["str"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("内陆学院城，书卷气息浓厚", "学院城", new() { ["intel"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("偏远山村，民风淳朴而坚韧", "偏远山村", new() { ["con"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-        }));
-        _questions.Add(new("成年之前，你学会了什么谋生手段？", new List<ChoiceData> {
-            new("铁匠学徒，锤炼了我的臂力", "铁匠学徒", new() { ["str"] = 2, ["dex"] = -1, ["cha"] = -1 }),
-            new("猎人向导，在林中追踪猎物", "猎人向导", new() { ["dex"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-            new("商队护卫，见多识广", "商队护卫", new() { ["con"] = 2, ["intel"] = -1, ["wis"] = -1 }),
-            new("抄写员，为贵族誊录文书", "抄写员", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-        }));
-        _questions.Add(new("是什么让你离开故土，踏上未知的道路？", new List<ChoiceData> {
-            new("家园被战火吞噬，我必须变得更强", "战火驱逐", new() { ["str"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("我渴望见识这个世界的奥秘与真相", "求知欲望", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("有人欠我一笔血债，我要亲手讨回", "复仇之路", new() { ["dex"] = 2, ["wis"] = -1, ["cha"] = -1 }),
-            new("命运的低语引导着我，我无法抗拒", "命运召唤", new() { ["wis"] = 2, ["dex"] = -1, ["str"] = -1 }),
-        }));
-    }
+        var data = OriginQuestionLoader.Load();
+        string raceKey = _selectedRace.raceId.ToString();
 
-    // ─── 精灵（独立4问） ───
-    private void _BuildElfQuestions()
-    {
-        _questions.Add(new("精灵漫长的孩童时代，你是如何度过的？", new List<ChoiceData> {
-            new("在林间嬉戏，与百年古树为伴", "林间嬉戏", new() { ["dex"] = 2, ["intel"] = -1, ["str"] = -1 }),
-            new("聆听长老吟诵失落的史诗", "聆听史诗", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("跟随母亲学习星辰与月相之术", "星辰之术", new() { ["wis"] = 2, ["str"] = -1, ["cha"] = -1 }),
-            new("在月光下练习剑舞与轻步", "月下剑舞", new() { ["dex"] = 2, ["cha"] = -1, ["con"] = -1 }),
-        }));
-        _questions.Add(new("在漫长的精灵岁月中，你将青春献给了什么？", new List<ChoiceData> {
-            new("星辉下的剑舞，追求刀锋的极致", "剑舞修行", new() { ["dex"] = 2, ["con"] = -1, ["cha"] = -1 }),
-            new("古老图书馆中研读失落的奥术", "奥术研究", new() { ["intel"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("在世界树的枝桠间冥想百年", "世界树冥想", new() { ["wis"] = 2, ["str"] = -1, ["cha"] = -1 }),
-            new("游历人类王国，学习他们短暂而炽热的生活方式", "游历人间", new() { ["cha"] = 2, ["wis"] = -1, ["con"] = -1 }),
-        }));
-        _questions.Add(new("你的族人如何看待你？", new List<ChoiceData> {
-            new("天赋异禀的弓手，百步穿杨", "天赋弓手", new() { ["dex"] = 2, ["str"] = -1, ["intel"] = -1 }),
-            new("离经叛道者，对古老传统不屑一顾", "离经叛道", new() { ["str"] = 2, ["wis"] = -1, ["intel"] = -1 }),
-            new("沉默的观察者，洞悉一切却从不开口", "沉默观察者", new() { ["wis"] = 2, ["cha"] = -1, ["str"] = -1 }),
-            new("精灵工匠，以魔法编织器物", "精灵工匠", new() { ["intel"] = 2, ["con"] = -1, ["str"] = -1 }),
-        }));
-        _questions.Add(new("是什么驱使你走出永恒之林，踏入凡俗世界？", new List<ChoiceData> {
-            new("古林被铁与火侵蚀，我要追讨这笔债", "古林之债", new() { ["str"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("一卷失落的手稿指向某个遥远的真相", "追寻真相", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("永恒的宁静令人窒息，我渴望短暂者的炽烈", "渴望炽烈", new() { ["cha"] = 2, ["wis"] = -1, ["con"] = -1 }),
-            new("梦境中的星辰指引我前行", "星辰指引", new() { ["wis"] = 2, ["dex"] = -1, ["str"] = -1 }),
-        }));
-    }
+        if (data.Races.TryGetValue(raceKey, out var raceQuestions))
+            _questions.AddRange(raceQuestions);
+        else
+            GD.PushWarning($"[OriginSelect] origin_questions.json 缺少种族 '{raceKey}' 的题目");
 
-    // ─── 矮人（独立4问） ───
-    private void _BuildDwarfQuestions()
-    {
-        _questions.Add(new("在矮人氏族的石厅中，你的童年是什么样的？", new List<ChoiceData> {
-            new("在锻造炉旁递工具，看父辈打铁", "炉旁学徒", new() { ["str"] = 2, ["dex"] = -1, ["cha"] = -1 }),
-            new("在矿洞深处帮长辈拣选矿石", "矿洞拣石", new() { ["con"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-            new("跟随符文师抄录古老的卢恩", "抄录卢恩", new() { ["intel"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("在酒窖里偷尝长辈酿造的烈酒", "酒窖偷酒", new() { ["cha"] = 2, ["wis"] = -1, ["dex"] = -1 }),
-        }));
-        _questions.Add(new("在矮人堡垒的深处，你的氏族以什么闻名？", new List<ChoiceData> {
-            new("锻造传奇武器的铸造大师", "铸造氏族", new() { ["str"] = 2, ["dex"] = -1, ["cha"] = -1 }),
-            new("开凿最深矿脉的矿工先驱", "矿工氏族", new() { ["con"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-            new("守护符文秘密的卢恩铭刻师", "符文氏族", new() { ["intel"] = 2, ["dex"] = -1, ["str"] = -1 }),
-            new("酿造传世佳酿的酒窖守护者", "酿酒氏族", new() { ["cha"] = 2, ["str"] = -1, ["dex"] = -1 }),
-        }));
-        _questions.Add(new("你第一次拿起战斧是在什么时候？", new List<ChoiceData> {
-            new("五岁时就在父亲的铁砧旁挥锤", "自幼习武", new() { ["str"] = 2, ["intel"] = -1, ["wis"] = -1 }),
-            new("成年礼上，为了证明自己的勇气", "成年礼", new() { ["con"] = 2, ["cha"] = -1, ["dex"] = -1 }),
-            new("从未拿过——我的武器是知识", "知识为刃", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("当地精入侵时，被迫拿起武器", "被迫应战", new() { ["dex"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-        }));
-        _questions.Add(new("是什么让你离开石厅，前往日光下的世界？", new List<ChoiceData> {
-            new("氏族圣物失窃，我必须夺回它", "圣物失窃", new() { ["str"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("古籍记载的失落矿脉在远方等待", "失落矿脉", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("族中长老说，我的命运在地表之上", "长老指引", new() { ["wis"] = 2, ["dex"] = -1, ["str"] = -1 }),
-            new("某个仇家逃到了人类的土地", "追讨仇家", new() { ["dex"] = 2, ["wis"] = -1, ["cha"] = -1 }),
-        }));
-    }
-
-    // ─── 半兽人（独立4问） ───
-    private void _BuildHalfOrcQuestions()
-    {
-        _questions.Add(new("作为混血孩子，你的成长岁月是怎样的？", new List<ChoiceData> {
-            new("在部落中以拳头证明自己", "拳头立威", new() { ["str"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-            new("在荒野中独自捕猎为生", "荒野独行", new() { ["dex"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("被人类母亲偷偷带走，藏在边境村庄", "藏身村庄", new() { ["wis"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("两边都不接纳——我自小流浪", "自小流浪", new() { ["con"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-        }));
-        _questions.Add(new("在部落中，你靠什么赢得尊重？", new List<ChoiceData> {
-            new("赤手空拳击败了最强的挑战者", "拳斗胜者", new() { ["str"] = 3, ["intel"] = -2, ["cha"] = -1 }),
-            new("在荒野中独自猎杀了一头巨熊", "猎熊者", new() { ["con"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("用计谋让两个敌对部落自相残杀", "诡计者", new() { ["intel"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("我从未被接纳——我是被驱逐的弃儿", "被驱逐者", new() { ["wis"] = 2, ["str"] = -1, ["cha"] = -1 }),
-        }));
-        _questions.Add(new("人类的血液在你体内低语着什么？", new List<ChoiceData> {
-            new("克制怒火，用冷静的头脑思考", "克制怒火", new() { ["wis"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("拥抱狂暴，让敌人在恐惧中颤抖", "拥抱狂暴", new() { ["str"] = 2, ["wis"] = -1, ["intel"] = -1 }),
-            new("学会微笑，用人类的方式融入社会", "融入社会", new() { ["cha"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("两种血脉的冲突让我比任何人都坚韧", "血脉冲突", new() { ["con"] = 2, ["cha"] = -1, ["dex"] = -1 }),
-        }));
-        _questions.Add(new("是什么驱使你离开荒原，走向文明世界？", new List<ChoiceData> {
-            new("酋长被屠戮，我要让仇敌的鲜血染红草原", "血染草原", new() { ["str"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("祖先的图腾召唤我前往远方", "图腾召唤", new() { ["wis"] = 2, ["dex"] = -1, ["str"] = -1 }),
-            new("我厌倦了部落的争斗，想找一个属于自己的位置", "厌倦争斗", new() { ["cha"] = 2, ["str"] = -1, ["wis"] = -1 }),
-            new("某个传说中的猎物，只有越过边境才能找到", "传说猎物", new() { ["dex"] = 2, ["wis"] = -1, ["cha"] = -1 }),
-        }));
-    }
-
-    // ─── 半精灵（独立4问） ───
-    private void _BuildHalfElfQuestions()
-    {
-        _questions.Add(new("在两族之间长大，你的童年记忆里有什么？", new List<ChoiceData> {
-            new("在精灵母亲的森林家中度过", "精灵森林", new() { ["dex"] = 2, ["con"] = -1, ["str"] = -1 }),
-            new("在人类父亲的村庄里长大", "人类村庄", new() { ["con"] = 2, ["wis"] = -1, ["dex"] = -1 }),
-            new("两边轮流住，从未真正属于哪一方", "两边轮住", new() { ["wis"] = 2, ["cha"] = -1, ["con"] = -1 }),
-            new("被双方亲族遗弃，独自长大", "独自长大", new() { ["intel"] = 2, ["str"] = -1, ["cha"] = -1 }),
-        }));
-        _questions.Add(new("你在两个世界之间长大，更亲近哪一边？", new List<ChoiceData> {
-            new("精灵一侧——我继承了他们的优雅与敏锐", "精灵血脉", new() { ["dex"] = 2, ["con"] = -1, ["str"] = -1 }),
-            new("人类一侧——我拥有他们的适应力与野心", "人类血脉", new() { ["con"] = 2, ["wis"] = -1, ["dex"] = -1 }),
-            new("两边都不属于——我只属于我自己", "独行者", new() { ["wis"] = 2, ["cha"] = -1, ["con"] = -1 }),
-            new("我学会了在两个世界之间斡旋调停", "调停者", new() { ["cha"] = 2, ["str"] = -1, ["wis"] = -1 }),
-        }));
-        _questions.Add(new("你的混血身份带给你最大的天赋是什么？", new List<ChoiceData> {
-            new("精灵的夜视与人类的耐力", "双重体质", new() { ["con"] = 2, ["intel"] = -1, ["cha"] = -1 }),
-            new("读懂任何人心思的直觉", "读心直觉", new() { ["wis"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("在任何文化中都能如鱼得水的魅力", "跨文化魅力", new() { ["cha"] = 2, ["con"] = -1, ["wis"] = -1 }),
-            new("精灵的灵巧双手与人类的创造力", "灵巧创造", new() { ["dex"] = 2, ["str"] = -1, ["con"] = -1 }),
-        }));
-        _questions.Add(new("是什么驱使你独自上路？", new List<ChoiceData> {
-            new("有人因我的混血身份伤害了我所爱的人", "因爱仇恨", new() { ["str"] = 2, ["cha"] = -1, ["intel"] = -1 }),
-            new("我想找到一个真正属于我自己的归宿", "寻找归宿", new() { ["wis"] = 2, ["str"] = -1, ["con"] = -1 }),
-            new("某种古老血脉的低语在召唤我", "血脉召唤", new() { ["intel"] = 2, ["str"] = -1, ["dex"] = -1 }),
-            new("我想看看，混血的我能在世上走多远", "证明自己", new() { ["cha"] = 2, ["str"] = -1, ["wis"] = -1 }),
-        }));
+        // 所有种族共用的最终问题：忠实伙伴
+        if (data.CompanionQuestion?.Choices?.Count > 0)
+            _questions.Add(data.CompanionQuestion);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -963,7 +664,7 @@ public partial class OriginSelect : CanvasLayer
         "res://src/assets/tiles/overworld/hills_0.png",
         "res://src/assets/tiles/overworld/mountain_0.png",
         "res://src/assets/tiles/overworld/deep_water_0.png",
-        "res://src/scenes/overworld/overworld_scene.tscn",
+        "res://src/scenes/overworld/overworld_scene_3d.tscn",
     };
     private void _PreloadWorldTextures()
     {

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ring_of_power",
+    "name": "力量戒指",
+    "type": "Ring",
+    "rarity": "Uncommon",
+    "price": 120,
+    "str": 2,
+    "desc": "一枚镶嵌红宝石的戒指，佩戴者感到力量涌动。"
+  },
+  {
+    "id": "amulet_of_vitality",
+    "name": "活力项链",
+    "type": "Amulet",
+    "rarity": "Uncommon",
+    "price": 150,
+    "con": 2,
+    "hp": 5,
+    "desc": "一条散发着温暖光芒的项链。"
+  },
+  {
+    "id": "cloak_of_protection",
+    "name": "防护斗篷",
+    "type": "Cloak",
+    "rarity": "Rare",
+    "price": 250,
+    "ac": 1,
+    "resistance": "magic",
+    "desc": "一层薄薄的魔法防护环绕着穿戴者。"
+  },
+  {
+    "id": "belt_of_giant_strength",
+    "name": "巨人力量腰带",
+    "type": "Belt",
+    "rarity": "Epic",
+    "price": 800,
+    "str": 4,
+    "desc": "蕴含巨人力量的腰带，佩戴者力大无穷。"
+  },
+  {
+    "id": "bracer_of_archery",
+    "name": "射术护腕",
+    "type": "Bracer",
+    "rarity": "Uncommon",
+    "price": 180,
+    "dex": 2,
+    "initiative": 2,
+    "desc": "为射手设计的精致护腕，增强灵活性和反应速度。"
+  }
+]

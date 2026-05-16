@@ -4,6 +4,7 @@
 // 对应策划：04-战略层系统.md — 大地图/城镇/遭遇
 using Godot;
 using Godot.Collections;
+using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Strategic;
 using BladeHex.Scenes.Overworld;
@@ -28,6 +29,9 @@ public partial class OverworldUI : CanvasLayer
 
     [Signal]
     public delegate void InventoryClickedEventHandler();
+
+    [Signal]
+    public delegate void PanelDismissedEventHandler();
 
     // ============================================================================
     // 主题常量
@@ -70,6 +74,8 @@ public partial class OverworldUI : CanvasLayer
     // 字段
     // ============================================================================
     private Control _root = null!;
+    private PanelContainer _topPanel = null!;
+    private PanelContainer _bottomPanelContainer = null!;
     private Label _dayLabel = null!;
     private Label _goldLabel = null!;
     private Label _foodLabel = null!;
@@ -82,15 +88,14 @@ public partial class OverworldUI : CanvasLayer
     private Label _weatherLabel = null!;
     private HBoxContainer _bottomBar = null!;
     private PanelContainer _escMenu = null!;
-    private PanelContainer _minimapContainer = null!;
 
     // 子面板
     private PartyPanel _partyPanel = null!;
     private TownUI _townUi = null!;
 
-    // 外部系统引用 (由 OverworldScene 设置)
+    // 外部系统引用 (由 OverworldScene3D 设置)
     public Node EconomyManager { get; set; } = null!;
-    public SaveManagerV2 SaveMgr { get; private set; } = new();
+    public SaveManager SaveMgr { get; private set; } = new();
 
     // 强类型场景上下文（替代 GetParent().Get("...") 反射访问）
     private IOverworldContext? _context;
@@ -100,7 +105,6 @@ public partial class OverworldUI : CanvasLayer
     private Node _characterDetail = null!;
     private Node _skillTreeUi = null!;
     private Node _questLog = null!;
-    private Node _settingsPanel = null!;
 
     // ============================================================================
     // 生命周期
@@ -124,6 +128,8 @@ public partial class OverworldUI : CanvasLayer
         return _context;
     }
 
+
+
     // ============================================================================
     // UI构建
     // ============================================================================
@@ -138,6 +144,7 @@ public partial class OverworldUI : CanvasLayer
 
         // ─── 1. 顶部信息栏 ───
         var topPanel = new PanelContainer();
+        _topPanel = topPanel;
         var topStyle = new StyleBoxFlat
         {
             BgColor = BgPanel,
@@ -235,6 +242,7 @@ public partial class OverworldUI : CanvasLayer
 
         // ─── 2. 底部功能栏 ───
         var bottomPanel = new PanelContainer();
+        _bottomPanelContainer = bottomPanel;
         var botStyle = new StyleBoxFlat
         {
             BgColor = BgPanel,
@@ -261,9 +269,8 @@ public partial class OverworldUI : CanvasLayer
         _bottomBar.AddThemeConstantOverride("separation", SpacingLg);
         bottomMargin.AddChild(_bottomBar);
 
-        // 6 buttons — party/inventory/army merged into unified 军队 panel
+        // 5 buttons — 角色面板已合并到军队面板
         _CreateBarButton("⚔️ 军队 [I]", "army", TextPrimary);
-        _CreateBarButton("👤 角色 [C]", "character", TextPrimary);
         _CreateBarButton("✨ 技能盘 [K]", "skill_tree", TextMagic);
         _CreateBarButton("📜 任务 [J]", "quests", TextWarning);
         _CreateBarButton("⛺ 营地 [T]", "camp", TextPositive);
@@ -272,6 +279,7 @@ public partial class OverworldUI : CanvasLayer
         // ─── 3. 子面板初始化 ───
         _partyPanel = new PartyPanel();
         _partyPanel.Visible = false;
+        _partyPanel.PanelClosed += () => EmitSignal(SignalName.PanelDismissed);
         root.AddChild(_partyPanel);
 
         _townUi = new TownUI();
@@ -411,10 +419,10 @@ public partial class OverworldUI : CanvasLayer
                     if (playerUnit != null)
                     {
                         var entityMgr = ctx?.EntityMgr;
-                        var gs = GetNode<BladeHex.Data.GlobalState>("/root/GlobalState");
-                        var saveData = SaveManagerV2.BuildSaveData(
+                        var gs = BladeHex.Data.Globals.StateOrNull;
+                        var saveData = SaveManager.BuildSaveData(
                             playerUnit, raceId, playerPos, econ, entityMgr,
-                            gs?.WorldSeed ?? 0, gs?.WorldSize ?? 1, gs?.CurrentSaveId);
+                            gs?.WorldGen.Seed ?? 0, gs?.WorldGen.Size ?? 1, gs?.Save.CurrentSaveId);
                         SaveMgr.SaveGame(saveData);
                     }
 
@@ -475,6 +483,12 @@ public partial class OverworldUI : CanvasLayer
     // 公开接口
     // ============================================================================
 
+    /// <summary>顶部信息栏面板引用（过渡动画用）</summary>
+    public Control TopPanel => _topPanel;
+
+    /// <summary>底部功能栏面板引用（过渡动画用）</summary>
+    public Control BottomPanel => _bottomPanelContainer;
+
     /// <summary>
     /// 更新顶部信息栏（含新增的速度/士气/声望）
     /// </summary>
@@ -513,7 +527,7 @@ public partial class OverworldUI : CanvasLayer
     }
 
     /// <summary>
-    /// 快捷键入口 — 由 OverworldScene 调用，触发对应面板操作。
+    /// 快捷键入口 — 由 OverworldScene3D 调用，触发对应面板操作。
     /// 如果目标面板已打开则关闭（toggle 行为）。
     /// </summary>
     public void HandleHotkey(string action)
@@ -539,7 +553,7 @@ public partial class OverworldUI : CanvasLayer
     }
 
     /// <summary>
-    /// 对接 C# OverworldScene.UpdateUIInfo 的统一入口
+    /// 对接 C# OverworldScene3D.UpdateUIInfo 的统一入口
     /// </summary>
     public void UpdateInfo(GodotObject playerUnitData, GodotObject economy)
     {
@@ -637,7 +651,7 @@ public partial class OverworldUI : CanvasLayer
 
     private void _OpenPartyPanel()
     {
-        // 从 OverworldScene 的 PlayerParty 获取 roster 和 inventory
+        // 从 OverworldScene3D 的 PlayerParty 获取 roster 和 inventory
         var ctx = GetContext();
         PartyRoster? roster = null;
         PartyInventory? inventory = null;
@@ -650,6 +664,34 @@ public partial class OverworldUI : CanvasLayer
 
         if (roster != null && inventory != null)
             _partyPanel.Open(roster, inventory);
+        else
+            _partyPanel.OpenTab("party");
+    }
+
+    /// <summary>以商店模式打开部队面板</summary>
+    public void OpenPartyShop(string shopName, EconomyManager economy, List<ItemData> stock, int prosperity = 50)
+    {
+        _CloseAllPanels();
+        var ctx = GetContext();
+        PartyRoster? roster = ctx?.PlayerParty?.Roster;
+        PartyInventory? inventory = ctx?.PlayerParty?.Inventory;
+
+        if (roster != null && inventory != null)
+            _partyPanel.OpenShop(roster, inventory, shopName, economy, stock, prosperity);
+        else
+            _partyPanel.OpenTab("party");
+    }
+
+    /// <summary>以战利品模式打开部队面板</summary>
+    public void OpenPartyLoot(List<ItemData> loot, int goldGranted = 0, int xpGranted = 0)
+    {
+        _CloseAllPanels();
+        var ctx = GetContext();
+        PartyRoster? roster = ctx?.PlayerParty?.Roster;
+        PartyInventory? inventory = ctx?.PlayerParty?.Inventory;
+
+        if (roster != null && inventory != null)
+            _partyPanel.OpenLoot(roster, inventory, loot, goldGranted, xpGranted);
         else
             _partyPanel.OpenTab("party");
     }
@@ -691,7 +733,7 @@ public partial class OverworldUI : CanvasLayer
         }
 
         // 获取 SkillTreeManager 单例和当前角色的技能盘
-        var stm = SkillTreeManager.GetInstance();
+        var stm = BladeHex.Data.Globals.SkillTreesOrNull;
         if (stm == null || stm.TreeData == null)
         {
             GD.PrintErr("[OverworldUI] SkillTreeManager 未初始化");
@@ -699,7 +741,7 @@ public partial class OverworldUI : CanvasLayer
             return;
         }
 
-        // 从 OverworldScene 获取队长数据
+        // 从 OverworldScene3D 获取队长数据
         CharacterSkillTree? charTree = null;
         var ctx = GetContext();
         if (ctx?.PlayerParty?.Roster != null && ctx.PlayerParty.Roster.Count > 0)
@@ -735,70 +777,12 @@ public partial class OverworldUI : CanvasLayer
 
     private void _OpenSettings()
     {
-        if (_settingsPanel == null)
+        // 统一使用 GameMenuManager 的设置面板
+        var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
+        if (gameMenu != null)
         {
-            _settingsPanel = _BuildSettingsPanel();
-            _root.AddChild((Control)_settingsPanel);
+            gameMenu.OpenSettings();
         }
-
-        if (_settingsPanel is Control settingsCtrl)
-            settingsCtrl.Visible = true;
-    }
-
-    private Control _BuildSettingsPanel()
-    {
-        var panel = new PanelContainer();
-        panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-
-        var bg = new StyleBoxFlat { BgColor = new Color(0.0f, 0.0f, 0.0f, 0.6f) };
-        bg.SetBorderWidthAll(0);
-        panel.AddThemeStyleboxOverride("panel", bg);
-
-        var center = new CenterContainer();
-        center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        panel.AddChild(center);
-
-        var inner = new PanelContainer();
-        var innerBg = MakePanelStyle(BgPrimary, BorderHighlight, 2, RadiusMd, 30);
-        inner.AddThemeStyleboxOverride("panel", innerBg);
-        center.AddChild(inner);
-
-        var vbox = new VBoxContainer();
-        vbox.AddThemeConstantOverride("separation", SpacingLg);
-        vbox.CustomMinimumSize = new Vector2(380, 0);
-        inner.AddChild(vbox);
-
-        vbox.AddChild(_CreateTitleLabel("\u8bbe \u7f6e"));
-
-        // 音量
-        vbox.AddChild(_CreateBodyLabel("\u4e3b\u97f3\u91cf"));
-        var volumeSlider = new HSlider();
-        volumeSlider.MinValue = 0;
-        volumeSlider.MaxValue = 100;
-        volumeSlider.Value = 80;
-        volumeSlider.CustomMinimumSize = new Vector2(300, 30);
-        volumeSlider.ValueChanged += (val) =>
-        {
-            float db = val > 0 ? Mathf.LinearToDb((float)val / 100.0f) : -80.0f;
-            AudioServer.SetBusVolumeDb(0, db);
-        };
-        vbox.AddChild(volumeSlider);
-
-        // 全屏
-        var fullscreenCheck = new CheckBox { Text = "\u5168\u5c4f\u6a21\u5f0f", ButtonPressed = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen };
-        fullscreenCheck.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        fullscreenCheck.Toggled += (pressed) =>
-        {
-            DisplayServer.WindowSetMode(pressed ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
-        };
-        vbox.AddChild(fullscreenCheck);
-
-        // 关闭
-        var closeBtn = _CreateButton("\u8fd4 \u56de", new Vector2(150, ButtonHeightLg));
-        closeBtn.Pressed += () => { panel.Visible = false; };
-        vbox.AddChild(closeBtn);
-
-        return panel;
     }
 
     private void _CloseAllPanels()
@@ -819,20 +803,9 @@ public partial class OverworldUI : CanvasLayer
         if (@event is InputEventKey keyEvent && keyEvent.Pressed && keyEvent.Keycode == Key.Escape)
         {
             // 全局菜单已开 → 让它自己处理
-            var gameMenu = GetNodeOrNull<BladeHex.UI.Global.GameMenuManager>("/root/GameMenuManager");
+            var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
             if (gameMenu != null && gameMenu.IsOpen)
                 return;
-
-            // 设置面板（旧版兼容）
-            if (_settingsPanel != null && _settingsPanel.Get("visible").AsBool())
-            {
-                if (_settingsPanel is Control settingsCtrl)
-                    settingsCtrl.Visible = false;
-                else if (_settingsPanel.HasMethod("hide_settings"))
-                    _settingsPanel.Call("hide_settings");
-                GetViewport().SetInputAsHandled();
-                return;
-            }
 
             bool anyPanelOpen = (_partyPanel != null && _partyPanel.Visible) ||
                 (_characterDetail != null && _characterDetail.Get("visible").AsBool()) ||

@@ -100,6 +100,7 @@ public partial class TownUI : PanelContainer
     // 鍩庨晣鏁版嵁
     private Dictionary _townData = new();
     private Label _goldLabel = null!;
+    private RichTextLabel? _descriptionLabel;
 
     // ============================================================================
     // 鐢熷懡鍛ㄦ湡
@@ -149,7 +150,17 @@ public partial class TownUI : PanelContainer
 
         mainVbox.AddChild(CreateSeparator());
 
-        // 鈹€鈹€鈹€ Tab鏍?鈹€鈹€鈹€
+        // ─── 描述文本区域 ───
+        _descriptionLabel = new RichTextLabel();
+        _descriptionLabel.Name = "DescriptionText";
+        _descriptionLabel.BbcodeEnabled = true;
+        _descriptionLabel.FitContent = true;
+        _descriptionLabel.CustomMinimumSize = new Vector2(0, 40);
+        _descriptionLabel.AddThemeColorOverride("default_color", TextSecondary);
+        _descriptionLabel.AddThemeFontSizeOverride("normal_font_size", FontSizeSm);
+        mainVbox.AddChild(_descriptionLabel);
+
+        // ─── Tab栏 ───
         var tabBar = new HBoxContainer();
         tabBar.AddThemeConstantOverride("separation", SpacingSm);
         mainVbox.AddChild(tabBar);
@@ -436,6 +447,19 @@ public partial class TownUI : PanelContainer
     {
         _townData = townData ?? new Dictionary();
         _townNameLabel.Text = townName;
+
+        // 显示描述文本（如果提供）
+        if (_descriptionLabel != null)
+        {
+            string desc = _townData.ContainsKey("description")
+                ? (string)_townData["description"]
+                : "";
+            _descriptionLabel.Text = desc.Length > 0
+                ? $"[i][color=#b0a890]{desc}[/color][/i]"
+                : "";
+            _descriptionLabel.Visible = desc.Length > 0;
+        }
+
         Visible = true;
         _SwitchTab(TownTab.Tavern);
     }

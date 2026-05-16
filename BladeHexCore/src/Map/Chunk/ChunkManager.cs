@@ -228,6 +228,17 @@ public partial class ChunkManager : RefCounted
         return null;
     }
 
+    /// <summary>获取指定全局坐标的瓦片（活跃 chunk + 内存缓存，用于小地图等全图查询）</summary>
+    public HexOverworldTile? GetTileAnywhere(int worldQ, int worldR)
+    {
+        var chunkCoord = ChunkData.WorldToChunk(worldQ, worldR);
+        if (ActiveChunks.TryGetValue(chunkCoord, out var chunk))
+            return chunk.GetTile(worldQ, worldR);
+        if (_memoryCache != null && _memoryCache.TryGetValue(chunkCoord, out var cached))
+            return cached.GetTile(worldQ, worldR);
+        return null;
+    }
+
     /// <summary>获取指定全局坐标所在的活跃 chunk</summary>
     public ChunkData? GetChunkAt(int worldQ, int worldR)
     {

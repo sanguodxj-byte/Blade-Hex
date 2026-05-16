@@ -71,10 +71,15 @@ public static class TerrainVisualRegistry
                 BattleTopVariantCount = btVariants,
                 BattleCliffKey = cliffKey,
                 DominantColor = dominant,
+                PaletteDark = _DarkenColor(dominant, 0.55f),
+                PaletteLight = _LightenColor(dominant, 0.30f),
                 PropDensity = propDensity,
                 BattlePropPack = new List<string>(propPack),
             };
         }
+
+        // 自动从 dominant 派生调色板：暗影 = dominant × 0.55, 高光 = dominant + 30%
+        // 后续可针对特殊地形手动覆盖（见末尾的 _OverridePalettes）
 
         // 水域 → 旧资产 pond
         Add(HexOverworldTile.TerrainType.DeepWater, "深水",
@@ -217,5 +222,33 @@ public static class TerrainVisualRegistry
             dominant: new Color(0.65f, 0.55f, 0.38f));
 
         return d;
+    }
+
+    // ─────────────────────────────────────────────
+    // 调色板辅助方法
+    // ─────────────────────────────────────────────
+
+    /// <summary>颜色变暗：朝墨褐色（#1A1208）方向插值</summary>
+    private static Color _DarkenColor(Color c, float amount)
+    {
+        var ink = new Color(0.10f, 0.07f, 0.03f); // 墨褐
+        return new Color(
+            Mathf.Lerp(c.R, ink.R, amount),
+            Mathf.Lerp(c.G, ink.G, amount),
+            Mathf.Lerp(c.B, ink.B, amount),
+            1.0f
+        );
+    }
+
+    /// <summary>颜色变亮：朝暖奶黄色（#EDE8D8）方向插值</summary>
+    private static Color _LightenColor(Color c, float amount)
+    {
+        var cream = new Color(0.93f, 0.91f, 0.85f); // 暖奶黄
+        return new Color(
+            Mathf.Lerp(c.R, cream.R, amount),
+            Mathf.Lerp(c.G, cream.G, amount),
+            Mathf.Lerp(c.B, cream.B, amount),
+            1.0f
+        );
     }
 }

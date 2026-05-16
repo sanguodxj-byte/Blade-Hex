@@ -29,6 +29,13 @@ namespace BladeHex.Combat;
 
 /// <summary>
 /// 战术战斗特效管理器 (池化版)
+/// <summary>
+/// [Scene Service] 战术战斗特效管理器 — 池化版本。
+///
+/// <para>所属场景：<see cref="BladeHex.View.Combat.CombatSceneBase"/>（在 InitSystems 中创建并 AddChild）。</para>
+/// <para>生命周期：随战斗场景创建与销毁；公共 API 全部为静态方法，使用 <c>VFXManager.PlayXxx(parent, pos)</c>。</para>
+/// <para>内部 <c>_particlePool</c> 是静态字段，在实例 _Ready 中初始化、_ExitTree 中清理。</para>
+/// <para>职责：使用 NodePool 复用 GpuParticles3D 节点，消除战斗密集时的 GC 压力。</para>
 /// </summary>
 [GlobalClass]
 public partial class VFXManager : Node
@@ -88,13 +95,8 @@ public partial class VFXManager : Node
     private static NodePool<GpuParticles3D>? _particlePool;
     private static readonly List<(GpuParticles3D particles, double expireAt)> _activeVfx = new();
 
-    /// <summary>单例实例 — 作为 Autoload 或手动 AddChild 使用</summary>
-    public static VFXManager? Instance { get; private set; }
-
     public override void _Ready()
     {
-        Instance = this;
-
         _particlePool = new NodePool<GpuParticles3D>(
             factory: () =>
             {
@@ -128,7 +130,6 @@ public partial class VFXManager : Node
 
     public override void _ExitTree()
     {
-        Instance = null;
         _particlePool?.Clear();
         _particlePool = null;
         _activeVfx.Clear();

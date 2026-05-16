@@ -89,6 +89,12 @@ public sealed class TerrainVisualProfile
     /// </summary>
     public Color DominantColor = new Color(0.5f, 0.5f, 0.5f);
 
+    /// <summary>程序化shader调色板：暗影/墨线色（最低明度）</summary>
+    public Color PaletteDark = new Color(0.30f, 0.22f, 0.15f);
+
+    /// <summary>程序化shader调色板：高光色（最高明度）</summary>
+    public Color PaletteLight = new Color(0.75f, 0.65f, 0.45f);
+
     // ========================================
     // 便捷方法
     // ========================================

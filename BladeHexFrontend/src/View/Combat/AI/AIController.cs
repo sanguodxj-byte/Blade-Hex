@@ -71,14 +71,41 @@ public partial class AIController : Node
         {
             if (!GodotObject.IsInstanceValid(enemy) || enemy.CurrentHp <= 0) continue;
 
-            // 为当前单位决策
-            var action = DecideActionForUnit(enemy, playerUnits, enemyUnits, hexGrid);
+            // 多动作循环：持续行动直到 AP 耗尽或无法行动
+            const int MaxActionsPerUnit = 5; // 防止无限循环
+            for (int actionIdx = 0; actionIdx < MaxActionsPerUnit; actionIdx++)
+            {
+                if (!GodotObject.IsInstanceValid(enemy) || enemy.CurrentHp <= 0) break;
+                if (enemy.CurrentAp < 1) break; // AP 不足以做任何事
 
-            // 执行行动
-            await ExecuteAction(action, hexGrid, combatUi);
+                // 检查是否还有存活的玩家单位
+                var alivePlayerUnits = playerUnits.Where(p => GodotObject.IsInstanceValid(p) && p.CurrentHp > 0).ToList();
+                if (alivePlayerUnits.Count == 0) break;
 
-            // 行动间短暂延迟，增强可读性
-            await ToSignal(GetTree().CreateTimer(0.4f), SceneTreeTimer.SignalName.Timeout);
+                var action = DecideActionForUnit(enemy, alivePlayerUnits, enemyUnits, hexGrid);
+
+                // Idle/Overwatch 意味着主动结束回合
+                if (action.Type == AIAction.ActionType.Idle || action.Type == AIAction.ActionType.Overwatch)
+                {
+                    await ExecuteAction(action, hexGrid, combatUi);
+                    break;
+                }
+
+                // 撤退后不再行动
+                if (action.Type == AIAction.ActionType.Retreat)
+                {
+                    await ExecuteAction(action, hexGrid, combatUi);
+                    break;
+                }
+
+                await ExecuteAction(action, hexGrid, combatUi);
+
+                // 行动间短暂延迟
+                await ToSignal(GetTree().CreateTimer(0.3f), SceneTreeTimer.SignalName.Timeout);
+            }
+
+            // 单位间延迟
+            await ToSignal(GetTree().CreateTimer(0.2f), SceneTreeTimer.SignalName.Timeout);
         }
 
         EmitSignal(SignalName.AllActionsCompleted);
@@ -157,14 +184,37 @@ public partial class AIController : Node
             if (action.MovePath.Count == 0) return;
         }
 
+        var actor = action.Actor!;
         var finalPos = action.MovePath[^1];
 
-        // 通过类型化适配器执行移动
-        _adapter?.MoveUnitTo(action.Actor!, finalPos.X, finalPos.Y);
+        // 计算路径消耗的 AP
+        float pathCost = hexGrid.GetPathCost(action.MovePath);
+        if (pathCost > actor.CurrentAp)
+        {
+            // AP 不足以走完全程 — 截断路径到可达范围
+            float apLeft = actor.CurrentAp;
+            int walkable = 0;
+            float spent = 0;
+            for (int i = 1; i < action.MovePath.Count; i++)
+            {
+                var cell = hexGrid.GetCell(action.MovePath[i].X, action.MovePath[i].Y);
+                float cost = cell?.Data != null ? cell.Data.moveCost : 1.0f;
+                if (spent + cost > apLeft) break;
+                spent += cost;
+                walkable = i;
+            }
+            if (walkable <= 0) return;
+            finalPos = action.MovePath[walkable];
+            pathCost = spent;
+        }
 
-        _adapter?.LogMessage($"{action.Actor!.Data!.UnitName} 移动到 ({finalPos.X}, {finalPos.Y})");
+        // 消耗 AP
+        actor.ConsumeAp(pathCost);
+
+        // 执行移动
+        _adapter?.MoveUnitTo(actor, finalPos.X, finalPos.Y);
+        _adapter?.LogMessage($"{actor.Data!.UnitName} 移动到 ({finalPos.X}, {finalPos.Y})");
         
-        // 移动动画时间
         await ToSignal(GetTree().CreateTimer(0.3f), SceneTreeTimer.SignalName.Timeout);
     }
 
@@ -175,8 +225,28 @@ public partial class AIController : Node
         var actor = action.Actor!;
         var target = action.TargetUnit!;
 
-        // 远程全掩体检查
+        // 射程验证 — 移动后仍不在射程内则跳过攻击
         var weapon = actor.Model.GetMainHand() as WeaponData;
+        int weaponRange = weapon?.RangeCells ?? 1;
+        int dist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, target.GridPos.X, target.GridPos.Y);
+        if (dist > weaponRange)
+        {
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 无法攻击 {target.Data!.UnitName}（距离 {dist}，射程 {weaponRange}）[/color]");
+            return;
+        }
+
+        // AP 验证 — 行动力不足则跳过攻击
+        int apCost = weapon?.ApCost ?? 4;
+        if (actor.CurrentAp < apCost)
+        {
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 行动力不足，无法攻击[/color]");
+            return;
+        }
+
+        // 消耗攻击 AP
+        actor.ConsumeAp(apCost);
+
+        // 远程全掩体检查
         if (weapon != null && weapon.IsRanged)
         {
             var targetCell = hexGrid.GetCell(target.GridPos.X, target.GridPos.Y);
@@ -189,6 +259,7 @@ public partial class AIController : Node
 
         // 攻击前动画
         _adapter?.PlayUnitAnim(actor, "attack");
+        actor.PlayAttackLunge(target.GlobalPosition);
         await ToSignal(GetTree().CreateTimer(0.6f), SceneTreeTimer.SignalName.Timeout);
 
         // 使用 CombatResolver 统一结算

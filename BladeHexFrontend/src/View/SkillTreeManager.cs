@@ -6,15 +6,28 @@ using System.Collections.Generic;
 namespace BladeHex.Strategic;
 
 /// <summary>
-/// 技能盘全局管理器 — Autoload 单例
-/// 层1: SkillTreeData (图数据) 层2: NodeFiller (状态维护) 层3: CharacterSkillTree (角色实例)
+/// [Autoload Singleton] 技能盘全局管理器。
+///
+/// <para>注册位置：<c>project.godot [autoload]</c> 段，名称 <c>SkillTreeManager</c>。</para>
+/// <para>生命周期：应用全局 — 角色加点进度需跨场景持久（大地图加点 → 进战斗 → 回大地图保留）。</para>
+/// <para>访问方式：建议通过 <see cref="BladeHex.Data.Globals.SkillTrees"/>（或 <see cref="BladeHex.Data.Globals.SkillTreesOrNull"/>）。</para>
+///
+/// <para>三层分离架构：</para>
+/// <list type="bullet">
+///   <item>层 1：<see cref="SkillTreeData"/> — 图数据（只读，所有角色共用）</item>
+///   <item>层 2：<see cref="NodeFiller"/> — 状态维护</item>
+///   <item>层 3：<see cref="CharacterSkillTree"/> — 角色实例</item>
+/// </list>
 /// </summary>
 [GlobalClass]
 public partial class SkillTreeManager : Node
 {
-    private static SkillTreeManager? _instance;
+    public static SkillTreeManager? Instance { get; private set; }
 
-    public static SkillTreeManager? GetInstance() => _instance;
+#if DEBUG
+    /// <summary>测试钩子：替换或重置 <see cref="Instance"/>。</summary>
+    public static void OverrideForTest(SkillTreeManager? mock) => Instance = mock;
+#endif
 
     // ========================================
     // 数据
@@ -35,8 +48,13 @@ public partial class SkillTreeManager : Node
 
     public override void _Ready()
     {
-        _instance = this;
+        Instance = this;
         LoadTreeData();
+    }
+
+    public override void _ExitTree()
+    {
+        if (Instance == this) Instance = null;
     }
 
     private void LoadTreeData()

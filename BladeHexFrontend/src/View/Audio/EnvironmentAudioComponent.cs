@@ -104,22 +104,20 @@ public partial class EnvironmentAudioComponent : Node
     {
         if (_audioManager == null) return;
 
-        // 天气
-        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "rain", AudioManager.BgmBasePath + "overworld_rain.ogg");
+        // 天气 — overworld_rain + overworld_rain_2 已在 AudioManager.InitBgmPlaylists 注册
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "storm", AudioManager.BgmBasePath + "overworld_storm.ogg");
 
         // 生态群系 (Biome) BGM 变体
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_forest", AudioManager.BgmBasePath + "biome_forest.ogg");
-        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_mountain", AudioManager.BgmBasePath + "overworld_travel.ogg"); // 资源缺失，复用
-        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_swamp", AudioManager.BgmBasePath + "overworld_night.ogg"); // 复用夜晚的阴郁感
+        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_mountain", AudioManager.BgmBasePath + "overworld_travel.ogg");
+        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_swamp", AudioManager.BgmBasePath + "overworld_night.ogg");
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_desert", AudioManager.BgmBasePath + "biome_desert.ogg");
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "biome_snowland", AudioManager.BgmBasePath + "biome_snowland.ogg");
 
-        // 地标接近 (Proximity) BGM 变体
-        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "prox_town", AudioManager.BgmBasePath + "overworld_travel.ogg"); // 资源缺失，复用
+        // 地标接近 (Proximity) BGM 变体（prox_ruins_3 已移作boss战斗）
+        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "prox_town", AudioManager.BgmBasePath + "overworld_travel.ogg");
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "prox_ruins", AudioManager.BgmBasePath + "prox_ruins.ogg");
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "prox_ruins", AudioManager.BgmBasePath + "prox_ruins_2.ogg");
-        _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "prox_ruins", AudioManager.BgmBasePath + "prox_ruins_3.ogg");
         _audioManager.AddBgmVariant(AudioManager.Scenario.Overworld, "prox_camp", AudioManager.BgmBasePath + "prox_camp.ogg");
     }
 
@@ -149,13 +147,26 @@ public partial class EnvironmentAudioComponent : Node
     {
         if (CurrentBiome == newBiome) return;
         CurrentBiome = newBiome;
+        // 切换地形底噪（仅在天气平静时）
+        if (CurrentWeather == WeatherType.Clear || CurrentWeather == WeatherType.Cloudy)
+            PlayTerrainAmbient();
         EvaluateAndPlayBgm(fadeTime);
     }
 
     public void SetProximity(ProximityType newProximity, float fadeTime = 2.0f)
     {
         if (CurrentProximity == newProximity) return;
+        var oldProximity = CurrentProximity;
         CurrentProximity = newProximity;
+
+        // 进入城镇/营地时自动切换场景底噪
+        if (newProximity == ProximityType.Town)
+            SetSceneAmbient(CurrentTime == TimeOfDay.Night ? SceneAmbients.TownNight : SceneAmbients.Town);
+        else if (newProximity == ProximityType.Camp)
+            SetSceneAmbient(SceneAmbients.Camp);
+        else if (oldProximity == ProximityType.Town || oldProximity == ProximityType.Camp)
+            ClearSceneAmbient(fadeTime);
+
         EvaluateAndPlayBgm(fadeTime);
     }
 
@@ -245,52 +256,205 @@ public partial class EnvironmentAudioComponent : Node
     // 环境底噪(Ambient) 与 随机音效
     // ========================================================================
 
+    /// <summary>
+    /// 天气变化时切换环境底噪。
+    /// 天气音效优先级最高，会覆盖地形底噪。
+    /// </summary>
     private void TransitionAmbient(WeatherType oldWeather, WeatherType newWeather, float fadeTime)
     {
         if (_audioManager == null) return;
 
-        string oldAmbient = GetAmbientNameForWeather(oldWeather);
+        // 停止旧天气音效
+        string oldAmbient = GetAmbientForWeather(oldWeather);
         if (!string.IsNullOrEmpty(oldAmbient))
             _audioManager.StopAmbient(oldAmbient, fadeTime);
 
-        string newAmbient = GetAmbientNameForWeather(newWeather);
+        // 播放新天气音效
+        string newAmbient = GetAmbientForWeather(newWeather);
         if (!string.IsNullOrEmpty(newAmbient))
-            _audioManager.PlayAmbient(newAmbient, -10.0f);
+            _audioManager.PlayAmbient(newAmbient, -8.0f);
 
+        // 天气结束时恢复地形底噪
+        if (newWeather == WeatherType.Clear || newWeather == WeatherType.Cloudy)
+            PlayTerrainAmbient();
+        else
+            StopTerrainAmbient(fadeTime);
+
+        // 雷暴管理
         if (newWeather == WeatherType.Storm)
             StartRandomThunder();
         else if (oldWeather == WeatherType.Storm)
             StopRandomThunder();
     }
 
+    /// <summary>
+    /// 昼夜切换时更新环境底噪。
+    /// 仅在无天气干扰时生效。
+    /// </summary>
     private void TransitionTimeAmbient(TimeOfDay oldTime, TimeOfDay newTime, float fadeTime)
     {
         if (_audioManager == null) return;
 
-        string oldAmbient = oldTime == TimeOfDay.Day ? "ambient_forest" : "ambient_night";
-        string newAmbient = newTime == TimeOfDay.Day ? "ambient_forest" : "ambient_night";
+        // 停止旧的昼夜底噪
+        string oldAmbient = GetAmbientForTime(oldTime);
+        if (!string.IsNullOrEmpty(oldAmbient))
+            _audioManager.StopAmbient(oldAmbient, fadeTime);
 
-        _audioManager.StopAmbient(oldAmbient, fadeTime);
-
-        // 仅在天气平静时播放昼夜环境音
+        // 仅在天气平静时播放昼夜+地形环境音
         if (CurrentWeather == WeatherType.Clear || CurrentWeather == WeatherType.Cloudy)
-            _audioManager.PlayAmbient(newAmbient, -15.0f);
+        {
+            string newAmbient = GetAmbientForTime(newTime);
+            if (!string.IsNullOrEmpty(newAmbient))
+                _audioManager.PlayAmbient(newAmbient, -15.0f);
+            PlayTerrainAmbient();
+        }
     }
 
-    private static string GetAmbientNameForWeather(WeatherType weather)
+    // ────────────────────────────────────────────────────────────────
+    // 地形底噪（与天气互斥，天气优先）
+    // ────────────────────────────────────────────────────────────────
+
+    private string _activeTerrainAmbient = "";
+
+    private void PlayTerrainAmbient()
+    {
+        if (_audioManager == null) return;
+        string newTerrain = GetAmbientForBiome(CurrentBiome);
+        if (newTerrain == _activeTerrainAmbient) return;
+
+        if (!string.IsNullOrEmpty(_activeTerrainAmbient))
+            _audioManager.StopAmbient(_activeTerrainAmbient, 3.0f);
+
+        _activeTerrainAmbient = newTerrain;
+        if (!string.IsNullOrEmpty(newTerrain))
+            _audioManager.PlayAmbient(newTerrain, -14.0f);
+    }
+
+    private void StopTerrainAmbient(float fadeTime)
+    {
+        if (_audioManager == null || string.IsNullOrEmpty(_activeTerrainAmbient)) return;
+        _audioManager.StopAmbient(_activeTerrainAmbient, fadeTime);
+        _activeTerrainAmbient = "";
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // 场景底噪（城镇、酒馆等室内场景）
+    // ────────────────────────────────────────────────────────────────
+
+    private string _activeSceneAmbient = "";
+
+    /// <summary>
+    /// 进入特殊场景（城镇、酒馆等）时调用，播放对应环境底噪。
+    /// 会停止地形底噪。
+    /// </summary>
+    public void SetSceneAmbient(string ambientName, float volumeDb = -10.0f)
+    {
+        if (_audioManager == null) return;
+
+        // 停止地形底噪
+        StopTerrainAmbient(2.0f);
+
+        // 停止旧场景底噪
+        if (!string.IsNullOrEmpty(_activeSceneAmbient) && _activeSceneAmbient != ambientName)
+            _audioManager.StopAmbient(_activeSceneAmbient, 2.0f);
+
+        _activeSceneAmbient = ambientName;
+        if (!string.IsNullOrEmpty(ambientName))
+            _audioManager.PlayAmbient(ambientName, volumeDb);
+    }
+
+    /// <summary>
+    /// 离开特殊场景时调用，恢复地形底噪。
+    /// </summary>
+    public void ClearSceneAmbient(float fadeTime = 2.0f)
+    {
+        if (_audioManager == null) return;
+
+        if (!string.IsNullOrEmpty(_activeSceneAmbient))
+        {
+            _audioManager.StopAmbient(_activeSceneAmbient, fadeTime);
+            _activeSceneAmbient = "";
+        }
+
+        // 恢复地形底噪（如果天气允许）
+        if (CurrentWeather == WeatherType.Clear || CurrentWeather == WeatherType.Cloudy)
+            PlayTerrainAmbient();
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // 环境音效名称映射
+    // ────────────────────────────────────────────────────────────────
+
+    /// <summary>天气 → 环境音效（优先级最高）</summary>
+    private static string GetAmbientForWeather(WeatherType weather)
     {
         return weather switch
         {
             WeatherType.Rain => "ambient_rain",
-            WeatherType.Storm => "ambient_storm",
-            WeatherType.Snow => "ambient_mountain", // 复用山地风声
-            WeatherType.Fog => "ambient_forest",
-            WeatherType.Blizzard => "ambient_storm",
-            WeatherType.Sandstorm => "ambient_desert",
-            WeatherType.Heatwave => "ambient_desert",
-            WeatherType.MagicStorm => "ambient_storm",
+            WeatherType.Storm => "ambient_storm",         // 含雷声底噪
+            WeatherType.Snow => "ambient_mountain",       // 风雪声（复用山地风声）
+            WeatherType.Fog => "",                        // 雾天无特殊底噪，保留地形音
+            WeatherType.Blizzard => "ambient_storm",      // 暴风雪
+            WeatherType.Sandstorm => "ambient_desert",    // 沙尘暴
+            WeatherType.Heatwave => "",                   // 热浪无特殊底噪
+            WeatherType.MagicStorm => "ambient_storm",    // 魔法风暴
+            // ── 预留 ──
+            // WeatherType.Hail => "ambient_hail",
+            // WeatherType.AcidRain => "ambient_acid_rain",
             _ => ""
         };
+    }
+
+    /// <summary>昼夜 → 环境底噪（低优先级，天气覆盖时不播放）</summary>
+    private static string GetAmbientForTime(TimeOfDay time)
+    {
+        return time switch
+        {
+            TimeOfDay.Night => "ambient_night",
+            // ── 预留 ──
+            // TimeOfDay.Dawn => "ambient_dawn",
+            // TimeOfDay.Dusk => "ambient_rural_night",
+            _ => "" // 白天由地形底噪覆盖
+        };
+    }
+
+    /// <summary>地形/生态群系 → 环境底噪</summary>
+    private static string GetAmbientForBiome(BiomeType biome)
+    {
+        return biome switch
+        {
+            BiomeType.Plains => "ambient_plains",
+            BiomeType.Forest => "ambient_forest",
+            BiomeType.Mountain => "ambient_mountain",
+            BiomeType.Swamp => "ambient_forest_2",        // 沼泽用森林变体（潮湿感）
+            BiomeType.Desert => "ambient_desert",
+            BiomeType.Snowland => "ambient_mountain",     // 雪地复用山地风声
+            // ── 预留 ──
+            // BiomeType.Coast => "ambient_ocean",
+            // BiomeType.Volcanic => "ambient_volcanic",
+            // BiomeType.Jungle => "ambient_jungle",
+            _ => "ambient_plains"
+        };
+    }
+
+    /// <summary>
+    /// 场景环境音效名称常量 — 供外部调用 SetSceneAmbient 时使用。
+    /// </summary>
+    public static class SceneAmbients
+    {
+        public const string Town = "ambient_rural_night";         // 城镇（人声、脚步、远处铁匠）
+        public const string TownNight = "ambient_rural_night_2";  // 城镇夜晚
+        public const string Tavern = "ambient_forest";            // 酒馆（预留：ambient_tavern）
+        public const string Market = "ambient_plains";            // 市场（预留：ambient_market）
+        public const string Dungeon = "ambient_ocean";            // 地牢（回声、水滴，复用海洋的空旷感）
+        public const string Camp = "ambient_night";               // 营地（夜晚虫鸣+篝火）
+        // ── 预留（需要新音效文件） ──
+        // public const string Tavern = "ambient_tavern";         // 酒馆（人声嘈杂、杯碟、笑声）
+        // public const string Forge = "ambient_forge";           // 铁匠铺（锤击、火焰）
+        // public const string Church = "ambient_church";         // 教堂（回声、唱诗）
+        // public const string Harbor = "ambient_ocean";          // 港口（海浪、海鸥、绳索）
+        // public const string Library = "ambient_library";       // 图书馆（翻书、低语）
+        // public const string Sewer = "ambient_sewer";           // 下水道（水流、老鼠）
     }
 
     private void StartRandomThunder()

@@ -33,6 +33,7 @@ public partial class InteractionManager : Node
     // ========================================
 
     private Node2D? _currentEntity = null;
+    public Node2D? GetCurrentEntity() => _currentEntity;
     public Node2D? PlayerParty = null; // 简单起见，这里先用 Node2D，后续可改为 OverworldParty
     public HexOverworldGrid? HexGrid = null;
 

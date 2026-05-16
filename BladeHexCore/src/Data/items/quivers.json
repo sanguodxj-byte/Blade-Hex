@@ -1,0 +1,5 @@
+[
+  { "id": "leather_quiver", "name": "皮箭筒", "damage_bonus": 0, "price": 15 },
+  { "id": "reinforced_quiver", "name": "强化箭筒", "damage_bonus": 5, "price": 40 },
+  { "id": "war_quiver", "name": "战争箭筒", "damage_bonus": 10, "price": 80 }
+]

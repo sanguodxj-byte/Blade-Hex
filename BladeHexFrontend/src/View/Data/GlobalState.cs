@@ -1,73 +1,44 @@
 // GlobalState.cs
-// 全局状态管理单例，用于跨场景数据传递
+// 全局状态管理 — Autoload 聚合根。
 using Godot;
+using BladeHex.Data.Contexts;
 
 namespace BladeHex.Data;
 
 /// <summary>
-/// 全局状态管理 — Autoload 单例
+/// [Autoload Singleton] 全局状态聚合根。
+///
+/// <para>注册位置：<c>project.godot [autoload]</c> 段，名称 <c>GlobalState</c>。</para>
+/// <para>生命周期：应用全局。</para>
+/// <para>访问方式：建议通过 <see cref="Globals.State"/> 或 <see cref="Globals.StateOrNull"/>。</para>
+///
+/// <para>状态按职责拆分为多个子上下文，禁止在此类直接添加新字段：</para>
+/// <list type="bullet">
+///   <item><see cref="Save"/> — 存档加载状态</item>
+///   <item><see cref="WorldGen"/> — 世界生成参数</item>
+///   <item><see cref="QuickCombat"/> — 快速战斗配置</item>
+///   <item><see cref="Weather"/> — 天气快照</item>
+///   <item><see cref="OriginContext"/> — 出身选择数据</item>
+/// </list>
 /// </summary>
 [GlobalClass]
 public partial class GlobalState : Node
 {
-    /// <summary>是否正在加载存档</summary>
-    [Export] public bool IsLoadingSave { get; set; }
-
-    /// <summary>已加载的存档数据</summary>
-    [Export] public Godot.Collections.Dictionary LoadedData { get; set; } = new();
-
-    /// <summary>快速游戏模式（跳过出身选择，随机生成角色）</summary>
-    [Export] public bool IsQuickGame { get; set; }
-
-    /// <summary>世界种子（新游戏时设置，0 表示随机）</summary>
-    [Export] public int WorldSeed { get; set; }
-
-    /// <summary>世界大小（0=小, 1=中, 2=大）— 新游戏时由玩家选择</summary>
-    [Export] public int WorldSize { get; set; } = 1; // 默认中型
-
-    /// <summary>当前存档 ID（用于 chunk 持久化路径）</summary>
-    [Export] public string? CurrentSaveId { get; set; }
-
-    /// <summary>
-    /// 玩家选择的出身数据（由 OriginSelect 设置）
-    /// 包含: race (RaceData), unit_data (UnitData)
-    /// </summary>
-    [Export] public Godot.Collections.Dictionary PlayerOrigin { get; set; } = new();
-
     // ========================================
-    // 快速战斗配置（由 QuickCombatSetup 面板设置）
+    // 子上下文（推荐访问方式）
     // ========================================
 
-    /// <summary>快速战斗地图模板名（空=随机）</summary>
-    [Export] public string QuickCombatTemplate { get; set; } = "";
-
-    /// <summary>快速战斗规模 (0=Mercenary, 1=Knight, 2=Lord, 3=Stronghold)</summary>
-    [Export] public int QuickCombatSize { get; set; } = 0;
-
-    /// <summary>玩家方单位数量</summary>
-    [Export] public int QuickCombatPlayerCount { get; set; } = 2;
-
-    /// <summary>敌方单位数量</summary>
-    [Export] public int QuickCombatEnemyCount { get; set; } = 3;
-
-    /// <summary>敌方难度 (0=简单, 1=普通, 2=困难)</summary>
-    [Export] public int QuickCombatDifficulty { get; set; } = 1;
+    [Export] public SaveContext Save { get; set; } = new();
+    [Export] public WorldGenContext WorldGen { get; set; } = new();
+    [Export] public QuickCombatContext QuickCombat { get; set; } = new();
+    [Export] public WeatherContext Weather { get; set; } = new();
+    [Export] public PlayerOriginContext OriginContext { get; set; } = new();
 
     // ========================================
-    // 天气状态（大地图 → 战斗场景传递）
+    // 设置相关（薄包装，仍保留在 GlobalState）
     // ========================================
 
-    /// <summary>当前天气类型 (-1=Clear, 0=Rain, 1=Snow, 2=Sandstorm)</summary>
-    public int CurrentWeatherType { get; set; } = -1;
-
-    /// <summary>当前天气强度 [0, 1]</summary>
-    public float CurrentWeatherIntensity { get; set; } = 0.0f;
-
-    // ========================================
-    // 设置相关（供 调用）
-    // ========================================
-
-    /// <summary>获取当前游戏设置（从文件加载或创建默认）</summary>
+    /// <summary>获取当前游戏设置（从文件加载或创建默认）。</summary>
     public GameSettings GetSettings()
     {
         var settings = new GameSettings();
@@ -75,7 +46,7 @@ public partial class GlobalState : Node
         return settings;
     }
 
-    /// <summary>应用设置到引擎并保存到文件</summary>
+    /// <summary>应用设置到引擎并保存到文件。</summary>
     public void ApplySettings(GameSettings settings)
     {
         settings.ApplyToEngine();

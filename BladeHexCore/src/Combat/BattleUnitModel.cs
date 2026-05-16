@@ -238,6 +238,22 @@ public partial class BattleUnitModel
                 newLevel = attackerMastery.GetLevelBySubtype(weaponSubtype);
         }
 
+        // --- OnTakeDamage 钩子：触发防御方装备能力（如 thorns）---
+        int reflectDamage = 0;
+        if (hpDamage > 0)
+        {
+            var ctx = new BladeHex.Combat.Abilities.TakeDamageContext
+            {
+                Attacker = null!,
+                Defender = this,
+                HpDamageTaken = hpDamage,
+                DrDamageTaken = drDamage,
+            };
+            foreach (var ab in BladeHex.Combat.Abilities.UnitAbilities.GetAll(Data))
+                ab.OnTakeDamage(ctx);
+            reflectDamage = ctx.ReflectDamage;
+        }
+
         return new DamageResult
         {
             IsPenetrated = isPenetrated,
@@ -248,6 +264,7 @@ public partial class BattleUnitModel
             RemainingHp = CurrentHp,
             MasteryLeveledUp = leveledUp,
             MasteryNewLevel = newLevel,
+            ReflectDamageToAttacker = reflectDamage,
         };
     }
 }

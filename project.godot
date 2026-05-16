@@ -23,6 +23,7 @@ EventBus="*res://BladeHexFrontend/src/View/Events/EventBus.cs"
 AudioManager="*res://BladeHexFrontend/src/View/Audio/AudioManager.cs"
 AudioEventReactor="*res://BladeHexFrontend/src/View/Events/AudioEventReactor.cs"
 UITheme="*res://BladeHexFrontend/src/View/UI/UITheme.cs"
+CursorManager="*res://BladeHexFrontend/src/View/UI/CursorManager.cs"
 DebugConsole="*res://BladeHexFrontend/src/View/Debug/DebugConsole.cs"
 GameMenuManager="*res://BladeHexFrontend/src/View/UI/Global/GameMenuManager.cs"
 

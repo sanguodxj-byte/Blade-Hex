@@ -18,10 +18,10 @@ public partial class ChunkGenerator : RefCounted
     // 噪声参数
     // ========================================
 
-    public const float ElevationFreq = 0.035f;   // 大陆基础高程
-    public const float RidgeFreq = 0.05f;        // 山脊噪声（线性山脉）
-    public const float MoistureFreq = 0.03f;     // 湿度基础噪声
-    public const float TemperatureFreq = 0.015f;  // 温度扰动
+    public const float ElevationFreq = 0.025f;   // 大陆基础高程（降低：更大块的陆地）
+    public const float RidgeFreq = 0.04f;        // 山脊噪声（降低：更连续的山脉）
+    public const float MoistureFreq = 0.018f;    // 湿度基础噪声（大幅降低：更宽广的湿度带）
+    public const float TemperatureFreq = 0.01f;  // 温度扰动（降低：温度带更平缓）
 
     // ========================================
     // 运行时噪声实例（确定性）
@@ -72,9 +72,9 @@ public partial class ChunkGenerator : RefCounted
         _noiseElev.Seed = WorldSeed;
         _noiseElev.Frequency = ElevationFreq;
         _noiseElev.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _noiseElev.FractalOctaves = 5;
+        _noiseElev.FractalOctaves = 4;          // 减少 octaves：去掉最高频细节
         _noiseElev.FractalLacunarity = 2.0f;
-        _noiseElev.FractalGain = 0.45f;
+        _noiseElev.FractalGain = 0.4f;          // 降低 gain：高频 octave 贡献更小
 
         // 山脊噪声（Ridged Multi — 产生线性山脉走向）
         _noiseRidge = new FastNoiseLite();
@@ -82,9 +82,9 @@ public partial class ChunkGenerator : RefCounted
         _noiseRidge.Seed = WorldSeed + 500;
         _noiseRidge.Frequency = RidgeFreq;
         _noiseRidge.FractalType = FastNoiseLite.FractalTypeEnum.Ridged;
-        _noiseRidge.FractalOctaves = 4;
-        _noiseRidge.FractalLacunarity = 2.2f;
-        _noiseRidge.FractalGain = 0.5f;
+        _noiseRidge.FractalOctaves = 3;         // 减少：山脉更平滑
+        _noiseRidge.FractalLacunarity = 2.0f;
+        _noiseRidge.FractalGain = 0.45f;
 
         // 湿度基础噪声（用于局部变化，最终受海洋距离调制）
         _noiseMoist = new FastNoiseLite();
@@ -92,9 +92,9 @@ public partial class ChunkGenerator : RefCounted
         _noiseMoist.Seed = WorldSeed + 1000;
         _noiseMoist.Frequency = MoistureFreq;
         _noiseMoist.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _noiseMoist.FractalOctaves = 3;
+        _noiseMoist.FractalOctaves = 2;         // 大幅减少：湿度变化极平缓
         _noiseMoist.FractalLacunarity = 2.0f;
-        _noiseMoist.FractalGain = 0.5f;
+        _noiseMoist.FractalGain = 0.4f;
 
         // 温度扰动噪声
         _noiseTemp = new FastNoiseLite();
@@ -102,13 +102,13 @@ public partial class ChunkGenerator : RefCounted
         _noiseTemp.Seed = WorldSeed + 2000;
         _noiseTemp.Frequency = TemperatureFreq;
         _noiseTemp.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _noiseTemp.FractalOctaves = 3;
+        _noiseTemp.FractalOctaves = 2;          // 减少：温度带更宽
 
         // 大陆形状扭曲（Domain Warp — 让海岸线不规则）
         _noiseWarp = new FastNoiseLite();
         _noiseWarp.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
         _noiseWarp.Seed = WorldSeed + 3000;
-        _noiseWarp.Frequency = 0.02f;
+        _noiseWarp.Frequency = 0.015f;          // 降低：更大尺度的海岸线扭曲
         _noiseWarp.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _noiseWarp.FractalOctaves = 3;
     }
@@ -182,34 +182,41 @@ public partial class ChunkGenerator : RefCounted
         float ridge = (ridgeRaw + 1.0f) * 0.5f;
         ridge = Mathf.Pow(ridge, 2.0f); // 锐化山脊（让山脉更窄更高）
 
-        // 合成高程：基础 70% + 山脊 30%
-        float elev = baseElev * 0.7f + ridge * 0.3f;
+        // 合成高程：基础 75% + 山脊 25%（降低山脊权重，减少碎片化山地）
+        float elev = baseElev * 0.75f + ridge * 0.25f;
 
         // 边缘衰减 — 大陆轮廓（用 domain warp 扭曲坐标，产生不规则海岸线）
-        float warpScale = Mathf.Max(WorldWidth, WorldHeight) * 0.12f; // 扭曲幅度 = 世界尺寸的 12%
-        float warpX = _noiseWarp!.GetNoise2D(worldQ * 0.5f, worldR * 0.5f) * warpScale;
-        float warpY = _noiseWarp.GetNoise2D(worldQ * 0.5f + 200, worldR * 0.5f + 200) * warpScale;
+        float warpScale = Mathf.Max(WorldWidth, WorldHeight) * 0.15f; // 扭曲幅度增大到 15%
+        float warpSeedOffset = (WorldSeed % 1000) * 0.1f; // 种子影响 warp 采样位置
+        float warpX = _noiseWarp!.GetNoise2D(worldQ * 0.35f + warpSeedOffset, worldR * 0.35f) * warpScale;
+        float warpY = _noiseWarp.GetNoise2D(worldQ * 0.35f + 200 + warpSeedOffset, worldR * 0.35f + 200) * warpScale;
         float edgeFalloff = CalcEdgeFalloff(
             worldQ + (int)warpX, worldR + (int)warpY,
             WorldWidth, WorldHeight);
 
-        // 内海/湖泊生成：用低频噪声在大陆深处挖出凹陷
-        // 只在大陆核心（edgeFalloff > 0.7）生效，确保不会切断大陆
-        float seaCarve = _noiseWarp.GetNoise2D(worldQ * 0.25f + 500, worldR * 0.25f + 500);
-        seaCarve = (seaCarve + 1.0f) * 0.5f;
-        // 噪声值 > 0.78 的区域挖凹（约 22% 的核心区域有机会形成内海）
-        float carveStrength = Mathf.Clamp((seaCarve - 0.78f) * 4.5f, 0.0f, 1.0f);
-        bool isCarvedArea = edgeFalloff > 0.7f && carveStrength > 0.0f;
+        // ========================================
+        // 内海/湖泊生成 — 改进版
+        // 使用独立的低频噪声，产生大块连续的内海而非碎片化水坑
+        // ========================================
+        float lakeSeedOffset = ((WorldSeed >> 12) & 0xFFF) * 0.05f;
+        float lakeNoise = _noiseWarp.GetNoise2D(worldQ * 0.15f + 500 + lakeSeedOffset, worldR * 0.15f + 500 + lakeSeedOffset);
+        lakeNoise = (lakeNoise + 1.0f) * 0.5f;
+        // 种子控制内海数量：有些种子产生更多内海，有些几乎没有
+        float lakeThreshold = 0.80f + ((WorldSeed >> 5) & 0x7) / 70.0f; // 0.80~0.90
+        float carveStrength = Mathf.Clamp((lakeNoise - lakeThreshold) * 5.0f, 0.0f, 1.0f);
+        bool isLakeArea = edgeFalloff > 0.65f && carveStrength > 0.0f;
 
-        if (isCarvedArea)
+        if (isLakeArea)
         {
-            // 内海区域：降低高程（最多降 0.3，形成浅水/深水）
-            elev = elev * edgeFalloff - carveStrength * 0.3f;
+            // 内海区域：大幅降低高程，确保形成连续水体
+            // 使用平滑的凹陷曲线，中心最深，边缘渐浅
+            float depthCurve = carveStrength * carveStrength; // 二次曲线，中心更深
+            elev = Mathf.Max(elev * edgeFalloff - depthCurve * 0.35f, 0.0f);
         }
         else
         {
-            // 正常区域：衰减 + 内陆保底
-            float inlandFloor = edgeFalloff > 0.5f ? 0.32f : 0.0f;
+            // 正常区域：衰减 + 内陆保底（提高保底值，防止内陆出现零散水坑）
+            float inlandFloor = edgeFalloff > 0.45f ? 0.34f : 0.0f;
             elev = Mathf.Max(elev * edgeFalloff, inlandFloor * edgeFalloff);
         }
         elev = Mathf.Clamp(elev, 0.0f, 1.0f);
@@ -219,17 +226,19 @@ public partial class ChunkGenerator : RefCounted
         // ========================================
         float moistNoise = SampleSmoothed(_noiseMoist!, worldQ, worldR);
 
-        // 海洋距离因子：高程越低（越接近海平面）越湿
-        // 用 edgeFalloff 近似海洋距离（边缘=近海=湿，中心=内陆=干）
+        // 海洋距离因子：用 edgeFalloff 近似（边缘=近海=湿，中心=内陆=干）
         float oceanProximity = 1.0f - Mathf.Clamp(edgeFalloff, 0.0f, 1.0f);
         // 沿海湿度加成（距海 0-30% 范围内线性增加）
-        float coastalMoisture = Mathf.Clamp(oceanProximity * 3.0f, 0.0f, 0.4f);
+        float coastalMoisture = Mathf.Clamp(oceanProximity * 2.5f, 0.0f, 0.35f);
 
-        // 雨影效应：山脉背后（高程高的区域下风侧）更干燥
-        // 简化：高程越高，对下游湿度的抑制越强
-        float rainShadow = Mathf.Clamp(elev - 0.6f, 0.0f, 0.3f);
+        // 内海/湖泊附近也增加湿度（模拟湖泊蒸发效应）
+        if (isLakeArea || carveStrength > 0.3f)
+            coastalMoisture = Mathf.Max(coastalMoisture, 0.2f);
 
-        float moist = Mathf.Clamp(moistNoise * 0.6f + coastalMoisture - rainShadow, 0.0f, 1.0f);
+        // 雨影效应：山脉背后更干燥
+        float rainShadow = Mathf.Clamp(elev - 0.6f, 0.0f, 0.25f);
+
+        float moist = Mathf.Clamp(moistNoise * 0.55f + coastalMoisture - rainShadow, 0.0f, 1.0f);
 
         // ========================================
         // 3. 温度 = 纬度 + 海洋调节 + 噪声 - 海拔惩罚
@@ -243,11 +252,11 @@ public partial class ChunkGenerator : RefCounted
         float oceanModeration = oceanProximity * 0.15f;
         float moderatedTemp = Mathf.Lerp(latitudeTemp, 0.5f, oceanModeration);
 
-        // 噪声扰动
-        float tempNoise = (tempRaw - 0.5f) * 0.3f;
+        // 噪声扰动（降低扰动幅度，让纬度梯度更明显）
+        float tempNoise = (tempRaw - 0.5f) * 0.2f;
 
-        // 海拔降温
-        float altitudePenalty = Mathf.Clamp(elev - 0.5f, 0.0f, 0.5f) * 0.6f;
+        // 海拔降温（降低系数，避免温带高地被错误归为寒冷）
+        float altitudePenalty = Mathf.Clamp(elev - 0.55f, 0.0f, 0.4f) * 0.4f;
 
         float temp = Mathf.Clamp(moderatedTemp + tempNoise - altitudePenalty, 0.0f, 1.0f);
 
@@ -260,41 +269,105 @@ public partial class ChunkGenerator : RefCounted
     }
 
     /// <summary>
-    /// 空间低通滤波 — 中心权重 0.3 + 6 邻居各 0.117（≈0.7/6）。
-    /// 邻居影响占 70%，确保地形高度连续，消除单瓦片噪点。
+    /// 空间低通滤波 — 2 环邻居加权平均。
+    /// 中心权重 0.2，1 环(6 邻居)各 0.08，2 环(12 邻居)各 0.02。
+    /// 总权重: 0.2 + 6×0.08 + 12×0.02 = 0.2 + 0.48 + 0.24 = 0.92（归一化到 1.0）
+    /// 大范围平滑确保地形高度连续，消除碎片化。
     /// </summary>
     private static float SampleSmoothed(FastNoiseLite noise, int q, int r)
     {
         float center = (noise.GetNoise2D(q, r) + 1.0f) * 0.5f;
 
-        float neighborSum = 0.0f;
+        // 1 环邻居
+        float ring1Sum = 0.0f;
         for (int i = 0; i < 6; i++)
         {
             int nq = q + HexNeighborOffsets[i][0];
             int nr = r + HexNeighborOffsets[i][1];
-            neighborSum += (noise.GetNoise2D(nq, nr) + 1.0f) * 0.5f;
+            ring1Sum += (noise.GetNoise2D(nq, nr) + 1.0f) * 0.5f;
         }
 
-        // 中心 30%，邻居 70%（强平滑，确保连续性）
-        return center * 0.3f + neighborSum * (0.7f / 6.0f);
+        // 2 环邻居（12 个位置）
+        float ring2Sum = 0.0f;
+        int ring2Count = 0;
+        for (int i = 0; i < 6; i++)
+        {
+            // 直线延伸 2 格
+            int nq = q + HexNeighborOffsets[i][0] * 2;
+            int nr = r + HexNeighborOffsets[i][1] * 2;
+            ring2Sum += (noise.GetNoise2D(nq, nr) + 1.0f) * 0.5f;
+            ring2Count++;
+
+            // 对角位置
+            int next = (i + 1) % 6;
+            int dq = q + HexNeighborOffsets[i][0] + HexNeighborOffsets[next][0];
+            int dr = r + HexNeighborOffsets[i][1] + HexNeighborOffsets[next][1];
+            ring2Sum += (noise.GetNoise2D(dq, dr) + 1.0f) * 0.5f;
+            ring2Count++;
+        }
+
+        // 加权平均：中心 20%，1 环 52%，2 环 28%
+        const float wCenter = 0.20f;
+        const float wRing1 = 0.52f;
+        const float wRing2 = 0.28f;
+
+        return center * wCenter + ring1Sum * (wRing1 / 6.0f) + ring2Sum * (wRing2 / ring2Count);
     }
 
     /// <summary>
-    /// 边缘衰减函数 — 用椭圆距离场产生大陆轮廓。
-    /// 衰减起始点随机化（0.55-0.70），确保大陆足够大不会被切碎。
+    /// 边缘衰减函数 — 多重噪声调制的大陆轮廓。
+    /// 不再是固定椭圆，而是用种子驱动的噪声产生不规则大陆形状：
+    /// - 基础形状：椭圆 + 种子控制的宽高比和偏移
+    /// - 噪声调制：低频噪声扭曲边缘，产生半岛、海湾、峡谷
+    /// - 多大陆支持：种子决定是单大陆还是群岛/双大陆
     /// </summary>
     private float CalcEdgeFalloff(int q, int r, int width, int height)
     {
-        // 像素布局已是矩形（even-q offset），直接用 q/r 归一化
+        // 归一化坐标到 [-1, 1]
         float nx = (float)q / width * 2.0f - 1.0f;
         float ny = (float)r / height * 2.0f - 1.0f;
 
-        float dist = nx * nx + ny * ny;
+        // === 种子驱动的大陆形状参数 ===
+        // 从种子中提取多个独立的随机参数
+        int s = WorldSeed;
+        float aspectRatio = 0.7f + ((s & 0xFF) / 255.0f) * 0.6f;          // 宽高比 0.7~1.3
+        float offsetX = (((s >> 8) & 0xFF) / 255.0f - 0.5f) * 0.25f;      // 中心偏移 X [-0.125, 0.125]
+        float offsetY = (((s >> 16) & 0xFF) / 255.0f - 0.5f) * 0.2f;      // 中心偏移 Y [-0.1, 0.1]
+        float rotation = (((s >> 24) & 0xFF) / 255.0f) * Mathf.Pi * 0.3f; // 旋转角 0~54°
+        float fadeStart = 0.45f + (((s >> 4) & 0xF) / 15.0f) * 0.2f;      // 衰减起始 0.45~0.65
 
-        float seedVariation = ((WorldSeed & 0xFF) / 255.0f) * 0.15f;
-        float fadeStart = 0.55f + seedVariation;
+        // 应用偏移
+        float cx = nx - offsetX;
+        float cy = ny - offsetY;
 
-        return 1.0f - Mathf.SmoothStep(fadeStart, 1.1f, dist);
+        // 应用旋转
+        float cosR = Mathf.Cos(rotation);
+        float sinR = Mathf.Sin(rotation);
+        float rx = cx * cosR - cy * sinR;
+        float ry = cx * sinR + cy * cosR;
+
+        // 椭圆距离（宽高比控制）
+        float dist = rx * rx / (aspectRatio * aspectRatio) + ry * ry;
+
+        // === 噪声调制边缘 — 产生不规则海岸线 ===
+        // 用极坐标角度采样噪声，让边缘凹凸不平
+        float angle = Mathf.Atan2(ny, nx);
+        float edgeNoise = _noiseWarp!.GetNoise2D(
+            Mathf.Cos(angle) * 50.0f + WorldSeed * 0.01f,
+            Mathf.Sin(angle) * 50.0f) * 0.25f;
+
+        // 大尺度形状噪声（让大陆不是完美椭圆）
+        float shapeNoise = _noiseElev!.GetNoise2D(
+            q * 0.008f + 1000,
+            r * 0.008f + 1000);
+        shapeNoise = (shapeNoise + 1.0f) * 0.5f;
+        // 形状噪声让某些方向的边缘更近/更远（产生半岛和海湾）
+        float shapeModifier = (shapeNoise - 0.5f) * 0.35f;
+
+        // 最终距离 = 基础椭圆 + 边缘噪声 + 形状调制
+        float modifiedDist = dist + edgeNoise + shapeModifier;
+
+        return 1.0f - Mathf.SmoothStep(fadeStart, fadeStart + 0.55f, modifiedDist);
     }
 
     // ========================================

@@ -91,6 +91,24 @@ public partial class ItemData : Resource
     [Export] public string EquipSpriteFramesId { get; set; } = "";
 
     // ========================================
+    // 箭筒系统（副手装备，提升弹药量至满值 + 伤害修正）
+    // ========================================
+
+    /// <summary>箭筒伤害修正（不同等级箭筒提供+5伤害修正）</summary>
+    [Export] public int QuiverDamageBonus { get; set; } = 0;
+
+    /// <summary>是否为箭筒类物品</summary>
+    public bool IsQuiver => QuiverDamageBonus > 0;
+
+    // ========================================
+    // 装备能力组件（替代字符串 SpecialEffect 的可组合系统）
+    // ========================================
+
+    /// <summary>该物品携带的装备能力（无序列化，运行时由 JSON 加载器或 ApplyAffix 创建）</summary>
+    public System.Collections.Generic.List<BladeHex.Combat.Abilities.EquipmentAbility> Abilities { get; }
+        = new System.Collections.Generic.List<BladeHex.Combat.Abilities.EquipmentAbility>();
+
+    // ========================================
     // 稀有度工具方法
     // ========================================
 
@@ -141,6 +159,28 @@ public partial class ItemData : Resource
         if (!CanAddAffix()) return false;
         Affixes.Add(affix);
         ApplyAffix(affix);
+
+        // 词缀的 SpecialEffect 路由为 EquipmentAbility
+        if (!string.IsNullOrEmpty(affix.SpecialEffect))
+        {
+            var ability = BladeHex.Combat.Abilities.EquipmentAbilityRegistry.Create(
+                affix.SpecialEffect, affix.SpecialValue);
+            if (ability != null) Abilities.Add(ability);
+        }
+
+        // 词缀的条件触发效果路由为 ConditionalDamageDiceAbility
+        if (!string.IsNullOrEmpty(affix.Condition) && affix.ConditionalDamageDiceCount > 0)
+        {
+            Abilities.Add(new BladeHex.Combat.Abilities.ConditionalDamageDiceAbility
+            {
+                AbilityId = $"affix_cond_{affix.AffixId}",
+                Condition = affix.Condition,
+                DiceCount = affix.ConditionalDamageDiceCount,
+                DiceSides = affix.ConditionalDamageDiceSides,
+                DamageType = affix.ConditionalDamageType,
+            });
+        }
+
         return true;
     }
 

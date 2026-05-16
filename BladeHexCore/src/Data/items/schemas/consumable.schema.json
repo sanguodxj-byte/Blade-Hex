@@ -1,0 +1,15 @@
+{
+  "title": "Consumable Item Array",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+      "name": { "type": "string" },
+      "desc": { "type": "string" },
+      "price": { "type": "integer", "minimum": 1, "default": 10 }
+    }
+  }
+}

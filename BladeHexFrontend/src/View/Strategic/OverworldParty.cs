@@ -10,7 +10,7 @@ namespace BladeHex.Strategic;
 /// 战略层大地图上的玩家队伍实体（无网格平滑移动版）
 /// </summary>
 [GlobalClass]
-public partial class OverworldParty : Node2D
+public partial class OverworldParty : Node2D, IOverworldMapEntity
 {
     [Export] public float BaseMoveSpeed { get; set; } = 300.0f;
     [Export] public Texture2D? OverworldSprite { get; set; }
@@ -63,11 +63,11 @@ public partial class OverworldParty : Node2D
     /// <summary>海上移动累计距离（用于遭遇检定）</summary>
     private float _seaDistanceTraveled = 0f;
 
-    /// <summary>是否有待处理的海上遭遇（由 OverworldScene 消费）</summary>
+    /// <summary>是否有待处理的海上遭遇（由 OverworldScene3D 消费）</summary>
     public bool SeaEncounterPending { get; set; } = false;
 
     // ========================================
-    // 移动速度组件（由 OverworldScene 初始化注入依赖）
+    // 移动速度组件（由 OverworldScene3D 初始化注入依赖）
     // ========================================
 
     public MovementSpeedComponent? SpeedComponent;
@@ -162,6 +162,12 @@ public partial class OverworldParty : Node2D
         Path.Clear();
         IsMoving = false;
     }
+
+    /// <summary>获取显示名称（IOverworldMapEntity）</summary>
+    public string GetDisplayName() => Roster?.Leader?.UnitName ?? "冒险者队伍";
+
+    /// <summary>获取描述文本（IOverworldMapEntity）</summary>
+    public string GetDescription() => $"{GetDisplayName()} — {Roster?.Count ?? 0} 人队伍";
 
     public void MoveTo(Vector2 targetPx)
     {
@@ -433,7 +439,7 @@ public partial class OverworldParty : Node2D
                 if (_seaDistanceTraveled >= SeaEncounterTable.EncounterCheckInterval)
                 {
                     _seaDistanceTraveled -= SeaEncounterTable.EncounterCheckInterval;
-                    // 遭遇检定由 OverworldScene 处理（通过信号或轮询 SeaEncounterPending）
+                    // 遭遇检定由 OverworldScene3D 处理（通过信号或轮询 SeaEncounterPending）
                     SeaEncounterPending = true;
                 }
             }

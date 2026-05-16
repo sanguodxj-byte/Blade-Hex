@@ -85,7 +85,7 @@ public partial class CombatManager : Node
         Registry.LockInitialCounts();
 
         // 战斗开始时重置所有角色的职业技能状态
-        SkillTreeManager.GetInstance()?.OnBattleStart();
+        BladeHex.Data.Globals.SkillTreesOrNull?.OnBattleStart();
 
         EventBus.Instance?.Publish(EventBus.Signals.CombatStarted, new Godot.Collections.Dictionary
         {
@@ -96,6 +96,10 @@ public partial class CombatManager : Node
         Turns.StartCombat();
     }
 
+    /// <remarks>
+    /// Deprecated: Use TurnManager for state transitions. Direct ChangeState may desync TurnManager.
+    /// Kept for backward compatibility with Godot signal bindings.
+    /// </remarks>
     public void ChangeState(CombatState newState)
     {
         // 向后兼容：直接调用时同步到 TurnManager
@@ -113,7 +117,7 @@ public partial class CombatManager : Node
     {
         Registry.ResetActions(units);
         // 每回合开始重置职业技能回合计数
-        SkillTreeManager.GetInstance()?.OnTurnStart();
+        BladeHex.Data.Globals.SkillTreesOrNull?.OnTurnStart();
     }
 
     public void EndCurrentTurn()
@@ -334,6 +338,9 @@ public partial class CombatManager : Node
 
     private void EndCombat(bool victory)
     {
+        // 防重入：如果已经在 CombatEnd 状态则忽略
+        if (CurrentState == CombatState.CombatEnd) return;
+
         Turns.EndCombat();
 
         var eventData = ResultBuilder.BuildEventData(victory);

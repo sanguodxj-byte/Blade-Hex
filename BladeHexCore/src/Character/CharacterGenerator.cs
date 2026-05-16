@@ -47,7 +47,7 @@ public static class CharacterGenerator
         if (race != null && Array.IndexOf(race.RacialTraits, "dwarven_resilience") >= 0)
             unitData.BaseMaxHp += level;
 
-        unitData.BaseAc = 10;
+        unitData.BaseAc = 8;
         unitData.BaseMoveRange = 4;
         unitData.BaseInitiative = 0;
 
@@ -60,7 +60,103 @@ public static class CharacterGenerator
         unitData.Runtime.Loyalty = 50;
 
         ApplyFunctionalTraits(unitData, traits);
+        EquipStartingGear(unitData);
         return unitData;
+    }
+
+    // ========================================================================
+    // 初始装备
+    // ========================================================================
+
+    /// <summary>
+    /// 为角色装备初始装备：布衣 + 鞋子 + 随机1阶主武器，品质随机。
+    /// 所有人形角色（玩家、同伴）调用。
+    /// </summary>
+    public static void EquipStartingGear(UnitData unit)
+    {
+        // 布衣（轻甲，DR阈值3）
+        if (unit.Armor == null)
+        {
+            var cloth = new ArmorData();
+            cloth.ItemId = "starter_cloth_armor";
+            cloth.ItemName = "旅行布衣";
+            cloth.armorType = ArmorData.ArmorType.Light;
+            cloth.AcBonus = 1;
+            cloth.MaxDexBonus = 99;
+            cloth.DrThreshold = 3;
+            cloth.EquipSlotTarget = ItemData.EquipSlot.Costume;
+            cloth.ItemRarity = RollStartingRarity();
+            cloth.InitializeArmorPoints();
+            unit.Armor = cloth;
+        }
+
+        // 鞋子
+        if (unit.Boots == null)
+        {
+            var boots = new ArmorData();
+            boots.ItemId = "starter_boots";
+            boots.ItemName = "皮靴";
+            boots.armorType = ArmorData.ArmorType.Light;
+            boots.AcBonus = 0;
+            boots.MaxDexBonus = 99;
+            boots.DrThreshold = 1;
+            boots.EquipSlotTarget = ItemData.EquipSlot.Feet;
+            boots.ItemRarity = RollStartingRarity();
+            boots.InitializeArmorPoints();
+            unit.Boots = boots;
+        }
+
+        // 随机1阶主武器（从轻型近战武器中随机选一把）
+        if (unit.PrimaryMainHand == null)
+        {
+            var tier1Subtypes = new WeaponData.WeaponSubtype[]
+            {
+                // Slash Light
+                WeaponData.WeaponSubtype.Dagger,
+                WeaponData.WeaponSubtype.Seax,
+                WeaponData.WeaponSubtype.Kukri,
+                // Pierce Light
+                WeaponData.WeaponSubtype.Stiletto,
+                WeaponData.WeaponSubtype.SpikedDagger,
+                WeaponData.WeaponSubtype.Rapier,
+                // Crush Light
+                WeaponData.WeaponSubtype.Club,
+                WeaponData.WeaponSubtype.LightHammer,
+                WeaponData.WeaponSubtype.Cestus,
+            };
+
+            var subtype = tier1Subtypes[GD.Randi() % (uint)tier1Subtypes.Length];
+            var config = WeaponRegistry.GetConfig(subtype);
+
+            var weapon = new WeaponData();
+            weapon.ItemId = $"starter_{subtype.ToString().ToLower()}";
+            weapon.ItemName = config.Name;
+            weapon.Subtype = subtype;
+            weapon.Tier = 1;
+            weapon.DamageDiceCount = config.DiceCount;
+            weapon.DamageDiceSides = config.DiceSides;
+            weapon.WeaponDamageType = config.DamageType;
+            weapon.ApCost = config.BaseApCost;
+            weapon.RangeCells = config.Range;
+            weapon.Class = config.Range > 1 ? WeaponData.WeaponClass.Ranged : WeaponData.WeaponClass.Melee;
+            weapon.Weight = config.BaseApCost <= 3 ? WeaponData.WeightCategory.Light : WeaponData.WeightCategory.Medium;
+            weapon.IsFinesse = subtype == WeaponData.WeaponSubtype.Dagger
+                || subtype == WeaponData.WeaponSubtype.Rapier
+                || subtype == WeaponData.WeaponSubtype.Kukri;
+            weapon.IsDualWieldable = weapon.Weight == WeaponData.WeightCategory.Light;
+            weapon.ItemRarity = RollStartingRarity();
+            unit.PrimaryMainHand = weapon;
+        }
+    }
+
+    /// <summary>随机初始装备品质：70%普通, 20%优秀, 8%稀有, 2%史诗</summary>
+    private static ItemData.Rarity RollStartingRarity()
+    {
+        float roll = GD.Randf();
+        if (roll < 0.70f) return ItemData.Rarity.Common;
+        if (roll < 0.90f) return ItemData.Rarity.Uncommon;
+        if (roll < 0.98f) return ItemData.Rarity.Rare;
+        return ItemData.Rarity.Epic;
     }
 
     /// <summary>生成随机敌方单位</summary>
@@ -95,7 +191,7 @@ public static class CharacterGenerator
 
         int estLevel = Mathf.Max(1, (int)(cr * 4));
         unitData.BaseMaxHp = 20 + Mathf.FloorToInt(Mathf.Sqrt(unitData.Con) * estLevel / 2.0f);
-        unitData.BaseAc = 10;
+        unitData.BaseAc = 8;
         unitData.BaseMoveRange = 4;
         unitData.Morale = 0;
         return unitData;
@@ -322,7 +418,7 @@ public static class CharacterGenerator
 
         unitData.BaseMaxHp = 20 + Mathf.FloorToInt(Mathf.Sqrt(unitData.Con) * targetLevel / 2.0f)
             + (tpl.ContainsKey("hp_bonus") ? tpl["hp_bonus"].AsInt32() : 0);
-        unitData.BaseAc = 10 + (tpl.ContainsKey("ac_bonus") ? tpl["ac_bonus"].AsInt32() : 0);
+        unitData.BaseAc = 8 + (tpl.ContainsKey("ac_bonus") ? tpl["ac_bonus"].AsInt32() : 0);
         unitData.BaseMoveRange = 4;
         unitData.BaseInitiative = tpl.ContainsKey("initiative_bonus") ? tpl["initiative_bonus"].AsInt32() : 0;
         unitData.Morale = 0;

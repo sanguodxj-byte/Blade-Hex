@@ -25,9 +25,9 @@ public partial class HexOverworldGenerator : RefCounted
     public const int DefaultWidth = 64;
     public const int DefaultHeight = 48;
 
-    public const float ElevationFreq = 0.06f;
-    public const float MoistureFreq = 0.07f;
-    public const float TemperatureFreq = 0.025f;
+    public const float ElevationFreq = 0.025f;
+    public const float MoistureFreq = 0.018f;
+    public const float TemperatureFreq = 0.01f;
 
     public const float SeaLevel = 0.30f;
     public const float ShallowLevel = 0.35f;
@@ -103,30 +103,30 @@ public partial class HexOverworldGenerator : RefCounted
         _noiseElev.Seed = Seed;
         _noiseElev.Frequency = ElevationFreq;
         _noiseElev.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _noiseElev.FractalOctaves = 6;
+        _noiseElev.FractalOctaves = 4;
         _noiseElev.FractalLacunarity = 2.0f;
-        _noiseElev.FractalGain = 0.5f;
+        _noiseElev.FractalGain = 0.4f;
 
         _noiseMoist = new FastNoiseLite();
         _noiseMoist.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
         _noiseMoist.Seed = Seed + 1000;
         _noiseMoist.Frequency = MoistureFreq;
         _noiseMoist.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _noiseMoist.FractalOctaves = 4;
+        _noiseMoist.FractalOctaves = 2;
         _noiseMoist.FractalLacunarity = 2.0f;
-        _noiseMoist.FractalGain = 0.5f;
+        _noiseMoist.FractalGain = 0.4f;
 
         _noiseTemp = new FastNoiseLite();
         _noiseTemp.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
         _noiseTemp.Seed = Seed + 2000;
         _noiseTemp.Frequency = TemperatureFreq;
         _noiseTemp.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _noiseTemp.FractalOctaves = 3;
+        _noiseTemp.FractalOctaves = 2;
 
         _noiseDetail = new FastNoiseLite();
         _noiseDetail.NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular;
         _noiseDetail.Seed = Seed + 3000;
-        _noiseDetail.Frequency = 0.08f;
+        _noiseDetail.Frequency = 0.05f;
         _noiseDetail.CellularDistanceFunction = FastNoiseLite.CellularDistanceFunctionEnum.Euclidean;
     }
 

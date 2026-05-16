@@ -83,6 +83,14 @@ public partial class GridInventory : Resource
     /// <summary>总可用格数</summary>
     public int TotalCells => GridWidth * GridHeight;
 
+    /// <summary>直接设置网格尺寸（商店/战利品布局用）</summary>
+    public void SetGridSize(int width, int height)
+    {
+        GridWidth = Math.Max(1, width);
+        GridHeight = Math.Max(1, height);
+        _grid = new bool[GridWidth, GridHeight];
+    }
+
     /// <summary>已放置的物品列表</summary>
     public List<GridItem> Items { get; private set; } = new();
 

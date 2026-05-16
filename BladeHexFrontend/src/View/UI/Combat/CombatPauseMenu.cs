@@ -14,7 +14,6 @@ public partial class CombatPauseMenu : CanvasLayer
     [Signal] public delegate void ReturnToMainMenuRequestedEventHandler();
 
     private Control _root = null!;
-    private Control _settingsPanel = null!;
 
     // ============== 主题色（沿用 OverworldUI 风格，避免外部依赖） ==============
     private static readonly Color BgPrimary = new(0.10f, 0.09f, 0.07f, 0.96f);
@@ -56,17 +55,13 @@ public partial class CombatPauseMenu : CanvasLayer
     public void Open()
     {
         Visible = true;
-        // 进入菜单 → 暂停游戏
         GetTree().Paused = true;
-        // 设置面板若开着也关掉，回到菜单首页
-        if (_settingsPanel != null) _settingsPanel.Visible = false;
     }
 
     public void Close()
     {
         Visible = false;
         GetTree().Paused = false;
-        if (_settingsPanel != null) _settingsPanel.Visible = false;
         EmitSignal(SignalName.ResumeRequested);
     }
 
@@ -77,11 +72,8 @@ public partial class CombatPauseMenu : CanvasLayer
         if (!Visible) return;
         if (@event is InputEventKey k && k.Pressed && !k.Echo && k.Keycode == Key.Escape)
         {
-            // 设置面板优先关闭
-            if (_settingsPanel != null && _settingsPanel.Visible)
-                _settingsPanel.Visible = false;
-            else
-                Close();
+            // GameMenuManager 的设置面板由它自己处理 ESC
+            Close();
             GetViewport().SetInputAsHandled();
         }
     }
@@ -152,79 +144,12 @@ public partial class CombatPauseMenu : CanvasLayer
 
     private void OpenSettings()
     {
-        if (_settingsPanel == null)
+        // 统一使用 GameMenuManager 的设置面板
+        var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
+        if (gameMenu != null)
         {
-            _settingsPanel = BuildSettingsPanel();
-            _root.AddChild(_settingsPanel);
+            gameMenu.OpenSettings();
         }
-        _settingsPanel.Visible = true;
-    }
-
-    private Control BuildSettingsPanel()
-    {
-        var panel = new PanelContainer();
-        panel.ProcessMode = ProcessModeEnum.Always;
-        panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        panel.MouseFilter = Control.MouseFilterEnum.Stop;
-        var bg = new StyleBoxFlat { BgColor = new Color(0, 0, 0, 0.6f) };
-        panel.AddThemeStyleboxOverride("panel", bg);
-
-        var center = new CenterContainer();
-        center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        panel.AddChild(center);
-
-        var inner = new PanelContainer();
-        inner.AddThemeStyleboxOverride("panel", MakePanelStyle(BgPrimary, BorderHighlight, 2, RadiusMd, 30));
-        center.AddChild(inner);
-
-        var vbox = new VBoxContainer();
-        vbox.AddThemeConstantOverride("separation", SpacingLg);
-        vbox.CustomMinimumSize = new Vector2(380, 0);
-        inner.AddChild(vbox);
-
-        var title = new Label { Text = "设  置", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", FontSizeXl);
-        title.AddThemeColorOverride("font_color", TextAccent);
-        vbox.AddChild(title);
-
-        // 音量
-        var volLabel = new Label { Text = "主音量" };
-        volLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        vbox.AddChild(volLabel);
-
-        var volSlider = new HSlider
-        {
-            MinValue = 0,
-            MaxValue = 100,
-            Value = Mathf.Clamp(Mathf.DbToLinear(AudioServer.GetBusVolumeDb(0)) * 100.0f, 0, 100),
-            CustomMinimumSize = new Vector2(300, 30),
-        };
-        volSlider.ValueChanged += val =>
-        {
-            float db = val > 0 ? Mathf.LinearToDb((float)val / 100.0f) : -80.0f;
-            AudioServer.SetBusVolumeDb(0, db);
-        };
-        vbox.AddChild(volSlider);
-
-        // 全屏
-        var fullscreenCheck = new CheckBox
-        {
-            Text = "全屏模式",
-            ButtonPressed = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen,
-        };
-        fullscreenCheck.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        fullscreenCheck.Toggled += pressed =>
-        {
-            DisplayServer.WindowSetMode(pressed ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed);
-        };
-        vbox.AddChild(fullscreenCheck);
-
-        var closeBtn = MakeButton("返回");
-        closeBtn.CustomMinimumSize = new Vector2(150, ButtonHeightLg);
-        closeBtn.Pressed += () => panel.Visible = false;
-        vbox.AddChild(closeBtn);
-
-        return panel;
     }
 
     // ===========================================================

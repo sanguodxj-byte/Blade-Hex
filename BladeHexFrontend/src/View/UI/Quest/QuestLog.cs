@@ -1,5 +1,6 @@
 // QuestLog.cs
 // 任务日志界面 — 管理正在进行和已完成的任务
+// 纯代码构建 UI（无 .tscn 依赖）
 using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
@@ -28,23 +29,109 @@ public partial class QuestLog : Control
     public override void _Ready()
     {
         _factory = new UIFactory();
-        _setup_internal_references();
+        _BuildUI();
         _apply_theme();
     }
 
-    private void _setup_internal_references()
-    {
-        _activeList = GetNode<ItemList>("Panel/VBoxContainer/TabContainer/进行中/ActiveQuestList");
-        _completedList = GetNode<ItemList>("Panel/VBoxContainer/TabContainer/已完成/CompletedQuestList");
-        _detailLabel = GetNode<RichTextLabel>("Panel/VBoxContainer/DetailPanel/VBox/QuestDetail");
-        _abandonBtn = GetNode<Button>("Panel/VBoxContainer/DetailPanel/VBox/AbandonButton");
-        _tabContainer = GetNode<TabContainer>("Panel/VBoxContainer/TabContainer");
+    // ========================================
+    // UI 构建（纯代码）
+    // ========================================
 
+    private void _BuildUI()
+    {
+        // 根面板
+        var panel = new Panel();
+        panel.Name = "Panel";
+        panel.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        panel.OffsetLeft = 80; panel.OffsetRight = -80;
+        panel.OffsetTop = 40; panel.OffsetBottom = -40;
+        AddChild(panel);
+
+        // 主垂直布局
+        var vbox = new VBoxContainer();
+        vbox.Name = "VBoxContainer";
+        vbox.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        vbox.OffsetLeft = 16; vbox.OffsetRight = -16;
+        vbox.OffsetTop = 16; vbox.OffsetBottom = -16;
+        vbox.AddThemeConstantOverride("separation", 8);
+        panel.AddChild(vbox);
+
+        // 标题
+        var title = new Label();
+        title.Name = "Title";
+        title.Text = "📜 任务日志";
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        vbox.AddChild(title);
+
+        // Tab 容器（进行中 / 已完成）
+        _tabContainer = new TabContainer();
+        _tabContainer.Name = "TabContainer";
+        _tabContainer.SizeFlagsVertical = SizeFlags.ExpandFill;
+        vbox.AddChild(_tabContainer);
+
+        // 进行中 tab
+        var activeTab = new VBoxContainer();
+        activeTab.Name = "进行中";
+        _tabContainer.AddChild(activeTab);
+
+        _activeList = new ItemList();
+        _activeList.Name = "ActiveQuestList";
+        _activeList.SizeFlagsVertical = SizeFlags.ExpandFill;
+        _activeList.SelectMode = ItemList.SelectModeEnum.Single;
+        activeTab.AddChild(_activeList);
+
+        // 已完成 tab
+        var completedTab = new VBoxContainer();
+        completedTab.Name = "已完成";
+        _tabContainer.AddChild(completedTab);
+
+        _completedList = new ItemList();
+        _completedList.Name = "CompletedQuestList";
+        _completedList.SizeFlagsVertical = SizeFlags.ExpandFill;
+        _completedList.SelectMode = ItemList.SelectModeEnum.Single;
+        completedTab.AddChild(_completedList);
+
+        // 详情面板
+        var detailPanel = new PanelContainer();
+        detailPanel.Name = "DetailPanel";
+        detailPanel.CustomMinimumSize = new Vector2(0, 200);
+        vbox.AddChild(detailPanel);
+
+        var detailVbox = new VBoxContainer();
+        detailVbox.Name = "VBox";
+        detailVbox.AddThemeConstantOverride("separation", 8);
+        detailPanel.AddChild(detailVbox);
+
+        _detailLabel = new RichTextLabel();
+        _detailLabel.Name = "QuestDetail";
+        _detailLabel.BbcodeEnabled = true;
+        _detailLabel.SizeFlagsVertical = SizeFlags.ExpandFill;
+        _detailLabel.Text = "[center][color=gray]请选择一个任务查看详情[/color][/center]";
+        detailVbox.AddChild(_detailLabel);
+
+        _abandonBtn = new Button();
+        _abandonBtn.Name = "AbandonButton";
+        _abandonBtn.Text = "放弃任务";
+        _abandonBtn.Visible = false;
+        detailVbox.AddChild(_abandonBtn);
+
+        // 关闭按钮
+        var closeBtn = new Button();
+        closeBtn.Name = "CloseButton";
+        closeBtn.Text = "关闭";
+        closeBtn.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+        vbox.AddChild(closeBtn);
+
+        // 连接信号
         _activeList.ItemSelected += (idx) => _on_quest_selected(idx, true);
         _completedList.ItemSelected += (idx) => _on_quest_selected(idx, false);
         _abandonBtn.Pressed += _on_abandon_pressed;
-        GetNode<Button>("Panel/VBoxContainer/CloseButton").Pressed += () => { Visible = false; EmitSignal(SignalName.CloseRequested); };
+        closeBtn.Pressed += () => { Visible = false; EmitSignal(SignalName.CloseRequested); };
     }
+
+    // ========================================
+    // 主题
+    // ========================================
 
     private void _apply_theme()
     {
@@ -58,6 +145,10 @@ public partial class QuestLog : Control
         Theme.ApplyButtonTheme(_abandonBtn, Theme.MakeButtonStyle(Theme.BgNegative, Theme.BorderDefault));
         Theme.ApplyButtonTheme(GetNode<Button>("Panel/VBoxContainer/CloseButton"));
     }
+
+    // ========================================
+    // 公共 API
+    // ========================================
 
     public void Open(QuestManager manager)
     {
@@ -89,6 +180,10 @@ public partial class QuestLog : Control
         _update_detail();
     }
 
+    // ========================================
+    // 内部逻辑
+    // ========================================
+
     private void _on_quest_selected(long index, bool active)
     {
         var list = active ? _activeList : _completedList;
@@ -108,7 +203,7 @@ public partial class QuestLog : Control
         string d = $"[b][size={Theme.FontSizeLg}]{_selectedQuest.Title}[/size][/b]\n";
         d += $"[color=gray]类型: {_selectedQuest.Type} | 推荐等级: {_selectedQuest.RecommendedLevel}[/color]\n\n";
         d += $"{_selectedQuest.Description}\n\n";
-        
+
         d += "[b]任务目标:[/b]\n";
         d += $"{_selectedQuest.Objectives}\n";
 
@@ -118,7 +213,6 @@ public partial class QuestLog : Control
 
         _detailLabel.Text = d;
         _abandonBtn.Visible = _manager?.ActiveQuests.Contains(_selectedQuest) ?? false;
-        _abandonBtn.Disabled = false; // All active quests can be abandoned
     }
 
     private void _on_abandon_pressed()

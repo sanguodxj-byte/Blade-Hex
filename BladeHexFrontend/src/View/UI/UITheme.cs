@@ -8,7 +8,12 @@ using System.Collections.Generic;
 namespace BladeHex.UI;
 
 /// <summary>
-/// UI主题系统 — Autoload 单例，集中管理所有设计令牌
+/// [Autoload Singleton] UI 主题系统。
+///
+/// <para>注册位置：<c>project.godot [autoload]</c> 段，名称 <c>UITheme</c>。</para>
+/// <para>生命周期：应用全局。</para>
+/// <para>访问方式：<c>UITheme.Instance</c>（高频访问，未走 <see cref="BladeHex.Data.Globals"/>）。</para>
+/// <para>职责：集中管理颜色、字号、间距、圆角等设计令牌；UI 组件统一从此读取，便于未来切换图像 UI。</para>
 /// </summary>
 [GlobalClass]
 public partial class UITheme : Node

@@ -48,6 +48,9 @@ public partial class BattleOutcome : Resource
     /// <summary>掉落的装备/物品详细数据（战利品面板显示用）</summary>
     public List<LootEntry> LootEntries = new();
 
+    /// <summary>掉落的实际物品数据（可直接放入背包）</summary>
+    public List<BladeHex.Data.ItemData> LootItems = new();
+
     // ===== 势力关系 =====
     /// <summary>势力声望变化: factionId → change</summary>
     public Dictionary<string, int> FactionReputationChanges = new();

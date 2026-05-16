@@ -132,7 +132,7 @@ public static class UnitTemplateDB
 
         // HP
         unit.BaseMaxHp = CalculateHpFromTemplate(tpl);
-        unit.BaseAc = 10 + (tpl.ContainsKey("ac_bonus") ? tpl["ac_bonus"].AsInt32() : 0);
+        unit.BaseAc = 8 + (tpl.ContainsKey("ac_bonus") ? tpl["ac_bonus"].AsInt32() : 0);
         unit.BaseMoveRange = tpl.ContainsKey("move_range") ? tpl["move_range"].AsInt32() : 4;
         unit.BaseInitiative = tpl.ContainsKey("initiative_bonus") ? tpl["initiative_bonus"].AsInt32() : 0;
 
@@ -1222,6 +1222,54 @@ public static class UnitTemplateDB
         d["description"] = "阿瓦隆尼亚终极挑战。三阶段Boss：空中轰炸→地面暴怒→超新星倒计时。";
         return d;
     }
+
+    // ========================================
+    // 伙伴模板（出身选择用）
+    // ========================================
+
+    public static Godot.Collections.Dictionary CompanionLoyalHound() => new()
+    {
+        { "template_id", "companion_loyal_hound" }, { "name", "忠犬" },
+        { "enemy_type", (int)UnitData.EnemyType.Beast }, { "level", 1 },
+        { "attr_weights", ToVariantArray([1.5f, 2.5f, 2.0f, 0.5f, 2.0f, 0.5f]) },
+        { "base_hp", 6 }, { "ac_bonus", 1 }, { "move_range", 8 }, { "initiative_bonus", 3 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Instinct },
+        { "natural_dr", 6 }, { "natural_dr_threshold", 1 },
+        { "traits", new string[] { "嗅觉追踪", "忠诚：主人相邻时攻击+1", "群猎" } },
+        { "description", "从小跟随主人长大的猎犬，忠诚而敏捷。" },
+    };
+
+    public static Godot.Collections.Dictionary CompanionYoungBear() => new()
+    {
+        { "template_id", "companion_young_bear" }, { "name", "幼熊" },
+        { "enemy_type", (int)UnitData.EnemyType.Beast }, { "level", 1 },
+        { "attr_weights", ToVariantArray(WBeast) },
+        { "base_hp", 9 }, { "ac_bonus", 1 }, { "move_range", 5 }, { "initiative_bonus", -1 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Reckless },
+        { "creature_size", (int)UnitData.CreatureSize.Large },
+        { "natural_dr", 20 }, { "natural_dr_threshold", 3 },
+        { "traits", new string[] { "多重攻击：熊掌+啃咬", "成长：每升2级体型+1档DR" } },
+        { "description", "被主人救下的幼熊，如今已长得壮硕，忠心耿耿。" },
+    };
+
+    public static Godot.Collections.Dictionary CompanionSlime() => new()
+    {
+        { "template_id", "companion_slime" }, { "name", "史莱姆" },
+        { "enemy_type", (int)UnitData.EnemyType.Demon }, { "level", 15 },
+        { "attr_weights", ToVariantArray([1.0f, 0.5f, 3.0f, 1.5f, 0.5f, 0.0f]) },
+        { "base_hp", 7 }, { "ac_bonus", -2 }, { "move_range", 4 }, { "initiative_bonus", -2 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Instinct },
+        { "creature_size", (int)UnitData.CreatureSize.Small },
+        { "natural_dr", 30 }, { "natural_dr_threshold", 4 },
+        { "immunities", new string[] { "poison", "mind" } }, { "resistances", new string[] { "pierce", "slash" } },
+        { "traits", new string[] { "分裂：HP<50%时分裂", "腐蚀：近战攻击者武器受损", "弹跳：无视地形" } },
+        { "description", "来历不明的史莱姆，异常强大却对主人格外亲近。" },
+    };
+
+    public static List<Godot.Collections.Dictionary> GetCompanionTemplates() =>
+    [
+        CompanionLoyalHound(), CompanionYoungBear(), CompanionSlime(),
+    ];
 
     // ========================================
     // 模板查询接口

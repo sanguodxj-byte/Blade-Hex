@@ -32,7 +32,7 @@ public static class EnemyGenerator
                 Wis = 10,
                 Cha = 10,
                 BaseMaxHp = 10,
-                BaseAc = 10,
+                BaseAc = 8,
                 ThreatLevel = 0.25f,
             };
             if (levelAdjustment != 0) ApplyLevelScaling(fallback, levelAdjustment);

@@ -17,8 +17,12 @@ using System.Linq;
 namespace BladeHex.Debug;
 
 /// <summary>
-/// 全局调试控制台 (Autoload Singleton)。
-/// 提供分区数据显示、命令输入、日志环形缓冲等功能。
+/// [Autoload Singleton] 全局调试控制台。
+///
+/// <para>注册位置：<c>project.godot [autoload]</c> 段，名称 <c>DebugConsole</c>。</para>
+/// <para>生命周期：应用全局；Release 构建中惰性，不创建 UI。</para>
+/// <para>访问方式：建议通过 <see cref="BladeHex.Data.Globals.DebugConsole"/>（容错版本，可能为 null）。</para>
+/// <para>职责：分区数据显示、命令输入、日志环形缓冲、剪贴板复制。</para>
 /// </summary>
 [GlobalClass]
 public partial class DebugConsole : Node

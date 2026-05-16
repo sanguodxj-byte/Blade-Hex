@@ -19,13 +19,25 @@ public partial class MainMenu : CanvasLayer
         _factory = new UIFactory();
         
         // 播放主菜单背景音乐
-        var audio = GetNodeOrNull<BladeHex.Audio.AudioManager>("/root/AudioManager");
+        var audio = BladeHex.Data.Globals.AudioOrNull;
         if (audio != null)
         {
             audio.PlayScenarioBgm(0, "default", 2.0f); 
         }
 
+        // 30% 概率下雨打雷
+        _rng.Randomize();
+        _isRainyMenu = _rng.Randf() < 0.3f;
+
         _SetupUI();
+
+        if (_isRainyMenu)
+            _SetupRainEffect();
+        else
+        {
+            // 确保非下雨时停止可能残留的雨声
+            BladeHex.Data.Globals.AudioOrNull?.StopAmbient("ambient_rain", 1.0f);
+        }
     }
 
     // ============================================================================
@@ -212,23 +224,23 @@ public partial class MainMenu : CanvasLayer
 
     private void _OnMenuButtonPressed(string action)
     {
-        var gs = GetNode<GlobalState>("/root/GlobalState");
+        var gs = BladeHex.Data.Globals.State;
         
         switch (action)
         {
             case "new_game":
-                gs.IsLoadingSave = false;
-                gs.IsQuickGame = false;
+                gs.Save.IsLoadingSave = false;
+                gs.WorldGen.IsQuickGame = false;
                 BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/origin_select.tscn");
                 break;
             case "continue":
                 ShowSaveManagementPanel();
                 break;
             case "quick_game":
-                gs.IsLoadingSave = false;
-                gs.IsQuickGame = true;
-                gs.PlayerOrigin = new Godot.Collections.Dictionary();
-                LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene.tscn", LoadingScreen.PhaseType.QuickGame);
+                gs.Save.IsLoadingSave = false;
+                gs.WorldGen.IsQuickGame = true;
+                gs.OriginContext.Data = new Godot.Collections.Dictionary();
+                LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.QuickGame);
                 break;
             case "quick_combat":
                 ShowQuickCombatSetup();
@@ -404,11 +416,11 @@ public partial class MainMenu : CanvasLayer
     /// <summary>加载指定存档</summary>
     private void LoadSave(string saveId)
     {
-        var gs = GetNode<GlobalState>("/root/GlobalState");
-        gs.IsLoadingSave = true;
-        gs.IsQuickGame = false;
-        gs.CurrentSaveId = saveId;
-        LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene.tscn", LoadingScreen.PhaseType.LoadSave);
+        var gs = BladeHex.Data.Globals.State;
+        gs.Save.IsLoadingSave = true;
+        gs.WorldGen.IsQuickGame = false;
+        gs.Save.CurrentSaveId = saveId;
+        LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.LoadSave);
     }
 
     /// <summary>确认删除存档</summary>
@@ -536,254 +548,164 @@ public partial class MainMenu : CanvasLayer
 
     private void ShowSettingsPanel()
     {
-        if (_settingsPanel != null)
+        // 统一使用 GameMenuManager 的设置面板（最完整版本：4 Tab 页）
+        var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
+        if (gameMenu != null)
         {
-            _settingsPanel.Visible = !_settingsPanel.Visible;
-            return;
+            gameMenu.IsInMainMenu = true;
+            gameMenu.OpenSettings();
+        }
+    }
+
+    // ========================================
+    // 雨天氛围效果
+    // ========================================
+
+    private CpuParticles2D? _rainFx;
+    private ColorRect? _lightningRect;
+    private ShaderMaterial? _lightningMat;
+    private AudioStreamPlayer? _thunderAudio;
+    private float _thunderTimer;
+    private float _lightningFade;
+    private bool _lightningActive;
+    private bool _isRainyMenu;
+    private RandomNumberGenerator _rng = new();
+
+    private void _SetupRainEffect()
+    {
+        var vp = new Vector2(1920, 1080);
+
+        // 雨粒子（插入到背景之上、UI 之下）
+        _rainFx = new CpuParticles2D();
+        _rainFx.Name = "MenuRain";
+        _rainFx.ZIndex = -1; // 在默认 UI 元素之下
+        _rainFx.Amount = 250;
+        _rainFx.Lifetime = 0.8f;
+        _rainFx.Preprocess = 0.4f;
+        _rainFx.Emitting = true;
+        _rainFx.EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle;
+        _rainFx.EmissionRectExtents = new Vector2(vp.X * 0.6f, 5);
+        _rainFx.Position = new Vector2(vp.X * 0.5f, -20);
+        _rainFx.Direction = new Vector2(0.15f, 1);
+        _rainFx.Spread = 5;
+        _rainFx.InitialVelocityMin = 800;
+        _rainFx.InitialVelocityMax = 1200;
+        _rainFx.Gravity = new Vector2(30, 300);
+        _rainFx.ScaleAmountMin = 0.8f;
+        _rainFx.ScaleAmountMax = 1.2f;
+        _rainFx.Color = new Color(0.6f, 0.7f, 0.85f, 0.3f);
+
+        var rainImg = Image.CreateEmpty(2, 14, false, Image.Format.Rgba8);
+        rainImg.Fill(new Color(0.75f, 0.82f, 0.95f, 0.5f));
+        _rainFx.Texture = ImageTexture.CreateFromImage(rainImg);
+
+        // 插入到第 1 个位置（背景是第 0 个）
+        AddChild(_rainFx);
+        MoveChild(_rainFx, 1);
+
+        // 闪电 shader（缩小区域，只覆盖上半部分背景）
+        _lightningRect = new ColorRect();
+        _lightningRect.Name = "LightningFX";
+        _lightningRect.ZIndex = -1; // 在 UI 之下
+        // 只覆盖屏幕上部 60% 区域（闪电在天空中）
+        _lightningRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+        _lightningRect.OffsetBottom = vp.Y * 0.55f;
+        _lightningRect.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _lightningRect.Color = Colors.White;
+
+        var shader = GD.Load<Shader>("res://src/assets/shaders/lightning.gdshader");
+        if (shader != null)
+        {
+            _lightningMat = new ShaderMaterial();
+            _lightningMat.Shader = shader;
+            _lightningMat.SetShaderParameter("fade", 0.0f);
+            _lightningMat.SetShaderParameter("bolt_intensity", 2.0f);
+            _lightningMat.SetShaderParameter("bolt_width", 0.015f);
+            _lightningMat.SetShaderParameter("glow_radius", 0.18f);
+            _lightningMat.SetShaderParameter("glow_intensity", 0.7f);
+            _lightningRect.Material = _lightningMat;
+        }
+        _lightningRect.Visible = false;
+        AddChild(_lightningRect);
+        MoveChild(_lightningRect, 2);
+
+        // 雨声（使用 AudioManager 的 ambient 系统，和大地图共用同一音效）
+        var audio = BladeHex.Data.Globals.AudioOrNull;
+        if (audio != null)
+        {
+            audio.PlayAmbient("ambient_rain", -10.0f);
         }
 
-        _settingsPanel = new PanelContainer();
-        _settingsPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _settingsPanel.ZIndex = 100;
+        // 雷声（使用 AudioManager 播放 SFX）
+        _thunderAudio = new AudioStreamPlayer();
+        _thunderAudio.Name = "ThunderSfx";
+        _thunderAudio.VolumeDb = -4.0f;
+        AddChild(_thunderAudio);
 
-        var bg = new StyleBoxFlat { BgColor = new Color(0.0f, 0.0f, 0.0f, 0.75f) };
-        bg.SetBorderWidthAll(0);
-        _settingsPanel.AddThemeStyleboxOverride("panel", bg);
-        AddChild(_settingsPanel);
+        _thunderTimer = _rng.RandfRange(3.0f, 8.0f);
+    }
 
-        var center = new CenterContainer();
-        center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _settingsPanel.AddChild(center);
+    public override void _Process(double delta)
+    {
+        if (!_isRainyMenu) return;
+        float dt = (float)delta;
 
-        var inner = new PanelContainer();
-        inner.CustomMinimumSize = new Vector2(550, 0);
-        var innerBg = new StyleBoxFlat { BgColor = new Color(0.08f, 0.08f, 0.1f, 0.96f) };
-        innerBg.SetBorderWidthAll(2);
-        innerBg.BorderColor = new Color(0.5f, 0.45f, 0.3f);
-        innerBg.SetCornerRadiusAll(10);
-        innerBg.SetContentMarginAll(30);
-        inner.AddThemeStyleboxOverride("panel", innerBg);
-        center.AddChild(inner);
-
-        var scroll = new ScrollContainer();
-        scroll.CustomMinimumSize = new Vector2(500, 550);
-        scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever;
-        inner.AddChild(scroll);
-
-        var vbox = new VBoxContainer();
-        vbox.AddThemeConstantOverride("separation", 14);
-        vbox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        scroll.AddChild(vbox);
-
-        // === 标题 ===
-        var title = new Label { Text = "设 置" };
-        title.AddThemeFontSizeOverride("font_size", 28);
-        title.AddThemeColorOverride("font_color", new Color(0.95f, 0.85f, 0.6f));
-        title.HorizontalAlignment = HorizontalAlignment.Center;
-        vbox.AddChild(title);
-        vbox.AddChild(MakeSettingsSeparator());
-
-        // === 音频 ===
-        AddSectionTitle(vbox, "音频");
-
-        AddSliderSetting(vbox, "主音量", 0, 100, 80, (val) =>
+        // 闪电淡出
+        if (_lightningActive)
         {
-            float db = val > 0 ? Mathf.LinearToDb((float)val / 100.0f) : -80.0f;
-            AudioServer.SetBusVolumeDb(AudioServer.GetBusIndex("Master"), db);
-        });
-
-        AddSliderSetting(vbox, "音乐音量", 0, 100, 70, (val) =>
-        {
-            int idx = AudioServer.GetBusIndex("Music");
-            if (idx >= 0)
+            _lightningFade -= dt * 2.5f;
+            if (_lightningFade <= 0)
             {
-                float db = val > 0 ? Mathf.LinearToDb((float)val / 100.0f) : -80.0f;
-                AudioServer.SetBusVolumeDb(idx, db);
+                _lightningFade = 0;
+                _lightningActive = false;
+                if (_lightningRect != null) _lightningRect.Visible = false;
             }
-        });
+            _lightningMat?.SetShaderParameter("fade", _lightningFade);
+        }
 
-        AddSliderSetting(vbox, "音效音量", 0, 100, 80, (val) =>
+        // 雷电计时
+        _thunderTimer -= dt;
+        if (_thunderTimer <= 0)
         {
-            int idx = AudioServer.GetBusIndex("SFX");
-            if (idx >= 0)
+            TriggerLightning();
+            _thunderTimer = _rng.RandfRange(6.0f, 15.0f);
+        }
+    }
+
+    private void TriggerLightning()
+    {
+        if (_lightningRect == null || _lightningMat == null) return;
+
+        // 随机闪电位置和方向
+        float startX = _rng.RandfRange(0.15f, 0.85f);
+        float endX = startX + _rng.RandfRange(-0.15f, 0.15f);
+        _lightningMat.SetShaderParameter("bolt_start", new Vector2(startX, 0.0f));
+        _lightningMat.SetShaderParameter("bolt_end", new Vector2(endX, _rng.RandfRange(0.6f, 0.95f)));
+        _lightningMat.SetShaderParameter("time_offset", _rng.Randf() * 100.0f);
+        _lightningMat.SetShaderParameter("bolt_intensity", _rng.RandfRange(1.5f, 2.5f));
+        _lightningMat.SetShaderParameter("branch_probability", _rng.RandfRange(0.3f, 0.7f));
+
+        // 激活
+        _lightningFade = 1.0f;
+        _lightningActive = true;
+        _lightningRect.Visible = true;
+        _lightningMat.SetShaderParameter("fade", 1.0f);
+
+        // 雷声延迟
+        float thunderDelay = _rng.RandfRange(0.2f, 1.2f);
+        var timer = GetTree().CreateTimer(thunderDelay);
+        timer.Timeout += () =>
+        {
+            if (_thunderAudio == null || !IsInstanceValid(_thunderAudio)) return;
+            var thunderStream = GD.Load<AudioStream>("res://assets/audio/sfx/thunder.ogg");
+            if (thunderStream == null)
+                thunderStream = GD.Load<AudioStream>("res://assets/audio/sfx/thunder.wav");
+            if (thunderStream != null)
             {
-                float db = val > 0 ? Mathf.LinearToDb((float)val / 100.0f) : -80.0f;
-                AudioServer.SetBusVolumeDb(idx, db);
+                _thunderAudio.Stream = thunderStream;
+                _thunderAudio.VolumeDb = _rng.RandfRange(-6.0f, 0.0f);
+                _thunderAudio.Play();
             }
-        });
-
-        vbox.AddChild(MakeSettingsSeparator());
-
-        // === 显示 ===
-        AddSectionTitle(vbox, "显示");
-
-        var fullscreenCheck = MakeCheckbox("全屏模式",
-            DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen);
-        fullscreenCheck.Toggled += (pressed) =>
-        {
-            DisplayServer.WindowSetMode(pressed
-                ? DisplayServer.WindowMode.Fullscreen
-                : DisplayServer.WindowMode.Windowed);
         };
-        vbox.AddChild(fullscreenCheck);
-
-        var vsyncCheck = MakeCheckbox("垂直同步",
-            DisplayServer.WindowGetVsyncMode() != DisplayServer.VSyncMode.Disabled);
-        vsyncCheck.Toggled += (pressed) =>
-        {
-            DisplayServer.WindowSetVsyncMode(pressed
-                ? DisplayServer.VSyncMode.Enabled
-                : DisplayServer.VSyncMode.Disabled);
-        };
-        vbox.AddChild(vsyncCheck);
-
-        // 分辨率选择
-        var resLabel = MakeSettingsLabel("窗口分辨率");
-        vbox.AddChild(resLabel);
-        var resOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        resOption.AddThemeFontSizeOverride("font_size", 15);
-        resOption.AddItem("1280 × 720", 0);
-        resOption.AddItem("1600 × 900", 1);
-        resOption.AddItem("1920 × 1080", 2);
-        resOption.AddItem("2560 × 1440", 3);
-        // 选中当前分辨率
-        var curSize = DisplayServer.WindowGetSize();
-        if (curSize.X >= 2560) resOption.Selected = 3;
-        else if (curSize.X >= 1920) resOption.Selected = 2;
-        else if (curSize.X >= 1600) resOption.Selected = 1;
-        else resOption.Selected = 0;
-        resOption.ItemSelected += (idx) =>
-        {
-            Vector2I size = idx switch
-            {
-                1 => new Vector2I(1600, 900),
-                2 => new Vector2I(1920, 1080),
-                3 => new Vector2I(2560, 1440),
-                _ => new Vector2I(1280, 720),
-            };
-            DisplayServer.WindowSetSize(size);
-            // 居中窗口
-            var screenSize = DisplayServer.ScreenGetSize();
-            DisplayServer.WindowSetPosition((screenSize - size) / 2);
-        };
-        vbox.AddChild(resOption);
-
-        vbox.AddChild(MakeSettingsSeparator());
-
-        // === 游戏 ===
-        AddSectionTitle(vbox, "游戏");
-
-        AddSliderSetting(vbox, "游戏速度", 1, 5, 2, (val) =>
-        {
-            var gs = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs != null) gs.Set("game_speed_multiplier", (float)val);
-        });
-
-        AddSliderSetting(vbox, "自动存档间隔 (分钟)", 1, 30, 5, (val) =>
-        {
-            var gs = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs != null) gs.Set("autosave_interval_min", (int)val);
-        });
-
-        var showDamageNumbers = MakeCheckbox("显示伤害数字", true);
-        showDamageNumbers.Toggled += (pressed) =>
-        {
-            var gs = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs != null) gs.Set("show_damage_numbers", pressed);
-        };
-        vbox.AddChild(showDamageNumbers);
-
-        var showTutorial = MakeCheckbox("显示教程提示", true);
-        showTutorial.Toggled += (pressed) =>
-        {
-            var gs = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs != null) gs.Set("show_tutorials", pressed);
-        };
-        vbox.AddChild(showTutorial);
-
-        var cameraShake = MakeCheckbox("战斗镜头震动", true);
-        cameraShake.Toggled += (pressed) =>
-        {
-            var gs = GetNodeOrNull<GlobalState>("/root/GlobalState");
-            if (gs != null) gs.Set("camera_shake_enabled", pressed);
-        };
-        vbox.AddChild(cameraShake);
-
-        vbox.AddChild(MakeSettingsSeparator());
-
-        // === 关闭按钮 ===
-        var closeBtn = new Button { Text = "返 回" };
-        closeBtn.CustomMinimumSize = new Vector2(180, 48);
-        closeBtn.AddThemeFontSizeOverride("font_size", 18);
-        var closeBtnStyle = new StyleBoxFlat { BgColor = new Color(0.15f, 0.14f, 0.18f) };
-        closeBtnStyle.SetBorderWidthAll(1);
-        closeBtnStyle.BorderColor = new Color(0.4f, 0.35f, 0.28f);
-        closeBtnStyle.SetCornerRadiusAll(6);
-        closeBtnStyle.SetContentMarginAll(8);
-        closeBtn.AddThemeStyleboxOverride("normal", closeBtnStyle);
-        closeBtn.Pressed += () => { _settingsPanel.Visible = false; };
-        vbox.AddChild(closeBtn);
-    }
-
-    // === 设置面板辅助方法 ===
-
-    private static void AddSectionTitle(VBoxContainer parent, string text)
-    {
-        var lbl = new Label { Text = text };
-        lbl.AddThemeFontSizeOverride("font_size", 20);
-        lbl.AddThemeColorOverride("font_color", new Color(0.85f, 0.75f, 0.5f));
-        parent.AddChild(lbl);
-    }
-
-    private static Label MakeSettingsLabel(string text)
-    {
-        var lbl = new Label { Text = text };
-        lbl.AddThemeFontSizeOverride("font_size", 15);
-        lbl.AddThemeColorOverride("font_color", new Color(0.8f, 0.78f, 0.72f));
-        return lbl;
-    }
-
-    private static void AddSliderSetting(VBoxContainer parent, string label, int min, int max, int defaultVal, System.Action<double> onChange)
-    {
-        var hbox = new HBoxContainer();
-        hbox.AddThemeConstantOverride("separation", 12);
-        parent.AddChild(hbox);
-
-        var lbl = new Label { Text = label, CustomMinimumSize = new Vector2(200, 0) };
-        lbl.AddThemeFontSizeOverride("font_size", 15);
-        lbl.AddThemeColorOverride("font_color", new Color(0.8f, 0.78f, 0.72f));
-        hbox.AddChild(lbl);
-
-        var slider = new HSlider { MinValue = min, MaxValue = max, Value = defaultVal, CustomMinimumSize = new Vector2(200, 0) };
-        slider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        hbox.AddChild(slider);
-
-        var valLabel = new Label { Text = defaultVal.ToString(), CustomMinimumSize = new Vector2(40, 0) };
-        valLabel.AddThemeFontSizeOverride("font_size", 15);
-        valLabel.AddThemeColorOverride("font_color", new Color(0.9f, 0.85f, 0.6f));
-        hbox.AddChild(valLabel);
-
-        slider.ValueChanged += (val) =>
-        {
-            valLabel.Text = ((int)val).ToString();
-            onChange(val);
-        };
-    }
-
-    private static CheckBox MakeCheckbox(string text, bool defaultVal)
-    {
-        var cb = new CheckBox { Text = text, ButtonPressed = defaultVal };
-        cb.AddThemeFontSizeOverride("font_size", 15);
-        cb.AddThemeColorOverride("font_color", new Color(0.8f, 0.78f, 0.72f));
-        return cb;
-    }
-
-    private static HSeparator MakeSettingsSeparator()
-    {
-        var sep = new HSeparator();
-        var style = new StyleBoxFlat { BgColor = new Color(0.3f, 0.28f, 0.22f, 0.5f) };
-        style.SetContentMarginAll(1);
-        sep.AddThemeStyleboxOverride("separator", style);
-        return sep;
     }
 }

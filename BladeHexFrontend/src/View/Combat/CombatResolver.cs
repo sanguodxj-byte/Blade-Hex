@@ -71,6 +71,15 @@ public static class CombatResolver
         // 掩体惩罚（远程攻击时）
         var weapon = attacker.Model.GetMainHand() as WeaponData;
         int coverAcBonus = 0;
+
+        // 弹药检查（远程武器消耗弹药）
+        if (weapon != null && weapon.NeedsAmmo && !weapon.ConsumeAmmo())
+        {
+            result["hit"] = false;
+            result["out_of_ammo"] = true;
+            return result;
+        }
+
         if (weapon != null && weapon.IsRanged && grid != null)
         {
             int cover = LineOfSight.GetCoverLevel(defender.GridPos, attacker.GridPos, grid);
@@ -81,6 +90,23 @@ public static class CombatResolver
         if (grid != null && LineOfSight.HasRiverCrossingPenalty(attacker.GridPos, defender.GridPos, grid))
         {
             hasDisadvantage = true; modifiers["river_crossing"] = true;
+        }
+
+        // 早期包夹检测（用于命中加成 — 真正伤害倍率在第 5 步重新计算）
+        bool earlyIsFlanking = false;
+        if (!isAoo)
+        {
+            var earlyFlank = FacingSystem.GetFlankingBonus(attacker.GridPos, defender);
+            earlyIsFlanking = earlyFlank.DamageMultiplier > 1.0f;
+        }
+        if (earlyIsFlanking)
+        {
+            int flankHitBonus = BladeHex.Combat.Abilities.UnitAbilities.GetTotalFlankingHitBonus(attacker.Data);
+            if (flankHitBonus != 0)
+            {
+                accuracyMod += flankHitBonus;
+                modifiers["flank_hit_bonus"] = flankHitBonus;
+            }
         }
 
         // 士气暴击加成
@@ -124,6 +150,14 @@ public static class CombatResolver
         var damageInfo = attacker.Model.RollDamage();
         int baseDamage = (int)damageInfo["total"];
 
+        // 箭筒伤害加成
+        if (weapon != null && weapon.IsRanged && !weapon.IsThrowing)
+        {
+            var offHand = attacker.Data?.PrimaryOffHand;
+            if (offHand != null && offHand.IsQuiver)
+                baseDamage += offHand.QuiverDamageBonus;
+        }
+
         // 偷袭
         int sneakDice = PassiveSkillResolver.GetSneakAttackDice(attacker, hasAdvantage && !hasDisadvantage);
         int sneakDamage = sneakDice > 0 ? RPGRuleEngine.RollDice(sneakDice, PassiveSkillResolver.GetSneakAttackSides()) : 0;
@@ -134,6 +168,7 @@ public static class CombatResolver
         {
             var flankBonus = FacingSystem.GetFlankingBonus(attacker.GridPos, defender);
             flankMult = flankBonus.DamageMultiplier;
+
             if (flankMult > 1.0f)
             {
                 result["is_flanking"] = true;
@@ -164,7 +199,8 @@ public static class CombatResolver
             FlankMultiplier = flankMult,
             ChargeMultiplier = chargeMult,
             MountBonus = (attacker.Data != null && attacker.Data.IsMounted) ? 2 : 0,
-            DamageReduction = PassiveSkillResolver.GetPassiveDamageReduction(defender, "physical"),
+            DamageReduction = PassiveSkillResolver.GetPassiveDamageReduction(defender, "physical")
+                + BladeHex.Combat.Abilities.UnitAbilities.GetTotalFlatDamageReduction(defender.Data),
             FinalMultiplier = 1.0f, // damageMultiplier 在穿甲后应用
         };
 
@@ -217,6 +253,7 @@ public static class CombatResolver
         // ===== 8. 同步 HP + 触发表现（Node 层副作用）=====
         defender.CurrentHp = defender.Model.CurrentHp;
         defender.UpdateHpBar();
+        defender.UpdateArmorBar();
         result["damage"] = hpDamage;
 
         if (hpDamage > 0 || dmgResult.DrDamage > 0)
@@ -226,7 +263,55 @@ public static class CombatResolver
             _ = defender.HandleDeathAnimIfDead();
         }
 
+        // ===== 9. 装备能力钩子（OnDealDamage / Reflect）=====
+        ApplyEquipmentAbilityEffects(attacker, defender, hpDamage, dmgResult.DrDamage, dmgResult.ReflectDamageToAttacker);
+
         return result;
+    }
+
+    /// <summary>
+    /// 应用装备能力效果：攻击方 OnDealDamage（如 lifesteal）+ 防御方反弹（如 thorns）
+    /// </summary>
+    private static void ApplyEquipmentAbilityEffects(Unit attacker, Unit defender, int hpDamage, int drDamage, int reflectDamage)
+    {
+        // 1) 反伤：来自防御方的 OnTakeDamage（已在 ApplyDamage 中聚合）
+        if (reflectDamage > 0 && attacker.CurrentHp > 0)
+        {
+            int actualReflect = Math.Max(0, Math.Min(reflectDamage, attacker.CurrentHp));
+            attacker.Model.CurrentHp = Math.Max(0, attacker.Model.CurrentHp - actualReflect);
+            attacker.CurrentHp = attacker.Model.CurrentHp;
+            attacker.UpdateHpBar();
+            Events.EventBus.Instance?.PublishUnitDamaged(attacker, actualReflect, attacker.CurrentHp);
+        }
+
+        // 2) OnDealDamage：触发攻击方装备能力（lifesteal 等）
+        if (hpDamage > 0)
+        {
+            var ctx = new BladeHex.Combat.Abilities.DealDamageContext
+            {
+                Attacker = attacker.Model,
+                Defender = defender.Model,
+                HpDamageDealt = hpDamage,
+                DrDamageDealt = drDamage,
+            };
+            foreach (var ab in BladeHex.Combat.Abilities.UnitAbilities.GetAll(attacker.Data))
+                ab.OnDealDamage(ctx);
+
+            if (ctx.HealAmount > 0)
+                attacker.Heal(ctx.HealAmount);
+
+            // 3) 应用条件型/附加伤害（如词缀的 vs_undead +1d6）
+            foreach (var dmgEvent in ctx.ExtraDamageEvents)
+            {
+                if (dmgEvent.Damage <= 0 || defender.CurrentHp <= 0) continue;
+                int actualExtra = Math.Max(0, Math.Min(dmgEvent.Damage, defender.CurrentHp));
+                defender.Model.CurrentHp = Math.Max(0, defender.Model.CurrentHp - actualExtra);
+                defender.CurrentHp = defender.Model.CurrentHp;
+                defender.UpdateHpBar();
+                Events.EventBus.Instance?.PublishUnitDamaged(defender, actualExtra, defender.CurrentHp);
+                _ = defender.HandleDeathAnimIfDead();
+            }
+        }
     }
 
     // ============================================================================

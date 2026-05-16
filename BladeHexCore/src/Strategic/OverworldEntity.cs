@@ -1,6 +1,5 @@
 ﻿using Godot;
 using System;
-using System.Collections.Generic;
 using BladeHex.Data;
 
 namespace BladeHex.Strategic;
@@ -288,159 +287,26 @@ public partial class OverworldEntity : Resource
     };
 
     // ========================================
-    // 战斗桥梁方法 — 战略层 → 战斗层
+    // 战斗桥梁方法 — 战略层 → 战斗层（委托到 EntityCombatBridge）
     // ========================================
 
     /// <summary>
     /// 生成战斗部署数据 — 根据实体类型和队伍配置生成战斗单位
     /// </summary>
     public BattleUnitDeployment[] GetDeployment(bool isAttacker)
-    {
-        var deployments = new List<BattleUnitDeployment>();
-
-        switch (EntityTypeEnum)
-        {
-            case EntityType.Adventurer:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "adventurer_warrior",
-                    Count = Math.Max(1, PartySize / 2),
-                    LevelOverride = PartyLevel,
-                    DeployZone = "front_line",
-                    IsPlayerControlled = false,
-                });
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "adventurer_mage",
-                    Count = Math.Max(1, PartySize - PartySize / 2),
-                    LevelOverride = PartyLevel,
-                    DeployZone = "back_line",
-                    IsPlayerControlled = false,
-                });
-                break;
-
-            case EntityType.RaidingParty:
-                var race = SourceSettlement?.SettlementRaceValue ?? OverworldPOI.SettlementRace.Goblin;
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = race switch
-                    {
-                        OverworldPOI.SettlementRace.Goblin => "goblin_warrior",
-                        OverworldPOI.SettlementRace.Kobold => "kobold_trapper",
-                        OverworldPOI.SettlementRace.Minotaur => "minotaur_warrior",
-                        OverworldPOI.SettlementRace.ShadowCult => "cultist",
-                        _ => "goblin_warrior",
-                    },
-                    Count = PartySize,
-                    LevelOverride = PartyLevel,
-                    DeployZone = "front_line",
-                    IsPlayerControlled = false,
-                });
-                break;
-
-            case EntityType.Caravan:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "caravan_guard",
-                    Count = Math.Max(1, PartySize),
-                    LevelOverride = 1,
-                    DeployZone = "front_line",
-                    IsPlayerControlled = false,
-                });
-                break;
-
-            case EntityType.EpicMonster:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = MonsterType switch
-                    {
-                        "dragon" => "dragon",
-                        "ancient_golem" => "iron_golem",
-                        _ => "unknown_boss",
-                    },
-                    Count = 1,
-                    LevelOverride = PartyLevel,
-                    DeployZone = "front_line",
-                    IsPlayerControlled = false,
-                });
-                break;
-
-            case EntityType.LordArmy:
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "soldier",
-                    Count = Math.Max(1, PartySize * 2 / 3),
-                    LevelOverride = PartyLevel,
-                    DeployZone = "front_line",
-                    IsPlayerControlled = false,
-                });
-                deployments.Add(new BattleUnitDeployment
-                {
-                    UnitTemplateId = "archer",
-                    Count = Math.Max(1, PartySize / 3),
-                    LevelOverride = PartyLevel,
-                    DeployZone = "back_line",
-                    IsPlayerControlled = false,
-                });
-                break;
-        }
-
-        return deployments.ToArray();
-    }
+        => EntityCombatBridge.GetDeployment(this, isAttacker);
 
     /// <summary>
     /// 应用战斗结果 — 战斗结束后更新实体状态
     /// </summary>
     public void ApplyBattleOutcome(BattleOutcome outcome)
-    {
-        if (outcome == null) return;
-
-        // 更新队伍人数
-        if (outcome.AttackerLossPercent > 0)
-        {
-            int losses = (int)(PartySize * outcome.AttackerLossPercent);
-            PartySize = Math.Max(0, PartySize - losses);
-        }
-
-        // 更新战力
-        CombatPower = PartySize * PartyLevel * (EntityTypeEnum == EntityType.LordArmy ? 1.5f : 2.0f);
-
-        // 全灭处理
-        if (outcome.AttackerDestroyed || PartySize <= 0)
-        {
-            IsAlive = false;
-            return;
-        }
-
-        // 战败逃跑
-        if (!outcome.AttackerWon && IsAlive)
-        {
-            CurrentAIState = AIState.Fleeing;
-            TargetPosition = HomePosition;
-        }
-
-        // 更新掠夺队状态
-        if (EntityTypeEnum == EntityType.RaidingParty && outcome.AttackerWon)
-        {
-            LootCarried += outcome.GoldGranted;
-        }
-    }
+        => EntityCombatBridge.ApplyBattleOutcome(this, outcome);
 
     /// <summary>
     /// 计算遭遇战 CR 总值 — 用于战斗难度评估
     /// </summary>
     public float GetEncounterCR()
-    {
-        return EntityTypeEnum switch
-        {
-            EntityType.Adventurer => PartyLevel * 1.5f,
-            EntityType.RaidingParty => 2.0f + (SourceSettlement?.ThreatLevel ?? 0.5f) * 1.5f,
-            EntityType.Caravan => 1.0f,
-            EntityType.EpicMonster => 10.0f + PartyLevel * 2.0f,
-            EntityType.LordArmy => PartyLevel * 3.0f,
-            _ => 1.0f,
-        };
-    }
+        => EntityCombatBridge.GetEncounterCR(this);
 
     // ========================================
     // 序列化
