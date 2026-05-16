@@ -1,65 +1,50 @@
 // OverworldScene3D.DayNight.cs
-// 昼夜循环 — 通过 DirectionalLight 色温 + 环境光调整
+// 昼夜循环 — 此文件仅保留 partial 代理，实际实现在 Components/DayNightController.cs。
+//
+// 重构于 Sprint 6（架构优化 spec R5）：从大块 partial 抽出独立 Component。
+// 主类内的字段和方法都退化为对 _dayNight controller 的转发。
 using Godot;
+using BladeHex.Scenes.Overworld.Components;
 
 namespace BladeHex.Scenes.Overworld;
 
 public partial class OverworldScene3D
 {
     // ========================================
-    // 昼夜循环
+    // 拥有的组件
+    // ========================================
+
+    private DayNightController? _dayNight;
+
+    // ========================================
+    // 主光照引用（仍由主类创建于 SetupLighting，由 controller 引用）
     // ========================================
 
     private DirectionalLight3D? _sunLight;
     private Godot.Environment? _worldEnv;
-    private Gradient? _timeGradient;
 
+    // ========================================
+    // 转发：保留旧 API 让其它 partial 编译通过
+    // ========================================
+
+    /// <summary>构建组件并注入依赖。由 SetupLighting 末尾调用。</summary>
     private void SetupDayNightCycle()
     {
-        // 创建昼夜渐变 — 骑砍风格：夜间偏蓝但仍清晰可辨
-        _timeGradient = new Gradient();
-        _timeGradient.Offsets = new float[]
-        {
-            0.00f, 0.20f, 0.25f, 0.30f, 0.42f, 0.70f, 0.75f, 0.80f, 0.85f, 1.00f,
-        };
-        _timeGradient.Colors = new Color[]
-        {
-            new(0.35f, 0.35f, 0.50f), // 00:00 午夜 — 蓝灰，仍可辨
-            new(0.38f, 0.38f, 0.52f), // 05:00 黎明前
-            new(0.65f, 0.50f, 0.40f), // 06:00 日出
-            new(0.92f, 0.87f, 0.78f), // 07:00 早晨
-            new(1.00f, 1.00f, 0.98f), // 10:00 白昼
-            new(0.92f, 0.72f, 0.52f), // 17:00 黄昏
-            new(0.72f, 0.48f, 0.38f), // 18:00 日落
-            new(0.50f, 0.40f, 0.45f), // 19:00 暮色
-            new(0.40f, 0.37f, 0.48f), // 20:00 入夜
-            new(0.35f, 0.35f, 0.50f), // 24:00 午夜
-        };
+        _dayNight = new DayNightController { Name = "DayNightController" };
+        AddChild(_dayNight);
+        if (_sunLight != null && _worldEnv != null && EconomyMgr != null)
+            _dayNight.Initialize(_sunLight, _worldEnv, EconomyMgr);
     }
 
-    private void UpdateDayNightCycle()
-    {
-        if (_sunLight == null || _worldEnv == null || EconomyMgr == null || _timeGradient == null)
-            return;
+    /// <summary>每帧由主类 _Process 调用。</summary>
+    private void UpdateDayNightCycle() => _dayNight?.Tick();
 
-        float timeRatio = EconomyMgr.CurrentHour / 24.0f;
-        Color tint = _timeGradient.Sample(timeRatio);
+    // ========================================
+    // 暴露给 Weather 叠加层（保持原字段语义，由 controller 提供）
+    // ========================================
 
-        // 能量范围提升：夜间最低 0.5（而非 0.3），保证地图始终可读
-        _baseSunEnergy = Mathf.Lerp(0.5f, 1.0f, tint.Luminance);
-        _baseAmbientEnergy = Mathf.Lerp(0.35f, 0.55f, tint.Luminance);
-        _baseSunColor = tint;
-        _baseAmbientColor = tint * 0.7f;
-
-        _sunLight.LightColor = _baseSunColor;
-        _sunLight.LightEnergy = _baseSunEnergy;
-        _worldEnv.AmbientLightColor = _baseAmbientColor;
-        _worldEnv.AmbientLightEnergy = _baseAmbientEnergy;
-    }
-
-    // 基础光照值（天气叠加前）
-    private float _baseSunEnergy = 0.9f;
-    private float _baseAmbientEnergy = 0.5f;
-    private Color _baseSunColor = Colors.White;
-    private Color _baseAmbientColor = new Color(0.65f, 0.65f, 0.70f);
+    private float _baseSunEnergy => _dayNight?.BaseSunEnergy ?? 0.9f;
+    private float _baseAmbientEnergy => _dayNight?.BaseAmbientEnergy ?? 0.5f;
+    private Color _baseSunColor => _dayNight?.BaseSunColor ?? Colors.White;
+    private Color _baseAmbientColor => _dayNight?.BaseAmbientColor ?? new Color(0.65f, 0.65f, 0.70f);
 }

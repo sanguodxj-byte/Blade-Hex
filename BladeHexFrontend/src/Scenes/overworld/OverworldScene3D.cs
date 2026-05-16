@@ -8,6 +8,7 @@ using BladeHex.Map;
 using BladeHex.View.Map;
 using BladeHex.Strategic;
 using BladeHex.Data;
+using BladeHex.Scenes.Overworld.Components;
 
 namespace BladeHex.Scenes.Overworld;
 
