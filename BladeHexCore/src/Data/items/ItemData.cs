@@ -48,6 +48,8 @@ public partial class ItemData : Resource
     [Export] public string ItemName { get; set; } = "未命名物品";
     [Export] public string Description { get; set; } = "";
     [Export] public string IconId { get; set; } = "";
+    /// <summary>图标 fallback ID（当 IconId 对应的图标不存在时使用，如 tier 武器回退到基础子类型图标）</summary>
+    [Export] public string IconFallbackId { get; set; } = "";
     [Export] public float Weight { get; set; } = 1.0f;
     [Export] public int Price { get; set; } = 10;
     [Export] public Rarity ItemRarity = Rarity.Common;

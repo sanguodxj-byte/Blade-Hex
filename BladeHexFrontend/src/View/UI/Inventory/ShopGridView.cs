@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.View.UI.Inventory;
 
@@ -19,8 +20,8 @@ namespace BladeHex.View.UI.Inventory;
 [GlobalClass]
 public partial class ShopGridView : Control, IItemContainer
 {
-    public const int CellSize = 42;
-    public const int CellGap = 2;
+    public const int CellSize = 72;
+    public const int CellGap = 3;
     public const int GridWidth = 10;
 
     private static readonly Color BgCell = new(0.08f, 0.08f, 0.10f, 0.85f);
@@ -31,6 +32,7 @@ public partial class ShopGridView : Control, IItemContainer
     private ItemPopup? _popup;
     private readonly Dictionary<Vector2I, Panel> _cellPanels = new();
     private readonly Dictionary<string, Control> _itemControls = new();
+    private readonly Dictionary<string, int> _stockQuantities = new();
 
     /// <summary>商店经济（null = 战利品模式，免费拾取）</summary>
     public EconomyManager? Economy { get; set; }
@@ -62,9 +64,18 @@ public partial class ShopGridView : Control, IItemContainer
 
     public int GetBuyPrice(ItemData item)
     {
-        int basePrice = item.Price;
-        float markup = 1.0f + (100 - Prosperity) * 0.005f;
-        return Math.Max(1, Mathf.RoundToInt(basePrice * markup));
+        return TradePricingService.GetBuyPrice(item, Prosperity);
+    }
+
+    public int GetSellPrice(ItemData item)
+    {
+        return TradePricingService.GetSellPrice(item, Prosperity);
+    }
+
+    public bool CanPurchase(ItemData item)
+    {
+        if (Economy == null) return true; // 战利品模式：免费拾取
+        return Economy.Gold >= GetBuyPrice(item);
     }
 
     /// <summary>重建布局并渲染</summary>
@@ -79,17 +90,18 @@ public partial class ShopGridView : Control, IItemContainer
 
         // 应用尺寸
         foreach (var item in _stock) ItemSizeConfig.ApplyRecommendedSize(item);
+        var displayStock = BuildDisplayStock();
 
         // 按需计算高度（无上限）
-        int totalArea = _stock.Sum(i => i.InvWidth * i.InvHeight);
-        int maxItemH = _stock.Count > 0 ? _stock.Max(i => i.InvHeight) : 1;
+        int totalArea = displayStock.Sum(i => i.InvWidth * i.InvHeight);
+        int maxItemH = displayStock.Count > 0 ? displayStock.Max(i => i.InvHeight) : 1;
         int height = Math.Max(maxItemH + 1, (int)Math.Ceiling((double)totalArea / GridWidth) * 2 + maxItemH);
 
         _layout = new GridInventory();
         _layout.SetGridSize(GridWidth, height);
 
         // 自动放置（按面积降序）
-        foreach (var item in _stock.OrderByDescending(i => i.InvWidth * i.InvHeight))
+        foreach (var item in displayStock.OrderByDescending(i => i.InvWidth * i.InvHeight))
             _layout.TryAutoPlace(item);
         _layout.AutoSort();
 
@@ -112,6 +124,36 @@ public partial class ShopGridView : Control, IItemContainer
     }
 
     public void Refresh() => Rebuild();
+
+    private List<ItemData> BuildDisplayStock()
+    {
+        _stockQuantities.Clear();
+        if (_stock == null) return new List<ItemData>();
+
+        var display = new List<ItemData>();
+        foreach (var item in _stock)
+        {
+            string key = GetStockKey(item);
+            if (IsStackableForDisplay(item) && _stockQuantities.ContainsKey(key))
+            {
+                _stockQuantities[key]++;
+                continue;
+            }
+
+            if (IsStackableForDisplay(item)) _stockQuantities[key] = 1;
+            else _stockQuantities[$"{key}|{display.Count}"] = 1;
+            display.Add(item);
+        }
+
+        return display;
+    }
+
+    private static string GetStockKey(ItemData item) => $"{item.ItemId}|{item.ItemName}";
+
+    private static bool IsStackableForDisplay(ItemData item)
+    {
+        return item is ConsumableData || item.SourceTags.Contains("material") || item.SourceTags.Contains("supply");
+    }
 
     private Panel MakeCellPanel(int x, int y)
     {
@@ -137,9 +179,10 @@ public partial class ShopGridView : Control, IItemContainer
 
     private void CreateItemControl(GridItem gi)
     {
+        int quantity = IsStackableForDisplay(gi.Item) && _stockQuantities.TryGetValue(GetStockKey(gi.Item), out int qty) ? qty : gi.Quantity;
         string overlay = Economy != null ? $"{GetBuyPrice(gi.Item)}金" : "拾取";
         var color = Economy != null ? new Color(0.3f, 0.85f, 0.3f) : new Color(0.9f, 0.8f, 0.5f);
-        var w = ItemGridWidget.Create(gi.Item, CellSize, CellGap, 1, overlay, color);
+        var w = ItemGridWidget.Create(gi.Item, CellSize, CellGap, quantity, overlay, color);
         w.Position = new Vector2(gi.GridX * (CellSize + CellGap), gi.GridY * (CellSize + CellGap));
 
         w.GuiInput += (ev) =>
@@ -194,8 +237,8 @@ public partial class ShopGridView : Control, IItemContainer
         // 商店模式：卖出 → 加金币 + 入货架
         if (Economy != null)
         {
-            int sellPrice = source.Item.GetSellPrice();
-            Economy.Gold += sellPrice;
+            int sellPrice = GetSellPrice(source.Item);
+            Economy.AddGold(sellPrice);
             OnGoldChanged?.Invoke(Economy.Gold);
         }
         _stock.Add(source.Item);
@@ -205,14 +248,19 @@ public partial class ShopGridView : Control, IItemContainer
     public void RemoveFromSource(DragSource source)
     {
         // 商店物品被拖到背包：从货架移除 + 扣钱
-        if (_stock != null && _stock.Contains(source.Item))
-            _stock.Remove(source.Item);
         if (Economy != null)
         {
             int price = GetBuyPrice(source.Item);
-            Economy.Gold -= price;
+            if (!Economy.SpendGold(price))
+            {
+                GD.PrintErr($"[ShopGridView] 购买失败：金币不足，item={source.Item.ItemName}, price={price}, gold={Economy.Gold}");
+                return;
+            }
             OnGoldChanged?.Invoke(Economy.Gold);
         }
+
+        if (_stock != null && _stock.Contains(source.Item))
+            _stock.Remove(source.Item);
     }
 
     public void HighlightDropTarget(DragSource source, ContainerHitInfo? hit)

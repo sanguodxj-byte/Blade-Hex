@@ -145,7 +145,8 @@ public partial class DragController : Node
             {
                 // 同容器内移动 = TryMove/TrySwap 已经原地修改，跳过 RemoveFromSource
                 bool sameContainer = hit.Container == _source.Container;
-                if (!sameContainer)
+                bool sourceStillOwnsItem = !sameContainer && SourceStillOwnsItem(_source);
+                if (sourceStillOwnsItem)
                     _source.Container.RemoveFromSource(_source);
 
                 hit.Container.Refresh();
@@ -155,6 +156,17 @@ public partial class DragController : Node
         }
 
         Cleanup();
+    }
+
+    private static bool SourceStillOwnsItem(DragSource source)
+    {
+        if (source.Container is ShopGridView shop)
+            return shop.Stock?.Contains(source.Item) == true;
+
+        if (source.Container is GridInventoryView grid && source.Origin is BladeHex.Strategic.GridItem gi)
+            return grid.Inventory?.Items.Contains(gi) == true;
+
+        return true;
     }
 
     private ContainerHitInfo? HitTestContainers(Vector2 globalMousePos)

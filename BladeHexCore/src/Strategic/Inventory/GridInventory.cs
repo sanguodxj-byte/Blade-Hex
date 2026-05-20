@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -58,8 +59,8 @@ public partial class GridInventory : Resource
     /// <summary>最小网格高度（无队员时）</summary>
     public const int MinGridHeight = 4;
 
-    /// <summary>最大网格高度上限</summary>
-    public const int MaxGridHeight = 12;
+    /// <summary>最大网格高度上限（背包无明显限制）</summary>
+    public const int MaxGridHeight = 30;
 
     /// <summary>力量对背包行数的贡献权重（每点STR贡献）</summary>
     private const float StrWeightPerRow = 0.06f;
@@ -102,36 +103,13 @@ public partial class GridInventory : Resource
     // ========================================
 
     /// <summary>
-    /// 根据队伍成员属性重新计算背包容量
-    /// 力量影响最大（60%权重），体质次之（30%权重），人数基础（10%权重）
+    /// 根据队伍成员属性重新计算背包容量（已移除限制：固定使用最大高度）
     /// </summary>
     /// <param name="partyMembers">队伍中所有角色</param>
     public void RecalculateCapacity(IEnumerable<UnitData> partyMembers)
     {
-        var members = partyMembers.ToList();
-        if (members.Count == 0)
-        {
-            GridHeight = MinGridHeight;
-            RebuildGrid();
-            return;
-        }
-
-        // 取队伍中所有成员的STR和CON总和
-        int totalStr = members.Sum(m => m.Str);
-        int totalCon = members.Sum(m => m.Con);
-        int memberCount = members.Count;
-
-        // 计算额外行数：
-        // 力量贡献 = 总STR × 0.06（主要贡献）
-        // 体质贡献 = 总CON × 0.03（次要贡献）
-        // 人数贡献 = 人数 × 0.5（基础贡献）
-        float strRows = totalStr * StrWeightPerRow;
-        float conRows = totalCon * ConWeightPerRow;
-        float baseRows = memberCount * BaseRowsPerMember;
-
-        int calculatedHeight = MinGridHeight + (int)Math.Floor(strRows + conRows + baseRows);
-        GridHeight = Math.Clamp(calculatedHeight, MinGridHeight, MaxGridHeight);
-
+        // 取消队伍属性影响：直接使用最大高度，无限制背包
+        GridHeight = MaxGridHeight;
         RebuildGrid();
     }
 
@@ -161,6 +139,12 @@ public partial class GridInventory : Resource
     /// <returns>是否放置成功</returns>
     public bool TryPlace(ItemData item, int x, int y, int quantity = 1)
     {
+        if (TryStackAt(item, x, y, quantity))
+            return true;
+
+        if (TryStackAnywhere(item, quantity))
+            return true;
+
         if (!CanPlace(item, x, y)) return false;
 
         var gridItem = new GridItem
@@ -182,17 +166,8 @@ public partial class GridInventory : Resource
     /// <returns>是否放置成功</returns>
     public bool TryAutoPlace(ItemData item, int quantity = 1)
     {
-        // 先尝试堆叠到已有同类物品上（仅消耗品/材料可堆叠）
-        if (IsStackable(item))
-        {
-            var existing = Items.FirstOrDefault(i =>
-                i.Item.ItemId == item.ItemId && i.Item.ItemName == item.ItemName);
-            if (existing != null)
-            {
-                existing.Quantity += quantity;
-                return true;
-            }
-        }
+        if (TryStackAnywhere(item, quantity))
+            return true;
 
         // 从左上角开始逐行扫描寻找空位
         var pos = FindFirstFit(item.InvWidth, item.InvHeight);
@@ -260,6 +235,48 @@ public partial class GridInventory : Resource
         gridItem.GridY = newY;
         MarkCells(newX, newY, gridItem.Width, gridItem.Height, true);
         return true;
+    }
+
+    /// <summary>
+    /// 尝试把 dragged 堆叠到 target 上。成功后 dragged 会从背包中移除。
+    /// </summary>
+    public bool TryMerge(GridItem dragged, GridItem target)
+    {
+        if (dragged == target) return false;
+        if (!Items.Contains(dragged) || !Items.Contains(target)) return false;
+        if (!CanStack(dragged.Item, target.Item)) return false;
+
+        target.Quantity += dragged.Quantity;
+        return Remove(dragged);
+    }
+
+    /// <summary>尝试把指定数量堆叠到目标格已有同类物品上。</summary>
+    public bool TryStackAt(ItemData item, int x, int y, int quantity = 1)
+    {
+        var target = GetItemAt(x, y);
+        if (target == null || !CanStack(item, target.Item)) return false;
+
+        target.Quantity += Math.Max(1, quantity);
+        return true;
+    }
+
+    /// <summary>尝试把指定数量堆叠到任意已有同类物品上。</summary>
+    public bool TryStackAnywhere(ItemData item, int quantity = 1)
+    {
+        if (!IsStackable(item)) return false;
+
+        var existing = Items.FirstOrDefault(i => CanStack(item, i.Item));
+        if (existing == null) return false;
+
+        existing.Quantity += Math.Max(1, quantity);
+        return true;
+    }
+
+    public bool CanStack(ItemData incoming, ItemData existing)
+    {
+        return IsStackable(incoming) && IsStackable(existing)
+            && incoming.ItemId == existing.ItemId
+            && incoming.ItemName == existing.ItemName;
     }
 
     /// <summary>
@@ -400,7 +417,7 @@ public partial class GridInventory : Resource
     }
 
     /// <summary>获取所有物品的总价值</summary>
-    public int TotalValue => Items.Sum(i => i.Item.GetSellPrice() * i.Quantity);
+    public int TotalValue => Items.Sum(i => TradePricingService.GetBasePrice(i.Item) * i.Quantity);
 
     /// <summary>获取物品总数</summary>
     public int TotalItemCount => Items.Sum(i => i.Quantity);
@@ -412,7 +429,7 @@ public partial class GridInventory : Resource
     private bool IsStackable(ItemData item)
     {
         // 消耗品和材料可堆叠
-        return item is ConsumableData || item.SourceTags.Contains("material");
+        return item is ConsumableData || item.SourceTags.Contains("material") || item.SourceTags.Contains("supply");
     }
 
     private Vector2I? FindFirstFit(int width, int height)

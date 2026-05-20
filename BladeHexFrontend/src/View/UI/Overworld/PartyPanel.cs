@@ -66,6 +66,7 @@ public partial class PartyPanel : PanelContainer
     private EquipmentSlotView _equipmentView = null!;
     private ShopGridView? _shopView;
     private Label? _shopGoldLabel;
+    private VBoxContainer? _attributesBox;
 
     private DragController _dragController = null!;
     private ItemPopup _itemPopup = null!;
@@ -77,6 +78,69 @@ public partial class PartyPanel : PanelContainer
     public override void _Ready()
     {
         _BuildLayout();
+
+        // 初次进入和窗口尺寸变化时都要对齐 HUD
+        GetTree().Root.SizeChanged += _AlignToHud;
+        VisibilityChanged += () => { if (Visible) _AlignToHud(); };
+    }
+
+    /// <summary>
+    /// 把面板上下边界对齐到顶部状态栏底边和底部功能栏顶边（紧贴 HUD 不留缝隙、不遮挡）。
+    /// </summary>
+    private void _AlignToHud()
+    {
+        if (!IsInsideTree()) return;
+
+        Control? topBar = null;
+        Control? botBar = null;
+
+        // 沿父链找 OverworldUI（提供 TopPanel / BottomPanel）
+        Node? n = GetParent();
+        while (n != null)
+        {
+            if (n is OverworldUI hud)
+            {
+                topBar = hud.TopPanel;
+                botBar = hud.BottomPanel;
+                break;
+            }
+            n = n.GetParent();
+        }
+
+        // 没找到 HUD：用一个保守默认值
+        float topH = topBar != null ? topBar.Size.Y : 48f;
+        float botH = botBar != null ? botBar.Size.Y : 96f;
+
+        OffsetTop = topH + 8f;
+        OffsetBottom = -(botH + 8f);
+
+        // HUD 控件可能在打开瞬间尺寸还未结算，等下一帧再次对齐一次
+        CallDeferred(nameof(_AlignToHudDeferred));
+    }
+
+    private void _AlignToHudDeferred()
+    {
+        if (!IsInsideTree() || !Visible) return;
+
+        Control? topBar = null;
+        Control? botBar = null;
+        Node? n = GetParent();
+        while (n != null)
+        {
+            if (n is OverworldUI hud)
+            {
+                topBar = hud.TopPanel;
+                botBar = hud.BottomPanel;
+                break;
+            }
+            n = n.GetParent();
+        }
+
+        if (topBar == null && botBar == null) return;
+        float topH = topBar != null ? topBar.Size.Y : 48f;
+        float botH = botBar != null ? botBar.Size.Y : 96f;
+        OffsetTop = topH + 8f;
+        OffsetBottom = -(botH + 8f);
     }
 
     // ========================================
@@ -91,6 +155,7 @@ public partial class PartyPanel : PanelContainer
         _isShopMode = false;
         _shopStock = null;
         Visible = true;
+        _AlignToHud();
         _EnsureGridInventory();
         _RefreshAll();
     }
@@ -106,6 +171,7 @@ public partial class PartyPanel : PanelContainer
         _shopProsperity = prosperity;
         _shopName = shopName;
         Visible = true;
+        _AlignToHud();
         _EnsureGridInventory();
         _RefreshAll();
     }
@@ -121,6 +187,7 @@ public partial class PartyPanel : PanelContainer
         _shopProsperity = 50;
         _shopName = $"战利品 — 金币+{goldGranted} 经验+{xpGranted}";
         Visible = true;
+        _AlignToHud();
         _EnsureGridInventory();
         _RefreshAll();
     }
@@ -143,13 +210,15 @@ public partial class PartyPanel : PanelContainer
 
     private void _BuildLayout()
     {
-        // 面板尺寸
+        // 面板尺寸：紧贴顶部状态栏底边到底部功能栏顶边，水平稍内缩
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
-        SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        AnchorLeft = 0.12f; AnchorRight = 0.88f;
-        AnchorTop = 0.08f; AnchorBottom = 0.92f;
-        OffsetLeft = 0; OffsetRight = 0; OffsetTop = 0; OffsetBottom = 0;
+        SizeFlagsHorizontal = SizeFlags.Fill;
+        SizeFlagsVertical = SizeFlags.Fill;
+        AnchorLeft = 0; AnchorRight = 1;
+        AnchorTop = 0; AnchorBottom = 1;
+        // OffsetTop/Bottom 在 _AlignToHud() 中按运行时 HUD 实际高度设置
+        OffsetLeft = 32; OffsetRight = -32;
+        OffsetTop = 0; OffsetBottom = 0;
 
         var style = new StyleBoxFlat { BgColor = BgPrimary };
         style.SetBorderWidthAll(2);
@@ -158,33 +227,28 @@ public partial class PartyPanel : PanelContainer
         AddThemeStyleboxOverride("panel", style);
 
         var margin = new MarginContainer();
-        margin.AddThemeConstantOverride("margin_left", 16);
-        margin.AddThemeConstantOverride("margin_right", 16);
-        margin.AddThemeConstantOverride("margin_top", 12);
-        margin.AddThemeConstantOverride("margin_bottom", 12);
+        margin.AddThemeConstantOverride("margin_left", 12);
+        margin.AddThemeConstantOverride("margin_right", 12);
+        margin.AddThemeConstantOverride("margin_top", 6);
+        margin.AddThemeConstantOverride("margin_bottom", 8);
         margin.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(margin);
 
         var mainVbox = new VBoxContainer();
-        mainVbox.AddThemeConstantOverride("separation", 8);
+        mainVbox.AddThemeConstantOverride("separation", 4);
         mainVbox.SizeFlagsVertical = SizeFlags.ExpandFill;
         margin.AddChild(mainVbox);
 
-        // 顶栏
+        // 顶栏（已移除"部队管理"标题；军队按钮移到背包头部；这里只放关闭按钮，浮在右上）
         var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 10);
+        header.AddThemeConstantOverride("separation", 8);
         mainVbox.AddChild(header);
 
-        var title = _MakeLabel("部队管理", 20, TextAccent);
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
+        // 占位 — 让关闭按钮靠右
+        header.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
-        _toggleArmyBtn = new Button { Text = "军队 ▶", CustomMinimumSize = new Vector2(80, 32) };
-        _toggleArmyBtn.AddThemeFontSizeOverride("font_size", 12);
-        _toggleArmyBtn.Pressed += _ToggleArmyPanel;
-        header.AddChild(_toggleArmyBtn);
-
-        var closeBtn = new Button { Text = "✕", CustomMinimumSize = new Vector2(32, 32) };
+        var closeBtn = new Button { Text = "✕", CustomMinimumSize = new Vector2(48, 48) };
+        closeBtn.AddThemeFontSizeOverride("font_size", 22);
         closeBtn.Pressed += () =>
         {
             Visible = false;
@@ -195,8 +259,6 @@ public partial class PartyPanel : PanelContainer
         };
         header.AddChild(closeBtn);
 
-        mainVbox.AddChild(new HSeparator());
-
         // 三栏
         var columns = new HBoxContainer();
         columns.AddThemeConstantOverride("separation", 12);
@@ -204,7 +266,7 @@ public partial class PartyPanel : PanelContainer
         mainVbox.AddChild(columns);
 
         // 左栏
-        var leftPanel = _MakeColumnPanel(260);
+        var leftPanel = _MakeColumnPanel(380);
         columns.AddChild(leftPanel);
         var leftScroll = new ScrollContainer
         {
@@ -218,18 +280,35 @@ public partial class PartyPanel : PanelContainer
         _leftCol.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         leftScroll.AddChild(_leftCol);
 
-        // 中栏
+        // 中栏 + 右侧"军队"竖按钮（取代旧顶栏的横向按钮）
+        var centerWrap = new HBoxContainer();
+        centerWrap.AddThemeConstantOverride("separation", 4);
+        centerWrap.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        centerWrap.SizeFlagsVertical = SizeFlags.ExpandFill;
+        columns.AddChild(centerWrap);
+
         var centerPanel = _MakeColumnPanel(0);
         centerPanel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        columns.AddChild(centerPanel);
+        centerWrap.AddChild(centerPanel);
         _centerCol = new VBoxContainer();
         _centerCol.AddThemeConstantOverride("separation", 6);
         _centerCol.SizeFlagsVertical = SizeFlags.ExpandFill;
         _centerCol.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         centerPanel.AddChild(_centerCol);
 
+        // 军队竖按钮（每个汉字一行 → 自动竖排）
+        _toggleArmyBtn = new Button
+        {
+            Text = "军\n队\n▶",
+            CustomMinimumSize = new Vector2(48, 0),
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+        };
+        _toggleArmyBtn.AddThemeFontSizeOverride("font_size", 22);
+        _toggleArmyBtn.Pressed += _ToggleArmyPanel;
+        centerWrap.AddChild(_toggleArmyBtn);
+
         // 右栏
-        _rightPanel = _MakeColumnPanel(240);
+        _rightPanel = _MakeColumnPanel(420);
         columns.AddChild(_rightPanel);
         var rightScroll = new ScrollContainer
         {
@@ -260,7 +339,7 @@ public partial class PartyPanel : PanelContainer
     {
         _armyPanelVisible = !_armyPanelVisible;
         _rightPanel.Visible = _armyPanelVisible;
-        _toggleArmyBtn.Text = _armyPanelVisible ? "军队 ▶" : "◀ 军队";
+        _toggleArmyBtn.Text = _armyPanelVisible ? "军\n队\n▶" : "◀\n军\n队";
     }
 
     private PanelContainer _MakeColumnPanel(int minWidth)
@@ -338,7 +417,7 @@ public partial class PartyPanel : PanelContainer
         _RefreshRight();
     }
 
-    // ─── 左栏：角色切换 + 立绘 + 装备 ───
+    // ─── 左栏：角色切换 + HP/MP + 属性 + 立绘叠装备 ───
 
     private void _RefreshLeft()
     {
@@ -350,36 +429,60 @@ public partial class PartyPanel : PanelContainer
         switchRow.AddThemeConstantOverride("separation", 8);
         _leftCol.AddChild(switchRow);
 
-        var prevBtn = new Button { Text = "◀", CustomMinimumSize = new Vector2(36, 36) };
+        var prevBtn = new Button { Text = "◀", CustomMinimumSize = new Vector2(56, 56) };
+        prevBtn.AddThemeFontSizeOverride("font_size", 22);
         prevBtn.Pressed += () => _SwitchChar(-1);
         switchRow.AddChild(prevBtn);
 
         int total = _roster?.Members.Count ?? 0;
-        _nameLabel = _MakeLabel(SelectedUnit?.UnitName ?? "无角色", 16, TextAccent);
+        _nameLabel = _MakeLabel(SelectedUnit?.UnitName ?? "无角色", 32, TextAccent);
         _nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
         _nameLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         switchRow.AddChild(_nameLabel);
 
-        var nextBtn = new Button { Text = "▶", CustomMinimumSize = new Vector2(36, 36) };
+        var nextBtn = new Button { Text = "▶", CustomMinimumSize = new Vector2(56, 56) };
+        nextBtn.AddThemeFontSizeOverride("font_size", 22);
         nextBtn.Pressed += () => _SwitchChar(1);
         switchRow.AddChild(nextBtn);
-
-        _indexLabel = _MakeLabel($"({_currentIndex + 1}/{total})", 11, TextMuted);
-        _indexLabel.HorizontalAlignment = HorizontalAlignment.Center;
-        _leftCol.AddChild(_indexLabel);
 
         var u = SelectedUnit;
         if (u == null) return;
 
-        // 立绘
-        var avatar = new BladeHex.View.Unit.CharacterAvatarControl
+        // 等级 + 职业称号 + 序号同行（紧凑）
+        var lvRow = new HBoxContainer();
+        lvRow.Alignment = BoxContainer.AlignmentMode.Center;
+        lvRow.AddThemeConstantOverride("separation", 12);
+        _leftCol.AddChild(lvRow);
+        var lvLine = _MakeLabel($"等级 {u.Level}", 22, TextAccent);
+        lvRow.AddChild(lvLine);
+
+        // 职业称号（从技能盘推导）+ 图标
+        string classTitle = _GetClassTitle(u);
+        if (!string.IsNullOrEmpty(classTitle))
         {
-            Mode = BladeHex.View.Unit.CharacterAvatarControl.DisplayMode.Full,
-            CustomMinimumSize = new Vector2(180, 220),
-            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
-        };
-        _leftCol.AddChild(avatar);
-        avatar.SetUnit(u);
+            var titleLine = _MakeLabel(classTitle, 20, new Color(0.8f, 0.7f, 1.0f));
+            lvRow.AddChild(titleLine);
+
+            // 职业图标（64x64 缩放到行高）
+            string? iconPath = ClassTitleResolver.GetIconPath(classTitle);
+            if (iconPath != null)
+            {
+                var iconTex = GD.Load<Texture2D>(iconPath);
+                if (iconTex != null)
+                {
+                    var icon = new TextureRect();
+                    icon.Texture = iconTex;
+                    icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+                    icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+                    icon.CustomMinimumSize = new Vector2(32, 32);
+                    lvRow.AddChild(icon);
+                }
+            }
+        }
+
+        var idxLine = _MakeLabel($"({_currentIndex + 1}/{total})", 18, TextMuted);
+        lvRow.AddChild(idxLine);
+        _indexLabel = idxLine;
 
         // HP/MP
         int hp = PartyRoster.GetCurrentHp(u);
@@ -388,58 +491,107 @@ public partial class PartyPanel : PanelContainer
         int maxMana = Math.Max(1, u.Intel / 2 + u.Level);
         _leftCol.AddChild(_MakeBar("法力", u.CurrentMana, maxMana, new Color(0.3f, 0.5f, 1.0f)));
 
-        // 等级单独一行
-        var lvLine = _MakeLabel($"等级 {u.Level}", 12, TextAccent);
-        lvLine.HorizontalAlignment = HorizontalAlignment.Center;
-        _leftCol.AddChild(lvLine);
-
-        // 六维（Grid 排列保证对齐）
-        var statBlock = new GridContainer { Columns = 3 };
-        statBlock.AddThemeConstantOverride("h_separation", 10);
-        statBlock.AddThemeConstantOverride("v_separation", 2);
-        _leftCol.AddChild(statBlock);
-        _AddInlineStat(statBlock, "力量", u.Str);
-        _AddInlineStat(statBlock, "敏捷", u.Dex);
-        _AddInlineStat(statBlock, "体质", u.Con);
-        _AddInlineStat(statBlock, "智力", u.Intel);
-        _AddInlineStat(statBlock, "感知", u.Wis);
-        _AddInlineStat(statBlock, "魅力", u.Cha);
+        // 立绘 + 装备槽（叠层：立绘在底，装备槽在上；鼠标悬停装备区时整体透明，露出立绘）
+        _BuildAvatarEquipStack(u);
 
         _leftCol.AddChild(new HSeparator());
 
-        // 装备槽
-        _equipmentView = new EquipmentSlotView { Name = "EquipmentSlotView" };
-        _leftCol.AddChild(_equipmentView);
-        _equipmentView.Initialize(u, _dragController, _itemPopup);
-
-        _leftCol.AddChild(new HSeparator());
-
-        // 战斗属性
-        _BuildStatGrid(u);
+        // 属性（六维 + 战斗属性合并紧凑显示）
+        _BuildCompactAttributes(u);
     }
 
-    private void _BuildStatGrid(UnitData u)
+    /// <summary>
+    /// 构建立绘+装备叠层容器：立绘作为背景，装备槽悬浮在上方。
+    /// 鼠标悬停在装备区域时，装备整体降透明度，方便观察立绘。
+    /// </summary>
+    private void _BuildAvatarEquipStack(UnitData u)
     {
-        // 战斗属性面板：2列卡片式布局
-        _leftCol.AddChild(_MakeLabel("战斗属性", 11, TextAccent));
+        // 用尺寸固定的容器承载立绘和装备槽
+        var stack = new Control
+        {
+            CustomMinimumSize = new Vector2(0, 320),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
+        _leftCol.AddChild(stack);
 
-        var statGrid = new GridContainer { Columns = 2 };
-        statGrid.AddThemeConstantOverride("h_separation", 8);
-        statGrid.AddThemeConstantOverride("v_separation", 4);
-        statGrid.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _leftCol.AddChild(statGrid);
+        // 立绘（底层，铺满容器）
+        var avatar = new BladeHex.View.Unit.CharacterAvatarControl
+        {
+            Mode = BladeHex.View.Unit.CharacterAvatarControl.DisplayMode.Full,
+            CustomMinimumSize = new Vector2(280, 280),
+        };
+        avatar.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        avatar.MouseFilter = Control.MouseFilterEnum.Ignore;
+        stack.AddChild(avatar);
+        avatar.SetUnit(u);
 
+        // 装备槽（顶层，水平居中；包一层 CenterContainer 让 VBox 按内容尺寸居中）
+        var equipCenter = new CenterContainer();
+        equipCenter.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        equipCenter.MouseFilter = Control.MouseFilterEnum.Pass;
+        stack.AddChild(equipCenter);
+
+        _equipmentView = new EquipmentSlotView { Name = "EquipmentSlotView" };
+        equipCenter.AddChild(_equipmentView);
+        _equipmentView.Initialize(u, _dragController, _itemPopup);
+
+        // 装备变化时实时刷新属性面板（不重建装备视图本身）
+        _equipmentView.EquipmentChanged += () => _RefreshAttributesOnly();
+
+        // 鼠标悬停整体淡化，露出立绘 — 用每帧检测，避免子槽位 Stop 过滤导致的 Enter/Exit 抖动
+        _equipmentView.HoverFadeEnabled = true;
+    }
+
+    /// <summary>属性面板：六维 + 战斗属性合并成一个紧凑卡片网格</summary>
+    private void _BuildCompactAttributes(UnitData u)
+    {
+        var box = new VBoxContainer();
+        box.AddThemeConstantOverride("separation", 4);
+        box.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _leftCol.AddChild(box);
+        _attributesBox = box;
+        _PopulateAttributes(box, u);
+    }
+
+    /// <summary>装备变化时只重建属性区域，避免拖拽视图被销毁</summary>
+    private void _RefreshAttributesOnly()
+    {
+        var u = SelectedUnit;
+        if (u == null || _attributesBox == null) return;
+        foreach (Node c in _attributesBox.GetChildren()) c.QueueFree();
+        _PopulateAttributes(_attributesBox, u);
+    }
+
+    private void _PopulateAttributes(VBoxContainer box, UnitData u)
+    {
+        box.AddChild(_MakeLabel("属性", 18, TextAccent));
+
+        var grid = new GridContainer { Columns = 3 };
+        grid.AddThemeConstantOverride("h_separation", 6);
+        grid.AddThemeConstantOverride("v_separation", 2);
+        grid.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        box.AddChild(grid);
+
+        // 六维
+        _AddStatCard(grid, "力", u.Str.ToString());
+        _AddStatCard(grid, "敏", u.Dex.ToString());
+        _AddStatCard(grid, "体", u.Con.ToString());
+        _AddStatCard(grid, "智", u.Intel.ToString());
+        _AddStatCard(grid, "感", u.Wis.ToString());
+        _AddStatCard(grid, "魅", u.Cha.ToString());
+
+        // 战斗属性（实时计算）
         int dexMod = (int)Math.Floor(Math.Sqrt(u.Dex / 2.0));
         if (u.Armor != null && u.Armor.MaxDexBonus < 99)
             dexMod = Math.Min(dexMod, u.Armor.MaxDexBonus);
         int drTotal = u.Armor?.DrThreshold ?? 0;
         int ac = 10 + dexMod + (int)Math.Floor(Math.Sqrt(drTotal));
-        _AddStatCard(statGrid, "闪避", ac.ToString());
+        _AddStatCard(grid, "闪避", ac.ToString());
 
         int conMod = (int)Math.Floor(Math.Sqrt(u.Con / 2.0));
         int apPenalty = u.Armor?.ApPenalty ?? 0;
         int maxAp = 12 + (int)Math.Floor(Math.Sqrt(u.Dex / 2.0)) + conMod / 2 - apPenalty;
-        _AddStatCard(statGrid, "行动力", $"{maxAp}");
+        _AddStatCard(grid, "AP", $"{maxAp}");
 
         int dmgMin = 1, dmgMax = 3;
         if (u.PrimaryMainHand != null)
@@ -447,14 +599,161 @@ public partial class PartyPanel : PanelContainer
             dmgMin = u.PrimaryMainHand.DamageDiceCount;
             dmgMax = u.PrimaryMainHand.DamageDiceCount * u.PrimaryMainHand.DamageDiceSides;
         }
-        _AddStatCard(statGrid, "伤害", $"{dmgMin}-{dmgMax}");
+        _AddStatCard(grid, "伤害", $"{dmgMin}-{dmgMax}");
 
         int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, u.Wis - 14) / 4.0));
         int critPct = 5 + wisCritTier * 5;
-        _AddStatCard(statGrid, "暴击", $"{critPct}%");
+        _AddStatCard(grid, "暴击", $"{critPct}%");
+
+        // 先攻修正
+        int initMod = BladeHex.Combat.CombatStats.GetInitiativeModifier(u);
+        _AddStatCard(grid, "先攻", initMod >= 0 ? $"+{initMod}" : $"{initMod}");
+
+        // 特质区域
+        _PopulateTraits(box, u);
     }
 
-    /// <summary>添加战斗属性卡片（带边框背景，更易读）</summary>
+    /// <summary>特质展示区域：显示角色特质列表及其实时效果</summary>
+    private void _PopulateTraits(VBoxContainer box, UnitData u)
+    {
+        if (u.CharacterTraits == null || u.CharacterTraits.Count == 0) return;
+
+        box.AddChild(new HSeparator());
+        box.AddChild(_MakeLabel("特质", 16, TextAccent));
+
+        var traitsVbox = new VBoxContainer();
+        traitsVbox.AddThemeConstantOverride("separation", 2);
+        traitsVbox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        box.AddChild(traitsVbox);
+
+        foreach (var trait in u.CharacterTraits)
+        {
+            if (trait == null) continue;
+            var traitRow = _BuildTraitEntry(trait);
+            traitsVbox.AddChild(traitRow);
+        }
+    }
+
+    /// <summary>构建单个特质条目：图标(预留) + 名称 + 效果</summary>
+    private Control _BuildTraitEntry(TraitData trait)
+    {
+        var hbox = new HBoxContainer();
+        hbox.AddThemeConstantOverride("separation", 6);
+        hbox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+
+        // 图标占位（16x16 紧凑）
+        if (!string.IsNullOrEmpty(trait.IconId))
+        {
+            var iconTex = GD.Load<Texture2D>($"res://assets/generated_ui_icons/{trait.IconId}.png");
+            if (iconTex != null)
+            {
+                var icon = new TextureRect();
+                icon.Texture = iconTex;
+                icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+                icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+                icon.CustomMinimumSize = new Vector2(16, 16);
+                hbox.AddChild(icon);
+            }
+        }
+        else
+        {
+            var dot = new ColorRect();
+            dot.CustomMinimumSize = new Vector2(8, 8);
+            dot.Color = _GetTraitColor(trait);
+            var dotCenter = new CenterContainer();
+            dotCenter.CustomMinimumSize = new Vector2(16, 16);
+            dotCenter.AddChild(dot);
+            hbox.AddChild(dotCenter);
+        }
+
+        // 名称（带颜色）
+        var nameLabel = new Label { Text = trait.TraitName };
+        nameLabel.AddThemeFontSizeOverride("font_size", 14);
+        nameLabel.AddThemeColorOverride("font_color", _GetTraitColor(trait));
+        hbox.AddChild(nameLabel);
+
+        // 效果简述（灰色，右对齐）
+        string effectText = _GetTraitEffectText(trait);
+        if (!string.IsNullOrEmpty(effectText))
+        {
+            var effectLabel = new Label { Text = effectText };
+            effectLabel.AddThemeFontSizeOverride("font_size", 12);
+            effectLabel.AddThemeColorOverride("font_color", TextMuted);
+            effectLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            effectLabel.HorizontalAlignment = HorizontalAlignment.Right;
+            effectLabel.ClipText = true;
+            hbox.AddChild(effectLabel);
+        }
+
+        // Tooltip
+        hbox.MouseFilter = Control.MouseFilterEnum.Stop;
+        hbox.TooltipText = $"{trait.TraitName}: {trait.Description}";
+
+        return hbox;
+    }
+
+    /// <summary>获取特质颜色（正面=绿，负面=红，中性=灰）</summary>
+    private static Color _GetTraitColor(TraitData trait)
+    {
+        // 判断是正面还是负面特质
+        int totalMod = trait.StrMod + trait.DexMod + trait.ConMod + trait.IntMod + trait.WisMod + trait.ChaMod;
+        if (trait.traitType == TraitData.TraitType.Functional)
+        {
+            // 功能性特质：根据效果判断正负
+            bool isNegative = trait.FunctionalEffect is "old_wound" or "gluttony" or "timid" or "xenophobia";
+            return isNegative ? new Color(0.9f, 0.4f, 0.3f) : new Color(0.4f, 0.85f, 0.5f);
+        }
+        if (totalMod > 0) return new Color(0.4f, 0.85f, 0.5f);
+        if (totalMod < 0) return new Color(0.9f, 0.4f, 0.3f);
+        return new Color(0.7f, 0.68f, 0.63f);
+    }
+
+    /// <summary>获取特质实时效果文本</summary>
+    private static string _GetTraitEffectText(TraitData trait)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+
+        // 属性修正
+        if (trait.StrMod != 0) parts.Add($"力量{trait.StrMod:+#;-#}");
+        if (trait.DexMod != 0) parts.Add($"敏捷{trait.DexMod:+#;-#}");
+        if (trait.ConMod != 0) parts.Add($"体质{trait.ConMod:+#;-#}");
+        if (trait.IntMod != 0) parts.Add($"智力{trait.IntMod:+#;-#}");
+        if (trait.WisMod != 0) parts.Add($"感知{trait.WisMod:+#;-#}");
+        if (trait.ChaMod != 0) parts.Add($"魅力{trait.ChaMod:+#;-#}");
+
+        // 功能性效果
+        if (trait.traitType == TraitData.TraitType.Functional && !string.IsNullOrEmpty(trait.FunctionalEffect))
+        {
+            string funcDesc = trait.FunctionalEffect switch
+            {
+                "dark_vision" => "黑暗视觉",
+                "iron_stomach" => "免疫食物中毒",
+                "adaptability" => "疲劳惩罚减半",
+                "thick_skin" => "物理伤害-1",
+                "indomitable" => "濒死时50%保持1HP",
+                "ether_resonance" => "施法恢复1d4 HP",
+                "premonition" => "被伏击时获得准备轮",
+                "old_wound" => "战斗开始HP-10%",
+                "gluttony" => "补给消耗x1.5",
+                "timid" => "HP<50%时攻击-1",
+                "xenophobia" => "异族队友忠诚-10",
+                "long_arm" => "近战射程+1",
+                "eagle_eye" => "远程命中+1",
+                "speed" => "移动速度-1",
+                "alertness" => "先攻+3",
+                "affinity" => "商店-15%/招募-10%",
+                "spell_memory" => "法术位+1",
+                "sorcerer_blood" => "天生施法者",
+                "ranged_hit_minus_1" => "远程命中-1",
+                _ => trait.FunctionalEffect,
+            };
+            parts.Add(funcDesc);
+        }
+
+        return parts.Count > 0 ? string.Join(" | ", parts) : "";
+    }
+
+    /// <summary>添加战斗属性卡片（紧凑版）</summary>
     private static void _AddStatCard(GridContainer grid, string name, string value)
     {
         var card = new PanelContainer();
@@ -466,16 +765,16 @@ public partial class PartyPanel : PanelContainer
         grid.AddChild(card);
 
         var hb = new HBoxContainer();
-        hb.AddThemeConstantOverride("separation", 6);
+        hb.AddThemeConstantOverride("separation", 4);
         card.AddChild(hb);
 
         var n = new Label { Text = name };
-        n.AddThemeFontSizeOverride("font_size", 11);
+        n.AddThemeFontSizeOverride("font_size", 16);
         n.AddThemeColorOverride("font_color", TextMuted);
         hb.AddChild(n);
 
         var v = new Label { Text = value };
-        v.AddThemeFontSizeOverride("font_size", 13);
+        v.AddThemeFontSizeOverride("font_size", 18);
         v.AddThemeColorOverride("font_color", TextPrimary);
         v.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         v.HorizontalAlignment = HorizontalAlignment.Right;
@@ -505,20 +804,19 @@ public partial class PartyPanel : PanelContainer
 
         _centerCol.AddChild(new HSeparator());
 
-        // 下半：网格背包
+        // 下半：网格背包（标题+整理按钮全部左对齐，与下方网格左边缘对齐）
         var invHeader = new HBoxContainer();
-        invHeader.AddThemeConstantOverride("separation", 6);
+        invHeader.AddThemeConstantOverride("separation", 12);
         _centerCol.AddChild(invHeader);
-        invHeader.AddChild(_MakeLabel("背包", 13, TextAccent));
+        invHeader.AddChild(_MakeLabel("背包", 26, TextAccent));
 
-        var capLbl = _MakeLabel("", 10, TextSecondary);
-        capLbl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        invHeader.AddChild(capLbl);
-
-        var sortBtn = new Button { Text = "整理", CustomMinimumSize = new Vector2(48, 22) };
-        sortBtn.AddThemeFontSizeOverride("font_size", 11);
+        var sortBtn = new Button { Text = "整理", CustomMinimumSize = new Vector2(96, 40) };
+        sortBtn.AddThemeFontSizeOverride("font_size", 22);
         sortBtn.Pressed += () => { _gridInventory?.AutoSort(); _backpackView?.Refresh(); };
         invHeader.AddChild(sortBtn);
+
+        // 占位 — 让上面两个控件保持左对齐
+        invHeader.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
         // 网格外框
         var gridOuter = new PanelContainer();
@@ -540,11 +838,12 @@ public partial class PartyPanel : PanelContainer
         gridOuter.AddChild(gridScroll);
 
         _backpackView = new GridInventoryView { Name = "BackpackView" };
+        // 左对齐：不撑满宽度
+        _backpackView.SizeFlagsHorizontal = 0;
         gridScroll.AddChild(_backpackView);
         if (_gridInventory != null)
         {
             _backpackView.Initialize(_gridInventory, _dragController, _itemPopup);
-            capLbl.Text = $"{_gridInventory.UsedCells}/{_gridInventory.TotalCells}";
         }
     }
 
@@ -558,7 +857,7 @@ public partial class PartyPanel : PanelContainer
         hint.CustomMinimumSize = new Vector2(0, 80);
         _centerCol.AddChild(hint);
 
-        var lbl = _MakeLabel("右键点击物品查看详情", 12, TextMuted);
+        var lbl = _MakeLabel("右键点击物品查看详情", 24, TextMuted);
         lbl.HorizontalAlignment = HorizontalAlignment.Center;
         hint.AddChild(lbl);
     }
@@ -572,7 +871,7 @@ public partial class PartyPanel : PanelContainer
         s.SetCornerRadiusAll(4);
         s.SetContentMarginAll(8);
         shopPanel.AddThemeStyleboxOverride("panel", s);
-        shopPanel.CustomMinimumSize = new Vector2(0, 140);
+        shopPanel.CustomMinimumSize = new Vector2(0, 280);
         shopPanel.SizeFlagsVertical = SizeFlags.ExpandFill;
         _centerCol.AddChild(shopPanel);
 
@@ -585,11 +884,11 @@ public partial class PartyPanel : PanelContainer
         shopHeader.AddThemeConstantOverride("separation", 8);
         shopVbox.AddChild(shopHeader);
 
-        shopHeader.AddChild(_MakeLabel(_shopName, 13, TextAccent));
+        shopHeader.AddChild(_MakeLabel(_shopName, 26, TextAccent));
         shopHeader.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
         if (_shopEconomy != null)
         {
-            _shopGoldLabel = _MakeLabel($"金币: {_shopEconomy.Gold}", 12, TextPositive);
+            _shopGoldLabel = _MakeLabel($"金币: {_shopEconomy.Gold}", 24, TextPositive);
             shopHeader.AddChild(_shopGoldLabel);
         }
 
@@ -617,6 +916,7 @@ public partial class PartyPanel : PanelContainer
             Name = "ShopGridView",
             Economy = _shopEconomy,
             Prosperity = _shopProsperity,
+            SizeFlagsHorizontal = 0, // 左对齐，不撑满
         };
         _shopView.OnGoldChanged = (gold) =>
         {
@@ -628,7 +928,7 @@ public partial class PartyPanel : PanelContainer
 
         // 提示
         string hint = _shopEconomy != null ? "拖入背包购买 · 拖出商店卖出" : "拖入背包拾取";
-        shopVbox.AddChild(_MakeLabel(hint, 10, TextMuted));
+        shopVbox.AddChild(_MakeLabel(hint, 20, TextMuted));
     }
 
     // ─── 右栏：队伍成员 ───
@@ -637,12 +937,12 @@ public partial class PartyPanel : PanelContainer
     {
         foreach (Node c in _rightCol.GetChildren()) c.QueueFree();
 
-        _rightCol.AddChild(_MakeLabel("队伍成员", 14, TextAccent));
+        _rightCol.AddChild(_MakeLabel("队伍成员", 28, TextAccent));
         _rightCol.AddChild(new HSeparator());
 
         if (_roster == null || _roster.Members.Count == 0)
         {
-            _rightCol.AddChild(_MakeLabel("暂无队伍成员", 12, TextMuted));
+            _rightCol.AddChild(_MakeLabel("暂无队伍成员", 24, TextMuted));
             return;
         }
 
@@ -655,17 +955,18 @@ public partial class PartyPanel : PanelContainer
 
             bool isLeader = _roster.IsLeader(member);
             string prefix = isLeader ? "★ " : "";
-            _AddMemberEntry($"{prefix}{member.UnitName}", member.Level, hp, maxHp, member.Morale);
+            string memberClassTitle = _GetClassTitle(member);
+            _AddMemberEntry($"{prefix}{member.UnitName}", member.Level, memberClassTitle, hp, maxHp, member.Morale);
         }
 
         _rightCol.AddChild(new HSeparator());
-        _rightCol.AddChild(_MakeLabel($"队伍人数: {_roster.Count}/{_roster.Capacity}", 12, TextAccent));
+        _rightCol.AddChild(_MakeLabel($"队伍人数: {_roster.Count}/{_roster.Capacity}", 24, TextAccent));
         float hpPct = totalMaxHp > 0 ? (float)totalHp / totalMaxHp * 100f : 0;
-        _rightCol.AddChild(_MakeLabel($"整体状态: {hpPct:F0}%", 11,
+        _rightCol.AddChild(_MakeLabel($"整体状态: {hpPct:F0}%", 22,
             hpPct > 60 ? TextPositive : hpPct > 30 ? TextAccent : TextNegative));
     }
 
-    private void _AddMemberEntry(string name, int level, int hp, int maxHp, int morale)
+    private void _AddMemberEntry(string name, int level, string classTitle, int hp, int maxHp, int morale)
     {
         var entry = new PanelContainer();
         var entryStyle = new StyleBoxFlat { BgColor = new Color(0.08f, 0.08f, 0.10f, 0.5f) };
@@ -682,8 +983,11 @@ public partial class PartyPanel : PanelContainer
         topRow.AddThemeConstantOverride("separation", 4);
         inner.AddChild(topRow);
 
-        topRow.AddChild(_MakeLabel($"{name} Lv.{level}", 12, TextPrimary));
-        var hpStr = _MakeLabel($"{hp}/{maxHp}", 10, hp > maxHp / 2 ? TextPositive : TextNegative);
+        string levelStr = string.IsNullOrEmpty(classTitle)
+            ? $"{name} Lv.{level}"
+            : $"{name} Lv.{level} {classTitle}";
+        topRow.AddChild(_MakeLabel(levelStr, 24, TextPrimary));
+        var hpStr = _MakeLabel($"{hp}/{maxHp}", 20, hp > maxHp / 2 ? TextPositive : TextNegative);
         hpStr.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         hpStr.HorizontalAlignment = HorizontalAlignment.Right;
         topRow.AddChild(hpStr);
@@ -691,7 +995,7 @@ public partial class PartyPanel : PanelContainer
         var hpRow = new HBoxContainer();
         hpRow.AddThemeConstantOverride("separation", 4);
         inner.AddChild(hpRow);
-        hpRow.AddChild(_MakeLabel("HP", 9, TextMuted));
+        hpRow.AddChild(_MakeLabel("HP", 18, TextMuted));
 
         var bar = new ProgressBar
         {
@@ -700,7 +1004,7 @@ public partial class PartyPanel : PanelContainer
             Value = hp,
             ShowPercentage = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(80, 8),
+            CustomMinimumSize = new Vector2(160, 16),
         };
         var hpColor = hp > maxHp * 0.6f ? TextPositive : hp > maxHp * 0.3f ? TextAccent : TextNegative;
         var hpBg = new StyleBoxFlat { BgColor = new Color(0.04f, 0.04f, 0.05f, 0.9f) };
@@ -714,8 +1018,25 @@ public partial class PartyPanel : PanelContainer
         if (morale > 0)
         {
             var mc = morale >= 70 ? TextPositive : morale >= 40 ? TextAccent : TextNegative;
-            hpRow.AddChild(_MakeLabel($"♥{morale}", 9, mc));
+            hpRow.AddChild(_MakeLabel($"♥{morale}", 18, mc));
         }
+    }
+
+    // ========================================
+    // 职业称号
+    // ========================================
+
+    /// <summary>从技能盘推导角色的复合职业称号</summary>
+    private static string _GetClassTitle(UnitData unit)
+    {
+        var stMgr = BladeHex.Data.Globals.SkillTreesOrNull;
+        if (stMgr == null) return "";
+
+        // 优先使用 CharacterId（存档恢复时设置），否则用运行时实例 ID
+        long charId = unit.CharacterId >= 0 ? unit.CharacterId : (long)unit.GetInstanceId();
+        var tree = stMgr.GetSkillTree(charId);
+        if (tree == null) return "";
+        return tree.GetClassTitleName();
     }
 
     // ========================================
@@ -735,8 +1056,8 @@ public partial class PartyPanel : PanelContainer
         var hbox = new HBoxContainer();
         hbox.AddThemeConstantOverride("separation", 8);
 
-        var lbl = new Label { Text = label, CustomMinimumSize = new Vector2(28, 0) };
-        lbl.AddThemeFontSizeOverride("font_size", 12);
+        var lbl = new Label { Text = label, CustomMinimumSize = new Vector2(56, 0) };
+        lbl.AddThemeFontSizeOverride("font_size", 24);
         hbox.AddChild(lbl);
 
         var bar = new ProgressBar
@@ -746,7 +1067,7 @@ public partial class PartyPanel : PanelContainer
             Value = current,
             ShowPercentage = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(120, 16),
+            CustomMinimumSize = new Vector2(120, 28),
         };
         // 背景槽
         var bg = new StyleBoxFlat { BgColor = new Color(0.04f, 0.04f, 0.05f, 0.9f) };
@@ -761,7 +1082,7 @@ public partial class PartyPanel : PanelContainer
         hbox.AddChild(bar);
 
         var val = new Label { Text = $"{current}/{max}" };
-        val.AddThemeFontSizeOverride("font_size", 11);
+        val.AddThemeFontSizeOverride("font_size", 22);
         val.AddThemeColorOverride("font_color", new Color(0.85f, 0.85f, 0.85f));
         hbox.AddChild(val);
 
@@ -784,15 +1105,15 @@ public partial class PartyPanel : PanelContainer
     private static void _AddInlineStat(GridContainer grid, string name, int value)
     {
         var hbox = new HBoxContainer();
-        hbox.AddThemeConstantOverride("separation", 4);
+        hbox.AddThemeConstantOverride("separation", 6);
 
         var n = new Label { Text = name };
-        n.AddThemeFontSizeOverride("font_size", 11);
+        n.AddThemeFontSizeOverride("font_size", 22);
         n.AddThemeColorOverride("font_color", TextMuted);
         hbox.AddChild(n);
 
         var v = new Label { Text = value.ToString() };
-        v.AddThemeFontSizeOverride("font_size", 11);
+        v.AddThemeFontSizeOverride("font_size", 22);
         v.AddThemeColorOverride("font_color", TextPrimary);
         hbox.AddChild(v);
 

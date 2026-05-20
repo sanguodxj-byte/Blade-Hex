@@ -20,8 +20,8 @@ public partial class GridInventoryView : Control, IItemContainer
 {
     [Signal] public delegate void ItemRightClickedEventHandler();
 
-    public const int CellSize = 42;
-    public const int CellGap = 2;
+    public const int CellSize = 72;
+    public const int CellGap = 3;
 
     private static readonly Color BgCell = new(0.08f, 0.08f, 0.10f, 0.85f);
     private static readonly Color BgCellValid = new(0.08f, 0.22f, 0.08f, 0.7f);
@@ -172,6 +172,18 @@ public partial class GridInventoryView : Control, IItemContainer
     public bool CanAccept(DragSource source, ContainerHitInfo hit)
     {
         if (_inventory == null || hit.Target is not Vector2I cell) return false;
+        if (source.Container is ShopGridView shop && !shop.CanPurchase(source.Item))
+            return false;
+
+        var target = _inventory.GetItemAt(cell.X, cell.Y);
+        if (target != null)
+        {
+            if (source.Origin is GridItem dragged && dragged == target)
+                return _inventory.CanPlaceSize(source.Item.InvWidth, source.Item.InvHeight, cell.X, cell.Y, dragged);
+            if (_inventory.CanStack(source.Item, target.Item))
+                return true;
+        }
+
         var ignore = source.Origin as GridItem;
         return _inventory.CanPlaceSize(source.Item.InvWidth, source.Item.InvHeight, cell.X, cell.Y, ignore);
     }
@@ -185,12 +197,18 @@ public partial class GridInventoryView : Control, IItemContainer
         {
             var existing = _inventory.GetItemAt(cell.X, cell.Y);
             if (existing != null && existing != dragged)
+            {
+                if (_inventory.CanStack(dragged.Item, existing.Item))
+                    return _inventory.TryMerge(dragged, existing);
                 return _inventory.TrySwap(dragged, existing);
+            }
             return _inventory.TryMove(dragged, cell.X, cell.Y);
         }
 
         // 来自其他容器：克隆物品避免共享引用（商店连续购买同款不会共享同一实例）
         var itemToPlace = source.Item.Duplicate(true) as ItemData ?? source.Item;
+        if (_inventory.TryStackAt(itemToPlace, cell.X, cell.Y))
+            return true;
         return _inventory.TryPlace(itemToPlace, cell.X, cell.Y);
     }
 
@@ -209,7 +227,15 @@ public partial class GridInventoryView : Control, IItemContainer
         if (_inventory == null) return;
 
         var ignore = source.Origin as GridItem;
-        bool ok = _inventory.CanPlaceSize(source.Item.InvWidth, source.Item.InvHeight, cell.X, cell.Y, ignore);
+        var target = _inventory.GetItemAt(cell.X, cell.Y);
+        bool ok = false;
+        if (target != null)
+        {
+            bool sameDragged = source.Origin is GridItem dragged && dragged == target;
+            ok = !sameDragged && _inventory.CanStack(source.Item, target.Item);
+        }
+        if (!ok)
+            ok = _inventory.CanPlaceSize(source.Item.InvWidth, source.Item.InvHeight, cell.X, cell.Y, ignore);
         var bg = ok ? BgCellValid : BgCellInvalid;
         var border = ok ? new Color(0.25f, 0.7f, 0.25f, 0.85f) : new Color(0.7f, 0.2f, 0.2f, 0.85f);
 

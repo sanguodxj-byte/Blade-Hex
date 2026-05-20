@@ -82,11 +82,11 @@ public partial class ConsumableData : ItemData
 
     public string GetEffectText() => consumableType switch
     {
-        ConsumableType.HealingPotion => $"恢复{HealDiceCount}d{HealDiceSides}+{HealBonus} HP",
-        ConsumableType.StrongHealing => $"恢复{HealDiceCount}d{HealDiceSides}+{HealBonus} HP",
+        ConsumableType.HealingPotion => $"恢复{HealDiceCount}-{HealDiceCount * HealDiceSides}+{HealBonus} HP",
+        ConsumableType.StrongHealing => $"恢复{HealDiceCount}-{HealDiceCount * HealDiceSides}+{HealBonus} HP",
         ConsumableType.Antidote => "解除中毒状态",
-        ConsumableType.FireOil => $"投掷至目标格，范围内{DamageDiceCount}d{DamageDiceSides}火伤×{AppliedStatusDuration}轮",
-        ConsumableType.HolyWater => $"投掷至目标格，亡灵{DamageDiceCount}d{DamageDiceSides}伤害",
+        ConsumableType.FireOil => $"投掷至目标格，范围内{DamageDiceCount}-{DamageDiceCount * DamageDiceSides}火伤×{AppliedStatusDuration}轮",
+        ConsumableType.HolyWater => $"投掷至目标格，亡灵{DamageDiceCount}-{DamageDiceCount * DamageDiceSides}伤害",
         ConsumableType.SpellScroll => LinkedSpellId != "" ? $"施放一次{LinkedSpellId}" : "施放一次法术",
         ConsumableType.Whetstone => "本场战斗近战伤害+1",
         _ => "",

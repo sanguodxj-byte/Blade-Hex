@@ -55,14 +55,14 @@ public static class ItemGridWidget
 
         // 图标 — 优先 ResourceRegistry 加载真实纹理，缺失则使用程序化占位符
         Texture2D? tex = !string.IsNullOrEmpty(item.IconId)
-            ? ResourceRegistry.GetIcon(item.IconId)
+            ? (ResourceRegistry.GetIcon(item.IconId) ?? ResourceRegistry.GetIcon(item.IconFallbackId))
             : null;
 
         if (tex != null)
         {
             var icon = new TextureRect();
             icon.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-            icon.OffsetLeft = 3; icon.OffsetTop = 3; icon.OffsetRight = -3; icon.OffsetBottom = -12;
+            icon.OffsetLeft = 6; icon.OffsetTop = 6; icon.OffsetRight = -6; icon.OffsetBottom = -24;
             icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
             float aspect = (float)item.InvWidth / item.InvHeight;
             icon.StretchMode = (aspect < 0.6f || aspect > 1.7f)
@@ -82,8 +82,8 @@ public static class ItemGridWidget
                 BgColor = new Color(0.08f, 0.08f, 0.10f, 0.5f),
             };
             placeholder.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-            placeholder.OffsetLeft = 3; placeholder.OffsetTop = 3;
-            placeholder.OffsetRight = -3; placeholder.OffsetBottom = -12;
+            placeholder.OffsetLeft = 6; placeholder.OffsetTop = 6;
+            placeholder.OffsetRight = -6; placeholder.OffsetBottom = -24;
             w.AddChild(placeholder);
         }
 
@@ -91,11 +91,11 @@ public static class ItemGridWidget
         int maxC = item.InvWidth * 3;
         string displayName = item.ItemName.Length > maxC ? item.ItemName[..maxC] : item.ItemName;
         var nl = new Label { Text = displayName };
-        nl.AddThemeFontSizeOverride("font_size", 9);
+        nl.AddThemeFontSizeOverride("font_size", 18);
         nl.AddThemeColorOverride("font_color", rc);
         nl.HorizontalAlignment = HorizontalAlignment.Center;
         nl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
-        nl.OffsetTop = -11; nl.OffsetBottom = 0;
+        nl.OffsetTop = -22; nl.OffsetBottom = 0;
         nl.MouseFilter = Control.MouseFilterEnum.Ignore;
         w.AddChild(nl);
 
@@ -103,22 +103,22 @@ public static class ItemGridWidget
         if (quantity > 1)
         {
             var ql = new Label { Text = $"×{quantity}" };
-            ql.AddThemeFontSizeOverride("font_size", 10);
+            ql.AddThemeFontSizeOverride("font_size", 20);
             ql.AddThemeColorOverride("font_color", new Color(0.95f, 0.93f, 0.88f));
             ql.HorizontalAlignment = HorizontalAlignment.Right;
             ql.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopRight);
-            ql.OffsetRight = -2; ql.OffsetTop = 1;
+            ql.OffsetRight = -4; ql.OffsetTop = 2;
             ql.MouseFilter = Control.MouseFilterEnum.Ignore;
             w.AddChild(ql);
         }
-        else if (!string.IsNullOrEmpty(overlay))
+        if (!string.IsNullOrEmpty(overlay))
         {
             var ol = new Label { Text = overlay };
-            ol.AddThemeFontSizeOverride("font_size", 9);
+            ol.AddThemeFontSizeOverride("font_size", 18);
             ol.AddThemeColorOverride("font_color", overlayColor ?? new Color(0.3f, 0.85f, 0.3f));
             ol.HorizontalAlignment = HorizontalAlignment.Right;
-            ol.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopRight);
-            ol.OffsetRight = -2; ol.OffsetTop = 1;
+            ol.SetAnchorsAndOffsetsPreset(quantity > 1 ? Control.LayoutPreset.BottomRight : Control.LayoutPreset.TopRight);
+            ol.OffsetRight = -4; ol.OffsetTop = quantity > 1 ? -22 : 2; ol.OffsetBottom = quantity > 1 ? -2 : 0;
             ol.MouseFilter = Control.MouseFilterEnum.Ignore;
             w.AddChild(ol);
         }

@@ -198,7 +198,7 @@ public partial class PartyInventory : Resource
                 Quantity = 1,
                 Value = 5 + target.PrimaryMainHand.DamageDiceCount * target.PrimaryMainHand.DamageDiceSides * 3,
                 ItemType = LootEntry.LootType.Weapon,
-                Description = $"{target.PrimaryMainHand.DamageDiceCount}d{target.PrimaryMainHand.DamageDiceSides}",
+                Description = $"{target.PrimaryMainHand.DamageDiceCount}-{target.PrimaryMainHand.DamageDiceCount * target.PrimaryMainHand.DamageDiceSides}",
                 WeaponRef = target.PrimaryMainHand,
             };
         }
