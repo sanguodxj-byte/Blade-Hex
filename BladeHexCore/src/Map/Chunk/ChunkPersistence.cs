@@ -336,6 +336,17 @@ public static class ChunkPersistence
         if (data.TryGetValue("prosperity", out var prosperity))
             poi.Prosperity = prosperity.AsInt32();
 
+        // Footprint / Scale 字段（旧存档没有 → 用默认 solo + rotation 0）
+        if (data.TryGetValue("center_hex_q", out var chq) && data.TryGetValue("center_hex_r", out var chr))
+            poi.CenterHex = new Vector2I(chq.AsInt32(), chr.AsInt32());
+        if (data.TryGetValue("footprint_template", out var fpTpl))
+            poi.FootprintTemplateName = fpTpl.AsString();
+        if (data.TryGetValue("footprint_rotation", out var fpRot))
+            poi.FootprintRotation = fpRot.AsInt32();
+        // 重建占用 hex 缓存
+        try { poi.RebuildOccupiedHexes(); }
+        catch (System.Exception) { /* 模板未注册，留 OccupiedHexes 为空 */ }
+
         // 外族聚落字段
         if (data.TryGetValue("settlement_race", out var race))
             poi.SettlementRaceValue = (BladeHex.Strategic.OverworldPOI.SettlementRace)race.AsInt32();

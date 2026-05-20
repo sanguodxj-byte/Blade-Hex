@@ -221,7 +221,44 @@ public static class TerrainVisualRegistry
             btKey: "road_top", btVariants: 1, cliffKey: "cliff_dirt",
             dominant: new Color(0.65f, 0.55f, 0.38f));
 
+        _AssignPatternTypes(d);
         return d;
+    }
+
+    /// <summary>为每个地形指派程序化shader pattern type</summary>
+    private static void _AssignPatternTypes(Dictionary<HexOverworldTile.TerrainType, TerrainVisualProfile> d)
+    {
+        // 0=平原/草地, 1=森林, 2=水域, 3=山地/岩石, 4=沙漠, 5=雪地/冰, 6=道路, 7=沼泽
+        var map = new Dictionary<HexOverworldTile.TerrainType, int>
+        {
+            [HexOverworldTile.TerrainType.Plains] = 0,
+            [HexOverworldTile.TerrainType.Grassland] = 0,
+            [HexOverworldTile.TerrainType.Savanna] = 0,
+            [HexOverworldTile.TerrainType.Hills] = 0,
+            [HexOverworldTile.TerrainType.Wasteland] = 0,
+            [HexOverworldTile.TerrainType.Forest] = 1,
+            [HexOverworldTile.TerrainType.DenseForest] = 1,
+            [HexOverworldTile.TerrainType.Jungle] = 1,
+            [HexOverworldTile.TerrainType.Taiga] = 1,
+            [HexOverworldTile.TerrainType.DeepWater] = 2,
+            [HexOverworldTile.TerrainType.ShallowWater] = 2,
+            [HexOverworldTile.TerrainType.River] = 2,
+            [HexOverworldTile.TerrainType.Mountain] = 3,
+            [HexOverworldTile.TerrainType.MountainSnow] = 3,
+            [HexOverworldTile.TerrainType.Rocky] = 3,
+            [HexOverworldTile.TerrainType.Sand] = 4,
+            [HexOverworldTile.TerrainType.Snow] = 5,
+            [HexOverworldTile.TerrainType.Ice] = 5,
+            [HexOverworldTile.TerrainType.Road] = 6,
+            [HexOverworldTile.TerrainType.Swamp] = 7,
+            [HexOverworldTile.TerrainType.Bog] = 7,
+        };
+
+        foreach (var (terrain, profile) in d)
+        {
+            if (map.TryGetValue(terrain, out var pt))
+                profile.PatternType = pt;
+        }
     }
 
     // ─────────────────────────────────────────────

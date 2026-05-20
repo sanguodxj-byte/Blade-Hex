@@ -17,8 +17,11 @@ public partial class CombatMinimapPanel : MinimapPanelBase
     // ========================================
     // 配置覆盖
     // ========================================
-    protected override int MapPixelWidth => _mapW;
-    protected override int MapPixelHeight => _mapH;
+    // 渲染分辨率:固定 150×150 像素(不管战场多大,都缩放到这个分辨率)
+    // 这样 TextureRect 有足够像素可见,不会出现"15×15 像素几乎不可见"的问题
+    private const int RenderResolution = 150;
+    protected override int MapPixelWidth => RenderResolution;
+    protected override int MapPixelHeight => RenderResolution;
     protected override int PanelMargin => 4;
     protected override float PanelAlpha => 0.85f;
     protected override string Title => "";
@@ -39,6 +42,9 @@ public partial class CombatMinimapPanel : MinimapPanelBase
     private CombatManager? _combatMgr;
     private int _mapW = 12;
     private int _mapH = 10;
+    // axial → pixel 偏移(让负坐标映射到 [0, mapW/mapH) 范围)
+    private int _offsetQ;
+    private int _offsetR;
 
     // 视野数据（由 CombatSceneBase 更新）
     private Vector2 _viewCenter;
@@ -57,16 +63,44 @@ public partial class CombatMinimapPanel : MinimapPanelBase
     {
         _hexGrid = hexGrid;
         _combatMgr = combatMgr;
-        _mapW = mapWidth;
-        _mapH = mapHeight;
+
+        // 六边形地图:axial 坐标范围 [-N, N],像素图大小 = (2N+1) × (2N+1)
+        // 矩形地图:直接用 W × H
+        if (_hexGrid.Cells.Count > 0)
+        {
+            // 从实际 cell 坐标推算范围
+            int minQ = int.MaxValue, maxQ = int.MinValue;
+            int minR = int.MaxValue, maxR = int.MinValue;
+            foreach (var coord in _hexGrid.Cells.Keys)
+            {
+                if (coord.X < minQ) minQ = coord.X;
+                if (coord.X > maxQ) maxQ = coord.X;
+                if (coord.Y < minR) minR = coord.Y;
+                if (coord.Y > maxR) maxR = coord.Y;
+            }
+            _offsetQ = -minQ;
+            _offsetR = -minR;
+            _mapW = maxQ - minQ + 1;
+            _mapH = maxR - minR + 1;
+        }
+        else
+        {
+            _offsetQ = 0;
+            _offsetR = 0;
+            _mapW = mapWidth;
+            _mapH = mapHeight;
+        }
 
         // 世界尺寸 = 格数 × 格间距
-        _worldWidth = mapWidth * HexUtils.HorizontalSpacing;
-        _worldHeight = mapHeight * HexUtils.VerticalSpacing;
+        _worldWidth = _mapW * HexUtils.HorizontalSpacing;
+        _worldHeight = _mapH * HexUtils.VerticalSpacing;
 
         BuildBaseUI();
         BakeTerrain();
         Initialized = true;
+
+        // 正方形 150×150 渲染图,面板也正方形
+        CustomMinimumSize = new Vector2(RenderResolution, RenderResolution);
     }
 
     // ========================================
@@ -79,19 +113,82 @@ public partial class CombatMinimapPanel : MinimapPanelBase
 
         MapImage.Fill(DefaultBgColor);
 
+        // axial → pixel 转换(pointy-top hex):
+        //   px = size * (sqrt(3) * q + sqrt(3)/2 * r)
+        //   py = size * (3/2 * r)
+        // 我们用归一化版本:把所有 cell 的像素坐标映射到 [0, RenderResolution) 范围
+
+        // 第一遍:算所有 cell 的像素坐标范围
+        float sqrt3 = Mathf.Sqrt(3f);
+        float minPx = float.MaxValue, maxPx = float.MinValue;
+        float minPy = float.MaxValue, maxPy = float.MinValue;
+
+        foreach (var coord in _hexGrid.Cells.Keys)
+        {
+            float px = sqrt3 * coord.X + sqrt3 * 0.5f * coord.Y;
+            float py = 1.5f * coord.Y;
+            if (px < minPx) minPx = px;
+            if (px > maxPx) maxPx = px;
+            if (py < minPy) minPy = py;
+            if (py > maxPy) maxPy = py;
+        }
+
+        float rangeX = maxPx - minPx;
+        float rangeY = maxPy - minPy;
+        if (rangeX <= 0) rangeX = 1;
+        if (rangeY <= 0) rangeY = 1;
+
+        // 保持正方形内等比缩放(留 2px 边距)
+        int margin = 4;
+        int usable = RenderResolution - margin * 2;
+        float scale = Mathf.Min(usable / rangeX, usable / rangeY);
+
+        // 每个 cell 画一个小圆(半径 = scale * 0.45,让相邻 cell 的圆刚好接触)
+        int dotR = Mathf.Max(2, (int)(scale * 0.45f));
+
         foreach (var kvp in _hexGrid.Cells)
         {
             var cell = kvp.Value;
             if (cell == null || !GodotObject.IsInstanceValid(cell)) continue;
 
-            int x = cell.GridPos.X;
-            int y = cell.GridPos.Y;
-            if (x < 0 || x >= _mapW || y < 0 || y >= _mapH) continue;
+            float px = sqrt3 * cell.GridPos.X + sqrt3 * 0.5f * cell.GridPos.Y;
+            float py = 1.5f * cell.GridPos.Y;
 
-            MapImage.SetPixel(x, y, GetCellColor(cell));
+            int ix = margin + (int)((px - minPx) * scale);
+            int iy = margin + (int)((py - minPy) * scale);
+
+            var color = GetCellColor(cell);
+            // 画实心圆
+            for (int dy = -dotR; dy <= dotR; dy++)
+                for (int dx = -dotR; dx <= dotR; dx++)
+                    if (dx * dx + dy * dy <= dotR * dotR)
+                    {
+                        int fx = ix + dx, fy = iy + dy;
+                        if (fx >= 0 && fx < RenderResolution && fy >= 0 && fy < RenderResolution)
+                            MapImage.SetPixel(fx, fy, color);
+                    }
         }
 
+        // 缓存转换参数供 Refresh / overlay 使用
+        _pixMinX = minPx; _pixMinY = minPy;
+        _pixScale = scale; _pixMargin = margin;
+
         FlushTexture();
+    }
+
+    // 缓存的 axial→pixel 转换参数
+    private float _pixMinX, _pixMinY, _pixScale;
+    private int _pixMargin;
+
+    /// <summary>axial 坐标转小地图像素坐标</summary>
+    private Vector2I AxialToMinimapPixel(Vector2I gridPos)
+    {
+        float sqrt3 = Mathf.Sqrt(3f);
+        float px = sqrt3 * gridPos.X + sqrt3 * 0.5f * gridPos.Y;
+        float py = 1.5f * gridPos.Y;
+        int ix = _pixMargin + (int)((px - _pixMinX) * _pixScale);
+        int iy = _pixMargin + (int)((py - _pixMinY) * _pixScale);
+        return new Vector2I(ix, iy);
     }
 
     // ========================================
@@ -103,26 +200,37 @@ public partial class CombatMinimapPanel : MinimapPanelBase
     {
         if (!Initialized || _hexGrid == null) return;
 
-        // 重绘地形底图（保持地形不变）
+        // 重绘地形底图
         BakeTerrain();
 
         // 叠加单位位置
         if (_combatMgr != null)
         {
+            int unitDotR = Mathf.Max(3, (int)(_pixScale * 0.35f));
+
+            void DrawUnitDot(Vector2I gridPos, Color color)
+            {
+                var p = AxialToMinimapPixel(gridPos);
+                for (int dy = -unitDotR; dy <= unitDotR; dy++)
+                    for (int dx = -unitDotR; dx <= unitDotR; dx++)
+                        if (dx * dx + dy * dy <= unitDotR * unitDotR)
+                        {
+                            int fx = p.X + dx, fy = p.Y + dy;
+                            if (fx >= 0 && fx < RenderResolution && fy >= 0 && fy < RenderResolution)
+                                MapImage.SetPixel(fx, fy, color);
+                        }
+            }
+
             foreach (var unit in _combatMgr.PlayerUnits)
             {
                 if (!GodotObject.IsInstanceValid(unit) || unit.CurrentHp <= 0) continue;
-                int x = unit.GridPos.X, y = unit.GridPos.Y;
-                if (x >= 0 && x < _mapW && y >= 0 && y < _mapH)
-                    MapImage.SetPixel(x, y, PlayerUnitColor);
+                DrawUnitDot(unit.GridPos, PlayerUnitColor);
             }
 
             foreach (var unit in _combatMgr.EnemyUnits)
             {
                 if (!GodotObject.IsInstanceValid(unit) || unit.CurrentHp <= 0) continue;
-                int x = unit.GridPos.X, y = unit.GridPos.Y;
-                if (x >= 0 && x < _mapW && y >= 0 && y < _mapH)
-                    MapImage.SetPixel(x, y, EnemyUnitColor);
+                DrawUnitDot(unit.GridPos, EnemyUnitColor);
             }
         }
 

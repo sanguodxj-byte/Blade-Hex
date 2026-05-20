@@ -71,15 +71,59 @@ public static class CombatStats
         return Math.Max(1, maxAp - GetArmorApPenalty(data));
     }
 
-    /// <summary>护甲 AP 惩罚 =  armor + shield + helmet 的 ApPenalty 总和</summary>
+    /// <summary>护甲 AP 惩罚 = armor + shield 的 ApPenalty 总和（v0.6: 头盔不算入 AP 惩罚）</summary>
     public static int GetArmorApPenalty(UnitData data)
     {
         if (data == null) return 0;
         int penalty = 0;
         if (data.Armor != null) penalty += data.Armor.ApPenalty;
         if (data.Shield != null) penalty += data.Shield.ApPenalty;
-        if (data.Helmet != null) penalty += data.Helmet.ApPenalty;
+        // 头盔不再扣 AP — 重盔已通过 AC/MaxDex 限制成本
         return penalty;
+    }
+
+    /// <summary>
+    /// 最大 Mana (v0.6 10.0): 10 + INT + floor(Level/2) + floor(WIS/4) + NodeManaMax
+    /// 2026-05-17 修订：WIS 提供 Mana 上限加成 floor(WIS/4)。
+    /// 节点 mana_max 加成自动累入（CharacterSkillTree.GetManaMaxBonus）。
+    /// </summary>
+    public static int GetMaxMana(UnitData data)
+    {
+        if (data == null) return 0;
+        int baseMana = 10 + data.Intel + data.Level / 2 + data.Wis / 4;
+        int nodeMana = data.Runtime?.SkillTree?.GetManaMaxBonus() ?? 0;
+        return Math.Max(0, baseMana + nodeMana);
+    }
+
+    /// <summary>
+    /// Mana 战斗内每回合恢复量 (v0.6 10.0 修订): floor(WIS/8) + floor(INT/12) + NodeManaRegen
+    /// 让 WIS 系成为续航型，INT 主属性也提供少量 mana regen 让法师能持久输出。
+    /// 节点 mana_regen 加成自动累入。
+    /// </summary>
+    public static int GetManaRegen(UnitData data)
+    {
+        if (data == null) return 0;
+        int nodeRegen = data.Runtime?.SkillTree?.GetManaRegenBonus() ?? 0;
+        return data.Wis / 8 + data.Intel / 12 + nodeRegen;
+    }
+
+    /// <summary>
+    /// 角色是否满足施法装备限制 (v0.6 10.0):
+    /// 1) 不能装备盾牌
+    /// 2) 只能穿戴 Cloth 类护甲（DR ≤ 3 的 Light，即布衣 / 法师长袍）
+    /// 3) 主手必须装备法术媒介（IsCatalyst）
+    /// </summary>
+    public static bool CanCastSpells(UnitData data)
+    {
+        if (data == null) return false;
+        if (data.Shield != null) return false;
+        if (data.Armor != null
+            && (data.Armor.armorType != ArmorData.ArmorType.Light || data.Armor.DrThreshold > 3))
+            return false;
+        var mainHand = data.PrimaryMainHand;
+        if (mainHand == null) return false;
+        if (mainHand is not WeaponData w) return false;
+        return w.IsCatalyst;
     }
 
     // ========================================
@@ -99,12 +143,22 @@ public static class CombatStats
 
     /// <summary>
     /// 暴击倍率 (v0.6): CritMultiplier = 2.0 + WISCritTier × 0.1
+    /// 重型武器 Lv.5+ 精通: 最终暴击倍率 ×1.2 (v0.6 6.9)
     /// </summary>
     public static float GetCritMultiplier(UnitData data)
     {
         if (data == null) return 2.0f;
         int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, data.Wis - 14) / 4.0));
-        return 2.0f + wisCritTier * 0.1f;
+        float baseMultiplier = 2.0f + wisCritTier * 0.1f;
+
+        // v0.6 6.9 重型武器 Lv.5+ → ×1.2
+        var weapon = GetMainHand(data, data.Runtime.UsingPrimaryWeapon) as WeaponData;
+        if (weapon != null && weapon.Weight == WeaponData.WeightCategory.Heavy)
+        {
+            int masteryLevel = data.WeaponMastery.GetLevelBySubtype(weapon.Subtype);
+            if (masteryLevel >= 5) baseMultiplier *= 1.2f;
+        }
+        return baseMultiplier;
     }
 
     /// <summary>暴击受伤倍率 = max(0.2, 1.0 - WISCritTier * 0.1)</summary>
@@ -145,7 +199,7 @@ public static class CombatStats
             && shield.CurrentArmorPoints > 0)
             shieldDrAc = (int)Mathf.Floor(Mathf.Sqrt(shield.DrThreshold));
 
-        return ac + dexAc + armorDrAc + shieldDrAc;
+        return ac + dexAc + armorDrAc + shieldDrAc + GetBuffStatBonus(data, "ac");
     }
 
     /// <summary>
@@ -234,7 +288,10 @@ public static class CombatStats
     // 攻击与伤害
     // ========================================
 
-    /// <summary>攻击加值 = 武器精通命中加成 + 武器命中修正（不再使用等级专精加值）</summary>
+    /// <summary>
+    /// 攻击加值 = 武器精通命中加成 + 武器命中修正 (v0.6 4.1，不再使用等级专精加值)
+    /// + Lv.5+ 轻型武器 +1 命中 (v0.6 6.9)
+    /// </summary>
     public static int GetAttackBonus(UnitData data, bool usingPrimaryWeapon)
     {
         if (data == null) return 0;
@@ -242,10 +299,14 @@ public static class CombatStats
 
         // 武器精通命中加成 = floor(MasteryLevel / 3)
         int masteryHitBonus = 0;
+        int lightLv5Bonus = 0;
         if (weapon != null)
         {
             int masteryLevel = data.WeaponMastery.GetLevelBySubtype(weapon.Subtype);
             masteryHitBonus = masteryLevel / 3;
+            // v0.6 6.9 轻型武器 Lv.5+ 命中 +1（仅命中，不影响暴击阈值）
+            if (masteryLevel >= 5 && weapon.Weight == WeaponData.WeightCategory.Light)
+                lightLv5Bonus = 1;
         }
 
         // 武器自身命中修正
@@ -253,7 +314,7 @@ public static class CombatStats
         if (weapon?.Subtype != null)
             weaponHitBonus = WeaponRegistry.GetConfig(weapon.Subtype).HitBonus;
 
-        return masteryHitBonus + weaponHitBonus;
+        return masteryHitBonus + weaponHitBonus + lightLv5Bonus + GetBuffStatBonus(data, "attack_bonus");
     }
 
     /// <summary>
@@ -264,25 +325,26 @@ public static class CombatStats
     {
         var weapon = GetMainHand(data, usingPrimaryWeapon) as WeaponData;
         int dmgDice = 0;
-        string dText = "徒手(1d20)";
+        string dText = "徒手(1-3)";
 
-        int levelExtra = data != null ? RPGRuleEngine.GetDamageDiceCount(data.Level) - 1 : 0;
+        // v0.6 §6.5: 武器伤害骰由武器面板（含 tier 缩放）决定，
+        // 不再加"等级追加骰"（v0.5 旧机制 GetDamageDiceCount(level) 已废弃）。
+        // 等级伤害成长走武器精通（每级 +10%）+ 装备 tier 升级。
 
         // 骰子结果
         if (weapon != null)
         {
             for (int i = 0; i < weapon.DamageDiceCount; i++)
                 dmgDice += GD.RandRange(1, weapon.DamageDiceSides);
-            if (levelExtra > 0)
-                for (int i = 0; i < levelExtra; i++)
-                    dmgDice += GD.RandRange(1, weapon.DamageDiceSides);
-            dText = $"{weapon.DamageDiceCount + levelExtra}d{weapon.DamageDiceSides}";
+            int wMin = weapon.DamageDiceCount;
+            int wMax = weapon.DamageDiceCount * weapon.DamageDiceSides;
+            dText = $"{wMin}-{wMax}";
         }
         else
         {
             // 徒手攻击：1d3（拳头），不是1d20
             dmgDice = GD.RandRange(1, 3);
-            dText = "徒手(1d3)";
+            dText = "徒手(1-3)";
         }
 
         // 百分比乘法加成体系
@@ -314,6 +376,20 @@ public static class CombatStats
 
 
     // ========================================
+    // 先攻计算
+    // ========================================
+
+    /// <summary>
+    /// 先攻修正值 = DEX_mod + BaseInitiative
+    /// 实际先攻 = d20 + GetInitiativeModifier()
+    /// </summary>
+    public static int GetInitiativeModifier(UnitData data)
+    {
+        if (data == null) return 0;
+        return GetStatModifier(data.Dex) + data.BaseInitiative;
+    }
+
+    // ========================================
     // 移动
     // ========================================
 
@@ -325,7 +401,25 @@ public static class CombatStats
         move += data.GetEquipmentMoveBonus();
         move += data.AccessoryMoveBonus;
         if (data.Mount != null) move += data.Mount.SpeedBonus;
+        move += GetBuffStatBonus(data, "speed");
         return Math.Max(1, move);
     }
 
+    // ============================================================
+    // Buff 系统集成
+    // ============================================================
+
+    /// <summary>
+    /// 从 BuffSystem 查询指定属性的 Base 层加值(整数)。
+    /// 用于 GetAc / GetAttackBonus / GetMoveRange 等简单加法属性。
+    /// 对于需要完整多乘区的属性(如 damage),应直接用 DamageCalcPipeline。
+    /// </summary>
+    private static int GetBuffStatBonus(UnitData? data, string stat)
+    {
+        if (data == null) return 0;
+        var result = Buff.BuffSystem.ResolveStatModifiers(data, stat);
+        // 对于 AC/攻击/移动这类"基础+加值"属性,只取 FlatBonus(Base 层)
+        // Increased/More/FinalMult 对这些属性无意义(它们是伤害专用乘区)
+        return (int)result.FlatBonus;
+    }
 }

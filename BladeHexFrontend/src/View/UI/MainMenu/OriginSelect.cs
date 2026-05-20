@@ -30,6 +30,8 @@ public partial class OriginSelect : CanvasLayer
     private readonly List<AnswerRecord> _answers = new();
     private LineEdit _nameInput = null!;
     private ButtonGroup _genderGroup = null!;
+    private ButtonGroup _sizeGroup = null!;
+    private int _worldSize = 1; // 默认中型
 
     // ── UI ──
     private Control _phase1 = null!;
@@ -41,6 +43,8 @@ public partial class OriginSelect : CanvasLayer
     private Label _attrLabel = null!;
     private Label _itemLabel = null!;
     private readonly List<string> _items = new();
+    private readonly List<string> _itemIds = new();
+    private readonly List<string> _itemTypes = new();
 
     private record AnswerRecord(string Question, string Choice, Dictionary<string, int> Mods);
 
@@ -140,6 +144,8 @@ public partial class OriginSelect : CanvasLayer
         _currentQuestion = 0;
         _answers.Clear();
         _items.Clear();
+        _itemIds.Clear();
+        _itemTypes.Clear();
         _attrs["str"] = 5; _attrs["dex"] = 5; _attrs["con"] = 5;
         _attrs["intel"] = 5; _attrs["wis"] = 5; _attrs["cha"] = 5;
         _BuildQuestions();
@@ -244,6 +250,46 @@ public partial class OriginSelect : CanvasLayer
         _AttachSfx(femaleBtn);
         genderRow.AddChild(maleBtn);
         genderRow.AddChild(femaleBtn);
+
+        // 世界大小
+        rightVbox.AddChild(_Lbl("世界规模", 22, new Color(0.85f, 0.78f, 0.55f)));
+        var sizeRow = new HBoxContainer();
+        sizeRow.AddThemeConstantOverride("separation", 8);
+        rightVbox.AddChild(sizeRow);
+
+        _sizeGroup = new ButtonGroup();
+        var sizeNames = BladeHex.Strategic.WorldCreationConfig.GetSizeNames();
+        var sizeDescs = BladeHex.Strategic.WorldCreationConfig.GetSizeDescriptions();
+        for (int i = 0; i < sizeNames.Length; i++)
+        {
+            var btn = new Button
+            {
+                Text = sizeNames[i],
+                CustomMinimumSize = new Vector2(72, 42),
+                ToggleMode = true,
+                TooltipText = sizeDescs[i],
+                ButtonPressed = (i == _worldSize),
+            };
+            btn.AddThemeFontSizeOverride("font_size", 16);
+            btn.ButtonGroup = _sizeGroup;
+            int captured = i;
+            btn.Pressed += () => _worldSize = captured;
+            _AttachSfx(btn);
+            sizeRow.AddChild(btn);
+        }
+
+        // 大小描述（动态显示选中项的说明）
+        var sizeDescLabel = _Lbl(sizeDescs[_worldSize], 14, new Color(0.65f, 0.62f, 0.55f));
+        rightVbox.AddChild(sizeDescLabel);
+        // 监听选择变化更新描述
+        foreach (var child in sizeRow.GetChildren())
+        {
+            if (child is Button b)
+            {
+                int idx = sizeRow.GetChildren().IndexOf(b);
+                b.Pressed += () => sizeDescLabel.Text = sizeDescs[idx];
+            }
+        }
 
         // 中间弹性空间，把按钮栏推到底部
         rightVbox.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
@@ -489,7 +535,11 @@ public partial class OriginSelect : CanvasLayer
 
         // 添加选项对应的物品（从 JSON 配置直接读，不再依赖 Summary 查表）
         if (!string.IsNullOrEmpty(choice.ItemReward))
+        {
             _items.Add(choice.ItemReward);
+            _itemIds.Add(choice.ItemRewardId ?? "");
+            _itemTypes.Add(choice.ItemRewardType ?? "material");
+        }
 
         // 记录伙伴选择（companion 题目的选项标记 IsCompanion=true）
         if (choice.IsCompanion)
@@ -548,7 +598,7 @@ public partial class OriginSelect : CanvasLayer
 
         var gs = BladeHex.Data.Globals.State;
         gs.Save.IsLoadingSave = false;
-        gs.WorldGen.Size = 1;
+        gs.WorldGen.Size = _worldSize;
         gs.OriginContext.Data = new Godot.Collections.Dictionary
         {
             { "race", _selectedRace! },
@@ -556,6 +606,8 @@ public partial class OriginSelect : CanvasLayer
             { "gender", (_genderGroup.GetPressedButton() as Button)?.Text == "女" ? "female" : "male" },
             { "companion", _companionChoice },
             { "items", _items.ToArray() },
+            { "itemIds", _itemIds.ToArray() },
+            { "itemTypes", _itemTypes.ToArray() },
         };
         LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.NewWorld);
     }

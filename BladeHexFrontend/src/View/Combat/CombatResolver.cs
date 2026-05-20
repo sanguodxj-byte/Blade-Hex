@@ -19,7 +19,15 @@ public static class CombatResolver
     // ============================================================================
 
     /// <summary>完整攻击结算管道</summary>
-    public static Godot.Collections.Dictionary ResolveAttack(Unit attacker, Unit defender, HexGrid? grid = null, bool isCharge = false, bool isAoo = false, int accuracyMod = 0, float damageMultiplier = 1.0f)
+    /// <param name="attackerAllies">
+    /// 攻击者同阵营单位数组（用于包围加成计算）。null = 跳过包围加成。
+    /// </param>
+    public static Godot.Collections.Dictionary ResolveAttack(
+        Unit attacker, Unit defender, HexGrid? grid = null,
+        bool isCharge = false, bool isAoo = false,
+        int accuracyMod = 0, float damageMultiplier = 1.0f,
+        Unit[]? attackerAllies = null,
+        float nodePassiveScale = 1.0f)
     {
         var result = new Godot.Collections.Dictionary
         {
@@ -67,10 +75,14 @@ public static class CombatResolver
         // 士气效果
         var moraleEffects = MoraleSystem.GetMoraleEffects(attacker);
         if (moraleEffects.FumbleRate > 0) { hasDisadvantage = true; modifiers["low_morale"] = true; }
+        if (moraleEffects.HitBonus != 0)
+        {
+            accuracyMod += moraleEffects.HitBonus;
+            modifiers["morale_hit"] = moraleEffects.HitBonus;
+        }
 
-        // 掩体惩罚（远程攻击时）
+        // 掩体惩罚（远程攻击时）—— 视野系统已移除，改为路径上累计命中惩罚
         var weapon = attacker.Model.GetMainHand() as WeaponData;
-        int coverAcBonus = 0;
 
         // 弹药检查（远程武器消耗弹药）
         if (weapon != null && weapon.NeedsAmmo && !weapon.ConsumeAmmo())
@@ -82,8 +94,30 @@ public static class CombatResolver
 
         if (weapon != null && weapon.IsRanged && grid != null)
         {
-            int cover = LineOfSight.GetCoverLevel(defender.GridPos, attacker.GridPos, grid);
-            if (cover == 1) { modifiers["half_cover"] = true; coverAcBonus = 2; }
+            int losPenalty = LineOfSight.GetPathPenalty(
+                attacker.GridPos, defender.GridPos, grid, attacker, defender);
+            if (losPenalty < 0)
+            {
+                accuracyMod += losPenalty;
+                modifiers["los_path_penalty"] = losPenalty;
+            }
+        }
+
+        // 高度差命中修正：每级 ±5%（高打低加，低打高减）
+        if (grid != null)
+        {
+            var atkCell = grid.GetCell(attacker.GridPos.X, attacker.GridPos.Y);
+            var defCell = grid.GetCell(defender.GridPos.X, defender.GridPos.Y);
+            if (atkCell != null && defCell != null)
+            {
+                int elevDiff = atkCell.Elevation - defCell.Elevation; // 正=高打低
+                if (elevDiff != 0)
+                {
+                    int elevMod = elevDiff; // 每级 ±1 点（对应 ±5% 命中率）
+                    accuracyMod += elevMod;
+                    modifiers["elevation_mod"] = elevMod;
+                }
+            }
         }
 
         // 渡河惩罚
@@ -109,24 +143,60 @@ public static class CombatResolver
             }
         }
 
-        // 士气暴击加成
-        int critThreshold = attacker.Model.GetCritThreshold();
-        if (attacker.Data != null)
+        // 包围加成 (v0.6 8.2 + v1 5.2)：每多 1 个不同方向友军贴脸，命中 +1，
+        // 4+ 时目标 AC -2 且伤害 +10%。
+        int surroundAcReduction = 0;
+        float surroundDamageBonus = 0f;
+        if (attackerAllies != null && attackerAllies.Length > 0 && !isAoo)
         {
-            float moraleCritBonus = MoraleSystem.GetMoraleEffects(attacker).CritBonus;
-            critThreshold = CombatRuleEngine.GetAdjustedCritThreshold(critThreshold, moraleCritBonus);
+            var sb = FacingSystem.GetSurroundingBonus(defender, attackerAllies);
+            if (sb.HitBonus != 0)
+            {
+                accuracyMod += sb.HitBonus;
+                modifiers["surround_hit"] = sb.HitBonus;
+            }
+            if (sb.AcReduction > 0)  modifiers["surround_ac_reduction"] = sb.AcReduction;
+            if (sb.DamageBonus > 0f) modifiers["surround_damage_bonus"]  = sb.DamageBonus;
+            surroundAcReduction = sb.AcReduction;
+            surroundDamageBonus = sb.DamageBonus;
         }
 
+        // 伤势惩罚 (v0.6 2.3)：HP 低于 50% / 25% 时全检定 -1 / -2，应用到攻击命中。
+        if (attacker.Data != null)
+        {
+            float atkHpPct = attacker.Model.GetMaxHp() > 0
+                ? (float)attacker.CurrentHp / attacker.Model.GetMaxHp()
+                : 1.0f;
+            var wound = RPGRuleEngine.GetWoundPenalty(atkHpPct);
+            int penalty = wound.ContainsKey("all_checks") ? wound["all_checks"].AsInt32() : 0;
+            if (penalty != 0)
+            {
+                accuracyMod += penalty;
+                modifiers["wound_penalty"] = penalty;
+            }
+        }
+
+        // 暴击阈值由 WIS 暴击曲线决定（见 CombatStats.GetCritThreshold）。
+        // v0.6 文档没有"士气进一步降低暴击阈值"的设计，移除旧版双重叠加避免
+        // 高 WIS + 高士气角色暴击爆炸。
+        int critThreshold = attacker.Model.GetCritThreshold();
+
         // ===== 2. 委托 Core 层执行攻击检定 =====
+        // 节点暴击率：技能盘 critical_rate 节点等独立暴击概率（v0.6 11.5）
+        float bonusCritChance = 0f;
+        if (attacker.SkillTree != null)
+            bonusCritChance += attacker.SkillTree.GetCriticalRateBonus();
+
         var attackInput = new CombatRuleEngine.AttackInput
         {
             AttackBonus = attackBonus,
-            TargetAc = defender.GetEffectiveAc(attacker),
+            TargetAc = defender.GetEffectiveAc(attacker) - surroundAcReduction,
             CritThreshold = critThreshold,
             HasAdvantage = hasAdvantage,
             HasDisadvantage = hasDisadvantage,
             AccuracyMod = accuracyMod,
-            CoverAcBonus = coverAcBonus,
+            CoverAcBonus = 0,           // 视野系统已移除：掩体惩罚已折叠到 AccuracyMod
+            BonusCritChance = bonusCritChance,
         };
 
         var rollResult = CombatRuleEngine.RollAttack(in attackInput);
@@ -185,6 +255,20 @@ public static class CombatResolver
         }
 
         // ===== 4. 委托 Core 层计算伤害 =====
+        // v0.6 11.4.1 节点平伤 AP 归一化: NodeDamage * WeaponAP / 4
+        // 防止低 AP 多段武器从 +1 melee_damage 节点过度获利。
+        // v0.6 11.4.2 / 11.8: AOE / 多段技能再乘 nodePassiveScale (一般 0.5)
+        int weaponApForNode = weapon?.ApCost ?? 4;
+        int rawPassiveMelee  = PassiveSkillResolver.GetPassiveMeleeDamageBonus(attacker);
+        int rawPassiveRanged = PassiveSkillResolver.GetPassiveRangedDamageBonus(attacker);
+        int passiveMelee  = (int)(((rawPassiveMelee  * weaponApForNode) / 4) * nodePassiveScale);
+        int passiveRanged = (int)(((rawPassiveRanged * weaponApForNode) / 4) * nodePassiveScale);
+        bool isMelee = weapon == null || !weapon.IsRanged;
+        int passiveDamageBonus = isMelee ? passiveMelee : passiveRanged;
+        // 远程伤害也要进入伤害计算（CombatRuleEngine 没有专门的 PassiveRangedBonus 字段，
+        // 直接折算入 BaseDamage 上层）
+        if (!isMelee && passiveRanged != 0) baseDamage += passiveRanged;
+
         var damageInput = new CombatRuleEngine.DamageInput
         {
             BaseDamage = baseDamage,
@@ -193,10 +277,10 @@ public static class CombatResolver
             CritMultiplier = PassiveSkillResolver.GetCritMultiplier(attacker),
             CritDamageTakenMultiplier = defender.Model.GetCritDamageTakenMultiplier(),
             SneakDamage = sneakDamage,
-            PassiveMeleeBonus = PassiveSkillResolver.GetPassiveMeleeDamageBonus(attacker),
+            PassiveMeleeBonus = isMelee ? passiveDamageBonus : 0,
             PassiveMeleeMultiplier = PassiveSkillResolver.GetPassiveMeleeDamageMultiplier(attacker),
-            IsMelee = weapon == null || !weapon.IsRanged,
-            FlankMultiplier = flankMult,
+            IsMelee = isMelee,
+            FlankMultiplier = flankMult * (1.0f + surroundDamageBonus),
             ChargeMultiplier = chargeMult,
             MountBonus = (attacker.Data != null && attacker.Data.IsMounted) ? 2 : 0,
             DamageReduction = PassiveSkillResolver.GetPassiveDamageReduction(defender, "physical")
@@ -211,15 +295,46 @@ public static class CombatResolver
         // ===== 5. 装甲穿透结算（委托 BattleUnitModel.ApplyDamage）=====
         var weaponSubtype = weapon?.Subtype ?? WeaponData.WeaponSubtype.Unarmed;
         var weaponWeight = weapon?.Weight ?? WeaponData.WeightCategory.Medium;
+        // STR 穿甲加成 v0.6 6.3: floor(sqrt(STR/4))
+        int strPenBonus = attacker.Data != null
+            ? (int)System.Math.Floor(System.Math.Sqrt(attacker.Data.Str / 4.0))
+            : 0;
+        // v0.6 6.9 中型武器 Lv.5+ 精通: 装甲伤害 ×1.2
+        bool mediumLv5 = false;
+        if (weapon != null && weapon.Weight == WeaponData.WeightCategory.Medium && attacker.Data != null)
+        {
+            int masteryLv = attacker.Data.WeaponMastery.GetLevelBySubtype(weapon.Subtype);
+            if (masteryLv >= 5) mediumLv5 = true;
+        }
+
+        // v0.6 6.2 盾牌对远程攻击的有效伤害减免
+        int finalDamage = damage;
+        bool isRanged = weapon != null && weapon.IsRanged;
+        if (isRanged && defender.Data?.Shield != null
+            && defender.Data.Shield.RangedDamageMultiplier < 1.0f
+            && defender.Data.Shield.CurrentArmorPoints > 0)
+        {
+            int reduced = (int)(finalDamage * defender.Data.Shield.RangedDamageMultiplier);
+            int absorbed = finalDamage - reduced;
+            int actualAbsorb = System.Math.Min(absorbed, defender.Data.Shield.CurrentArmorPoints);
+            defender.Data.Shield.CurrentArmorPoints -= actualAbsorb;
+            if (defender.Data.Shield.CurrentArmorPoints <= 0) defender.Data.Shield = null;
+            finalDamage = reduced + (absorbed - actualAbsorb);
+            modifiers["shield_ranged_absorbed"] = actualAbsorb;
+        }
+
         int preDamageHp = defender.CurrentHp;
         var dmgResult = defender.Model.ApplyDamage(
             source: DamageSource.WeaponAttack,
-            amount: damage,
+            amount: finalDamage,
             damageType: weapon?.WeaponDamageType ?? WeaponData.DamageType.Slash,
             naturalRoll: rollResult.NaturalRoll,
             weaponWeight: weaponWeight,
             attackerMastery: attacker.Data?.WeaponMastery,
-            weaponSubtype: weaponSubtype);
+            weaponSubtype: weaponSubtype,
+            weaponPen: weapon?.WeaponPen ?? 0,
+            strPenBonus: strPenBonus,
+            mediumLv5Mastery: mediumLv5);
 
         result["armor_penetrated"] = dmgResult.IsPenetrated;
         result["armor_damage"] = dmgResult.DrDamage;

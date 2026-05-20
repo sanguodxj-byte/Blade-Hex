@@ -28,6 +28,7 @@ public sealed class WorldPipeline
     {
         new Stages.TerrainStage(),
         new Stages.TerrainSmoothingStage(),
+        new Stages.MountainDepthStage(),
         new Stages.BiomeZoneStage(),
         new Stages.NationAllocationStage(),
         new Stages.RiverStage(),

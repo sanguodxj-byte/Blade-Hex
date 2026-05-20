@@ -40,6 +40,9 @@ public class UnitRuntimeState
     public int Loyalty = 50;
 
     public List<StatusEffectInstance> ActiveStatusEffects = new();
+
+    /// <summary>新 Buff 系统的活跃 buff 列表(替代 ActiveStatusEffects,逐步迁移)</summary>
+    public List<BladeHex.Combat.Buff.BuffInstance> ActiveBuffs = new();
     public Dictionary<string, int> SpellCooldowns = new();
 
     public int LifeShieldUsedThisCombat;
@@ -47,8 +50,30 @@ public class UnitRuntimeState
     public int LastStandUsedThisCombat;
     public int HeroicCallUsedThisCombat;
     public int ResurrectUsedThisCombat;
+    public int ManaSurgeUsedThisCombat;     // wis_b01 法力涌动 (2026-05-17)
+    public int AssassinateUsedThisCombat;   // wis_b07 暗杀 (2026-05-17)
+    public int HeadShotPendingTurns;        // wis_b02 爆头突袭：下次攻击必定暴击的剩余回合
+    public int DeathblowFocusPendingTurns;  // wis_b09 死灵之锋：击杀后下次攻击 +20% 伤害的剩余回合
+    public bool WeaponSwitchedThisTurn;     // sim AI：每回合最多切换 1 次武器（防 AP 抖动）
+
+    // 临时 buff (sim 用): 每个字段是"剩余轮数"，0 表示无 buff
+    public int BuffAttackBonusTurns;   // +N 命中
+    public int BuffAttackBonusValue;   // 加成值
+    public int BuffAcBonusTurns;
+    public int BuffAcBonusValue;
+    public int BuffTempHp;             // 临时 HP（受伤时优先扣临时）
+    public int DebuffAttackPenaltyTurns; // 攻击 -N
+    public int DebuffAttackPenaltyValue;
 
     public Vector2I GridPos;
+
+    /// <summary>
+    /// Optional reference to this unit's skill tree. Headless / sim path sets
+    /// this from <c>SkillTreeAllocator.AllocateForUnit</c>; live game path
+    /// keeps the tree on <c>Unit.SkillTree</c> (Frontend) and mirrors it here
+    /// when entering combat. Pure rule code reads stat bonuses through this.
+    /// </summary>
+    public BladeHex.Strategic.CharacterSkillTree? SkillTree;
 
     public void ResetForTurnStart()
     {

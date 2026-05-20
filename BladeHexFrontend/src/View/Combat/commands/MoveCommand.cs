@@ -59,8 +59,9 @@ public class MoveCommand : CommandBase
         unit.GridPos = destination;
         unit.HasMoved = true;
 
-        // AP 消耗 = 路径实际格数（地形消耗由外部寻路已计算，此处按格数计）
-        float apCost = Path.Count - 1;
+        // AP 消耗 = 路径步数（Path 不含起点，Path.Count 即为移动格数）
+        // 地形消耗由 HexGrid.GetPathCost 计算，此处用格数作为最低消耗
+        float apCost = Mathf.Max(1f, Path.Count);
         unit.ConsumeAp(apCost);
 
         return CommandResult.Ok(new Godot.Collections.Dictionary

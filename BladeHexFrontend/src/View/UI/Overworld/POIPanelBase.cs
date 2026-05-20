@@ -1,24 +1,23 @@
 // POIPanelBase.cs
-// POI 交互面板统一基类 — 提供共享主题、脚手架、UI 工厂方法
-// 所有 POI 子面板（城镇/交易/休息/竞技场/铁匠/训练/神殿/委托/招募/港口）继承此类
-// 物品相关面板使用 ArmyManagementUI（部队面板），不继承此类
+// POI 交互面板统一基类 — 固定布局脚手架
+// 统一布局从上到下：插画区 → 信息行 → 描述文本 → 功能列表区 → 结果反馈 → 离开按钮
+// 子类只需重写数据填充方法，不得修改布局结构
 using Godot;
 
 namespace BladeHex.View.UI.Overworld;
 
 /// <summary>
 /// POI 面板统一基类。
-/// 提供：主题色、标准脚手架（遮罩+居中面板+边距+VBox）、UI 工厂方法、Show/Hide 生命周期。
-/// 子类只需重写 BuildContent(VBoxContainer) 填充内容区。
+/// 固定布局：插画区 → 信息行 → 描述文本 → 功能列表（ScrollContainer） → 离开按钮。
+/// 子类通过重写虚方法填充数据，不得修改布局结构。
 /// </summary>
 [GlobalClass]
-public abstract partial class POIPanelBase : CanvasLayer
+public partial class POIPanelBase : CanvasLayer
 {
     // ============================================================================
-    // 统一主题常量 — 所有 POI 面板共享
+    // 统一主题常量
     // ============================================================================
 
-    // 背景
     protected static readonly Color ThemeBgPrimary = new(0.08f, 0.08f, 0.10f, 0.85f);
     protected static readonly Color ThemeBgSecondary = new(0.12f, 0.12f, 0.14f, 0.80f);
     protected static readonly Color ThemeBgPanel = new(0.10f, 0.10f, 0.12f, 0.85f);
@@ -26,13 +25,11 @@ public abstract partial class POIPanelBase : CanvasLayer
     protected static readonly Color ThemeBgCardHover = new(0.20f, 0.18f, 0.24f, 0.85f);
     protected static readonly Color ThemeOverlay = new(0.0f, 0.0f, 0.0f, 0.6f);
 
-    // 边框
     protected static readonly Color ThemeBorderDefault = new(0.3f, 0.3f, 0.35f, 0.6f);
     protected static readonly Color ThemeBorderHighlight = new(0.5f, 0.45f, 0.3f, 0.8f);
     protected static readonly Color ThemeBorderFriendly = new(0.3f, 0.5f, 0.4f, 0.7f);
     protected static readonly Color ThemeBorderEnemy = new(0.6f, 0.3f, 0.2f, 0.7f);
 
-    // 文字
     protected static readonly Color ThemeTextPrimary = new(0.95f, 0.93f, 0.88f);
     protected static readonly Color ThemeTextSecondary = new(0.7f, 0.68f, 0.63f);
     protected static readonly Color ThemeTextMuted = new(0.5f, 0.48f, 0.45f);
@@ -40,7 +37,6 @@ public abstract partial class POIPanelBase : CanvasLayer
     protected static readonly Color ThemeTextPositive = new(0.3f, 0.85f, 0.3f);
     protected static readonly Color ThemeTextNegative = new(0.9f, 0.3f, 0.25f);
 
-    // 按钮
     protected static readonly Color ThemeBtnNormalBg = new(0.18f, 0.17f, 0.22f);
     protected static readonly Color ThemeBtnNormalBorder = new(0.35f, 0.32f, 0.28f, 0.7f);
     protected static readonly Color ThemeBtnHoverBg = new(0.28f, 0.26f, 0.34f);
@@ -50,58 +46,77 @@ public abstract partial class POIPanelBase : CanvasLayer
     protected static readonly Color ThemeBtnFontHover = new(1.0f, 0.9f, 0.6f);
     protected static readonly Color ThemeBtnFontDisabled = new(0.4f, 0.4f, 0.4f);
 
-    // 字号
     protected const int FontSizeXl = 20;
     protected const int FontSizeLg = 16;
     protected const int FontSizeMd = 14;
     protected const int FontSizeSm = 12;
     protected const int FontSizeXs = 10;
 
-    // 间距
     protected const int SpacingXs = 2;
     protected const int SpacingSm = 4;
     protected const int SpacingMd = 8;
     protected const int SpacingLg = 12;
     protected const int SpacingXl = 16;
 
-    // 圆角
     protected const int RadiusSm = 4;
     protected const int RadiusMd = 8;
 
+    protected const int IllustrationHeight = 180;
+
     // ============================================================================
-    // 面板规格 — 子类可重写
+    // 面板规格
     // ============================================================================
 
-    /// <summary>面板宽度（像素）</summary>
-    protected virtual int PanelWidth => 450;
-
-    /// <summary>面板高度（像素）</summary>
-    protected virtual int PanelHeight => 420;
-
-    /// <summary>内边距</summary>
-    protected virtual int PanelMargin => 20;
-
-    /// <summary>CanvasLayer 层级</summary>
+    protected virtual int PanelWidth => 600;
+    protected virtual int PanelHeight => 680;
+    protected virtual int PanelMargin => 0;
     protected virtual int PanelLayer => 25;
-
-    /// <summary>是否点击遮罩关闭面板</summary>
     protected virtual bool CloseOnOverlayClick => true;
+
+    // ============================================================================
+    // 子类数据填充接口
+    // ============================================================================
+
+    /// <summary>插画区背景色</summary>
+    protected virtual Color GetIllustrationColor() => new(0.06f, 0.06f, 0.10f, 1.0f);
+
+    /// <summary>插画区居中文字</summary>
+    protected virtual string GetIllustrationText() => "[ 设施 ]";
+
+    /// <summary>信息行左侧标题</summary>
+    protected virtual string GetPanelTitle() => "设施";
+
+    /// <summary>信息行右侧状态文字</summary>
+    protected virtual string GetInfoText() => "";
+
+    /// <summary>描述文本（支持 BBCode）</summary>
+    protected virtual string GetDescriptionText() => "";
+
+    /// <summary>离开按钮文字</summary>
+    protected virtual string GetLeaveButtonText() => "离开";
+
+    /// <summary>填充功能列表区</summary>
+    protected virtual void PopulateActions(VBoxContainer actionsContainer) { }
 
     // ============================================================================
     // 脚手架节点引用
     // ============================================================================
 
-    /// <summary>根控件（控制整体可见性）</summary>
     protected Control Root { get; private set; } = null!;
-
-    /// <summary>内容区 VBox（子类在此添加内容）</summary>
-    protected VBoxContainer ContentVBox { get; private set; } = null!;
-
-    /// <summary>主面板容器（可用于设置自定义样式）</summary>
     protected PanelContainer MainPanel { get; private set; } = null!;
-
-    /// <summary>UI 组件工厂（统一创建接口）</summary>
+    private ColorRect _overlay = null!;
     protected BladeHex.UI.UIFactory Factory { get; private set; } = null!;
+
+    private Label _illustLabel = null!;
+    private Label _titleLabel = null!;
+    private Label _infoLabel = null!;
+    private RichTextLabel _descLabel = null!;
+    protected VBoxContainer ActionsVBox { get; private set; } = null!;
+    private RichTextLabel _resultLabel = null!;
+    private Button _leaveBtn = null!;
+
+    // 兼容旧接口
+    protected VBoxContainer ContentVBox => ActionsVBox;
 
     // ============================================================================
     // 生命周期
@@ -112,47 +127,79 @@ public abstract partial class POIPanelBase : CanvasLayer
         Layer = PanelLayer;
         Factory = new BladeHex.UI.UIFactory();
         BuildScaffold();
-        BuildContent(ContentVBox);
+        // 兼容旧子类
+        BuildContent(ActionsVBox);
     }
 
-    /// <summary>子类重写此方法填充面板内容</summary>
-    protected abstract void BuildContent(VBoxContainer container);
+    /// <summary>旧接口兼容 - 新子类重写 PopulateActions 即可</summary>
+    protected virtual void BuildContent(VBoxContainer container) { }
 
     // ============================================================================
-    // 公共 API — 统一 Show/Hide（带 Tween 动画）
+    // 公共 API
     // ============================================================================
 
     private Tween? _showTween;
 
-    /// <summary>显示面板（淡入 + 缩放动画）</summary>
     public void ShowPanel()
     {
+        RefreshLayout();
         _showTween?.Kill();
         Root.Visible = true;
+
+        // 遮罩从透明渐入，避免黑屏闪烁
+        _overlay.Color = new Color(ThemeOverlay.R, ThemeOverlay.G, ThemeOverlay.B, 0f);
+
         MainPanel.Scale = new Vector2(0.92f, 0.92f);
         MainPanel.Modulate = new Color(1, 1, 1, 0);
         MainPanel.PivotOffset = MainPanel.Size * 0.5f;
 
         _showTween = CreateTween();
         _showTween.SetParallel(true);
+        _showTween.TweenProperty(_overlay, "color:a", ThemeOverlay.A, 0.12f)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
         _showTween.TweenProperty(MainPanel, "modulate:a", 1.0f, 0.15f)
             .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
         _showTween.TweenProperty(MainPanel, "scale", Vector2.One, 0.18f)
             .SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
     }
 
-    /// <summary>隐藏面板（淡出动画）</summary>
     public virtual void HidePanel()
     {
         _showTween?.Kill();
         _showTween = CreateTween();
+        _showTween.SetParallel(true);
         _showTween.TweenProperty(MainPanel, "modulate:a", 0.0f, 0.1f)
             .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
-        _showTween.TweenCallback(Callable.From(() => Root.Visible = false));
+        _showTween.TweenProperty(_overlay, "color:a", 0.0f, 0.1f)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
+        _showTween.Chain().TweenCallback(Callable.From(() => Root.Visible = false));
     }
 
-    /// <summary>面板是否可见</summary>
     public bool IsPanelVisible() => Root.Visible;
+
+    /// <summary>立即隐藏面板（无动画，用于面板切换避免遮罩叠加闪烁）</summary>
+    public void HidePanelImmediate()
+    {
+        _showTween?.Kill();
+        Root.Visible = false;
+    }
+
+    /// <summary>刷新布局数据</summary>
+    public void RefreshLayout()
+    {
+        _illustLabel.Text = GetIllustrationText();
+        _titleLabel.Text = GetPanelTitle();
+        _infoLabel.Text = GetInfoText();
+        _descLabel.Text = GetDescriptionText();
+        _leaveBtn.Text = GetLeaveButtonText();
+        _resultLabel.Text = "";
+
+        foreach (Node c in ActionsVBox.GetChildren()) c.QueueFree();
+        PopulateActions(ActionsVBox);
+    }
+
+    protected void SetResult(string bbcodeText) => _resultLabel.Text = bbcodeText;
+    protected void UpdateInfo(string text) => _infoLabel.Text = text;
 
     // ============================================================================
     // 脚手架构建
@@ -160,13 +207,11 @@ public abstract partial class POIPanelBase : CanvasLayer
 
     private void BuildScaffold()
     {
-        // 根控件
         Root = new Control();
         Root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         Root.Visible = false;
         AddChild(Root);
 
-        // 半透明遮罩
         var overlay = new ColorRect();
         overlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         overlay.Color = ThemeOverlay;
@@ -180,8 +225,8 @@ public abstract partial class POIPanelBase : CanvasLayer
             };
         }
         Root.AddChild(overlay);
+        _overlay = overlay;
 
-        // 居中主面板
         MainPanel = new PanelContainer();
         MainPanel.CustomMinimumSize = new Vector2(PanelWidth, PanelHeight);
         MainPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
@@ -201,101 +246,123 @@ public abstract partial class POIPanelBase : CanvasLayer
         MainPanel.AddThemeStyleboxOverride("panel", panelStyle);
         Root.AddChild(MainPanel);
 
-        // 内边距
-        var margin = new MarginContainer();
-        margin.AddThemeConstantOverride("margin_left", PanelMargin);
-        margin.AddThemeConstantOverride("margin_right", PanelMargin);
-        margin.AddThemeConstantOverride("margin_top", PanelMargin);
-        margin.AddThemeConstantOverride("margin_bottom", PanelMargin);
-        MainPanel.AddChild(margin);
+        var mainVbox = new VBoxContainer();
+        mainVbox.AddThemeConstantOverride("separation", 0);
+        mainVbox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        MainPanel.AddChild(mainVbox);
 
-        // 内容 VBox
-        ContentVBox = new VBoxContainer();
-        ContentVBox.AddThemeConstantOverride("separation", SpacingMd);
-        margin.AddChild(ContentVBox);
+        // 1. 插画区（大面积占位符，预备替换为真实插画）
+        var illustPanel = new PanelContainer();
+        illustPanel.CustomMinimumSize = new Vector2(0, IllustrationHeight);
+        var illustStyle = new StyleBoxFlat { BgColor = GetIllustrationColor() };
+        illustStyle.SetContentMarginAll(0);
+        illustStyle.SetCornerRadiusAll(0);
+        illustStyle.SetBorderWidthAll(0);
+        illustPanel.AddThemeStyleboxOverride("panel", illustStyle);
+        mainVbox.AddChild(illustPanel);
+
+        // 占位符提示文字（居中，后续替换为 TextureRect）
+        _illustLabel = new Label();
+        _illustLabel.AddThemeFontSizeOverride("font_size", FontSizeLg);
+        _illustLabel.AddThemeColorOverride("font_color", new Color(0.4f, 0.38f, 0.35f, 0.6f));
+        _illustLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _illustLabel.VerticalAlignment = VerticalAlignment.Center;
+        _illustLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        illustPanel.AddChild(_illustLabel);
+
+        // 内容区
+        var contentMargin = new MarginContainer();
+        contentMargin.AddThemeConstantOverride("margin_left", 20);
+        contentMargin.AddThemeConstantOverride("margin_right", 20);
+        contentMargin.AddThemeConstantOverride("margin_top", 12);
+        contentMargin.AddThemeConstantOverride("margin_bottom", 16);
+        contentMargin.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        mainVbox.AddChild(contentMargin);
+
+        var contentVbox = new VBoxContainer();
+        contentVbox.AddThemeConstantOverride("separation", SpacingMd);
+        contentVbox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        contentMargin.AddChild(contentVbox);
+
+        // 2. 信息行（仅状态文字，无标题）
+        _infoLabel = new Label();
+        _infoLabel.AddThemeFontSizeOverride("font_size", FontSizeSm);
+        _infoLabel.AddThemeColorOverride("font_color", ThemeTextMuted);
+        contentVbox.AddChild(_infoLabel);
+
+        // 隐藏的标题引用（RefreshLayout 兼容）
+        _titleLabel = new Label();
+        _titleLabel.Visible = false;
+        contentVbox.AddChild(_titleLabel);
+
+        // 3. 描述文本
+        _descLabel = new RichTextLabel();
+        _descLabel.BbcodeEnabled = true;
+        _descLabel.ScrollActive = false;
+        _descLabel.FitContent = true;
+        _descLabel.CustomMinimumSize = new Vector2(0, 30);
+        _descLabel.AddThemeFontSizeOverride("normal_font_size", FontSizeMd);
+        _descLabel.AddThemeColorOverride("default_color", ThemeTextSecondary);
+        contentVbox.AddChild(_descLabel);
+
+        contentVbox.AddChild(CreateSeparatorH());
+
+        // 4. 功能列表区
+        var actionsScroll = new ScrollContainer();
+        actionsScroll.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        actionsScroll.HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever;
+        contentVbox.AddChild(actionsScroll);
+
+        ActionsVBox = new VBoxContainer();
+        ActionsVBox.AddThemeConstantOverride("separation", SpacingMd);
+        ActionsVBox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        ActionsVBox.Alignment = BoxContainer.AlignmentMode.Center;
+        actionsScroll.AddChild(ActionsVBox);
+
+        contentVbox.AddChild(CreateSeparatorH());
+
+        // 结果反馈
+        _resultLabel = new RichTextLabel();
+        _resultLabel.BbcodeEnabled = true;
+        _resultLabel.ScrollActive = false;
+        _resultLabel.FitContent = true;
+        _resultLabel.CustomMinimumSize = new Vector2(0, 24);
+        _resultLabel.AddThemeFontSizeOverride("normal_font_size", FontSizeSm);
+        _resultLabel.AddThemeColorOverride("default_color", ThemeTextSecondary);
+        contentVbox.AddChild(_resultLabel);
+
+        // 5. 离开按钮
+        _leaveBtn = CreateButton(GetLeaveButtonText(), new Vector2(0, 40));
+        _leaveBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _leaveBtn.Pressed += OnCloseRequested;
+        contentVbox.AddChild(_leaveBtn);
     }
 
-    /// <summary>关闭请求（遮罩点击或关闭按钮）— 子类可重写以发射信号</summary>
-    protected virtual void OnCloseRequested()
-    {
-        HidePanel();
-    }
+    protected virtual void OnCloseRequested() => HidePanel();
 
     // ============================================================================
-    // UI 工厂方法 — 委托给 UIFactory 统一实现
+    // UI 工厂方法
     // ============================================================================
 
-    /// <summary>创建标题标签（大号金色）</summary>
-    protected Label CreateTitleLabel(string text)
-        => Factory.CreateTitleLabel(text);
+    protected Label CreateTitleLabel(string text) => Factory.CreateTitleLabel(text);
+    protected Label CreateBodyLabel(string text, Color? color = null) => Factory.CreateBodyLabel(text, color);
+    protected Label CreateMutedLabel(string text) => Factory.CreateMutedLabel(text);
+    protected RichTextLabel CreateRichText(Vector2? minSize = null) => Factory.CreateRichText(minSize ?? default);
+    protected Button CreateButton(string text, Vector2? minSize = null) => Factory.CreateButton(text, minSize ?? new Vector2(0, 40));
+    protected PanelContainer CreateCard(Vector2? minSize = null, bool hoverable = false) => Factory.CreateCard(minSize ?? default, hoverable);
+    protected HSeparator CreateSeparatorH() => Factory.CreateSeparatorH();
+    protected VSeparator CreateSeparatorV() => Factory.CreateSeparatorV();
 
-    /// <summary>创建正文标签</summary>
-    protected Label CreateBodyLabel(string text, Color? color = null)
-        => Factory.CreateBodyLabel(text, color);
-
-    /// <summary>创建次要标签（小号灰色）</summary>
-    protected Label CreateMutedLabel(string text)
-        => Factory.CreateMutedLabel(text);
-
-    /// <summary>创建富文本标签（支持 BBCode）</summary>
-    protected RichTextLabel CreateRichText(Vector2? minSize = null)
-        => Factory.CreateRichText(minSize ?? default);
-
-    /// <summary>创建标准按钮（带 hover/pressed 样式）</summary>
-    protected Button CreateButton(string text, Vector2? minSize = null)
-        => Factory.CreateButton(text, minSize ?? new Vector2(0, 40));
-
-    /// <summary>创建卡片容器（用于列表项）</summary>
-    protected PanelContainer CreateCard(Vector2? minSize = null, bool hoverable = false)
-        => Factory.CreateCard(minSize ?? default, hoverable);
-
-    /// <summary>创建水平分隔线</summary>
-    protected HSeparator CreateSeparatorH()
-        => Factory.CreateSeparatorH();
-
-    /// <summary>创建垂直分隔线</summary>
-    protected VSeparator CreateSeparatorV()
-        => Factory.CreateSeparatorV();
-
-    /// <summary>创建金币显示标签（右对齐）</summary>
     protected Label CreateGoldLabel(int gold = 0)
     {
         var lbl = new Label();
-        lbl.Text = $"💰 {gold}";
+        lbl.Text = $"金币: {gold}";
         lbl.AddThemeFontSizeOverride("font_size", FontSizeMd);
         lbl.AddThemeColorOverride("font_color", ThemeTextAccent);
         lbl.HorizontalAlignment = HorizontalAlignment.Right;
         return lbl;
     }
 
-    /// <summary>创建标题栏（标题 + 金币，水平排列）</summary>
-    protected HBoxContainer CreateHeaderBar(string title, int gold = 0)
-    {
-        var hbox = new HBoxContainer();
-
-        var titleLbl = CreateTitleLabel(title);
-        hbox.AddChild(titleLbl);
-
-        var spacer = new Control();
-        spacer.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        hbox.AddChild(spacer);
-
-        var goldLbl = CreateGoldLabel(gold);
-        goldLbl.Name = "GoldLabel";
-        hbox.AddChild(goldLbl);
-
-        return hbox;
-    }
-
-    /// <summary>更新标题栏中的金币显示</summary>
-    protected void UpdateHeaderGold(HBoxContainer header, int gold)
-    {
-        var goldLbl = header.GetNodeOrNull<Label>("GoldLabel");
-        if (goldLbl != null)
-            goldLbl.Text = $"💰 {gold}";
-    }
-
-    /// <summary>创建结果/反馈文本区域</summary>
     protected RichTextLabel CreateResultLabel()
     {
         var rtl = new RichTextLabel();
@@ -308,7 +375,42 @@ public abstract partial class POIPanelBase : CanvasLayer
         return rtl;
     }
 
-    /// <summary>创建关闭/离开按钮（底部居中）</summary>
+    /// <summary>创建全宽功能按钮</summary>
+    protected Button CreateActionButton(string text, string tooltip = "")
+    {
+        var btn = CreateButton(text, new Vector2(0, 44));
+        btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        if (!string.IsNullOrEmpty(tooltip)) btn.TooltipText = tooltip;
+        return btn;
+    }
+
+    /// <summary>创建带禁用状态的功能按钮</summary>
+    protected Button CreateActionButton(string text, bool enabled, string disabledReason = "")
+    {
+        var btn = CreateActionButton(text);
+        btn.Disabled = !enabled;
+        if (!enabled && !string.IsNullOrEmpty(disabledReason)) btn.TooltipText = disabledReason;
+        return btn;
+    }
+
+    // 兼容旧接口
+    protected HBoxContainer CreateHeaderBar(string title, int gold = 0)
+    {
+        var hbox = new HBoxContainer();
+        hbox.AddChild(CreateTitleLabel(title));
+        hbox.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+        var goldLbl = CreateGoldLabel(gold);
+        goldLbl.Name = "GoldLabel";
+        hbox.AddChild(goldLbl);
+        return hbox;
+    }
+
+    protected void UpdateHeaderGold(HBoxContainer header, int gold)
+    {
+        var goldLbl = header.GetNodeOrNull<Label>("GoldLabel");
+        if (goldLbl != null) goldLbl.Text = $"金币: {gold}";
+    }
+
     protected Button CreateCloseButton(string text = "离开")
     {
         var btn = CreateButton(text, new Vector2(0, 40));

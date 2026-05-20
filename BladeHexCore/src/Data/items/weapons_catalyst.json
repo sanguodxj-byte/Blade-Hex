@@ -1,0 +1,13 @@
+[
+  { "id": "wand_apprentice", "subtype": "Wand", "tier": 1, "name": "学徒魔杖", "price": 30, "traits": ["catalyst"] },
+  { "id": "wand_arcane", "subtype": "Wand", "tier": 2, "name": "奥术魔杖", "price": 60, "traits": ["catalyst"] },
+  { "id": "wand_archmage", "subtype": "Wand", "tier": 3, "name": "大法师之杖", "price": 120, "traits": ["catalyst"] },
+
+  { "id": "orb_basic", "subtype": "Orb", "tier": 1, "name": "聚能法球", "price": 35, "traits": ["catalyst"] },
+  { "id": "orb_crystal", "subtype": "Orb", "tier": 2, "name": "水晶法球", "price": 70, "traits": ["catalyst"] },
+  { "id": "orb_eldritch", "subtype": "Orb", "tier": 3, "name": "幽邃法球", "price": 140, "traits": ["catalyst"] },
+
+  { "id": "staff_oak", "subtype": "Staff", "tier": 1, "name": "橡木法杖", "price": 50, "two_handed": true, "traits": ["catalyst"] },
+  { "id": "staff_runic", "subtype": "Staff", "tier": 2, "name": "符文法杖", "price": 100, "two_handed": true, "traits": ["catalyst"] },
+  { "id": "staff_archmage", "subtype": "Staff", "tier": 3, "name": "大法师法杖", "price": 200, "two_handed": true, "traits": ["catalyst"] }
+]

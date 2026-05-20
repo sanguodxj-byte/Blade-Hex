@@ -93,6 +93,16 @@ public static class ResourceRegistry
             if (tex != null) _iconCache[id] = tex;
             return tex;
         }
+        // 大小写不敏感 fallback（处理 ChainMail vs Chainmail 等情况）
+        foreach (var kvp in _iconPaths)
+        {
+            if (string.Equals(kvp.Key, id, StringComparison.OrdinalIgnoreCase))
+            {
+                var tex = GD.Load<Texture2D>(kvp.Value);
+                if (tex != null) _iconCache[id] = tex;
+                return tex;
+            }
+        }
         return null;
     }
 
@@ -216,17 +226,8 @@ public static class ResourceRegistry
 
     private static readonly string[] DefaultIconDirs =
     {
-        // 新资产目录（res://assets/generated_*）
-        "res://assets/generated_weapons",
-        "res://assets/generated_armor",
-        "res://assets/generated_helmets",
-        "res://assets/generated_shields",
-        "res://assets/generated_staves",
-        "res://assets/generated_spellbooks",
-        "res://assets/generated_consumables",
-        "res://assets/generated_class_icons",
-        "res://assets/generated_skill_icons",
-        "res://assets/generated_ui_icons",
+        // 统一扫描 assets 根目录下所有子目录
+        "res://assets",
         // 旧路径（兼容）
         "res://src/assets/generated/class_icons",
         "res://src/assets/generated/accessories",
@@ -239,22 +240,39 @@ public static class ResourceRegistry
     {
         foreach (var dir in DefaultIconDirs)
         {
-            TryScanDir(dir, _iconPaths, ".png", stripExt: true);
+            TryScanDirRecursive(dir, _iconPaths, ".png", stripExt: true);
         }
     }
 
-    private static void TryScanDir(string dirPath, Dictionary<string, string> target, string ext, bool stripExt)
+    /// <summary>递归扫描目录及其子目录中的所有图标文件</summary>
+    private static void TryScanDirRecursive(string dirPath, Dictionary<string, string> target, string ext, bool stripExt)
     {
         using var dir = DirAccess.Open(dirPath);
         if (dir == null) return;
         dir.ListDirBegin();
         for (var file = dir.GetNext(); !string.IsNullOrEmpty(file); file = dir.GetNext())
         {
-            if (dir.CurrentIsDir()) continue;
+            if (dir.CurrentIsDir())
+            {
+                // 跳过隐藏目录和 _rework 等临时目录
+                if (file.StartsWith('.') || file.StartsWith('_')) continue;
+                TryScanDirRecursive($"{dirPath}/{file}", target, ext, stripExt);
+                continue;
+            }
             if (!file.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) continue;
             var id = stripExt ? System.IO.Path.GetFileNameWithoutExtension(file) : file;
             var full = $"{dirPath}/{file}";
-            target[id] = full;
+            // 不覆盖已注册的（manifest 优先）
+            if (!target.ContainsKey(id))
+                target[id] = full;
+
+            // 变体支持：如果文件名以 _a/_b/_c 结尾，也注册不带后缀的版本（_a 作为默认）
+            if (id.Length > 2 && id[^2] == '_' && id[^1] >= 'a' && id[^1] <= 'c')
+            {
+                string baseId = id[..^2];
+                if (id[^1] == 'a' && !target.ContainsKey(baseId))
+                    target[baseId] = full;
+            }
         }
         dir.ListDirEnd();
     }

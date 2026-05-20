@@ -26,6 +26,9 @@ public partial class HexOverworldAStar : RefCounted
     /// <summary>不可通行地形的惩罚权重</summary>
     public float ImpassablePenalty { get; set; } = 20.0f;
 
+    /// <summary>是否允许穿越浅水（道路生成建桥时使用）</summary>
+    public bool AllowShallowWater { get; set; } = false;
+
     /// <summary>道路偏好因子 (0=无偏好, 越大越偏好道路)</summary>
     public float RoadPreference { get; set; } = 0.3f;
 
@@ -92,7 +95,8 @@ public partial class HexOverworldAStar : RefCounted
                 if (nTile == null) continue;
 
                 // 陆地寻路时浅水视为不可通行（防止路径穿越海域）
-                if (nTile.Terrain == HexOverworldTile.TerrainType.ShallowWater) continue;
+                // AllowShallowWater=true 时跳过此检查（道路生成建桥）
+                if (!AllowShallowWater && nTile.Terrain == HexOverworldTile.TerrainType.ShallowWater) continue;
 
                 float cost = GetMoveCost(nTile);
                 if (cost < 0.0f) continue;
@@ -292,7 +296,7 @@ public partial class HexOverworldAStar : RefCounted
                 var nTile = Grid.GetTile(neighbor.X, neighbor.Y);
                 if (nTile == null) continue;
                 // 陆地寻路时浅水视为不可通行
-                if (nTile.Terrain == HexOverworldTile.TerrainType.ShallowWater) continue;
+                if (!AllowShallowWater && nTile.Terrain == HexOverworldTile.TerrainType.ShallowWater) continue;
 
                 float cost = GetMoveCost(nTile);
                 if (cost < 0.0f) continue;

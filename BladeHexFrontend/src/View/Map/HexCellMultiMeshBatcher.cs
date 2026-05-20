@@ -43,6 +43,11 @@ public partial class HexCellMultiMeshBatcher : Node3D
     /// <summary>六棱柱网格几何体缓存（所有桶共享同一份网格）</summary>
     private CylinderMesh? _sharedMesh;
 
+    /// <summary>攻城建筑 mesh 缓存</summary>
+    private ArrayMesh? _rampartMesh;
+    private ArrayMesh? _towerMesh;
+    private ArrayMesh? _gateMesh;
+
     /// <summary>网格参数常量</summary>
     private const int RadialSegments = 6;
     private const float HexRadius = 96.0f;   // 与 HexUtils.Size 保持一致
@@ -56,6 +61,9 @@ public partial class HexCellMultiMeshBatcher : Node3D
     {
         Name = "HexCellMultiMeshBatcher";
         _sharedMesh = CreateHexMesh();
+        _rampartMesh = BladeHex.View.Map.SiegeMeshFactory.CreateRampartMesh();
+        _towerMesh = BladeHex.View.Map.SiegeMeshFactory.CreateTowerMesh();
+        _gateMesh = BladeHex.View.Map.SiegeMeshFactory.CreateGateMesh();
     }
 
     public override void _Process(double delta)
@@ -153,6 +161,9 @@ public partial class HexCellMultiMeshBatcher : Node3D
             active ? hlColor.B : 0f
         );
         mm.SetInstanceCustomData(idx, packed);
+
+        // 独立高亮覆盖层（在纹理层之上）
+        UpdateHighlightOverlay(cell, active, hlColor);
     }
 
     /// <summary>设置格子迷雾/遮蔽状态（当前通过 modulate 实现，custom data 预留）</summary>
@@ -173,6 +184,89 @@ public partial class HexCellMultiMeshBatcher : Node3D
     }
 
     // ============================================================================
+    // 高亮覆盖层（独立半透明圆盘，在纹理层之上）
+    // ============================================================================
+
+    private readonly Dictionary<HexCell, MeshInstance3D> _highlightOverlays = new();
+    private static ArrayMesh? _highlightRingMesh;
+
+    /// <summary>创建六边形环 mesh（中间镂空）</summary>
+    private static ArrayMesh CreateHexRingMesh()
+    {
+        // 六边形环：外半径 0.92，内半径 0.70（中间镂空）
+        float outerR = HexRadius * 0.92f;
+        float innerR = HexRadius * 0.70f;
+        float height = 0.3f;
+        int sides = 6;
+
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        for (int i = 0; i < sides; i++)
+        {
+            float a1 = Mathf.DegToRad(60f * i + 30f); // +30 for flat-top
+            float a2 = Mathf.DegToRad(60f * (i + 1) + 30f);
+
+            var outerV1 = new Vector3(Mathf.Cos(a1) * outerR, height * 0.5f, Mathf.Sin(a1) * outerR);
+            var outerV2 = new Vector3(Mathf.Cos(a2) * outerR, height * 0.5f, Mathf.Sin(a2) * outerR);
+            var innerV1 = new Vector3(Mathf.Cos(a1) * innerR, height * 0.5f, Mathf.Sin(a1) * innerR);
+            var innerV2 = new Vector3(Mathf.Cos(a2) * innerR, height * 0.5f, Mathf.Sin(a2) * innerR);
+
+            st.SetNormal(Vector3.Up);
+
+            // 三角形 1: outer1 - inner1 - outer2
+            st.AddVertex(outerV1);
+            st.AddVertex(innerV1);
+            st.AddVertex(outerV2);
+
+            // 三角形 2: inner1 - inner2 - outer2
+            st.AddVertex(innerV1);
+            st.AddVertex(innerV2);
+            st.AddVertex(outerV2);
+        }
+
+        return st.Commit();
+    }
+
+    private void UpdateHighlightOverlay(HexCell cell, bool active, Color color)
+    {
+        if (active)
+        {
+            if (!_highlightOverlays.TryGetValue(cell, out var overlay))
+            {
+                _highlightRingMesh ??= CreateHexRingMesh();
+
+                overlay = new MeshInstance3D();
+                overlay.Mesh = _highlightRingMesh;
+                overlay.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                AddChild(overlay);
+                _highlightOverlays[cell] = overlay;
+            }
+
+            // 位置：纹理层之上（OverlayLayer）
+            float overlayY = BladeHex.View.Combat.CombatLayerHeight.HexTopOffset + BladeHex.View.Combat.CombatLayerHeight.OverlayLayer;
+            overlay.Position = cell.Position + new Vector3(0, overlayY, 0);
+
+            // 半透明材质
+            var mat = new StandardMaterial3D();
+            mat.AlbedoColor = new Color(color.R, color.G, color.B, Mathf.Clamp(color.A * 1.2f, 0.2f, 0.7f));
+            mat.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+            mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+            mat.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+            mat.NoDepthTest = true;
+            overlay.MaterialOverride = mat;
+            overlay.Visible = true;
+        }
+        else
+        {
+            if (_highlightOverlays.TryGetValue(cell, out var overlay))
+            {
+                overlay.Visible = false;
+            }
+        }
+    }
+
+    // ============================================================================
     // 内部方法
     // ============================================================================
 
@@ -186,6 +280,21 @@ public partial class HexCellMultiMeshBatcher : Node3D
         mesh.BottomRadius = HexRadius;
         mesh.Height = HexHeight;
         return mesh;
+    }
+
+    /// <summary>根据桶 key 选择正确的 mesh</summary>
+    private Mesh ResolveMeshForBucket(string key)
+    {
+        // 暂时所有地形都用标准六棱柱，通过 Y 缩放表现高度
+        // 城墙自定义 mesh 后续再启用（需要适配动态高度）
+        return _sharedMesh!;
+    }
+
+    /// <summary>判断桶是否为攻城建筑类型</summary>
+    private static bool IsSiegeTerrainBucket(string key)
+    {
+        // 暂时关闭自定义 mesh，所有格子统一用 Y 缩放渲染
+        return false;
     }
 
     /// <summary>重建指定桶的 MultiMesh</summary>
@@ -204,7 +313,8 @@ public partial class HexCellMultiMeshBatcher : Node3D
         if (mm == null || mm.InstanceCount != count)
         {
             mm = new MultiMesh();
-            mm.Mesh = _sharedMesh;
+            // 根据地形类型选择 mesh
+            mm.Mesh = ResolveMeshForBucket(key);
             mm.TransformFormat = MultiMesh.TransformFormatEnum.Transform3D;
             mm.UseCustomData = true;
             mm.InstanceCount = count;
@@ -226,20 +336,39 @@ public partial class HexCellMultiMeshBatcher : Node3D
             var cell = bucket.Cells[i];
             if (cell == null || !GodotObject.IsInstanceValid(cell)) continue;
 
-            // Transform: 位置 + 30° Y 旋转（平顶六边形适配）
-            var pos = cell.Position;
-            var xform = new Transform3D(
-                Basis.Identity.Rotated(Vector3.Up, Mathf.DegToRad(30f)),
-                pos
-            );
+            // 柱体高度修正：elevation=0 高度 1×, elevation=1 高度 2×, elevation=2 高度 3×
+            // 确保柱体底面始终在 Y=0（地面），不会悬浮
+            // 共享 mesh 高度 = HexHeight(48)，通过 Y 缩放拉伸
+            int cellElev = cell.Elevation;
+            float heightScale = cellElev + 1.0f;  // elev 0→1×, 1→2×, 2→3×
+
+            // 攻城建筑 mesh 已经内置了正确高度，不需要 Y 缩放
+            bool isSiegeMesh = IsSiegeTerrainBucket(key);
+            if (isSiegeMesh) heightScale = 1.0f;
+
+            // 拉伸后柱体总高 = HexHeight × heightScale
+            // 柱体中心需要下移，使顶面保持在 cell.Position.Y + HexHeight/2
+            // 原始：中心在 cell.Position.Y，顶面在 Y+24，底面在 Y-24
+            // 拉伸后：中心在 cell.Position.Y - (heightScale-1)*HexHeight/2
+            //         顶面在 中心 + heightScale*HexHeight/2 = cell.Position.Y + HexHeight/2 ✓
+            //         底面在 中心 - heightScale*HexHeight/2 = cell.Position.Y - (2*heightScale-1)*HexHeight/2
+            float yOffset = isSiegeMesh
+                ? -cell.Position.Y  // 攻城 mesh 底面在 Y=0，直接放到世界 Y=0
+                : -(heightScale - 1.0f) * HexHeight * 0.5f;
+
+            var pos = cell.Position + new Vector3(0, yOffset, 0);
+            var basis = Basis.Identity
+                .Rotated(Vector3.Up, Mathf.DegToRad(30f))
+                .Scaled(new Vector3(1f, heightScale, 1f));
+
+            // 攻城 mesh 不旋转（已经内置了 30° 偏移）
+            if (isSiegeMesh)
+                basis = Basis.Identity;
+
+            var xform = new Transform3D(basis, pos);
             mm.SetInstanceTransform(i, xform);
 
             // CustomData: 打包高亮+遮蔽到单个 Color
-            // R = highlight flag (0/1)
-            // G = highlight color R
-            // B = highlight color G
-            // A = pack: bit7=shroud flag, bit0-6=highlight color B
-            //     encoding: A = shroud * 0.5 + highlightB * 0.49
             var custom = new Color(0f, 0f, 0f, 0f); // 默认：无高亮，无遮蔽
             mm.SetInstanceCustomData(i, custom);
         }

@@ -7,6 +7,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -86,6 +87,8 @@ public class QuestGenerator
             QuestData.QuestType.Extermination => GenerateFromTemplate(QuestTemplateLoader.GetExterminationTemplates(), issuer, rng, currentDay, index),
             QuestData.QuestType.Escort => GenerateEscortFromTemplate(issuer, rng, currentDay, index),
             QuestData.QuestType.Exploration => GenerateFromTemplate(QuestTemplateLoader.GetExplorationTemplates(), issuer, rng, currentDay, index),
+            QuestData.QuestType.Collection => GenerateFromTemplate(QuestTemplateLoader.GetCollectionTemplates(), issuer, rng, currentDay, index),
+            QuestData.QuestType.Bounty => GenerateFromTemplate(QuestTemplateLoader.GetBountyTemplates(), issuer, rng, currentDay, index),
             _ => GenerateFromTemplate(QuestTemplateLoader.GetExterminationTemplates(), issuer, rng, currentDay, index),
         };
     }
@@ -93,9 +96,11 @@ public class QuestGenerator
     private static QuestData.QuestType PickQuestType(Random rng)
     {
         int roll = rng.Next(100);
-        if (roll < 50) return QuestData.QuestType.Extermination;
-        if (roll < 75) return QuestData.QuestType.Escort;
-        return QuestData.QuestType.Exploration;
+        if (roll < 35) return QuestData.QuestType.Extermination;
+        if (roll < 55) return QuestData.QuestType.Escort;
+        if (roll < 70) return QuestData.QuestType.Exploration;
+        if (roll < 85) return QuestData.QuestType.Collection;
+        return QuestData.QuestType.Bounty;
     }
 
     /// <summary>从JSON模板池中随机选一个生成任务</summary>
@@ -142,7 +147,6 @@ public class QuestGenerator
         string[] targets = { "哥布林营地", "山贼据点", "狼群巢穴", "亡灵墓穴", "蜥蜴人窝点" };
         string target = targets[rng.Next(targets.Length)];
         int difficulty = 1 + rng.Next(3);
-        int reward = 30 + difficulty * 25 + rng.Next(20);
         int targetCount = 4 + difficulty * 2;
 
         // 目标位置：issuer 附近 500-1500 像素
@@ -162,7 +166,7 @@ public class QuestGenerator
             TargetWorldPosition = targetPos,
             TargetDescription = target,
             TargetCount = targetCount,
-            RewardGold = reward,
+            RewardGold = RewardPricingService.GetQuestReward(QuestData.QuestType.Extermination, difficulty, targetCount, 1.2f),
             RewardReputation = 5 + difficulty * 2,
             RewardFaction = issuer.OwningFaction,
             HasTimeLimit = true,
@@ -183,8 +187,6 @@ public class QuestGenerator
         if (candidates.Count == 0) return null;
 
         var dest = candidates[rng.Next(candidates.Count)];
-        int reward = 50 + rng.Next(40);
-
         return new QuestData
         {
             QuestId = $"escort_{issuer.PoiName}_{currentDay}_{index}",
@@ -197,7 +199,7 @@ public class QuestGenerator
             TargetWorldPosition = dest.Position,
             TargetDescription = dest.PoiName,
             TargetCount = 1,
-            RewardGold = reward,
+            RewardGold = RewardPricingService.GetQuestReward(QuestData.QuestType.Escort, 1, 1, issuer.Position.DistanceTo(dest.Position) / 1000.0f),
             RewardReputation = 8,
             RewardFaction = issuer.OwningFaction,
             HasTimeLimit = true,
@@ -209,7 +211,6 @@ public class QuestGenerator
     {
         string[] sites = { "远古废墟", "被遗忘的矿洞", "神秘石碑", "古代祭坛", "失落的宝库" };
         string site = sites[rng.Next(sites.Length)];
-        int reward = 40 + rng.Next(30);
 
         float angle = (float)(rng.NextDouble() * Math.PI * 2);
         float dist = 800f + (float)rng.NextDouble() * 1200f;
@@ -227,7 +228,7 @@ public class QuestGenerator
             TargetWorldPosition = targetPos,
             TargetDescription = site,
             TargetCount = 1,
-            RewardGold = reward,
+            RewardGold = RewardPricingService.GetQuestReward(QuestData.QuestType.Exploration, 1, 1, issuer.Position.DistanceTo(targetPos) / 1000.0f),
             RewardReputation = 10,
             RewardFaction = issuer.OwningFaction,
             HasTimeLimit = false,

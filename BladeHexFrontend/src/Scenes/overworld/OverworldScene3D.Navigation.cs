@@ -109,6 +109,45 @@ public partial class OverworldScene3D
         };
     }
 
+    /// <summary>
+    /// 查询指定像素位置的地面高程 Y 值（用于放置物体在地形表面）。
+    /// 与 HexOverworldRenderer3D.GetElevationY 使用相同算法。
+    /// </summary>
+    private float GetGroundElevationAt(Vector2 pixelPos)
+    {
+        HexOverworldTile? tile = null;
+        if (_chunkManager != null)
+        {
+            var axial = HexOverworldTile.PixelToAxial(pixelPos.X, pixelPos.Y);
+            tile = _chunkManager.GetTile(axial.X, axial.Y);
+        }
+        else if (_grid != null)
+        {
+            tile = _grid.GetTileAtPixel(pixelPos.X, pixelPos.Y);
+        }
+
+        if (tile == null) return 0.0f;
+
+        // 与 HexOverworldRenderer3D 保持一致的高程计算
+        const float ElevationScale = 0.8f;
+        const float ElevationBaseline = 0.5f;
+        float baseElev = (tile.Elevation - ElevationBaseline) * ElevationScale;
+        float terrainBonus = tile.Terrain switch
+        {
+            HexOverworldTile.TerrainType.Mountain => 0.45f,
+            HexOverworldTile.TerrainType.MountainSnow => 0.55f,
+            HexOverworldTile.TerrainType.Hills => 0.12f,
+            HexOverworldTile.TerrainType.Rocky => 0.08f,
+            HexOverworldTile.TerrainType.DeepWater => -0.18f,
+            HexOverworldTile.TerrainType.ShallowWater => -0.10f,
+            HexOverworldTile.TerrainType.River => -0.08f,
+            HexOverworldTile.TerrainType.Swamp => -0.05f,
+            HexOverworldTile.TerrainType.Bog => -0.04f,
+            _ => 0.0f,
+        };
+        return baseElev + terrainBonus;
+    }
+
     // ========================================
     // 初始化
     // ========================================
@@ -367,7 +406,10 @@ public partial class OverworldScene3D
             PlayerParty.Position = _playerPixelPos;
 
         if (_playerMesh != null)
-            _playerMesh.Position = new Vector3(newPos.X, 0.4f, newPos.Z);
+        {
+            float groundY = GetGroundElevationAt(_playerPixelPos);
+            _playerMesh.Position = new Vector3(newPos.X, groundY + 0.4f, newPos.Z);
+        }
     }
 
     // ========================================

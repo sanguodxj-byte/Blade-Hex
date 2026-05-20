@@ -1,12 +1,9 @@
 // OverworldScene3D.Interaction.cs
 // 交互系统 — 修复所有 POI/实体交互问题
 using Godot;
-using System.Collections.Generic;
-using System.Linq;
-using BladeHex.Data;
 using BladeHex.Strategic;
 using BladeHex.View.UI.Overworld;
-using BladeHex.Map;
+using OverworldUI = BladeHex.View.UI.Overworld.OverworldUI;
 
 namespace BladeHex.Scenes.Overworld;
 
@@ -19,6 +16,7 @@ public partial class OverworldScene3D
     private InteractionManager? _interactionMgr;
     private InteractionPanel? _interactionPanel;
     private TownPanel? _townPanel;
+    private PoiSecondaryPanelRouter? _secondaryPanelRouter;
 
     /// <summary>当前交互的 town 节点（用于防止重复创建 + 清理）</summary>
     private OverworldTown? _currentTownNode;
@@ -43,6 +41,19 @@ public partial class OverworldScene3D
         _townPanel.LeaveTown += OnLeaveTown;
         _townPanel.FacilitySelected += OnFacilitySelected;
 
+        _secondaryPanelRouter = new PoiSecondaryPanelRouter(
+            this,
+            () => _townPanel,
+            () => _currentTownNode,
+            () => EconomyMgr,
+            () => PlayerParty,
+            () => _recruitService,
+            () => _questGenerator,
+            () => _questManager,
+            () => _overworldUi,
+            OnArenaCombatRequested,
+            CleanupInteraction);
+
         // 信号连接 — 所有 InteractionManager 信号
         _interactionMgr.InteractionRequested += OnInteractionRequested;
         _interactionMgr.CombatRequested += OnCombatFromInteraction;
@@ -66,60 +77,20 @@ public partial class OverworldScene3D
 
         IsTimePaused = true;
         _playerMoving = false;
+        if (_camera != null) _camera.ExternalControl = true;
 
         // 清理上一个 town 节点
-        if (_currentTownNode != null && GodotObject.IsInstanceValid(_currentTownNode))
-        {
-            _currentTownNode.QueueFree();
-            _currentTownNode = null;
-        }
+        CleanupCurrentTownNode();
 
-        // 创建 OverworldTown
-        var town = new OverworldTown();
-        town.TownName = poi.PoiName;
-
-        switch (poi.PoiTypeEnum)
-        {
-            case OverworldPOI.POIType.Town:
-                town.TownType = "town";
-                town.SetupDefaultFacilities();
-                break;
-            case OverworldPOI.POIType.Village:
-                town.TownType = "village";
-                town.SetupVillageFacilities();
-                break;
-            case OverworldPOI.POIType.Castle:
-                town.TownType = "castle";
-                town.SetupCastleFacilities();
-                break;
-            case OverworldPOI.POIType.Tavern:
-                town.TownType = "tavern";
-                town.SetupTavernFacilities();
-                break;
-            case OverworldPOI.POIType.Outpost:
-                town.TownType = "outpost";
-                town.SetupOutpostFacilities();
-                break;
-            case OverworldPOI.POIType.Port:
-                town.TownType = "port";
-                town.SetupPortFacilities();
-                break;
-            default:
-                town.TownType = "village";
-                town.SetupVillageFacilities();
-                break;
-        }
+        // 创建仅用于交互 UI 的临时 OverworldTown。
+        var town = PoiTownAdapter.CreateTownNode(poi);
 
         // 加入场景树
-        town.Visible = false;
         AddChild(town);
         _currentTownNode = town;
 
         // 城镇/村庄类 POI → 直接打开 TownPanel（不经过 InteractionPanel）
-        if (poi.PoiTypeEnum == OverworldPOI.POIType.Town ||
-            poi.PoiTypeEnum == OverworldPOI.POIType.Village ||
-            poi.PoiTypeEnum == OverworldPOI.POIType.Castle ||
-            poi.PoiTypeEnum == OverworldPOI.POIType.Port)
+        if (PoiTownAdapter.OpensTownPanelDirectly(poi.PoiTypeEnum))
         {
             GD.Print($"[Interaction] 打开 TownPanel: {town.TownName}, 设施数={town.Facilities.Count}");
             _townPanel?.ShowTown(town);
@@ -178,209 +149,7 @@ public partial class OverworldScene3D
     private void OnFacilitySelected(int facilityType)
     {
         GD.Print($"[Interaction] OnFacilitySelected: type={facilityType} ({(TownFacility.FacilityType)facilityType})");
-
-        // 隐藏城镇面板（二级面板会覆盖）
-        _townPanel?.HidePanel();
-
-        var fType = (TownFacility.FacilityType)facilityType;
-        switch (fType)
-        {
-            case TownFacility.FacilityType.Market:
-                OpenTradePanel();
-                break;
-            case TownFacility.FacilityType.Tavern:
-                OpenRecruitPanel();
-                break;
-            case TownFacility.FacilityType.Smithy:
-                OpenSmithyPanel();
-                break;
-            case TownFacility.FacilityType.Training:
-                OpenTrainingPanel();
-                break;
-            case TownFacility.FacilityType.Temple:
-                OpenTemplePanel();
-                break;
-            case TownFacility.FacilityType.Arena:
-                OpenArenaPanel();
-                break;
-            case TownFacility.FacilityType.Castle:
-                OpenQuestPanel();
-                break;
-            default:
-                // 未实现的设施 → 回到城镇面板
-                _townPanel?.ShowPanel();
-                break;
-        }
-    }
-
-    // ========================================
-    // 二级面板（懒加载）
-    // ========================================
-
-    private TradePanel? _tradePanel2;
-    private RestPanel? _restPanel2;
-    private RecruitPanel? _recruitPanel2;
-    private SmithyPanel? _smithyPanel2;
-    private TrainingPanel? _trainingPanel2;
-    private TemplePanel? _templePanel2;
-    private ArenaPanel? _arenaPanel2;
-    private QuestBoardPanel? _questBoardPanel2;
-
-    private void OpenTradePanel()
-    {
-        if (PlayerParty?.Roster == null || EconomyMgr == null) return;
-
-        // 生成商店库存
-        var stock = GenerateTradeStock();
-
-        // 通过 OverworldUI 的部队面板以商店模式打开
-        if (_overworldUi != null)
-        {
-            string shopName = _currentTownNode?.TownName ?? "商店";
-            var inventory = PlayerParty.Inventory ?? new BladeHex.Strategic.PartyInventory();
-            _overworldUi.OpenPartyShop(shopName, EconomyMgr, stock, _currentTownNode?.Prosperity ?? 50);
-        }
-    }
-
-    private List<ItemData> GenerateTradeStock()
-    {
-        var stock = new List<ItemData>();
-        int prosperity = _currentTownNode?.Prosperity ?? 50;
-        int weaponCount = 3 + prosperity / 20;
-        int armorCount = 2 + prosperity / 25;
-        int consumCount = 3 + prosperity / 30;
-        string difficulty = prosperity >= 70 ? "hard" : prosperity >= 40 ? "normal" : "easy";
-        int itemLevel = 1 + prosperity / 10;
-        int maxWeaponPrice = 50 + prosperity * 4;
-
-        var weapons = PrototypeData.GetWeapons().Values.ToList();
-        var armors = PrototypeData.GetArmors().Values.ToList();
-        var consumables = PrototypeData.GetConsumables().Values.ToList();
-        var quivers = PrototypeData.GetQuivers().Values.ToList();
-
-        var affordableWeapons = weapons.Where(w => w.Price <= maxWeaponPrice).ToList();
-        for (int i = 0; i < System.Math.Min(weaponCount, affordableWeapons.Count); i++)
-        {
-            var baseW = affordableWeapons[(int)(GD.Randf() * affordableWeapons.Count)];
-            if (stock.Any(s => s.ItemId == baseW.ItemId)) continue;
-            var rarity = BladeHex.Combat.EquipmentGenerator.RollRarity(difficulty);
-            if (rarity > ItemData.Rarity.Rare) rarity = ItemData.Rarity.Rare;
-            stock.Add(BladeHex.Combat.EquipmentGenerator.GenerateEquipment(baseW, rarity, itemLevel, difficulty));
-        }
-
-        int maxArmorPrice = 30 + prosperity * 5;
-        var affordableArmors = armors.Where(a => a.Price <= maxArmorPrice).ToList();
-        for (int i = 0; i < System.Math.Min(armorCount, affordableArmors.Count); i++)
-        {
-            var baseA = affordableArmors[(int)(GD.Randf() * affordableArmors.Count)];
-            if (stock.Any(s => s.ItemId == baseA.ItemId)) continue;
-            var rarity = BladeHex.Combat.EquipmentGenerator.RollRarity(difficulty);
-            if (rarity > ItemData.Rarity.Rare) rarity = ItemData.Rarity.Rare;
-            stock.Add(BladeHex.Combat.EquipmentGenerator.GenerateEquipment(baseA, rarity, itemLevel, difficulty));
-        }
-
-        for (int i = 0; i < System.Math.Min(consumCount, consumables.Count); i++)
-        {
-            var c = consumables[(int)(GD.Randf() * consumables.Count)];
-            if (!stock.Any(s => s.ItemId == c.ItemId)) stock.Add(c);
-        }
-
-        int quiverCount = 1 + (prosperity >= 50 ? 1 : 0);
-        for (int i = 0; i < System.Math.Min(quiverCount, quivers.Count); i++)
-        {
-            var q = quivers[(int)(GD.Randf() * quivers.Count)];
-            if (!stock.Any(s => s.ItemId == q.ItemId)) stock.Add(q);
-        }
-
-        stock.Sort((a, b) => a.Price.CompareTo(b.Price));
-        return stock;
-    }
-
-    private void OpenRecruitPanel()
-    {
-        if (_recruitPanel2 == null)
-        {
-            _recruitPanel2 = new RecruitPanel();
-            AddChild(_recruitPanel2);
-            _recruitPanel2.RecruitFinished += (bool _) => OnSecondaryPanelClosed();
-        }
-
-        // 使用 RecruitService 提供数据
-        if (_recruitService != null && PlayerParty != null && EconomyMgr != null)
-        {
-            string poiId = _currentTownNode?.TownName ?? "";
-            int currentDay = EconomyMgr.DaysPassed;
-            _recruitPanel2.ShowRecruitList(_recruitService, poiId, EconomyMgr, PlayerParty, currentDay);
-        }
-        else
-        {
-            _recruitPanel2.ShowPanel();
-        }
-    }
-
-    private void OpenSmithyPanel()
-    {
-        if (_smithyPanel2 == null)
-        {
-            _smithyPanel2 = new SmithyPanel();
-            AddChild(_smithyPanel2);
-            _smithyPanel2.SmithyFinished += OnSecondaryPanelClosed;
-        }
-        _smithyPanel2.ShowPanel();
-    }
-
-    private void OpenTrainingPanel()
-    {
-        if (_trainingPanel2 == null)
-        {
-            _trainingPanel2 = new TrainingPanel();
-            AddChild(_trainingPanel2);
-            _trainingPanel2.TrainingFinished += OnSecondaryPanelClosed;
-        }
-        _trainingPanel2.ShowPanel();
-    }
-
-    private void OpenTemplePanel()
-    {
-        if (_templePanel2 == null)
-        {
-            _templePanel2 = new TemplePanel();
-            AddChild(_templePanel2);
-            _templePanel2.TempleFinished += OnSecondaryPanelClosed;
-        }
-        _templePanel2.ShowPanel();
-    }
-
-    private void OpenArenaPanel()
-    {
-        if (_arenaPanel2 == null)
-        {
-            _arenaPanel2 = new ArenaPanel();
-            AddChild(_arenaPanel2);
-            _arenaPanel2.ArenaFinished += OnSecondaryPanelClosed;
-        }
-        _arenaPanel2.ShowPanel();
-    }
-
-    private void OpenQuestPanel()
-    {
-        if (_questBoardPanel2 == null)
-        {
-            _questBoardPanel2 = new QuestBoardPanel();
-            AddChild(_questBoardPanel2);
-            _questBoardPanel2.BoardClosed += OnSecondaryPanelClosed;
-        }
-        _questBoardPanel2.ShowPanel();
-    }
-
-    /// <summary>二级面板关闭后回到城镇面板</summary>
-    private void OnSecondaryPanelClosed()
-    {
-        // 重新打开城镇面板
-        if (_currentTownNode != null && GodotObject.IsInstanceValid(_currentTownNode))
-            _townPanel?.ShowTown(_currentTownNode);
-        else
-            CleanupInteraction();
+        _secondaryPanelRouter?.Open((TownFacility.FacilityType)facilityType);
     }
 
     // ========================================
@@ -449,6 +218,14 @@ public partial class OverworldScene3D
         EnterCombatScene(ctx);
     }
 
+    private int _pendingArenaPrize = 0;
+
+    private void OnArenaCombatRequested(BattleContext ctx, int prize)
+    {
+        _pendingArenaPrize = prize;
+        EnterCombatScene(ctx);
+    }
+
     private void OnInteractionCompleted(string result)
     {
         CleanupInteraction();
@@ -464,12 +241,17 @@ public partial class OverworldScene3D
         IsTimePaused = false;
         _poiEntered = false;
         _encounterActive = false;
+        if (_camera != null) _camera.ExternalControl = false;
 
         // 清理临时 town 节点
+        CleanupCurrentTownNode();
+    }
+
+    private void CleanupCurrentTownNode()
+    {
         if (_currentTownNode != null && GodotObject.IsInstanceValid(_currentTownNode))
-        {
             _currentTownNode.QueueFree();
-            _currentTownNode = null;
-        }
+
+        _currentTownNode = null;
     }
 }

@@ -25,6 +25,9 @@ public partial class OverworldScene3D
     /// <summary>任务管理器</summary>
     private QuestManager? _questManager;
 
+    /// <summary>委托生成器 — 城镇布告栏动态任务</summary>
+    private QuestGenerator? _questGenerator;
+
     /// <summary>声望追踪器</summary>
     private ReputationTracker? _reputationTracker;
 
@@ -59,6 +62,10 @@ public partial class OverworldScene3D
         // 设置玩家信息
         EntityMgr.UpdatePlayerPosition(_playerPixelPos);
         EntityMgr.PlayerLevel = PlayerUnitData?.Level ?? 1;
+        EntityMgr.PlayerRaceId = PlayerRaceId;
+
+        // 写入静态字段供 OverworldEnemy 在 NpcProfile 生成时判断同/异族
+        OverworldEnemy.PlayerRaceIdStatic = PlayerRaceId;
 
         // --- 特殊角色加载到 DormantPool ---
         if (_worldSpecialCharacters.Count > 0)
@@ -94,6 +101,10 @@ public partial class OverworldScene3D
         _questManager = new QuestManager();
         _questManager.Name = "QuestManager";
         AddChild(_questManager);
+
+        // --- QuestGenerator 初始化 ---
+        _questGenerator = new QuestGenerator();
+        _questGenerator.Initialize(WorldPois, _worldSeed);
 
         // --- 每日事件订阅（FiefManager 结算）---
         EventBus.Instance?.Subscribe(EventBus.Signals.DayPassed, OnDayPassedFief);
@@ -275,7 +286,26 @@ public partial class OverworldScene3D
         var encountered = EntityMgr.CheckPlayerEncounters(_playerPixelPos);
         if (encountered != null)
         {
-            // 天气影响遭遇概率
+            // 友方/中立实体：直接打开交互（无追逃、无天气掩护）
+            if (!encountered.IsHostileToPlayer)
+            {
+                _encounterActive = true;
+                _playerMoving = false;
+                _lastEncounteredEntity = encountered;
+                _chasingEntity = null;
+                _fleeAttempted = false;
+                IsTimePaused = true;
+
+                var friendlyNode = new OverworldEnemy();
+                friendlyNode.SetupFromEntity(encountered);
+                friendlyNode.Visible = false;
+                AddChild(friendlyNode);
+
+                _interactionMgr?.TriggerInteraction(friendlyNode);
+                return;
+            }
+
+            // 天气影响遭遇概率（仅敌对实体）
             if (WeatherEncounterFactor < 1.0f)
             {
                 float roll = (float)GD.Randf();
@@ -385,21 +415,20 @@ public partial class OverworldScene3D
     {
         try
         {
-            // 将当前天气写入 GlobalState 供战斗场景读取
-            WriteWeatherToGlobalState();
+            // [Autoload 化] WeatherManager 现在是 Autoload，战斗场景直接读 Globals.Weather，无需快照写入。
 
             // 缓存 SceneTree 引用（移出后 GetTree() 返回 null）
             _cachedTree = GetTree();
 
             // 播放过渡动画
             var transition = new BladeHex.View.Transitions.CombatTransition();
-            AddChild(transition);
+            GetTree().Root.AddChild(transition);
 
             transition.Play(
                 _camera,
                 _overworldUi?.TopPanel,
                 _overworldUi?.BottomPanel,
-                _minimap,
+                _minimap?.Panel,
                 () => ExecuteCombatSwitch(ctx));
         }
         catch (System.Exception ex)
@@ -497,6 +526,22 @@ public partial class OverworldScene3D
 
             if (outcome.LootItems.Count > 0)
                 _overworldUi.OpenPartyLoot(outcome.LootItems, outcome.GoldGranted, outcome.XpGranted);
+        }
+
+        // 竞技场奖金处理
+        if (_pendingArenaPrize > 0)
+        {
+            if (victory)
+            {
+                EconomyMgr?.AddGold(_pendingArenaPrize);
+                GD.Print($"[Arena] 竞技场胜利! 获得奖金 {_pendingArenaPrize} 金币");
+            }
+            else
+            {
+                GD.Print("[Arena] 竞技场失败，报名费已损失");
+            }
+
+            _pendingArenaPrize = 0;
         }
     }
 }

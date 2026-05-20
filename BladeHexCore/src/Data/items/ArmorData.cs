@@ -39,6 +39,13 @@ public partial class ArmorData : ItemData
     [Export] public int DrThreshold;
 
     /// <summary>
+    /// 盾牌对来自防护弧的远程攻击的有效伤害乘数 (v0.6 6.2)。
+    /// 仅盾牌使用；身体护甲忽略此字段。1.0 = 无减免（默认）。
+    /// 推荐值：轻木盾 0.5、步兵重盾 0.35、骑士盾 0.30、军团塔盾 0.25。
+    /// </summary>
+    [Export] public float RangedDamageMultiplier { get; set; } = 1.0f;
+
+    /// <summary>
     /// 当前装甲值（額外生命值）。公式: DrThreshold * 10
     /// 只能通过修理恢复，不可通过治疗恢复。
     /// </summary>

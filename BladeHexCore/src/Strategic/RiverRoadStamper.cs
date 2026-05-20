@@ -171,8 +171,9 @@ public partial class RiverRoadStamper : RefCounted
         // 不覆盖已有的深水（海洋）
         if (tile.Terrain == Map.HexOverworldTile.TerrainType.DeepWater) return;
 
-        tile.IsRiver = true;
-        tile.SetTerrain(Map.HexOverworldTile.TerrainType.River);
+        // 河流加宽：只改地形为 ShallowWater，不设置 IsRiver。
+        // 否则 RiverRenderer 会把 expansion 当成分叉，把一条河切成几十段。
+        tile.SetTerrain(Map.HexOverworldTile.TerrainType.ShallowWater);
     }
 
     /// <summary>计算两个相邻坐标之间的六角方向 (0-5)</summary>

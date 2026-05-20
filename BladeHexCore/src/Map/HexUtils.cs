@@ -132,4 +132,26 @@ public static class HexUtils
         }
         return results;
     }
+
+    /// <summary>
+    /// 获取以 (cq, cr) 为中心、半径为 N 的六边形区域内所有格子（含中心、含边界）。
+    /// 总数 = 1 + 3·N·(N+1)。N=0 返回单格。
+    /// </summary>
+    public static List<Vector2I> GetHexagonCoords(int cq, int cr, int n)
+    {
+        var results = new List<Vector2I>();
+        for (int dq = -n; dq <= n; dq++)
+        {
+            int r1 = System.Math.Max(-n, -dq - n);
+            int r2 = System.Math.Min(n, -dq + n);
+            for (int dr = r1; dr <= r2; dr++)
+            {
+                results.Add(new Vector2I(cq + dq, cr + dr));
+            }
+        }
+        return results;
+    }
+
+    /// <summary>同 GetHexagonCoords，中心为 (0, 0)</summary>
+    public static List<Vector2I> GetHexagonCoords(int n) => GetHexagonCoords(0, 0, n);
 }

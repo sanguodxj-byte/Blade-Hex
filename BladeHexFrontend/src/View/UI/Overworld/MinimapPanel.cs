@@ -90,6 +90,12 @@ public partial class MinimapPanel : MinimapPanelBase
         MapRect.MouseExited += () => { _hoveredPoi = null; _tooltipLabel.Visible = false; };
     }
 
+    /// <summary>强制重新烘焙整张小地图（用于 reveal_all 等大批量揭示后）</summary>
+    public void RebakeTerrain()
+    {
+        BakeTerrainBase();
+    }
+
     // ========================================
     // 地形底图烘焙
     // ========================================

@@ -4,6 +4,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -36,6 +37,8 @@ public static class QuestTemplateLoader
     private static List<QuestTemplate>? _exterminationTemplates;
     private static List<QuestTemplate>? _escortTemplates;
     private static List<QuestTemplate>? _explorationTemplates;
+    private static List<QuestTemplate>? _collectionTemplates;
+    private static List<QuestTemplate>? _bountyTemplates;
     private static bool _loaded = false;
 
     public static List<QuestTemplate> GetExterminationTemplates()
@@ -56,6 +59,18 @@ public static class QuestTemplateLoader
         return _explorationTemplates!;
     }
 
+    public static List<QuestTemplate> GetCollectionTemplates()
+    {
+        EnsureLoaded();
+        return _collectionTemplates!;
+    }
+
+    public static List<QuestTemplate> GetBountyTemplates()
+    {
+        EnsureLoaded();
+        return _bountyTemplates!;
+    }
+
     private static void EnsureLoaded()
     {
         if (_loaded) return;
@@ -63,6 +78,8 @@ public static class QuestTemplateLoader
         _exterminationTemplates = new();
         _escortTemplates = new();
         _explorationTemplates = new();
+        _collectionTemplates = new();
+        _bountyTemplates = new();
 
         var json = LoadJsonFile("res://BladeHexCore/src/Quest/quest_templates.json");
         if (json == null)
@@ -125,7 +142,27 @@ public static class QuestTemplateLoader
             }
         }
 
-        GD.Print($"[QuestTemplateLoader] Loaded {_exterminationTemplates!.Count} extermination, {_escortTemplates!.Count} escort, {_explorationTemplates!.Count} exploration templates");
+        if (root.ContainsKey("collection"))
+        {
+            var arr = root["collection"].AsGodotArray();
+            foreach (var item in arr)
+            {
+                var dict = item.AsGodotDictionary();
+                _collectionTemplates!.Add(ParseOneTemplate(dict, QuestData.QuestType.Collection));
+            }
+        }
+
+        if (root.ContainsKey("bounty"))
+        {
+            var arr = root["bounty"].AsGodotArray();
+            foreach (var item in arr)
+            {
+                var dict = item.AsGodotDictionary();
+                _bountyTemplates!.Add(ParseOneTemplate(dict, QuestData.QuestType.Bounty));
+            }
+        }
+
+        GD.Print($"[QuestTemplateLoader] Loaded {_exterminationTemplates!.Count} extermination, {_escortTemplates!.Count} escort, {_explorationTemplates!.Count} exploration, {_collectionTemplates!.Count} collection, {_bountyTemplates!.Count} bounty templates");
     }
 
     private static QuestTemplate ParseOneTemplate(Godot.Collections.Dictionary dict, QuestData.QuestType type)
@@ -187,7 +224,6 @@ public static class QuestTemplateLoader
         int difficulty = template.DifficultyRange[0] + rng.Next(template.DifficultyRange[1] - template.DifficultyRange[0] + 1);
         difficulty = Math.Clamp(difficulty, 0, 3);
         int count = template.BaseCount[0] + rng.Next(template.BaseCount[1] - template.BaseCount[0] + 1);
-        int reward = template.BaseReward[0] + rng.Next(template.BaseReward[1] - template.BaseReward[0] + 1);
 
         // 方向文本
         string targetDir = GetDirectionText(issuerPos, targetPos);
@@ -218,11 +254,17 @@ public static class QuestTemplateLoader
             TargetWorldPosition = targetPos,
             TargetDescription = targetDesc,
             TargetCount = count,
-            RewardGold = reward,
+            RewardGold = RewardPricingService.GetQuestReward(template.QuestType, difficulty, count, DistanceFactor(issuerPos, targetPos)),
             RewardReputation = template.Reputation,
             HasTimeLimit = template.TimeLimitDays > 0,
             TimeLimitDays = template.TimeLimitDays,
         };
+    }
+
+    private static float DistanceFactor(Vector2 from, Vector2 to)
+    {
+        float distance = from.DistanceTo(to);
+        return Math.Clamp(distance / 1000.0f, 0.75f, 1.6f);
     }
 
     private static string GetDirectionText(Vector2 from, Vector2 to)

@@ -40,10 +40,11 @@ public partial class GameSettings : Resource
     // 音频设置
     // ========================================
 
-    [Export] public float MasterVolume { get; set; } = 1.0f;
-    [Export] public float MusicVolume { get; set; } = 0.7f;
-    [Export] public float SfxVolume { get; set; } = 1.0f;
-    [Export] public float AmbientVolume { get; set; } = 0.6f;
+    // 默认全部 50%（玩家可在设置中调高）
+    [Export] public float MasterVolume { get; set; } = 0.5f;
+    [Export] public float MusicVolume { get; set; } = 0.5f;
+    [Export] public float SfxVolume { get; set; } = 0.5f;
+    [Export] public float AmbientVolume { get; set; } = 0.5f;
 
     // ========================================
     // 游戏设置
@@ -147,10 +148,10 @@ public partial class GameSettings : Resource
         ResolutionIndex = video.ContainsKey("resolution_index") ? (int)video["resolution_index"] : 0;
 
         var audio = data.ContainsKey("audio") ? (Godot.Collections.Dictionary)data["audio"] : new Godot.Collections.Dictionary();
-        MasterVolume = audio.ContainsKey("master_volume") ? (float)audio["master_volume"] : 1.0f;
-        MusicVolume = audio.ContainsKey("music_volume") ? (float)audio["music_volume"] : 0.7f;
-        SfxVolume = audio.ContainsKey("sfx_volume") ? (float)audio["sfx_volume"] : 1.0f;
-        AmbientVolume = audio.ContainsKey("ambient_volume") ? (float)audio["ambient_volume"] : 0.6f;
+        MasterVolume = audio.ContainsKey("master_volume") ? (float)audio["master_volume"] : 0.5f;
+        MusicVolume = audio.ContainsKey("music_volume") ? (float)audio["music_volume"] : 0.5f;
+        SfxVolume = audio.ContainsKey("sfx_volume") ? (float)audio["sfx_volume"] : 0.5f;
+        AmbientVolume = audio.ContainsKey("ambient_volume") ? (float)audio["ambient_volume"] : 0.5f;
 
         var game = data.ContainsKey("game") ? (Godot.Collections.Dictionary)data["game"] : new Godot.Collections.Dictionary();
         Difficulty = game.ContainsKey("difficulty") ? (int)game["difficulty"] : 1;

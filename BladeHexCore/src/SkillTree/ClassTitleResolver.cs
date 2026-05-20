@@ -51,7 +51,7 @@ public static class ClassTitleResolver
         {
             // 6 种单属性
             { FlagStr, "战士" }, { FlagDex, "游侠" }, { FlagCon, "守卫" },
-            { FlagInt, "法师" }, { FlagWis, "贤者" }, { FlagCha, "诗人" },
+            { FlagInt, "法师" }, { FlagWis, "刺客" }, { FlagCha, "诗人" },
 
             // 15 种双属性
             { FlagStr | FlagDex, "剑舞者" }, { FlagStr | FlagCon, "重战士" },
@@ -269,5 +269,67 @@ public static class ClassTitleResolver
             FlagCha => attrs.ContainsKey("cha") ? attrs["cha"].AsInt32() : 10,
             _ => 10
         };
+    }
+
+    // ============================================================================
+    // 职业图标映射
+    // ============================================================================
+
+    private static Dictionary<string, string>? _iconTable;
+
+    private static void EnsureIconTable()
+    {
+        if (_iconTable != null) return;
+        _iconTable = new Dictionary<string, string>
+        {
+            // 6 种单属性
+            { "战士", "Warrior" }, { "游侠", "Ranger" }, { "守卫", "Guardian" },
+            { "法师", "Mage" }, { "刺客", "Assassin" }, { "诗人", "Bard" },
+            // 15 种双属性
+            { "剑舞者", "BladeDancer" }, { "重战士", "Juggernaut" },
+            { "魔剑士", "Spellsword" }, { "守护骑士", "Executioner" },
+            { "军阀", "Warlord" }, { "决斗家", "Duelist" },
+            { "秘射手", "ArcaneArcher" }, { "猎人", "Falconer" },
+            { "浪客", "Rogue" }, { "战法师", "Battlemage" },
+            { "苦修者", "StoneSaint" }, { "铁壁将军", "IronCommander" },
+            { "贤者", "Sage" }, { "术士", "Sorcerer" },
+            { "神使", "Prophet" },
+            // 20 种三属性
+            { "武圣", "Grandmaster" }, { "魔武者", "Spellweaver" },
+            { "审判官", "Hawkeye" }, { "战神", "Champion" },
+            { "铁焰魔战", "Ironweaver" }, { "磐石骑士", "Skullcrusher" },
+            { "征服者", "Conqueror" }, { "天启骑士", "DoomKnight" },
+            { "魔王", "Overlord" }, { "战术大师", "Crusader" },
+            { "影法师", "ShadowMage" }, { "荒野守望", "Nightstalker" },
+            { "千面客", "Faceless" }, { "星辰行者", "Stargazer" },
+            { "幻术师", "Illusionist" }, { "风语者", "Windwalker" },
+            { "远古守护", "ArcaneWarden" }, { "铁幕领主", "IronTyrant" },
+            { "铁壁守护", "HolyBulwark" }, { "天选者", "ChosenOne" },
+            // 15 种四属性
+            { "智者尊者", "Archsage" }, { "灵风大师", "ZephyrMaster" },
+            { "自然统帅", "Warchief" }, { "暗影领主", "ShadowLord" },
+            { "沉默之力", "SilentDeath" }, { "毁灭之主", "LordOfRuin" },
+            { "磐石守护", "StoneSaint" }, { "霸道魔将", "TempestLord" },
+            { "深渊骑士", "VoidKnight" }, { "战争之风", "StormBanner" },
+            { "狂风魔将", "ArcaneCalamity" }, { "独行圣者", "LoneBlade" },
+            { "战争之王", "WarKing" }, { "铁壁猎手", "SkyHunter" },
+            { "万象魔战", "Ironweaver" },
+            // 6 种五属性
+            { "万灵使者", "Emissary" }, { "山岳之主", "MountainLord" },
+            { "星界旅者", "AstralWalker" }, { "自然战神", "Warchief" },
+            { "铁血魔王", "IronTyrant" }, { "深渊行者", "VoidKnight" },
+            // 全属性
+            { "万象", "Paragon" },
+        };
+    }
+
+    /// <summary>根据职业称号获取图标资源路径（64x64）</summary>
+    public static string? GetIconPath(string title)
+    {
+        if (string.IsNullOrEmpty(title) || title == "无名者") return null;
+        EnsureIconTable();
+        if (_iconTable!.TryGetValue(title, out var iconName))
+            return $"res://assets/generated_class_icons/{iconName}.png";
+        return null;
     }
 }

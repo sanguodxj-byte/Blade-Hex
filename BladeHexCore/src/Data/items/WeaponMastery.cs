@@ -160,6 +160,12 @@ public class WeaponMastery
     public int GetXpBySubtype(WeaponData.WeaponSubtype subtype)
         => GetXp(GetKeyFor(subtype));
 
+    public void SetXp(MasteryKey key, int xp)
+        => _xpMap[key] = xp;
+
+    public void SetXpBySubtype(WeaponData.WeaponSubtype subtype, int xp)
+        => SetXp(GetKeyFor(subtype), xp);
+
     public int GetLevel(MasteryKey key)
         => LevelFromXp(GetXp(key));
 

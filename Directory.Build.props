@@ -1,0 +1,10 @@
+<Project>
+  <ItemGroup>
+    <Reference Include="NLua" Condition="!$(DefineConstants.Contains('EXCLUDE_LUA'))">
+      <HintPath>$(MSBuildThisFileDirectory)lib\NLua.dll</HintPath>
+    </Reference>
+    <Reference Include="KeraLua" Condition="!$(DefineConstants.Contains('EXCLUDE_LUA'))">
+      <HintPath>$(MSBuildThisFileDirectory)lib\KeraLua.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

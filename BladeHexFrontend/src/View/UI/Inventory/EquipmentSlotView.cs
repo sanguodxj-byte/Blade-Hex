@@ -11,11 +11,14 @@ namespace BladeHex.View.UI.Inventory;
 /// <summary>
 /// 装备槽容器视图。
 /// 内部维护多个 PanelContainer 槽位，每个槽位实现 IItemContainer 单元命中。
+/// 使用 VBoxContainer 作为基类，让自身高度正确传递到父容器（避免与 HSeparator 重合）。
 /// </summary>
 [GlobalClass]
-public partial class EquipmentSlotView : Control, IItemContainer
+public partial class EquipmentSlotView : VBoxContainer, IItemContainer
 {
-    public const int SlotSize = 54;
+    [Signal] public delegate void EquipmentChangedEventHandler();
+
+    public const int SlotSize = 80;
 
     private static readonly Color BgEquipSlot = new(0.09f, 0.08f, 0.11f, 0.9f);
 
@@ -24,8 +27,23 @@ public partial class EquipmentSlotView : Control, IItemContainer
     private ItemPopup? _popup;
     private readonly Dictionary<string, PanelContainer> _slots = new();
 
+    /// <summary>启用：鼠标悬停在装备区整体范围时整体淡化（露出背景立绘）</summary>
+    public bool HoverFadeEnabled { get; set; } = false;
+
+    public override void _Process(double delta)
+    {
+        if (!HoverFadeEnabled) return;
+        if (!IsInsideTree()) return;
+        // 用全局矩形判断鼠标是否在区域内 — 避免子槽位 MouseFilter.Stop 引起的频繁 Enter/Exit 抖动
+        bool inside = GetGlobalRect().HasPoint(GetGlobalMousePosition());
+        var target = inside ? new Color(1, 1, 1, 0.18f) : new Color(1, 1, 1, 1f);
+        if (Modulate != target)
+            Modulate = target;
+    }
+
     public override void _Ready()
     {
+        // 接收鼠标事件以便父容器能响应 MouseEntered/Exited（用于立绘叠层透明效果）
         MouseFilter = MouseFilterEnum.Pass;
     }
 
@@ -53,12 +71,16 @@ public partial class EquipmentSlotView : Control, IItemContainer
 
         if (_unit == null) return;
 
-        var equipBox = new VBoxContainer();
-        equipBox.AddThemeConstantOverride("separation", 3);
-        AddChild(equipBox);
+        // 自身即 VBoxContainer，直接配置：水平居中，避免遮挡左侧分割线
+        AddThemeConstantOverride("separation", 3);
+        SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        var equipBox = this;
 
-        // 行1: 头盔
-        AddRow(equipBox, ("helmet", "头盔", _unit.Helmet));
+        // 行1: 饰品1 | 头盔 | 饰品2
+        AddRow(equipBox,
+            ("accessory_1", "饰品", _unit.Accessory1),
+            ("helmet", "头盔", _unit.Helmet),
+            ("accessory_2", "饰品", _unit.Accessory2));
 
         // 行2: 主手 | 铠甲 | 副手
         AddRow(equipBox,
@@ -66,20 +88,11 @@ public partial class EquipmentSlotView : Control, IItemContainer
             ("armor", "铠甲", _unit.Armor),
             ("primary_off", "副手", _unit.PrimaryOffHand));
 
-        // 行3: 护手 | 空 | 饰品1
+        // 行3: 护手 | 鞋子 | 空
         AddRow(equipBox,
             ("gauntlets", "护手", _unit.Gauntlets),
-            ("spacer", "", null),
-            ("accessory_1", "饰品", _unit.Accessory1));
-
-        // 行4: 鞋子
-        AddRow(equipBox, ("boots", "鞋子", _unit.Boots));
-
-        // 行5: 副武器 | 饰品2 | 副武器副
-        AddRow(equipBox,
-            ("secondary_main", "副武器", _unit.SecondaryMainHand),
-            ("accessory_2", "饰品", _unit.Accessory2),
-            ("secondary_off", "副副手", _unit.SecondaryOffHand));
+            ("boots", "鞋子", _unit.Boots),
+            ("spacer", "", null));
     }
 
     public void Refresh() => Rebuild();
@@ -123,7 +136,7 @@ public partial class EquipmentSlotView : Control, IItemContainer
 
         // 图标 / 占位符
         Texture2D? tex = (equipped != null && !string.IsNullOrEmpty(equipped.IconId))
-            ? ResourceRegistry.GetIcon(equipped.IconId)
+            ? (ResourceRegistry.GetIcon(equipped.IconId) ?? ResourceRegistry.GetIcon(equipped.IconFallbackId))
             : null;
 
         if (tex != null)
@@ -214,6 +227,7 @@ public partial class EquipmentSlotView : Control, IItemContainer
 
         // 装备到目标槽位
         _unit.EquipToSlot(source.Item, slotId);
+        EmitSignal(SignalName.EquipmentChanged);
         return true;
     }
 
@@ -221,7 +235,10 @@ public partial class EquipmentSlotView : Control, IItemContainer
     {
         if (_unit == null) return;
         if (source.Container == this && source.Origin is string slotId)
+        {
             _unit.UnequipItem(slotId);
+            EmitSignal(SignalName.EquipmentChanged);
+        }
     }
 
     public void HighlightDropTarget(DragSource source, ContainerHitInfo? hit)

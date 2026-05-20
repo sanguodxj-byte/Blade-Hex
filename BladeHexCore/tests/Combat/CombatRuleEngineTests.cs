@@ -12,6 +12,7 @@
 //   - GetAdjustedCritThreshold（士气暴击修正）
 //   - CalculateCounterDamage（反击伤害）
 using System.Collections.Generic;
+using BladeHex.Combat.Buff;
 
 namespace BladeHex.Combat.Tests;
 
@@ -51,6 +52,11 @@ public static class CombatRuleEngineTests
         yield return Run(nameof(Counter_FullDirection_FullDamage), Counter_FullDirection_FullDamage);
         yield return Run(nameof(Counter_HalfDirection_HalvesDamage), Counter_HalfDirection_HalvesDamage);
         yield return Run(nameof(Counter_ZeroDirection_NoDamage), Counter_ZeroDirection_NoDamage);
+        yield return Run(nameof(Buff_ResolveResult_BaseOnly), Buff_ResolveResult_BaseOnly);
+        yield return Run(nameof(Buff_ResolveResult_BaseAndIncreased), Buff_ResolveResult_BaseAndIncreased);
+        yield return Run(nameof(Buff_ResolveResult_BaseAndIncreasedAndMore), Buff_ResolveResult_BaseAndIncreasedAndMore);
+        yield return Run(nameof(Buff_ResolveResult_FullMultiplicative), Buff_ResolveResult_FullMultiplicative);
+        yield return Run(nameof(Buff_ResolveResult_OverrideValue), Buff_ResolveResult_OverrideValue);
     }
 
     private static (string, bool, string) Run(string name, System.Func<(bool, string)> test)
@@ -268,5 +274,74 @@ public static class CombatRuleEngineTests
     private static (bool ok, string msg) Expect(bool condition, string failureMsg)
     {
         return (condition, condition ? "" : failureMsg);
+    }
+
+    // ========================================
+    // Buff 多乘区属性解算单元测试
+    // ========================================
+
+    private static (bool, string) Buff_ResolveResult_BaseOnly()
+    {
+        var result = new StatResolveResult
+        {
+            FlatBonus = 20
+        };
+        float final = result.Apply(100f);
+        return Expect(System.Math.Abs(final - 120f) < 0.001f, $"expected 120, got {final}");
+    }
+
+    private static (bool, string) Buff_ResolveResult_BaseAndIncreased()
+    {
+        var result = new StatResolveResult
+        {
+            FlatBonus = 20,
+            IncreasedPercent = 0.5f // +50% Increased
+        };
+        float final = result.Apply(100f);
+        return Expect(System.Math.Abs(final - 180f) < 0.001f, $"expected 180, got {final}");
+    }
+
+    private static (bool, string) Buff_ResolveResult_BaseAndIncreasedAndMore()
+    {
+        var result = new StatResolveResult
+        {
+            FlatBonus = 20,
+            IncreasedPercent = 0.5f, // +50%
+            MoreMultiplier = 1.2f    // 1.2x (对应代码中的 1f + Value, 等于 MoreMultiplier 的初始 1.0f 乘以 1.2f)
+        };
+        // (100 + 20) * 1.5 * 1.2 = 216
+        float final = result.Apply(100f);
+        return Expect(System.Math.Abs(final - 216f) < 0.001f, $"expected 216, got {final}");
+    }
+
+    private static (bool, string) Buff_ResolveResult_FullMultiplicative()
+    {
+        var result = new StatResolveResult
+        {
+            FlatBonus = 20,
+            IncreasedPercent = 0.5f,
+            MoreMultiplier = 1.2f,
+            FinalMultiplier = 0.9f // Final 0.9 倍 (90%)
+        };
+        // (100 + 20) * 1.5 * 1.2 * 0.9 = 194.4
+        float final = result.Apply(100f);
+        int finalInt = result.ApplyInt(100);
+        if (System.Math.Abs(final - 194.4f) > 0.001f)
+            return (false, $"float Apply expected 194.4, got {final}");
+        if (finalInt != 194)
+            return (false, $"int ApplyInt expected 194, got {finalInt}");
+        return (true, "");
+    }
+
+    private static (bool, string) Buff_ResolveResult_OverrideValue()
+    {
+        var result = new StatResolveResult
+        {
+            FlatBonus = 500,
+            IncreasedPercent = 2.0f,
+            OverrideValue = 88f // Override 直接改写
+        };
+        float final = result.Apply(100f);
+        return Expect(System.Math.Abs(final - 88f) < 0.001f, $"expected 88, got {final}");
     }
 }

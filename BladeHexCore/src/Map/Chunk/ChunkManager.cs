@@ -55,10 +55,11 @@ public partial class ChunkManager : RefCounted
     /// <summary>
     /// 用世界种子初始化
     /// </summary>
-    public void Initialize(int worldSeed, int worldWidth = 1024, int worldHeight = 768)
+    public void Initialize(int worldSeed, int worldWidth = 1024, int worldHeight = 768,
+        int templateGridW = 1, int templateGridH = 1)
     {
         Generator = new ChunkGenerator();
-        Generator.Initialize(worldSeed, worldWidth, worldHeight);
+        Generator.Initialize(worldSeed, worldWidth, worldHeight, templateGridW, templateGridH);
     }
 
     /// <summary>

@@ -17,8 +17,10 @@ public partial class TownFacility : Resource
         Tavern,
         Arena,
         Smithy,
-        Training,
-        Temple
+        Temple,
+        QuestBoard,
+        Rest,
+        Port,
     }
 
     [Export] public string FacilityName { get; set; } = "";
@@ -47,13 +49,15 @@ public partial class TownFacility : Resource
 
     public static string GetTypeName(FacilityType type) => type switch
     {
-        FacilityType.Castle => "城堡",
+        FacilityType.Castle => "领主厅",
         FacilityType.Market => "市场",
         FacilityType.Tavern => "酒馆",
         FacilityType.Arena => "竞技场",
         FacilityType.Smithy => "铁匠铺",
-        FacilityType.Training => "训练场",
         FacilityType.Temple => "药师所",
+        FacilityType.QuestBoard => "布告栏",
+        FacilityType.Rest => "休息",
+        FacilityType.Port => "港口",
         _ => "未知"
     };
 
@@ -64,82 +68,93 @@ public partial class TownFacility : Resource
         FacilityType.Tavern => "beer",
         FacilityType.Arena => "trophy",
         FacilityType.Smithy => "anvil",
-        FacilityType.Training => "dumbbell",
         FacilityType.Temple => "church",
+        FacilityType.QuestBoard => "scroll",
+        FacilityType.Rest => "bed",
+        FacilityType.Port => "anchor",
         _ => "building"
     };
 
     public static List<TownFacility> CreateDefaultFacilities() => new()
     {
-        new TownFacility("领主厅", FacilityType.Castle),
         new TownFacility("市场", FacilityType.Market),
         new TownFacility("酒馆", FacilityType.Tavern),
-        new TownFacility("竞技场", FacilityType.Arena),
         new TownFacility("铁匠铺", FacilityType.Smithy),
-        new TownFacility("训练场", FacilityType.Training),
-        new TownFacility("药师所", FacilityType.Temple)
+        new TownFacility("药师所", FacilityType.Temple),
+        new TownFacility("竞技场", FacilityType.Arena),
+        new TownFacility("布告栏", FacilityType.QuestBoard),
+        new TownFacility("休息", FacilityType.Rest),
     };
 
     public static List<TownFacility> CreateVillageFacilities() => new()
     {
-        new TownFacility("布告栏", FacilityType.Castle),
         new TownFacility("杂货铺", FacilityType.Market),
-        new TownFacility("旅店", FacilityType.Tavern)
+        new TownFacility("旅店", FacilityType.Tavern),
+        new TownFacility("布告栏", FacilityType.QuestBoard),
+        new TownFacility("休息", FacilityType.Rest),
     };
 
     public static List<TownFacility> CreatePortFacilities() => new()
     {
-        new TownFacility("港务厅", FacilityType.Castle),
         new TownFacility("海商市场", FacilityType.Market),
         new TownFacility("水手酒馆", FacilityType.Tavern),
-        new TownFacility("船坞", FacilityType.Smithy),
-        new TownFacility("药师所", FacilityType.Temple)
+        new TownFacility("铁匠铺", FacilityType.Smithy),
+        new TownFacility("药师所", FacilityType.Temple),
+        new TownFacility("竞技场", FacilityType.Arena),
+        new TownFacility("布告栏", FacilityType.QuestBoard),
+        new TownFacility("休息", FacilityType.Rest),
+        new TownFacility("租船出海", FacilityType.Port),
     };
 
     public static List<TownFacility> CreateCastleFacilities() => new()
     {
-        new TownFacility("领主厅", FacilityType.Castle),
         new TownFacility("军械库", FacilityType.Market),
         new TownFacility("兵营酒馆", FacilityType.Tavern),
         new TownFacility("铁匠铺", FacilityType.Smithy),
-        new TownFacility("训练场", FacilityType.Training)
+        new TownFacility("竞技场", FacilityType.Arena),
+        new TownFacility("布告栏", FacilityType.QuestBoard),
+        new TownFacility("休息", FacilityType.Rest),
     };
 
     public static List<TownFacility> CreateOutpostFacilities() => new()
     {
-        new TownFacility("哨所布告栏", FacilityType.Castle),
         new TownFacility("补给站", FacilityType.Market),
-        new TownFacility("营帐", FacilityType.Tavern)
+        new TownFacility("营帐", FacilityType.Tavern),
+        new TownFacility("布告栏", FacilityType.QuestBoard),
+        new TownFacility("休息", FacilityType.Rest),
     };
 
     public static List<TownFacility> CreateTavernFacilities() => new()
     {
         new TownFacility("酒馆", FacilityType.Tavern),
-        new TownFacility("杂货铺", FacilityType.Market)
+        new TownFacility("杂货铺", FacilityType.Market),
+        new TownFacility("休息", FacilityType.Rest),
     };
 
     public static List<TownFacility> CreateMineFacilities() => new()
     {
-        new TownFacility("矿务处", FacilityType.Castle),
         new TownFacility("矿工商店", FacilityType.Market),
-        new TownFacility("矿工酒馆", FacilityType.Tavern)
+        new TownFacility("矿工酒馆", FacilityType.Tavern),
+        new TownFacility("休息", FacilityType.Rest),
     };
 
     public static List<TownFacility> CreateShrineFacilities() => new()
     {
         new TownFacility("药师所", FacilityType.Temple),
-        new TownFacility("药材铺", FacilityType.Market)
+        new TownFacility("药材铺", FacilityType.Market),
     };
 
     private static string GetDefaultDescription(FacilityType type) => type switch
     {
         FacilityType.Castle => "领主的居所，可以觐见领主、查看声望和处理封地事务",
         FacilityType.Market => "各种商品琳琅满目，可以购买和出售物品",
-        FacilityType.Tavern => "冒险者的聚集地，可以查看布告栏接取委托、招募伙伴和打听消息",
+        FacilityType.Tavern => "冒险者的聚集地，可以招募伙伴和打听消息",
         FacilityType.Arena => "展示实力的地方，赢得比赛获取奖品和声望",
         FacilityType.Smithy => "经验丰富的铁匠，可以修理和升级装备",
-        FacilityType.Training => "训练场，花费金币提升经验",
         FacilityType.Temple => "药师所，可以治疗伤病和购买净化药水",
+        FacilityType.QuestBoard => "查看可接取的委托任务",
+        FacilityType.Rest => "在安全的地方休息，恢复队伍状态",
+        FacilityType.Port => "租船出海，前往远方的港口",
         _ => ""
     };
 
@@ -150,8 +165,10 @@ public partial class TownFacility : Resource
         FacilityType.Tavern => InteractionType.Type.Talk,
         FacilityType.Arena => InteractionType.Type.Arena,
         FacilityType.Smithy => InteractionType.Type.Repair,
-        FacilityType.Training => InteractionType.Type.Train,
         FacilityType.Temple => InteractionType.Type.Heal,
+        FacilityType.QuestBoard => InteractionType.Type.Quest,
+        FacilityType.Rest => InteractionType.Type.Rest,
+        FacilityType.Port => InteractionType.Type.Leave,
         _ => InteractionType.Type.Leave
     };
 }

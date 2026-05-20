@@ -28,6 +28,9 @@ public partial class AIController : Node
     // 所有单位缓存（用于士气系统跨阵营结算）
     private List<Unit> _allUnitsCache = new();
 
+    // 攻城结构检测缓存（每场战斗初始化一次）
+    private bool _hasSiegeStructures = false;
+
     /// <summary>难度配置，可通过属性注入</summary>
     [Export]
     public AIDifficultyConfig? DifficultyConfig
@@ -59,6 +62,9 @@ public partial class AIController : Node
     /// <summary>主入口：执行所有敌方单位的回合行动</summary>
     public async Task ExecuteEnemyTurn(List<Unit> enemyUnits, List<Unit> playerUnits, HexGrid hexGrid, Node combatUi)
     {
+        // 攻城结构检测（每回合检查一次，因为城门可能被破坏）
+        _hasSiegeStructures = AISiegeEvaluator.HasSiegeStructures(hexGrid);
+
         // 构建全单位缓存（士气系统需要跨阵营结算）
         _allUnitsCache = new List<Unit>(enemyUnits.Count + playerUnits.Count);
         _allUnitsCache.AddRange(enemyUnits);
@@ -100,12 +106,12 @@ public partial class AIController : Node
 
                 await ExecuteAction(action, hexGrid, combatUi);
 
-                // 行动间短暂延迟
-                await ToSignal(GetTree().CreateTimer(0.3f), SceneTreeTimer.SignalName.Timeout);
+                // 行动间短暂延迟(可被快进倍率缩短)
+                await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.3);
             }
 
-            // 单位间延迟
-            await ToSignal(GetTree().CreateTimer(0.2f), SceneTreeTimer.SignalName.Timeout);
+            // 单位间延迟(可被快进倍率缩短)
+            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.2);
         }
 
         EmitSignal(SignalName.AllActionsCompleted);
@@ -113,6 +119,20 @@ public partial class AIController : Node
 
     public AIAction DecideActionForUnit(Unit actor, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid)
     {
+        // 攻城 AI 前置检查：如果地图有城墙结构，优先评估攻城行动
+        if (_hasSiegeStructures)
+        {
+            AIAction? siegeAction = null;
+            // 敌方单位（AI 控制）= 攻方 → 攻城行为
+            // 注意：这里假设 AI 控制的是攻方；守城战中 AI 是守方
+            if (actor.Data!.IsEnemy)
+                siegeAction = AISiegeEvaluator.EvaluateAttackerAction(actor, playerUnits, hexGrid);
+            else
+                siegeAction = AISiegeEvaluator.EvaluateDefenderAction(actor, enemyUnits, hexGrid);
+
+            if (siegeAction != null) return siegeAction;
+        }
+
         var strategyKey = actor.Data!.aiStrategy;
         if (!_strategies.TryGetValue(strategyKey, out var strategy))
         {
@@ -167,6 +187,11 @@ public partial class AIController : Node
                 actor.HasActed = true;
                 break;
 
+            case AIAction.ActionType.UseSkill:
+                await ExecuteSiegeSkill(action, hexGrid);
+                actor.HasActed = true;
+                break;
+
             case AIAction.ActionType.Idle:
                 _adapter?.LogMessage($"[color=gray]{action.Description}[/color]");
                 break;
@@ -188,22 +213,33 @@ public partial class AIController : Node
         var finalPos = action.MovePath[^1];
 
         // 计算路径消耗的 AP
-        float pathCost = hexGrid.GetPathCost(action.MovePath);
+        float pathCost = hexGrid.GetPathCost(actor.GridPos, action.MovePath);
         if (pathCost > actor.CurrentAp)
         {
             // AP 不足以走完全程 — 截断路径到可达范围
             float apLeft = actor.CurrentAp;
-            int walkable = 0;
+            int walkable = -1;
             float spent = 0;
-            for (int i = 1; i < action.MovePath.Count; i++)
+            var current = actor.GridPos;
+            for (int i = 0; i < action.MovePath.Count; i++)
             {
-                var cell = hexGrid.GetCell(action.MovePath[i].X, action.MovePath[i].Y);
-                float cost = cell?.Data != null ? cell.Data.moveCost : 1.0f;
+                var next = action.MovePath[i];
+                var cell = hexGrid.GetCell(next.X, next.Y);
+                if (cell == null) continue;
+
+                float cost = cell.Data != null ? cell.Data.moveCost : 1.0f;
+                var prevCell = hexGrid.GetCell(current.X, current.Y);
+                if (prevCell != null && cell.Elevation > prevCell.Elevation)
+                {
+                    cost += 3.0f;
+                }
+
                 if (spent + cost > apLeft) break;
                 spent += cost;
                 walkable = i;
+                current = next;
             }
-            if (walkable <= 0) return;
+            if (walkable < 0) return;
             finalPos = action.MovePath[walkable];
             pathCost = spent;
         }
@@ -214,8 +250,8 @@ public partial class AIController : Node
         // 执行移动
         _adapter?.MoveUnitTo(actor, finalPos.X, finalPos.Y);
         _adapter?.LogMessage($"{actor.Data!.UnitName} 移动到 ({finalPos.X}, {finalPos.Y})");
-        
-        await ToSignal(GetTree().CreateTimer(0.3f), SceneTreeTimer.SignalName.Timeout);
+
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.3);
     }
 
     private async Task ExecuteAttack(AIAction action, HexGrid hexGrid, Node combatUi)
@@ -260,28 +296,37 @@ public partial class AIController : Node
         // 攻击前动画
         _adapter?.PlayUnitAnim(actor, "attack");
         actor.PlayAttackLunge(target.GlobalPosition);
-        await ToSignal(GetTree().CreateTimer(0.6f), SceneTreeTimer.SignalName.Timeout);
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.6);
 
-        // 使用 CombatResolver 统一结算
-        var result = CombatResolver.ResolveAttack(actor, target, hexGrid, action.IsCharge);
+        // 使用 CombatResolver 统一结算（包围加成需要传入攻击者同阵营单位）
+        var allies = (_allUnitsCache ?? new List<Unit>())
+            .Where(u => GodotObject.IsInstanceValid(u) && u != actor && u.CurrentHp > 0
+                     && u.IsPlayerSide == actor.IsPlayerSide)
+            .ToArray();
+        var result = CombatResolver.ResolveAttack(actor, target, hexGrid, action.IsCharge,
+            attackerAllies: allies);
 
         if (result["hit"].AsBool())
         {
             int dmg = result["damage"].AsInt32();
+            bool isCrit = result.ContainsKey("critical") && result["critical"].AsBool();
 
             // 播放命中音效
             int dmgType = 0;
             var actorWeapon = actor.Model.GetMainHand() as BladeHex.Data.WeaponData;
             if (actorWeapon != null) dmgType = (int)actorWeapon.WeaponDamageType;
-            _adapter?.PlayAttackHitSfx(dmgType, result["critical"].AsBool());
+            _adapter?.PlayAttackHitSfx(dmgType, isCrit);
+
+            // 伤害数字
+            _adapter?.ShowDamageNumber(target, dmg, isCrit);
 
             var logParts = new List<string>
             {
                 $"[color=red]{actor.Data!.UnitName} 命中 {target.Data!.UnitName}，造成 {dmg} 伤害[/color]"
             };
 
-            if (result.ContainsKey("critical") && result["critical"].AsBool()) logParts.Add("[color=yellow]★暴击！[/color]");
-            if (action.IsCharge) logParts.Add("[color=orange]冲锋加成！[/color]");
+            if (isCrit) logParts.Add("[color=yellow]★暴击!  [/color]");
+            if (action.IsCharge) logParts.Add("[color=orange]冲锋加成!  [/color]");
 
             _adapter?.LogMessage(string.Join(" ", logParts));
 
@@ -310,10 +355,61 @@ public partial class AIController : Node
             if (actorWeapon2 != null) missDmgType = (int)actorWeapon2.WeaponDamageType;
             _adapter?.PlayAttackMissSfx(missDmgType);
 
+            // 伤害数字 — Miss
+            _adapter?.ShowDamageNumber(target, 0,
+                missLabel: result.ContainsKey("fumble") && result["fumble"].AsBool() ? "Fumble" : "Miss");
+
             _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 的攻击未命中 {target.Data!.UnitName}。[/color]");
         }
 
         _adapter?.PlayUnitAnim(actor, "default");
+    }
+
+    /// <summary>执行攻城技能（攻击城门 / 架设云梯）</summary>
+    private async Task ExecuteSiegeSkill(AIAction action, HexGrid hexGrid)
+    {
+        var actor = action.Actor!;
+        var targetPos = action.TargetPosition;
+        var targetCell = hexGrid.GetCell(targetPos.X, targetPos.Y);
+        if (targetCell?.Data == null) return;
+
+        switch (action.SkillId)
+        {
+            case "siege_attack_gate":
+            {
+                var weapon = actor.Model.GetMainHand() as WeaponData;
+                actor.CurrentAp -= weapon?.ApCost ?? 4;
+                bool destroyed = SiegeActions.DamageDestructible(targetCell.Data);
+                if (destroyed)
+                {
+                    targetCell.Elevation = 1;
+                    _adapter?.LogMessage($"[color=red]{actor.Data!.UnitName} 破坏了城门！[/color]");
+                }
+                else
+                {
+                    _adapter?.LogMessage($"{actor.Data!.UnitName} 攻击城门（剩余 {targetCell.Data.durability}/{targetCell.Data.maxDurability}）");
+                }
+                break;
+            }
+
+            case "siege_build_ladder":
+            {
+                actor.CurrentAp -= SiegeActions.LadderApCost;
+                bool completed = SiegeActions.BuildLadder(targetCell.Data);
+                if (completed)
+                {
+                    targetCell.Elevation = 1;
+                    _adapter?.LogMessage($"[color=yellow]{actor.Data!.UnitName} 完成了云梯架设！[/color]");
+                }
+                else
+                {
+                    _adapter?.LogMessage($"{actor.Data!.UnitName} 架设云梯 ({targetCell.Data.ladderProgress}/{SiegeActions.LadderRequiredSteps})");
+                }
+                break;
+            }
+        }
+
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.5);
     }
 
     private List<Unit> SortByPriority(List<Unit> enemies)

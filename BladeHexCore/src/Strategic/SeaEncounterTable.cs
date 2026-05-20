@@ -2,6 +2,7 @@
 // 海上遭遇表 — 定义海上随机事件类型和概率
 using System;
 using System.Collections.Generic;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -93,7 +94,7 @@ public static class SeaEncounterTable
             {
                 Type = type,
                 Description = "发现漂浮的残骸，搜索后找到了一些物资。",
-                GoldReward = 50 + rng.Next(100 + playerLevel * 10),
+                GoldReward = RewardPricingService.GetSeaFlotsamGold(playerLevel),
                 ItemRewards = GenerateFlotsamLoot(rng),
             },
             SeaEncounterType.MerchantShip => new SeaEncounterResult

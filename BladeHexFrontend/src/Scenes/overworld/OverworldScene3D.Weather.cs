@@ -10,361 +10,315 @@ namespace BladeHex.Scenes.Overworld;
 
 public partial class OverworldScene3D
 {
-    // ========================================
-    // 天气系统字段
-    // ========================================
+	// ========================================
+	// 天气系统字段
+	// ========================================
 
-    private WeatherManager? _weatherMgr;
-    private WeatherParticles2D? _weatherParticles2D;
+	private WeatherManager? _weatherMgr;
+	private WeatherParticles2D? _weatherParticles2D;
+	private WeatherParticles3D? _weatherParticles3D;
 
-    /// <summary>沙尘暴屏幕色调覆盖</summary>
-    private ColorRect? _sandstormTintRect;
-    private CanvasLayer? _sandstormTintLayer;
-    private float _sandstormTintAlpha;
+	/// <summary>沙尘暴屏幕色调覆盖</summary>
+	private ColorRect? _sandstormTintRect;
+	private CanvasLayer? _sandstormTintLayer;
+	private float _sandstormTintAlpha;
 
-    // ========================================
-    // 天气游戏性修正值（每帧缓存，供其他系统读取）
-    // ========================================
+	// ========================================
+	// 天气游戏性修正值（每帧缓存，供其他系统读取）
+	// ========================================
 
-    /// <summary>天气移速修正因子 (0.5~1.0)</summary>
-    public float WeatherSpeedFactor { get; private set; } = 1.0f;
+	/// <summary>天气移速修正因子 (0.5~1.0)</summary>
+	public float WeatherSpeedFactor { get; private set; } = 1.0f;
 
-    /// <summary>天气视野修正因子 (0.6~1.0)</summary>
-    public float WeatherVisionFactor { get; private set; } = 1.0f;
+	/// <summary>天气视野修正因子 (0.6~1.0)</summary>
+	public float WeatherVisionFactor { get; private set; } = 1.0f;
 
-    /// <summary>天气遭遇率修正因子 (0.7~1.5)</summary>
-    public float WeatherEncounterFactor { get; private set; } = 1.0f;
+	/// <summary>天气遭遇率修正因子 (0.7~1.5)</summary>
+	public float WeatherEncounterFactor { get; private set; } = 1.0f;
 
-    // ========================================
-    // 初始化
-    // ========================================
+	// ========================================
+	// 初始化
+	// ========================================
 
-    /// <summary>初始化天气管理器和粒子系统</summary>
-    private void InitWeatherSystem()
-    {
-        // 天气状态机
-        _weatherMgr = new WeatherManager();
-        _weatherMgr.Name = "WeatherManager";
-        AddChild(_weatherMgr);
-        _weatherMgr.WeatherChanged += OnWeatherChanged;
+	/// <summary>场景销毁时解绑 Autoload 的信号订阅。</summary>
+	public override void _ExitTree()
+	{
+		if (_weatherMgr != null)
+		{
+			_weatherMgr.WeatherChanged -= OnWeatherChanged;
+			_weatherMgr = null;
+		}
+	}
 
-        // 2D 天气粒子（CanvasLayer 方案，始终在 3D 场景之上）
-        _weatherParticles2D = new WeatherParticles2D();
-        _weatherParticles2D.Name = "WeatherParticles2D";
-        AddChild(_weatherParticles2D);
+	/// <summary>初始化天气视觉子系统（粒子 + 沙尘暴色调）。
+	/// WeatherManager 现在是 Autoload，订阅其 WeatherChanged 信号；
+	/// 不再 new + AddChild。
+	/// 使用 WeatherOrNull 容错：autoload 缺失时跳过整段，不阻塞 _Ready 后续步骤（UI / Toast / 调试控制台）。</summary>
+	private void InitWeatherSystem()
+	{
+		// 天气状态机（Autoload）— 容错获取，缺失时跳过整个天气子系统
+		_weatherMgr = Globals.WeatherOrNull;
+		if (_weatherMgr == null)
+		{
+			GD.PrintErr("[OverworldScene3D] WeatherManager Autoload 不存在，跳过天气系统初始化");
+			return;
+		}
+		_weatherMgr.WeatherChanged += OnWeatherChanged;
 
-        // 沙尘暴屏幕色调层
-        _sandstormTintLayer = new CanvasLayer { Name = "SandstormTintLayer", Layer = 6 };
-        AddChild(_sandstormTintLayer);
-        _sandstormTintRect = new ColorRect();
-        _sandstormTintRect.Name = "SandstormTint";
-        _sandstormTintRect.Color = new Color(0.78f, 0.62f, 0.38f, 0.0f);
-        _sandstormTintRect.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _sandstormTintRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _sandstormTintLayer.AddChild(_sandstormTintRect);
+		// 2D 天气粒子（CanvasLayer 方案，始终在 3D 场景之上）
+		_weatherParticles2D = new WeatherParticles2D();
+		_weatherParticles2D.Name = "WeatherParticles2D";
+		AddChild(_weatherParticles2D);
 
-        GD.Print("[OverworldScene3D] 天气系统初始化完成");
-    }
+		// 3D 天气粒子（GPUParticles3D，在世界空间中有深度感）
+		_weatherParticles3D = new WeatherParticles3D();
+		_weatherParticles3D.Name = "WeatherParticles3D";
+		AddChild(_weatherParticles3D);
 
-    // ========================================
-    // 每帧更新
-    // ========================================
+		// 沙尘暴屏幕色调层
+		_sandstormTintLayer = new CanvasLayer { Name = "SandstormTintLayer", Layer = 6 };
+		AddChild(_sandstormTintLayer);
+		_sandstormTintRect = new ColorRect();
+		_sandstormTintRect.Name = "SandstormTint";
+		_sandstormTintRect.Color = new Color(0.78f, 0.62f, 0.38f, 0.0f);
+		_sandstormTintRect.MouseFilter = Control.MouseFilterEnum.Ignore;
+		_sandstormTintRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		_sandstormTintLayer.AddChild(_sandstormTintRect);
 
-    /// <summary>天气系统每帧更新（在 _Process 中调用）</summary>
-    private void UpdateWeather(float dt)
-    {
-        if (_weatherMgr == null) return;
+		// 同步当前天气到 UI 和粒子（场景重建时 Autoload 仍保留前次状态）
+		if (_weatherMgr.CurrentWeather != WeatherType.Clear)
+			OnWeatherChanged(0, (int)_weatherMgr.CurrentWeather);
 
-        // 天气自动循环（移动或等待时 tick）
-        bool timeFlowing = (_playerMoving || IsWaiting) && !IsTimePaused;
-        if (timeFlowing && EconomyMgr != null)
-        {
-            float deltaHours = dt * GameTimeScale;
-            if (IsWaiting && !_playerMoving) deltaHours *= 8.0f;
-            int season = (int)EconomyMgr.GetSeason();
-            UpdateWeatherTerrainContext();
-            _weatherMgr.TickWeatherCycle(season, deltaHours);
-        }
+		GD.Print($"[OverworldScene3D] 天气系统就绪（Autoload 共享）: 当前 {_weatherMgr.CurrentWeather}");
+	}
 
-        // 更新视觉效果
-        UpdateWeatherVisuals(dt);
+	// ========================================
+	// 每帧更新
+	// ========================================
 
-        // 更新游戏性修正值
-        UpdateWeatherGameplayFactors();
-    }
+	/// <summary>天气系统每帧更新（在 _Process 中调用）</summary>
+	private void UpdateWeather(float dt)
+	{
+		if (_weatherMgr == null) return;
 
-    // ========================================
-    // 视觉效果
-    // ========================================
+		// 天气自动循环（移动或等待时 tick）
+		bool timeFlowing = (_playerMoving || IsWaiting) && !IsTimePaused;
+		if (timeFlowing && EconomyMgr != null)
+		{
+			float deltaHours = dt * GameTimeScale;
+			if (IsWaiting && !_playerMoving) deltaHours *= 8.0f;
+			int season = (int)EconomyMgr.GetSeason();
+			UpdateWeatherTerrainContext();
+			_weatherMgr.TickWeatherCycle(season, deltaHours);
+		}
 
-    /// <summary>天气变化回调 — 更新 UI + 粒子</summary>
-    private void OnWeatherChanged(int oldWeather, int newWeather)
-    {
-        var weatherType = (WeatherType)newWeather;
-        string weatherName = weatherType switch
-        {
-            WeatherType.Rain => "🌧 雨天",
-            WeatherType.Snow => "🌨 雪天",
-            WeatherType.Sandstorm => "🌪 沙尘暴",
-            _ => "☀ 晴天",
-        };
+		// 更新视觉效果
+		UpdateWeatherVisuals(dt);
 
-        // 更新 UI 天气显示
-        _overworldUi?.UpdateWeatherDisplay(weatherName);
+		// 更新游戏性修正值
+		UpdateWeatherGameplayFactors();
+	}
 
-        // 更新粒子系统
-        if (_weatherParticles2D != null)
-        {
-            if (weatherType == WeatherType.Clear)
-                _weatherParticles2D.StopAll();
-            else
-                _weatherParticles2D.SetWeather(weatherType, _weatherMgr!.GetEffectiveIntensity());
-        }
+	// ========================================
+	// 视觉效果
+	// ========================================
 
-        // 更新音频
-        if (_envAudio != null)
-        {
-            var audioWeather = weatherType switch
-            {
-                WeatherType.Rain => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Rain,
-                WeatherType.Snow => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Snow,
-                WeatherType.Sandstorm => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Sandstorm,
-                _ => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Clear,
-            };
-            _envAudio.SetWeather(audioWeather);
-        }
+	/// <summary>天气变化回调 — 更新 UI + 粒子</summary>
+	private void OnWeatherChanged(int oldWeather, int newWeather)
+	{
+		var weatherType = (WeatherType)newWeather;
+		string weatherName = weatherType switch
+		{
+			WeatherType.Rain => "🌧 雨天",
+			WeatherType.Snow => "🌨 雪天",
+			WeatherType.Sandstorm => "🌪 沙尘暴",
+			_ => "☀ 晴天",
+		};
 
-        // 更新云层（天气联动）
-        UpdateCloudLayerForWeather(weatherType);
+		// 更新 UI 天气显示
+		_overworldUi?.UpdateWeatherDisplay(weatherName);
 
-        GD.Print($"[OverworldScene3D/Weather] 天气变化: {(WeatherType)oldWeather} → {weatherType}");
-    }
+		// 更新粒子系统
+		if (_weatherParticles2D != null)
+		{
+			if (weatherType == WeatherType.Clear)
+				_weatherParticles2D.StopAll();
+			else
+				_weatherParticles2D.SetWeather(weatherType, _weatherMgr!.GetEffectiveIntensity());
+		}
+		if (_weatherParticles3D != null)
+		{
+			if (weatherType == WeatherType.Clear)
+				_weatherParticles3D.StopAll();
+			else
+				_weatherParticles3D.SetWeather(weatherType, _weatherMgr!.GetEffectiveIntensity());
+		}
 
-    /// <summary>更新天气视觉效果（光照色调 + 沙尘暴雾罩）</summary>
-    private void UpdateWeatherVisuals(float dt)
-    {
-        if (_weatherMgr == null || _sunLight == null || _worldEnv == null) return;
+		// 更新音频
+		if (_envAudio != null)
+		{
+			var audioWeather = weatherType switch
+			{
+				WeatherType.Rain => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Rain,
+				WeatherType.Snow => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Snow,
+				WeatherType.Sandstorm => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Sandstorm,
+				_ => BladeHex.Audio.EnvironmentAudioComponent.WeatherType.Clear,
+			};
+			_envAudio.SetWeather(audioWeather);
+		}
 
-        var activeWeather = _weatherMgr.GetActiveWeatherType();
-        float intensity = _weatherMgr.GetEffectiveIntensity();
+		// 更新云层（天气联动）
+		UpdateCloudLayerForWeather(weatherType);
 
-        // --- 光照色调修正 ---
-        // 天气会叠加在昼夜循环之上，降低亮度并偏移色温
-        Color weatherTint = Colors.White;
-        float energyMod = 1.0f;
-        float ambientMod = 1.0f;
+		GD.Print($"[OverworldScene3D/Weather] 天气变化: {(WeatherType)oldWeather} → {weatherType}");
+	}
 
-        switch (activeWeather)
-        {
-            case WeatherType.Rain:
-                // 雨天：偏蓝灰，降低亮度
-                weatherTint = new Color(
-                    Mathf.Lerp(1.0f, 0.72f, intensity),
-                    Mathf.Lerp(1.0f, 0.75f, intensity),
-                    Mathf.Lerp(1.0f, 0.82f, intensity));
-                energyMod = Mathf.Lerp(1.0f, 0.65f, intensity);
-                ambientMod = Mathf.Lerp(1.0f, 0.75f, intensity);
-                break;
+	/// <summary>更新天气视觉效果（光照色调 + 沙尘暴雾罩 + 粒子强度）</summary>
+	private void UpdateWeatherVisuals(float dt)
+	{
+		if (_weatherMgr == null || _sunLight == null || _worldEnv == null) return;
 
-            case WeatherType.Snow:
-                // 雪天：偏冷白，轻微降低亮度
-                weatherTint = new Color(
-                    Mathf.Lerp(1.0f, 0.88f, intensity),
-                    Mathf.Lerp(1.0f, 0.92f, intensity),
-                    Mathf.Lerp(1.0f, 1.05f, intensity));
-                energyMod = Mathf.Lerp(1.0f, 0.75f, intensity);
-                ambientMod = Mathf.Lerp(1.0f, 0.85f, intensity);
-                break;
+		var activeWeather = _weatherMgr.GetActiveWeatherType();
+		float intensity = _weatherMgr.GetEffectiveIntensity();
 
-            case WeatherType.Sandstorm:
-                // 沙尘暴：偏黄褐，大幅降低亮度
-                weatherTint = new Color(
-                    Mathf.Lerp(1.0f, 1.1f, intensity),
-                    Mathf.Lerp(1.0f, 0.85f, intensity),
-                    Mathf.Lerp(1.0f, 0.55f, intensity));
-                energyMod = Mathf.Lerp(1.0f, 0.5f, intensity);
-                ambientMod = Mathf.Lerp(1.0f, 0.6f, intensity);
-                break;
-        }
+		// 光照色调修正（纯函数计算）
+		var visual = BladeHex.Scenes.Overworld.Components.WeatherController.CalculateVisualParams(activeWeather, intensity);
 
-        // 应用天气色调到光照（叠加在昼夜循环之上）
-        _sunLight.LightEnergy = _baseSunEnergy * energyMod;
-        _worldEnv.AmbientLightEnergy = _baseAmbientEnergy * ambientMod;
-        _sunLight.LightColor = _baseSunColor * weatherTint;
-        _worldEnv.AmbientLightColor = _baseAmbientColor * weatherTint * 0.8f;
+		// 应用天气色调到光照（叠加在昼夜循环之上）
+		_sunLight.LightEnergy = _baseSunEnergy * visual.EnergyMod;
+		_worldEnv.AmbientLightEnergy = _baseAmbientEnergy * visual.AmbientMod;
+		_sunLight.LightColor = _baseSunColor * visual.Tint;
+		_worldEnv.AmbientLightColor = _baseAmbientColor * visual.Tint * 0.8f;
 
-        // --- 沙尘暴屏幕雾罩 ---
-        float targetTintAlpha = activeWeather == WeatherType.Sandstorm
-            ? intensity * 0.2f  // 最大 20% 不透明度
-            : 0.0f;
-        _sandstormTintAlpha = Mathf.MoveToward(_sandstormTintAlpha, targetTintAlpha, dt * 0.15f);
+		// --- 粒子强度跟随过渡进度 ---
+		bool particlesEnabled = Globals.StateOrNull?.Get("weather_particles_enabled").AsBool() ?? true;
+		if (_weatherParticles2D != null)
+		{
+			if (!particlesEnabled || activeWeather == WeatherType.Clear || intensity < 0.01f)
+				_weatherParticles2D.StopAll();
+			else
+				_weatherParticles2D.SetWeather(activeWeather, intensity);
+		}
+		if (_weatherParticles3D != null)
+		{
+			if (!particlesEnabled || activeWeather == WeatherType.Clear || intensity < 0.01f)
+				_weatherParticles3D.StopAll();
+			else
+			{
+				_weatherParticles3D.SetWeather(activeWeather, intensity);
+				// 跟随相机/玩家位置
+				if (_camera != null)
+					_weatherParticles3D.UpdatePosition(_camera.GlobalPosition);
+			}
+		}
 
-        if (_sandstormTintRect != null)
-        {
-            _sandstormTintRect.Color = new Color(0.78f, 0.62f, 0.38f, _sandstormTintAlpha);
-            _sandstormTintRect.Visible = _sandstormTintAlpha > 0.005f;
-        }
-    }
+		// --- 沙尘暴屏幕雾罩 ---
+		float targetTintAlpha = activeWeather == WeatherType.Sandstorm
+			? intensity * 0.2f  // 最大 20% 不透明度
+			: 0.0f;
+		_sandstormTintAlpha = Mathf.MoveToward(_sandstormTintAlpha, targetTintAlpha, dt * 0.15f);
 
-    // ========================================
-    // 游戏性影响
-    // ========================================
+		if (_sandstormTintRect != null)
+		{
+			_sandstormTintRect.Color = new Color(0.78f, 0.62f, 0.38f, _sandstormTintAlpha);
+			_sandstormTintRect.Visible = _sandstormTintAlpha > 0.005f;
+		}
+	}
 
-    /// <summary>更新天气对游戏性的影响因子</summary>
-    private void UpdateWeatherGameplayFactors()
-    {
-        if (_weatherMgr == null)
-        {
-            WeatherSpeedFactor = 1.0f;
-            WeatherVisionFactor = 1.0f;
-            WeatherEncounterFactor = 1.0f;
-            return;
-        }
+	// ========================================
+	// 游戏性影响
+	// ========================================
 
-        var weather = _weatherMgr.GetActiveWeatherType();
-        float intensity = _weatherMgr.GetEffectiveIntensity();
+	/// <summary>更新天气对游戏性的影响因子</summary>
+	private void UpdateWeatherGameplayFactors()
+	{
+		if (_weatherMgr == null)
+		{
+			WeatherSpeedFactor = 1.0f;
+			WeatherVisionFactor = 1.0f;
+			WeatherEncounterFactor = 1.0f;
+			return;
+		}
 
-        // --- 移速修正 ---
-        // 雨天：轻度-5%, 中度-15%, 重度-25%
-        // 雪天：轻度-10%, 中度-20%, 重度-35%
-        // 沙尘暴：轻度-15%, 中度-30%, 重度-50%
-        WeatherSpeedFactor = weather switch
-        {
-            WeatherType.Rain => Mathf.Lerp(1.0f, 0.75f, intensity),
-            WeatherType.Snow => Mathf.Lerp(1.0f, 0.65f, intensity),
-            WeatherType.Sandstorm => Mathf.Lerp(1.0f, 0.50f, intensity),
-            _ => 1.0f,
-        };
+		var factors = BladeHex.Scenes.Overworld.Components.WeatherController.CalculateGameplayFactors(
+			_weatherMgr.GetActiveWeatherType(),
+			_weatherMgr.GetEffectiveIntensity());
+		WeatherSpeedFactor = factors.Speed;
+		WeatherVisionFactor = factors.Vision;
+		WeatherEncounterFactor = factors.Encounter;
+	}
 
-        // --- 视野修正 ---
-        // 雨天：轻度-10%, 中度-20%, 重度-30%
-        // 雪天：轻度-10%, 中度-25%, 重度-40%
-        // 沙尘暴：轻度-20%, 中度-35%, 重度-50%
-        WeatherVisionFactor = weather switch
-        {
-            WeatherType.Rain => Mathf.Lerp(1.0f, 0.70f, intensity),
-            WeatherType.Snow => Mathf.Lerp(1.0f, 0.60f, intensity),
-            WeatherType.Sandstorm => Mathf.Lerp(1.0f, 0.50f, intensity),
-            _ => 1.0f,
-        };
+	// ========================================
+	// 地形上下文
+	// ========================================
 
-        // --- 遭遇率修正 ---
-        // 雨天：遭遇率降低（敌人也不想淋雨）
-        // 雪天：遭遇率降低
-        // 沙尘暴：遭遇率大幅降低（视野差，双方都难发现对方）
-        // 但夜间+恶劣天气 = 被伏击概率上升（由战斗系统处理）
-        WeatherEncounterFactor = weather switch
-        {
-            WeatherType.Rain => Mathf.Lerp(1.0f, 0.75f, intensity),
-            WeatherType.Snow => Mathf.Lerp(1.0f, 0.80f, intensity),
-            WeatherType.Sandstorm => Mathf.Lerp(1.0f, 0.60f, intensity),
-            _ => 1.0f,
-        };
-    }
+	/// <summary>更新天气管理器的地形上下文（雪地/沙漠判定）</summary>
+	private void UpdateWeatherTerrainContext()
+	{
+		if (_weatherMgr == null) return;
 
-    // ========================================
-    // 地形上下文
-    // ========================================
+		HexOverworldTile? tile = null;
+		if (_chunkManager != null)
+		{
+			var axial = HexOverworldTile.PixelToAxial(_playerPixelPos.X, _playerPixelPos.Y);
+			tile = _chunkManager.GetTile(axial.X, axial.Y);
+		}
+		else
+		{
+			tile = _grid.GetTileAtPixel(_playerPixelPos.X, _playerPixelPos.Y);
+		}
 
-    /// <summary>更新天气管理器的地形上下文（雪地/沙漠判定）</summary>
-    private void UpdateWeatherTerrainContext()
-    {
-        if (_weatherMgr == null) return;
+		if (tile == null) return;
 
-        HexOverworldTile? tile = null;
-        if (_chunkManager != null)
-        {
-            var axial = HexOverworldTile.PixelToAxial(_playerPixelPos.X, _playerPixelPos.Y);
-            tile = _chunkManager.GetTile(axial.X, axial.Y);
-        }
-        else
-        {
-            tile = _grid.GetTileAtPixel(_playerPixelPos.X, _playerPixelPos.Y);
-        }
+		var t = tile.Terrain;
+		_weatherMgr.IsInSnowTerrain = t == HexOverworldTile.TerrainType.Snow
+			|| t == HexOverworldTile.TerrainType.Ice
+			|| t == HexOverworldTile.TerrainType.MountainSnow
+			|| t == HexOverworldTile.TerrainType.Taiga;
 
-        if (tile == null) return;
+		_weatherMgr.IsInDesertTerrain = t == HexOverworldTile.TerrainType.Sand
+			|| t == HexOverworldTile.TerrainType.Wasteland
+			|| t == HexOverworldTile.TerrainType.Savanna;
+	}
 
-        var t = tile.Terrain;
-        _weatherMgr.IsInSnowTerrain = t == HexOverworldTile.TerrainType.Snow
-            || t == HexOverworldTile.TerrainType.Ice
-            || t == HexOverworldTile.TerrainType.MountainSnow
-            || t == HexOverworldTile.TerrainType.Taiga;
+	// ========================================
+	// 战斗天气传递
+	// ========================================
+	// [Autoload 化后无需快照] WriteWeatherToGlobalState 已移除：
+	// 战斗场景直接读 Globals.Weather，不再走 GlobalState.Weather context 中转。
 
-        _weatherMgr.IsInDesertTerrain = t == HexOverworldTile.TerrainType.Sand
-            || t == HexOverworldTile.TerrainType.Wasteland
-            || t == HexOverworldTile.TerrainType.Savanna;
-    }
+	// ========================================
+	// 调试 API
+	// ========================================
 
-    // ========================================
-    // 战斗天气传递
-    // ========================================
+	/// <summary>强制设置天气（调试用）</summary>
+	public void DebugSetWeather(WeatherType weather, WeatherIntensity intensity = WeatherIntensity.Moderate)
+	{
+		_weatherMgr?.SetWeatherImmediate(weather, intensity);
+	}
 
-    /// <summary>将当前天气写入 GlobalState，供战斗场景读取</summary>
-    private void WriteWeatherToGlobalState()
-    {
-        var gs = BladeHex.Data.Globals.StateOrNull;
-        if (gs == null || _weatherMgr == null) return;
+	/// <summary>获取当前天气类型</summary>
+	public WeatherType GetCurrentWeather()
+	{
+		return _weatherMgr?.CurrentWeather ?? WeatherType.Clear;
+	}
 
-        gs.Weather.Type = (int)_weatherMgr.CurrentWeather;
-    }
+	/// <summary>获取当前天气强度</summary>
+	public float GetCurrentWeatherIntensity()
+	{
+		return _weatherMgr?.GetEffectiveIntensity() ?? 0.0f;
+	}
 
-    // ========================================
-    // 调试 API
-    // ========================================
+	/// <summary>天气联动更新云层</summary>
+	private void UpdateCloudLayerForWeather(WeatherType weather)
+	{
+		if (_cloudLayer == null) return;
 
-    /// <summary>强制设置天气（调试用）</summary>
-    public void DebugSetWeather(WeatherType weather, WeatherIntensity intensity = WeatherIntensity.Moderate)
-    {
-        _weatherMgr?.SetWeatherImmediate(weather, intensity);
-    }
-
-    /// <summary>获取当前天气类型</summary>
-    public WeatherType GetCurrentWeather()
-    {
-        return _weatherMgr?.CurrentWeather ?? WeatherType.Clear;
-    }
-
-    /// <summary>获取当前天气强度</summary>
-    public float GetCurrentWeatherIntensity()
-    {
-        return _weatherMgr?.GetEffectiveIntensity() ?? 0.0f;
-    }
-
-    /// <summary>天气联动更新云层</summary>
-    private void UpdateCloudLayerForWeather(WeatherType weather)
-    {
-        if (_cloudLayer == null) return;
-
-        switch (weather)
-        {
-            case WeatherType.Rain:
-                _cloudLayer.SetCoverage(0.7f);
-                _cloudLayer.SetOpacity(0.35f);
-                _cloudLayer.SetCloudColor(new Color(0.6f, 0.62f, 0.68f));
-                _windSystem?.SetWind(0.5f, 0.7f);
-                _windSystem?.SetGust(0.4f, 5.0f);
-                break;
-            case WeatherType.Snow:
-                _cloudLayer.SetCoverage(0.6f);
-                _cloudLayer.SetOpacity(0.30f);
-                _cloudLayer.SetCloudColor(new Color(0.85f, 0.87f, 0.92f));
-                _windSystem?.SetWind(0.2f, 0.35f);
-                _windSystem?.SetGust(0.2f, 10.0f);
-                break;
-            case WeatherType.Sandstorm:
-                _cloudLayer.SetCoverage(0.5f);
-                _cloudLayer.SetOpacity(0.25f);
-                _cloudLayer.SetCloudColor(new Color(0.8f, 0.7f, 0.5f));
-                _windSystem?.SetWind(1.0f, 0.9f);
-                _windSystem?.SetGust(0.5f, 3.0f);
-                break;
-            default: // Clear
-                _cloudLayer.SetCoverage(0.45f);
-                _cloudLayer.SetOpacity(0.35f);
-                _cloudLayer.SetCloudColor(new Color(0.95f, 0.95f, 1.0f));
-                _windSystem?.SetWind(0.3f, 0.4f);
-                _windSystem?.SetGust(0.3f, 8.0f);
-                break;
-        }
-    }
+		var p = BladeHex.Scenes.Overworld.Components.WeatherController.CalculateCloudParams(weather);
+		_cloudLayer.SetCoverage(p.Coverage);
+		_cloudLayer.SetOpacity(p.Opacity);
+		_cloudLayer.SetCloudColor(p.Color);
+		_windSystem?.SetWind(p.WindStrength, p.WindAngle);
+		_windSystem?.SetGust(p.GustStrength, p.GustPeriod);
+	}
 }

@@ -10,6 +10,13 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\BladeHexCore\BladeHexCore.csproj" />
+    <PackageReference Include="NLua" Version="1.7.6" />
+    <Reference Include="NLua">
+      <HintPath>..\lib\NLua.dll</HintPath>
+    </Reference>
+    <Reference Include="KeraLua">
+      <HintPath>..\lib\KeraLua.dll</HintPath>
+    </Reference>
     <Compile Include="src\**\*.cs" />
   </ItemGroup>
 </Project>

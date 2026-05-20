@@ -173,14 +173,22 @@ public static class RPGRuleEngine
     public static int GetLevelFromCr(float cr) => Mathf.Max(1, (int)(cr * 6));
 
     // ========================================
-    // HP 计算公式
-    // HP = 基础HP + CON修正 × 等级
+    // HP 计算公式 (v0.6)
+    // BaseHP = 10 (固定)
+    // CON_HP_Bonus = floor(sqrt(CON / 4))
+    // MaxHP = 10 + CON_HP_Bonus * Level + 装备 HP + 节点 HP（由调用方累加）
+    //
+    // 设计意图：低 CON 缓慢成长，让护甲、盾牌、走位、治疗成为生存体系
+    // 的重要组成部分，避免高级单位 TTK 过长。
+    // 玩家可主动选择脆皮路线（高 CON 大幅减伤来自 DR 而非 HP）。
     // ========================================
 
     public static int CalculateMaxHp(int baseHp, int conScore, int level)
     {
-        int conMod = GetStatModifier(conScore);
-        return Mathf.Max(1, baseHp + conMod * level);
+        // baseHp 字段保留为兼容，但 v0.6 起强制使用 10。
+        const int BaseHp = 10;
+        int conHpBonus = (int)Mathf.Floor(Mathf.Sqrt(conScore / 4.0f));
+        return Mathf.Max(1, BaseHp + conHpBonus * level);
     }
 
     // ========================================
@@ -248,13 +256,13 @@ public static class RPGRuleEngine
     // 骰子
     // ========================================
 
-    public static int RollD20() => GD.RandRange(1, 20);
+    public static int RollD20() => BladeHex.Combat.CombatRandom.RollD20();
 
     public static int RollDice(int count, int sides)
     {
         int total = 0;
         for (int i = 0; i < count; i++)
-            total += GD.RandRange(1, sides);
+            total += BladeHex.Combat.CombatRandom.RandRange(1, sides);
         return total;
     }
 
@@ -266,7 +274,7 @@ public static class RPGRuleEngine
         int total = 0;
         for (int i = 0; i < count; i++)
         {
-            int r = GD.RandRange(1, 20);
+            int r = BladeHex.Combat.CombatRandom.RandRange(1, 20);
             rolls.Add(r);
             total += r;
         }
@@ -286,8 +294,8 @@ public static class RPGRuleEngine
     /// <summary>优势掷骰（掷两次取较高）</summary>
     public static Godot.Collections.Dictionary RollWithAdvantage()
     {
-        int r1 = GD.RandRange(1, 20);
-        int r2 = GD.RandRange(1, 20);
+        int r1 = BladeHex.Combat.CombatRandom.RandRange(1, 20);
+        int r2 = BladeHex.Combat.CombatRandom.RandRange(1, 20);
         return new Godot.Collections.Dictionary
         {
             { "result", Mathf.Max(r1, r2) }, { "roll1", r1 }, { "roll2", r2 },
@@ -297,8 +305,8 @@ public static class RPGRuleEngine
     /// <summary>劣势掷骰（掷两次取较低）</summary>
     public static Godot.Collections.Dictionary RollWithDisadvantage()
     {
-        int r1 = GD.RandRange(1, 20);
-        int r2 = GD.RandRange(1, 20);
+        int r1 = BladeHex.Combat.CombatRandom.RandRange(1, 20);
+        int r2 = BladeHex.Combat.CombatRandom.RandRange(1, 20);
         return new Godot.Collections.Dictionary
         {
             { "result", Mathf.Min(r1, r2) }, { "roll1", r1 }, { "roll2", r2 },

@@ -25,9 +25,6 @@ public partial class OverworldUI : CanvasLayer
     public delegate void PartyClickedEventHandler();
 
     [Signal]
-    public delegate void CharacterClickedEventHandler();
-
-    [Signal]
     public delegate void InventoryClickedEventHandler();
 
     [Signal]
@@ -91,7 +88,7 @@ public partial class OverworldUI : CanvasLayer
 
     // 子面板
     private PartyPanel _partyPanel = null!;
-    private TownUI _townUi = null!;
+    private EconomyPanel? _economyPanel;
 
     // 外部系统引用 (由 OverworldScene3D 设置)
     public Node EconomyManager { get; set; } = null!;
@@ -102,7 +99,6 @@ public partial class OverworldUI : CanvasLayer
     private UIFactory _factory = null!;
 
     // 暂未迁移的子面板（保留为字段，等后续转换）
-    private Node _characterDetail = null!;
     private Node _skillTreeUi = null!;
     private Node _questLog = null!;
 
@@ -115,6 +111,14 @@ public partial class OverworldUI : CanvasLayer
         Layer = 10;
         _factory = new UIFactory();
         _SetupUi();
+
+        // 连接全局菜单的存档/加载信号
+        var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
+        if (gameMenu != null)
+        {
+            gameMenu.SaveRequested += () => _OnButtonPressed("save");
+            gameMenu.LoadRequested += () => _OnButtonPressed("load");
+        }
     }
 
     /// <summary>
@@ -170,7 +174,7 @@ public partial class OverworldUI : CanvasLayer
         topMargin.AddChild(topHbox);
 
         _dayLabel = new Label();
-        _dayLabel.Text = "\U0001f4c5 1250\u5e74 1\u6708 1\u65e5";
+        _dayLabel.Text = "纪元  1250年 1月 1日";
         _dayLabel.AddThemeColorOverride("font_color", TextAccent);
         _dayLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_dayLabel);
@@ -178,40 +182,40 @@ public partial class OverworldUI : CanvasLayer
         topHbox.AddChild(_CreateSeparatorV());
 
         _goldLabel = new Label();
-        _goldLabel.Text = "\U0001f4b0 \u91d1\u5e01: 1000";
+        _goldLabel.Text = "兵团金库: 1000 金";
         _goldLabel.AddThemeColorOverride("font_color", TextAccent);
         _goldLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_goldLabel);
 
         _foodLabel = new Label();
-        _foodLabel.Text = "\U0001f356 \u98df\u7269: 20/40";
+        _foodLabel.Text = "战友口粮: 20/40";
         _foodLabel.AddThemeColorOverride("font_color", TextSecondary);
         _foodLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_foodLabel);
 
         // 新增：速度状态
         _speedStatusLabel = new Label();
-        _speedStatusLabel.Text = "\u2694\ufe0f \u6b63\u5e38";
+        _speedStatusLabel.Text = "行军: 正常";
         _speedStatusLabel.AddThemeColorOverride("font_color", TextSecondary);
         _speedStatusLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_speedStatusLabel);
 
         // 新增：士气
         _moraleStatusLabel = new Label();
-        _moraleStatusLabel.Text = "\U0001f3ad \u6b63\u5e38";
+        _moraleStatusLabel.Text = "士气: 正常";
         _moraleStatusLabel.AddThemeColorOverride("font_color", TextSecondary);
         _moraleStatusLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_moraleStatusLabel);
 
         // 新增：声望
         _reputationLabel = new Label();
-        _reputationLabel.Text = "\U0001f91d \u58f0\u671b:0";
+        _reputationLabel.Text = "声望: 0";
         _reputationLabel.AddThemeColorOverride("font_color", TextSecondary);
         _reputationLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_reputationLabel);
 
         _speedLabel = new Label();
-        _speedLabel.Text = "\U0001f324 \u5b63\u8282: \u6625\u5b63";
+        _speedLabel.Text = "季节: 春季";
         _speedLabel.AddThemeColorOverride("font_color", TextSecondary);
         _speedLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_speedLabel);
@@ -228,14 +232,14 @@ public partial class OverworldUI : CanvasLayer
 
         // 地形显示（右上角）
         _terrainLabel = new Label();
-        _terrainLabel.Text = "\U0001f30d 地形: ---";
+        _terrainLabel.Text = "地形: ---";
         _terrainLabel.AddThemeColorOverride("font_color", TextSecondary);
         _terrainLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_terrainLabel);
 
         // 天气显示
         _weatherLabel = new Label();
-        _weatherLabel.Text = "☀ 晴天";
+        _weatherLabel.Text = "晴天";
         _weatherLabel.AddThemeColorOverride("font_color", TextSecondary);
         _weatherLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
         topHbox.AddChild(_weatherLabel);
@@ -269,22 +273,19 @@ public partial class OverworldUI : CanvasLayer
         _bottomBar.AddThemeConstantOverride("separation", SpacingLg);
         bottomMargin.AddChild(_bottomBar);
 
-        // 5 buttons — 角色面板已合并到军队面板
-        _CreateBarButton("⚔️ 军队 [I]", "army", TextPrimary);
-        _CreateBarButton("✨ 技能盘 [K]", "skill_tree", TextMagic);
-        _CreateBarButton("📜 任务 [J]", "quests", TextWarning);
-        _CreateBarButton("⛺ 营地 [T]", "camp", TextPositive);
-        _CreateBarButton("🏰 领地 [F]", "territory", TextSecondary);
+        // 底部功能按钮
+        _CreateBarButton("军队 [I]", "army", TextPrimary);
+        _CreateBarButton("技能盘 [K]", "skill_tree", TextMagic);
+        _CreateBarButton("任务 [J]", "quests", TextWarning);
+        _CreateBarButton("营地 [T]", "camp", TextPositive);
+        _CreateBarButton("领地 [F]", "territory", TextSecondary);
+        _CreateBarButton("财务账本", "economy_panel", TextAccent);
 
         // ─── 3. 子面板初始化 ───
         _partyPanel = new PartyPanel();
         _partyPanel.Visible = false;
         _partyPanel.PanelClosed += () => EmitSignal(SignalName.PanelDismissed);
         root.AddChild(_partyPanel);
-
-        _townUi = new TownUI();
-        _townUi.Visible = false;
-        root.AddChild(_townUi);
 
         // ─── 4. ESC 系统菜单 ───
         _escMenu = new PanelContainer();
@@ -423,7 +424,7 @@ public partial class OverworldUI : CanvasLayer
                         var saveData = SaveManager.BuildSaveData(
                             playerUnit, raceId, playerPos, econ, entityMgr,
                             gs?.WorldGen.Seed ?? 0, gs?.WorldGen.Size ?? 1, gs?.Save.CurrentSaveId);
-                        SaveMgr.SaveGame(saveData);
+                        SaveMgr.SaveGame(saveData, gs?.Save.CurrentSaveId);
                     }
 
                     // 持久化世界 chunk 数据（只有手动保存时才写磁盘）
@@ -438,10 +439,6 @@ public partial class OverworldUI : CanvasLayer
             case "army":
                 _CloseAllPanels();
                 _OpenPartyPanel();
-                break;
-            case "character":
-                _CloseAllPanels();
-                _OpenCharacterDetail();
                 break;
             case "quests":
                 _CloseAllPanels();
@@ -470,6 +467,10 @@ public partial class OverworldUI : CanvasLayer
                 _CloseAllPanels();
                 _OpenTerritoryUI();
                 break;
+            case "economy_panel":
+                _CloseAllPanels();
+                _ToggleEconomyPanel();
+                break;
             case "settings":
                 _OpenSettings();
                 break;
@@ -495,14 +496,14 @@ public partial class OverworldUI : CanvasLayer
     public void UpdateTopInfo(int year, int month, int day, string season, string clock,
         int gold, int food, int foodMax, string speedStatus, string moraleStatus, int reputation)
     {
-        _dayLabel.Text = $"\U0001f4c5 {year}\u5e74 {month}\u6708 {day}\u65e5";
-        _goldLabel.Text = $"\U0001f4b0 \u91d1\u5e01:{gold}";
-        _foodLabel.Text = $"\U0001f356 {food}/{foodMax}";
-        _speedStatusLabel.Text = $"\u2694\ufe0f {speedStatus}";
-        _moraleStatusLabel.Text = $"\U0001f3ad {moraleStatus}";
-        _reputationLabel.Text = $"\U0001f91d \u58f0\u671b:{reputation}";
-        _speedLabel.Text = $"\U0001f324 {season}";
-        _moraleLabel.Text = $"\u23f3 {clock}";
+        _dayLabel.Text = $"纪元  {year}年 {month}月 {day}日";
+        _goldLabel.Text = $"兵团金库: {gold} 金";
+        _foodLabel.Text = $"战友口粮: {food}/{foodMax}";
+        _speedStatusLabel.Text = $"行军: {speedStatus}";
+        _moraleStatusLabel.Text = $"士气: {moraleStatus}";
+        _reputationLabel.Text = $"声望: {reputation}";
+        _speedLabel.Text = $"季节: {season}";
+        _moraleLabel.Text = $"时间: {clock}";
     }
 
     /// <summary>
@@ -516,7 +517,7 @@ public partial class OverworldUI : CanvasLayer
     /// <summary>更新右上角地形显示</summary>
     public void UpdateTerrainDisplay(string terrainName, Color terrainColor)
     {
-        _terrainLabel.Text = $"\U0001f30d {terrainName}";
+        _terrainLabel.Text = $"地形: {terrainName}";
         _terrainLabel.AddThemeColorOverride("font_color", terrainColor);
     }
 
@@ -536,7 +537,6 @@ public partial class OverworldUI : CanvasLayer
         bool targetOpen = action switch
         {
             "army" or "inventory" or "party" => _partyPanel != null && _partyPanel.Visible,
-            "character" => _characterDetail != null && _characterDetail.Get("visible").AsBool(),
             "skill_tree" => _skillTreeUi != null && _skillTreeUi.Get("visible").AsBool(),
             "quests" => _questLog is Control qlCtrl && qlCtrl.Visible,
             "territory" => false,
@@ -605,43 +605,20 @@ public partial class OverworldUI : CanvasLayer
     }
 
     /// <summary>
-    /// 打开城镇界面
-    /// </summary>
-    public void OpenTown(string townName, Godot.Collections.Dictionary? townData = null)
-    {
-        _CloseAllPanels();
-        _townUi.OpenTown(townName, townData ?? new Godot.Collections.Dictionary());
-    }
-
-    /// <summary>
     /// 更新顶部状态文字（扎营等）
     /// </summary>
     private void _UpdateTopInfoStatus(string status)
     {
         if (!string.IsNullOrEmpty(status))
         {
-            _speedStatusLabel.Text = $"\u2694\ufe0f {status}";
+            _speedStatusLabel.Text = $"行军: {status}";
             _speedStatusLabel.AddThemeColorOverride("font_color", Colors.Yellow);
         }
         else
         {
-            _speedStatusLabel.Text = "\u2694\ufe0f \u6b63\u5e38";
+            _speedStatusLabel.Text = "行军: 正常";
             _speedStatusLabel.RemoveThemeColorOverride("font_color");
         }
-    }
-
-    private void _OpenCharacterDetail()
-    {
-        if (_characterDetail == null)
-        {
-            _characterDetail = new BladeHex.UI.CharacterDetailPanel();
-            if (_characterDetail is Control ctrl)
-            {
-                ctrl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-                _root.AddChild(ctrl);
-            }
-        }
-        if (_characterDetail is Control c) c.Visible = true;
     }
 
     private void _OpenArmyManagement()
@@ -699,7 +676,33 @@ public partial class OverworldUI : CanvasLayer
     private void _OpenTerritoryUI()
     {
         // TerritoryUI exists at BladeHex.View.UI.Overworld.TerritoryUI
-        GD.Print("[OverworldUI] \u9886\u5730\u7ba1\u7406\u9762\u677f \u2014 \u5f85\u5b8c\u5584");
+        GD.Print("[OverworldUI] 领地管理面板 — 待完善");
+    }
+
+    /// <summary>切换财务账本面板的显示状态（懒初始化）</summary>
+    private void _ToggleEconomyPanel()
+    {
+        if (_economyPanel == null)
+        {
+            _economyPanel = new EconomyPanel();
+            // 注入 EconomyManager 强类型引用
+            if (EconomyManager is BladeHex.Data.EconomyManager em)
+                _economyPanel.Economy = em;
+            _root.AddChild(_economyPanel);
+        }
+
+        if (_economyPanel.Visible)
+        {
+            _economyPanel.Visible = false;
+        }
+        else
+        {
+            // 刷新数据后显示
+            if (EconomyManager is BladeHex.Data.EconomyManager economy)
+                _economyPanel.Economy = economy;
+            _economyPanel.Refresh();
+            _economyPanel.Visible = true;
+        }
     }
 
     private void _OpenQuestLog()
@@ -787,11 +790,17 @@ public partial class OverworldUI : CanvasLayer
 
     private void _CloseAllPanels()
     {
+        bool anyWasOpen = (_partyPanel != null && _partyPanel.Visible) ||
+            (_skillTreeUi != null && _skillTreeUi.Get("visible").AsBool()) ||
+            (_questLog != null && _questLog is Control qlc2 && qlc2.Visible);
+
         if (_partyPanel != null) _partyPanel.Visible = false;
-        if (_characterDetail != null) _characterDetail.Set("visible", false);
         if (_skillTreeUi != null) _skillTreeUi.Set("visible", false);
         if (_questLog != null && _questLog is Control qlCtrl) qlCtrl.Visible = false;
-        if (_townUi != null) _townUi.Visible = false;
+
+        // 通知场景清理交互状态（解除 _poiEntered 锁定）
+        if (anyWasOpen)
+            EmitSignal(SignalName.PanelDismissed);
     }
 
     // ============================================================================
@@ -808,10 +817,8 @@ public partial class OverworldUI : CanvasLayer
                 return;
 
             bool anyPanelOpen = (_partyPanel != null && _partyPanel.Visible) ||
-                (_characterDetail != null && _characterDetail.Get("visible").AsBool()) ||
                 (_skillTreeUi != null && _skillTreeUi.Get("visible").AsBool()) ||
-                (_questLog != null && _questLog is Control qlc && qlc.Visible) ||
-                (_townUi != null && _townUi.Visible);
+                (_questLog != null && _questLog is Control qlc && qlc.Visible);
 
             if (anyPanelOpen)
                 _CloseAllPanels();

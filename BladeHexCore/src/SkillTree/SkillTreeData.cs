@@ -693,7 +693,7 @@ public partial class SkillTreeData : RefCounted
         n = Ms("int_s06", "法力护盾", 3, ["int_s15"], D(("mana_max", 2), ("ac", 1)), Mp(3,3,-2));
         n.Neighbors = new List<string> { "int_s15", "int_b01" };
         // Ring 4
-        n = Mb("int_b02", "奥术爆发", 4, [], ["int_s03"], "arcane_burst", true, "主动: 对目标造成2d8奥术伤害", Mp(3,4,0));
+        n = Mb("int_b02", "法术研习·1环", 4, [], ["int_s03"], "spell_slot_1", true, "主动: 激活时选 1 系，获得 1 环法术（毁灭/幻术/附魔/防护/生命）", Mp(3,4,0));
         n.Neighbors = new List<string> { "int_s03", "int_s04", "int_s08" };
         n = Ms("int_s13", "魔力回涌", 4, ["int_b01"], D(("mana_max", 3)), Mp(3,4,-1));
         n.Neighbors = new List<string> { "int_b01" };
@@ -707,20 +707,20 @@ public partial class SkillTreeData : RefCounted
         n = Ms("int_s07", "元素精通", 5, ["int_b08"], D(("spell_damage", 1), ("mana_max", 2)), Mp(3,5,-2));
         n.Neighbors = new List<string> { "int_b08", "int_b03" };
         // Ring 6
-        n = Mb("int_b03", "连锁闪电", 6, [], ["int_s04"], "chain_lightning", true, "主动: 闪电跳跃攻击最多3个目标", Mp(3,6,0));
+        n = Mb("int_b03", "法术研习·2环", 6, [], ["int_s04"], "spell_slot_2", true, "主动: 激活时选 1 系，获得 2 环法术", Mp(3,6,0));
         n.Neighbors = new List<string> { "int_s04", "int_s07", "int_b04" };
         n = Mb("int_b04", "法术反射", 6, [], ["int_s08"], "spell_reflect", false, "被动: 1次/回合反射敌方法术", Mp(3,6,-1));
         n.Neighbors = new List<string> { "int_s08", "int_s14" };
         n = Ms("int_s14", "奥术精通", 6, ["int_b04"], D(("spell_damage", 1), ("mana_max", 3)), Mp(3,6,-2));
         n.Neighbors = new List<string> { "int_b04", "int_b09" };
-        n = Mb("int_b09", "时间扭曲", 6, [], ["int_s14"], "time_warp", true, "主动: 重新获得本回合主行动", Mp(3,6,-3));
+        n = Mb("int_b09", "法术研习·4环", 6, [], ["int_s14"], "spell_slot_4", true, "主动: 激活时选 1 系，获得 4 环法术（前置 3 环）", Mp(3,6,-3));
         n.Neighbors = new List<string> { "int_s14", "int_s12" };
         // Ring 7
         n = Ms("int_s09", "法术大师", 7, ["int_b03"], D(("spell_hit", 2), ("spell_damage", 1)), Mp(3,7,-1));
         n.Neighbors = new List<string> { "int_b03" };
         n = Ms("int_s12", "专注之心", 7, ["int_b09"], D(("spell_damage", 2)), Mp(3,7,-3));
         n.Neighbors = new List<string> { "int_b09", "int_ks01" };
-        n = Mb("int_b05", "奥术炸弹", 8, [], ["int_s09"], "arcane_bomb", true, "主动: 范围奥术爆炸3d6伤害", Mp(3,8,-1));
+        n = Mb("int_b05", "法术研习·3环", 8, [], ["int_s09"], "spell_slot_3", true, "主动: 激活时选 1 系，获得 3 环法术（前置 2 环）", Mp(3,8,-1));
         n.Neighbors = new List<string> { "int_s09" };
         n = Mk("int_ks01", "绝对专注", 8, ["int_s12"], "absolute_focus", "法术强度+4", "不能学习其他体系的法术", new Godot.Collections.Dictionary(), Mp(3,8,-3));
         n.Neighbors = new List<string> { "int_s12" };
@@ -733,7 +733,7 @@ public partial class SkillTreeData : RefCounted
         n.Neighbors = new List<string> { "int_b10" };
         n = Ms("int_s18", "奥术回响", 7, ["int_s14"], D(("mana_max", 3)), Mp(3,7,-2));
         n.Neighbors = new List<string> { "int_s14", "int_b11" };
-        n = Mb("int_b11", "虚空之门", 8, [], ["int_s18"], "void_gate", true, "主动: 传送至视野内任意位置", Mp(3,8,-2));
+        n = Mb("int_b11", "法术研习·5环", 8, [], ["int_s18"], "spell_slot_5", true, "主动: 激活时选 1 系，获得 5 环法术（前置 4 环）", Mp(3,8,-2));
         n.Neighbors = new List<string> { "int_s18" };
         n = Ms("int_s19", "预知未来", 7, ["int_b09"], D(("all_save", 2), ("initiative", 2)), Mp(3,7,-4));
         n.Neighbors = new List<string> { "int_b09", "int_b12" };
@@ -745,66 +745,84 @@ public partial class SkillTreeData : RefCounted
 
     // ========================================================================
     // WIS 感知区域 — dir_idx=4, NW(0,-1)
+    // 2026-05-17 重设计：WIS = 暴击/刺杀主属性 + 法力续航。
+    //   小节点：critical_rate / mana_max / mana_regen 加成（不再是治疗主题）
+    //   大节点：主动技能 = 爆头突袭/暗杀/法力涌动/影刃涂毒 等刺客技能
+    //          被动 = 致命猎杀（HP<30% 敌人加成）/ 死灵之锋（击杀后暴击率）
+    //   保留 wis_b03/b05 为 hybrid 用（INT+WIS 贤者）— ward_blessing/purify_field stub
+    //   keystone = assassin_instinct (暴击倍率 +0.5x, 禁重甲/盾)
     // ========================================================================
 
     void BuildWisRegion()
     {
         SkillNodeData n;
         // Ring 1
-        n = Ms("wis_s01", "治愈之心", 1, ["start"], D(("heal_amount", 1)), Mp(4,1,0));
+        n = Ms("wis_s01", "暴击直觉", 1, ["start"], D(("critical_rate", 0.02)), Mp(4,1,0));
         n.Neighbors = new List<string> { "start", "wis_s02" };
         // Ring 2
-        n = Ms("wis_s02", "虔诚信仰", 2, ["wis_s01"], D(("mana_max", 2)), Mp(4,2,0));
+        n = Ms("wis_s02", "法力觉醒", 2, ["wis_s01"], D(("mana_max", 3)), Mp(4,2,0));
         n.Neighbors = new List<string> { "wis_s01", "wis_b01" };
-        n = Ms("wis_s09", "洞察之力", 2, ["wis_s01"], D(("wis_check", 1)), Mp(4,2,-1));
+        n = Ms("wis_s09", "致命专注", 2, ["wis_s01"], D(("critical_rate", 0.02), ("wis_check", 1)), Mp(4,2,-1));
         n.Neighbors = new List<string> { "wis_s01", "wis_s06" };
         // Ring 3
-        n = Mb("wis_b01", "基础治疗", 3, [], ["wis_s02"], "basic_heal", true, "主动: 治疗1d8+感知修正HP", Mp(4,3,0));
+        n = Mb("wis_b01", "法力涌动", 3, [], ["wis_s02"], "mana_surge", true,
+            "主动: AP 4，每场战斗 1 次。立即将自身 Mana 恢复至上限。", Mp(4,3,0));
         n.Neighbors = new List<string> { "wis_s02", "wis_s03", "wis_s06" };
-        n = Ms("wis_s03", "净化之触", 3, ["wis_b01"], D(("wis_check", 1)), Mp(4,3,-1));
+        n = Ms("wis_s03", "影刃训练", 3, ["wis_b01"], D(("critical_rate", 0.03)), Mp(4,3,-1));
         n.Neighbors = new List<string> { "wis_b01", "wis_b02" };
-        n = Ms("wis_s06", "灵魂庇护", 3, ["wis_s09"], D(("ac", 1)), Mp(4,3,-2));
+        n = Ms("wis_s06", "心灵专注", 3, ["wis_s09"], D(("mana_max", 3), ("mana_regen", 1)), Mp(4,3,-2));
         n.Neighbors = new List<string> { "wis_s09", "wis_b01", "wis_s08" };
         // Ring 4
-        n = Mb("wis_b02", "群体治疗", 4, [], ["wis_s03"], "group_heal", true, "主动: 治疗周围所有友军1d6+感知修正", Mp(4,4,0));
+        n = Mb("wis_b02", "爆头突袭", 4, [], ["wis_s03"], "head_shot", true,
+            "主动: AP 8，下一次近战或远程武器攻击必定暴击且伤害 ×1.5；不可与精准射击/暗杀同回合使用。", Mp(4,4,0));
         n.Neighbors = new List<string> { "wis_s03", "wis_s04", "wis_b04" };
-        n = Mb("wis_b04", "净化之焰", 4, [], ["wis_s06"], "purifying_flame", true, "主动: 照亮黑暗区域, 亡灵受1d10伤害", Mp(4,4,-1));
+        n = Mb("wis_b04", "致命猎杀", 4, [], ["wis_s06"], "lethal_focus", false,
+            "被动: 对当前 HP 低于 30% 的敌人，攻击命中 +2、暴击率 +10%（不影响法术）。", Mp(4,4,-1));
         n.Neighbors = new List<string> { "wis_s06", "wis_s08" };
-        n = Ms("wis_s08", "坚韧灵魂", 4, ["wis_s06"], D(("all_save", 1)), Mp(4,4,-2));
+        n = Ms("wis_s08", "暴击精通", 4, ["wis_s06"], D(("critical_rate", 0.03)), Mp(4,4,-2));
         n.Neighbors = new List<string> { "wis_s06", "wis_b06" };
         // Ring 5
-        n = Ms("wis_s04", "神恩", 5, ["wis_b02"], D(("heal_amount", 2)), Mp(4,5,0));
+        n = Ms("wis_s04", "暴击专精", 5, ["wis_b02"], D(("critical_rate", 0.04)), Mp(4,5,0));
         n.Neighbors = new List<string> { "wis_b02", "wis_b03" };
-        n = Ms("wis_s07", "驱散邪恶", 5, ["wis_b04"], D(("wis_check", 2)), Mp(4,5,-1));
+        n = Ms("wis_s07", "法力洪流", 5, ["wis_b04"], D(("mana_max", 5), ("mana_regen", 1)), Mp(4,5,-1));
         n.Neighbors = new List<string> { "wis_b04", "wis_b06" };
-        n = Mb("wis_b06", "守护之灵", 5, [], ["wis_s08"], "guardian_spirit", true, "主动: 召唤守护灵为友军挡一次致命攻击", Mp(4,5,-2));
+        n = Mb("wis_b06", "影刃涂毒", 5, [], ["wis_s08"], "poison_blade", true,
+            "主动: AP 3，下次武器攻击附加 1d4×3 回合中毒（复用 DEX 系 poison_blade handler）。", Mp(4,5,-2));
         n.Neighbors = new List<string> { "wis_s08", "wis_s07" };
         // Ring 6
-        n = Mb("wis_b03", "复活", 6, [], ["wis_s04"], "resurrect", true, "主动: 复活1名阵亡队友(半HP)", Mp(4,6,0));
+        n = Mb("wis_b03", "守护祝福", 6, [], ["wis_s04"], "ward_blessing", true,
+            "主动: 给周围友军赋予 +AC/豁免增益（INT+WIS 贤者跨界用；尚未完整实装）。", Mp(4,6,0));
         n.Neighbors = new List<string> { "wis_s04", "wis_s05" };
-        n = Mb("wis_b05", "奥术审判", 6, [], ["wis_s07"], "arcane_judgment", true, "主动: 对邪恶目标造成3d10奥术伤害", Mp(4,6,-1));
+        n = Mb("wis_b05", "净化领域", 6, [], ["wis_s07"], "purify_field", true,
+            "主动: 周围友军移除负面状态并恢复少量 HP（INT+WIS 贤者跨界用；尚未完整实装）。", Mp(4,6,-1));
         n.Neighbors = new List<string> { "wis_s07", "wis_s10" };
-        n = Ms("wis_s10", "信仰之盾", 6, ["wis_b05"], D(("ac", 2), ("heal_amount", 1)), Mp(4,6,-2));
+        n = Ms("wis_s10", "致命之眼", 6, ["wis_b05"], D(("critical_rate", 0.05)), Mp(4,6,-2));
         n.Neighbors = new List<string> { "wis_b05" };
         // Ring 7
-        n = Ms("wis_s05", "大治愈术", 7, ["wis_b03"], D(("heal_amount", 3), ("mana_max", 5)), Mp(4,7,0));
+        n = Ms("wis_s05", "影刃大师", 7, ["wis_b03"], D(("critical_rate", 0.05), ("mana_max", 5)), Mp(4,7,0));
         n.Neighbors = new List<string> { "wis_b03", "wis_ks01" };
-        n = Mk("wis_ks01", "生命精通", 7, ["wis_s05"], "life_mastery", "治疗效果+50%", "不能造成任何伤害", D(("spell_damage", -99)), Mp(4,7,-1));
+        n = Mk("wis_ks01", "刺客本能", 7, ["wis_s05"], "assassin_instinct",
+            "暴击倍率 +0.5x；暴击率 +5%",
+            "不能装备重甲（DR > 5）；不能使用盾牌",
+            new Godot.Collections.Dictionary(), Mp(4,7,-1));
         n.Neighbors = new List<string> { "wis_s05" };
         // 外扩分支
-        n = Ms("wis_s11", "先知之眼", 8, ["wis_ks01"], D(("wis_check", 3)), Mp(4,8,0));
+        n = Ms("wis_s11", "智慧之眼", 8, ["wis_ks01"], D(("wis_check", 3)), Mp(4,8,0));
         n.Neighbors = new List<string> { "wis_ks01", "wis_b07" };
-        n = Mb("wis_b07", "神谕", 9, [], ["wis_s11"], "oracle", true, "主动: 揭示隐藏的陷阱/宝藏/敌人弱点", Mp(4,9,0));
+        n = Mb("wis_b07", "暗杀", 9, [], ["wis_s11"], "assassinate", true,
+            "主动: AP 8，每场战斗 1 次。指定 HP 低于 30% 的敌方单位直接斩杀（豁免无效，无视 AC/DR；boss 改为造成 50% 当前 HP 真伤）。", Mp(4,9,0));
         n.Neighbors = new List<string> { "wis_s11", "wis_s12" };
-        n = Ms("wis_s12", "奥术护盾", 9, ["wis_b07"], D(("ac", 2), ("heal_amount", 1)), Mp(4,10,0));
+        n = Ms("wis_s12", "完美专注", 9, ["wis_b07"], D(("critical_rate", 0.05), ("mana_regen", 1)), Mp(4,10,0));
         n.Neighbors = new List<string> { "wis_b07" };
-        n = Ms("wis_s13", "自然之怒", 6, ["wis_s10"], D(("spell_damage", 1)), Mp(4,6,1));
+        n = Ms("wis_s13", "致命爆击", 6, ["wis_s10"], D(("critical_rate", 0.05)), Mp(4,6,1));
         n.Neighbors = new List<string> { "wis_s10", "wis_b08" };
-        n = Mb("wis_b08", "元素风暴", 7, [], ["wis_s13"], "elemental_storm", true, "主动: 召唤自然之力攻击区域内所有敌人2d8", Mp(4,7,1));
+        n = Mb("wis_b08", "影遁", 7, [], ["wis_s13"], "stealth", true,
+            "主动: AP 4，进入潜行状态（复用 DEX 系 stealth handler；潜行+暴头突袭/暗杀爆发）。", Mp(4,7,1));
         n.Neighbors = new List<string> { "wis_s13", "wis_s14" };
-        n = Ms("wis_s14", "荆棘之环", 7, ["wis_b08"], D(("ac", 1), ("wis_check", 1)), Mp(4,7,-2));
+        n = Ms("wis_s14", "暴击本能", 7, ["wis_b08"], D(("critical_rate", 0.03)), Mp(4,7,-2));
         n.Neighbors = new List<string> { "wis_b08", "wis_b09" };
-        n = Mb("wis_b09", "灵魂守护", 8, [7], ["wis_s14"], "soul_guardian", false, "机制: 当友军HP降至0时自动触发, 恢复其1d10+WIS修正HP, 每场战斗限1次", Mp(4,8,-2));
+        n = Mb("wis_b09", "死灵之锋", 8, [7], ["wis_s14"], "deathblow_focus", false,
+            "被动: 击杀任意敌人后，下一次攻击暴击率 +10%、伤害 +20%（持续 1 回合或直至触发）。", Mp(4,8,-2));
         n.Neighbors = new List<string> { "wis_s14" };
     }
 

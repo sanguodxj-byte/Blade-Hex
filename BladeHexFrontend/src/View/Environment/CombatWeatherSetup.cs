@@ -13,10 +13,11 @@ public static class CombatWeatherSetup
 {
     public static void Setup(Node3D scene, int mapWidth, int mapHeight)
     {
-        var gs = BladeHex.Data.Globals.StateOrNull;
-        if (gs == null || gs.Weather.Type < 0) return;
+        // 从 Autoload 读取当前天气（与大地图实时同步）
+        var weatherMgr = BladeHex.Data.Globals.WeatherOrNull;
+        if (weatherMgr == null) return;
 
-        var weather = (WeatherType)gs.Weather.Type;
+        var weather = weatherMgr.GetActiveWeatherType();
         if (weather == WeatherType.Clear) return;
 
         if (weather == WeatherType.Sandstorm)

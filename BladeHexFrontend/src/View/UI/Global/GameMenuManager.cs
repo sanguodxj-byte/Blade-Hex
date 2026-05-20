@@ -95,28 +95,28 @@ public partial class GameMenuManager : CanvasLayer
         _settingsPanel.Visible = true;
     }
 
-    public override void _UnhandledInput(InputEvent @event)
-    {
-        // 菜单打开时：ESC 关闭设置或关闭菜单
-        if (Visible && @event is InputEventKey k && k.Pressed && !k.Echo && k.Keycode == Key.Escape)
-        {
-            if (_settingsPanel.Visible)
-            {
-                _settingsPanel.Visible = false;
-                _menuPanel.Visible = true;
-            }
-            else
-                Close();
-            GetViewport().SetInputAsHandled();
-        }
-    }
-
     public override void _Input(InputEvent @event)
     {
-        // 菜单关闭时：不拦截任何输入（让场景处理）
-        // 菜单打开时：阻止所有键盘/鼠标穿透到暂停的场景
-        if (Visible && @event is InputEventKey)
+        if (!Visible) return;
+
+        if (@event is InputEventKey k)
+        {
+            // ESC 关闭设置面板或关闭整个菜单
+            if (k.Pressed && !k.Echo && k.Keycode == Key.Escape)
+            {
+                if (_settingsPanel.Visible)
+                {
+                    _settingsPanel.Visible = false;
+                    _menuPanel.Visible = true;
+                }
+                else
+                {
+                    Close();
+                }
+            }
+            // 阻止所有键盘事件穿透到暂停的场景
             GetViewport().SetInputAsHandled();
+        }
     }
 
     // ============================================================
@@ -239,10 +239,10 @@ public partial class GameMenuManager : CanvasLayer
         tabs.AddChild(audioScroll);
         var av = new VBoxContainer(); av.AddThemeConstantOverride("separation", 10); av.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         audioScroll.AddChild(av);
-        AddSlider(av, "主音量", 0, 100, 80, v => SetBusVolume("Master", v));
-        AddSlider(av, "音乐音量", 0, 100, 70, v => SetBusVolume("Music", v));
-        AddSlider(av, "音效音量", 0, 100, 80, v => SetBusVolume("SFX", v));
-        AddSlider(av, "环境音量", 0, 100, 60, v => SetBusVolume("Ambient", v));
+        AddSlider(av, "主音量", 0, 100, 50, v => SetBusVolume("Master", v));
+        AddSlider(av, "音乐音量", 0, 100, 50, v => SetBusVolume("Music", v));
+        AddSlider(av, "音效音量", 0, 100, 50, v => SetBusVolume("SFX", v));
+        AddSlider(av, "环境音量", 0, 100, 50, v => SetBusVolume("Ambient", v));
         av.AddChild(MakeSeparator());
         var mute = MakeCheck("失去焦点时静音", true); mute.Toggled += p => SetGlobal("mute_on_focus_loss", p); av.AddChild(mute);
 

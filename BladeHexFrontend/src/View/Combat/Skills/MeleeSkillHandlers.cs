@@ -32,7 +32,8 @@ public static class MeleeSkillHandlers
             var target = SkillUtils.FindUnitAt(pos, ctx.Enemies);
             if (target != null)
             {
-                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
+                // v0.6 11.8: 旋风斩节点平伤对每个目标按 50% 结算
+                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 1.0f, null, 0.5f);
                 ctx.Result["results"].AsGodotArray().Add(r);
             }
         }
@@ -63,15 +64,23 @@ public static class MeleeSkillHandlers
     {
         if (ctx.Grid == null) return;
         var neighbors = HexUtils.GetNeighbors(ctx.Attacker.GridPos.X, ctx.Attacker.GridPos.Y);
+        // v0.6 11.8 限制：每次使用最多恢复 3d6 HP
+        int healCap = RPGRuleEngine.RollDice(3, 6);
+        int healed = 0;
         foreach (var pos in neighbors)
         {
             var target = SkillUtils.FindUnitAt(pos, ctx.Enemies);
             if (target != null)
             {
-                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
+                // v0.6 11.4.2 / 11.8 节点平伤 AOE 副目标 ×0.5
+                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 1.0f, null, 0.5f);
                 ctx.Result["results"].AsGodotArray().Add(r);
-                if (r.ContainsKey("hit") && r["hit"].AsBool())
-                    ctx.Attacker.Heal(RPGRuleEngine.RollDice(1, 6));
+                if (r.ContainsKey("hit") && r["hit"].AsBool() && healed < healCap)
+                {
+                    int gain = System.Math.Min(RPGRuleEngine.RollDice(1, 6), healCap - healed);
+                    ctx.Attacker.Heal(gain);
+                    healed += gain;
+                }
             }
         }
     }
@@ -81,12 +90,26 @@ public static class MeleeSkillHandlers
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
         if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
 
+        // v0.6 11.8 嗜血节点：被动触发，每回合最多 1 次
+        if (ctx.Attacker.Data?.Runtime.ExtraActionsThisTurn > 0)
+        {
+            SkillUtils.Fail(ctx.Result, "本回合已获得过额外行动");
+            return;
+        }
+
         var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
         ctx.Result["results"].AsGodotArray().Add(r);
-        if (target.CurrentHp <= 0 || (r.ContainsKey("hit") && r["hit"].AsBool() && target.CurrentHp - (r.ContainsKey("damage") ? r["damage"].AsInt32() : 0) <= 0))
+        bool didKill = target.CurrentHp <= 0
+            || (r.ContainsKey("hit") && r["hit"].AsBool()
+                && target.CurrentHp - (r.ContainsKey("damage") ? r["damage"].AsInt32() : 0) <= 0);
+        if (didKill && ctx.Attacker.Data != null)
         {
+            // v0.6 11.8: 击杀后获得 4 AP 额外行动池（仅可用于普攻 / 移动，不能技能 / Spell）
+            ctx.Attacker.Data.Runtime.ExtraActionsThisTurn += 1;
+            ctx.Attacker.Data.Runtime.CurrentAp += 4;
             ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-                { "target", ctx.Attacker }, { "effect_id", "bloodthirst_extra_action" }, { "duration", 1 }
+                { "target", ctx.Attacker }, { "effect_id", "bloodthirst_extra_action" }, { "duration", 1 },
+                { "stat_modifiers", new Godot.Collections.Dictionary { { "extra_ap", 4 } } }
             });
         }
     }
@@ -100,7 +123,8 @@ public static class MeleeSkillHandlers
             var target = SkillUtils.FindUnitAt(pos, ctx.Enemies);
             if (target != null)
             {
-                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 1.5f);
+                // AOE：节点平伤副目标 ×0.5
+                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 1.5f, null, 0.5f);
                 ctx.Result["results"].AsGodotArray().Add(r);
             }
         }

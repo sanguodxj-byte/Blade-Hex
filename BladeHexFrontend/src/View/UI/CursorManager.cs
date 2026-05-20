@@ -15,7 +15,9 @@ public partial class CursorManager : Node
     public static CursorManager? Instance { get; private set; }
 
     private const string CursorPath = "res://src/assets/ui/cursors/cursor_default.png";
-    private static readonly Vector2 Hotspot = Vector2.Zero; // 左上角尖端
+    // 实际不透明像素从 (7, 5) 开始 — 把 hotspot 对齐到那里,避免点击位置看起来"偏右下"。
+    // 之前是 Vector2.Zero(图左上角),那里其实是透明边距,导致整体视觉偏移。
+    private static readonly Vector2 Hotspot = new(7, 5);
 
     public override void _Ready()
     {

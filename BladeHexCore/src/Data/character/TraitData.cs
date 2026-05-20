@@ -40,6 +40,9 @@ public partial class TraitData : Resource
     [Export] public float EffectValue;
     [Export] public float Weight { get; set; } = 1.0f;
 
+    // 图标（预留，后续替换为真实图标资源）
+    [Export] public string IconId { get; set; } = "";
+
     // AI加点方向微调
     [Export] public Godot.Collections.Dictionary AiDirectionBonus = new();
 

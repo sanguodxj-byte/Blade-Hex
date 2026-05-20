@@ -47,19 +47,33 @@ public static class RangedSkillHandlers
 
     public static void MultiShot(in SkillHandlerContext ctx)
     {
-        var targets = new List<Vector2I> { ctx.TargetCell };
-        targets.AddRange(HexUtils.GetNeighbors(ctx.TargetCell.X, ctx.TargetCell.Y));
-        int shotCount = 0;
-        foreach (var pos in targets)
+        // v0.6 11.8 dex_b03 连珠箭：连射 3 支箭，每支 -2 命中，节点平伤每支 50%
+        var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
+        if (target == null)
         {
-            if (shotCount >= 3) break;
-            var target = SkillUtils.FindUnitAt(pos, ctx.Enemies);
-            if (target != null)
+            // Fallback：扫一圈邻格
+            var targets = new List<Vector2I> { ctx.TargetCell };
+            targets.AddRange(HexUtils.GetNeighbors(ctx.TargetCell.X, ctx.TargetCell.Y));
+            int shotCount = 0;
+            foreach (var pos in targets)
             {
-                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
-                ctx.Result["results"].AsGodotArray().Add(r);
-                shotCount++;
+                if (shotCount >= 3) break;
+                var t = SkillUtils.FindUnitAt(pos, ctx.Enemies);
+                if (t != null)
+                {
+                    var r = CombatResolver.ResolveAttack(ctx.Attacker, t, ctx.Grid, false, false, -2, 1.0f, null, 0.5f);
+                    ctx.Result["results"].AsGodotArray().Add(r);
+                    shotCount++;
+                }
             }
+            return;
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (target.CurrentHp <= 0) break;
+            var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, 1.0f, null, 0.5f);
+            ctx.Result["results"].AsGodotArray().Add(r);
         }
     }
 

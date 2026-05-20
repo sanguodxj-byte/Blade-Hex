@@ -106,6 +106,15 @@ public partial class HexGrid : Node3D
     public List<Vector2I> GetCellsInRange(int startQ, int startR, float movePoints)
     {
         var startPos = new Vector2I(startQ, startR);
+        
+        bool isPlayerSide = false;
+        bool hasActor = false;
+        if (Cells.TryGetValue(startPos, out var startCell) && startCell.Occupant != null)
+        {
+            isPlayerSide = startCell.Occupant.IsPlayerSide;
+            hasActor = true;
+        }
+
         var costSoFar = new Dictionary<Vector2I, float>();
         costSoFar[startPos] = 0.0f;
         
@@ -128,6 +137,13 @@ public partial class HexGrid : Node3D
 
                 // 不可通行的格子不可进入
                 if (nextCell.Data != null && !nextCell.Data.isPassable) continue;
+
+                // 单位阻挡：不能穿过敌方单位，如果没有 actor 则不能穿过任何单位
+                if (nextCell.Occupant != null)
+                {
+                    if (!hasActor || nextCell.Occupant.IsPlayerSide != isPlayerSide)
+                        continue;
+                }
 
                 int elevDiff = nextCell.Elevation - currentCell.Elevation;
 
@@ -164,6 +180,14 @@ public partial class HexGrid : Node3D
         // 如果目标已被占据，直接返回空路径
         if (targetCell.Occupant != null)
             return new List<Vector2I>();
+
+        bool isPlayerSide = false;
+        bool hasActor = false;
+        if (Cells.TryGetValue(startPos, out var startCell) && startCell.Occupant != null)
+        {
+            isPlayerSide = startCell.Occupant.IsPlayerSide;
+            hasActor = true;
+        }
 
         var frontier = new PriorityQueue<Vector2I, float>();
         frontier.Enqueue(startPos, 0.0f);
@@ -202,9 +226,15 @@ public partial class HexGrid : Node3D
                 if (nextCell.Data != null && !nextCell.Data.isPassable)
                     continue;
 
-                // 规则2：不能穿过其他单位
-                if (nextCell.Occupant != null && nextPos != targetPos)
-                    continue;
+                // 规则2：不能穿过敌方单位。如果是盟友，允许穿过（nextPos != targetPos）。如果没有 actor 则退化为不能穿过任何单位。
+                if (nextCell.Occupant != null)
+                {
+                    if (!hasActor || nextCell.Occupant.IsPlayerSide != isPlayerSide)
+                        continue;
+
+                    if (nextPos == targetPos)
+                        continue;
+                }
 
                 float moveCost = nextCell.Data != null ? (float)nextCell.Data.moveCost : 1.0f;
                 
@@ -238,29 +268,29 @@ public partial class HexGrid : Node3D
         return path;
     }
 
-    public float GetPathCost(List<Vector2I> path)
+    public float GetPathCost(Vector2I startPos, List<Vector2I> path)
     {
-        if (path == null || path.Count <= 1) return 0.0f;
+        if (path == null || path.Count == 0) return 0.0f;
 
         float totalCost = 0.0f;
-        for (int i = 1; i < path.Count; i++)
-        {
-            var current = path[i - 1];
-            var next = path[i];
+        var current = startPos;
 
+        for (int i = 0; i < path.Count; i++)
+        {
+            var next = path[i];
             if (!Cells.ContainsKey(current) || !Cells.ContainsKey(next)) continue;
 
             var currentCell = Cells[current];
             var nextCell = Cells[next];
 
-            float moveCost = 1.0f; // 基础成本
-            if (nextCell.Data != null) moveCost = nextCell.Data.moveCost;
+            float moveCost = nextCell.Data != null ? nextCell.Data.moveCost : 1.0f;
 
-            // 高程惩罚：低向高额外 +3
+            // 高程惩罚:低向高额外 +3
             if (nextCell.Elevation > currentCell.Elevation)
                 moveCost += 3.0f;
 
             totalCost += moveCost;
+            current = next; // 推进到下一步
         }
         return totalCost;
     }

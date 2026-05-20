@@ -1,88 +1,69 @@
-﻿// SmithyPanel.cs
-// Smithy panel - Repair and upgrade equipment
+// SmithyPanel.cs
+// 铁匠铺面板 — 修理装备、磨砺武器、加固防具
+// 使用统一布局基类，只填充数据；业务规则委托给 SmithyService。
 using Godot;
 using BladeHex.Data;
+using BladeHex.Strategic.Facilities;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.View.UI.Overworld;
 
 [GlobalClass]
 public partial class SmithyPanel : POIPanelBase
 {
-    [Signal]
-    public delegate void SmithyFinishedEventHandler();
+    [Signal] public delegate void SmithyFinishedEventHandler();
 
-    private Label _goldLabel = null!;
-    private RichTextLabel _resultLabel = null!;
-    private EconomyManager _economy = null!;
+    private PoiPanelContext? _context;
+    private EconomyManager? Economy => _context?.Economy;
+    private PartyRoster? Roster => _context?.Roster;
 
-    // ── Panel specs ────────────────────────────────────────────────────────
-    protected override int PanelWidth => 420;
-    protected override int PanelHeight => 420;
+    protected override Color GetIllustrationColor() => new(0.12f, 0.08f, 0.04f, 1.0f);
+    protected override string GetIllustrationText() => "[ 铁匠铺 ]";
+    protected override string GetPanelTitle() => "";
+    protected override string GetInfoText()
+    {
+        string gold = Economy != null ? $"金币: {Economy.Gold}" : "金币: —";
+        string memberCount = Roster != null ? $"队伍: {Roster.Count}人" : "无队伍";
+        return $"铁匠铺 | {gold} | {memberCount}";
+    }
+    protected override string GetDescriptionText() => "经验丰富的铁匠可以帮你修理和强化装备。炉火通明，铁锤声不绝于耳。";
+    protected override string GetLeaveButtonText() => "离开铁匠铺";
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    protected override void PopulateActions(VBoxContainer container)
+    {
+        int repairCost = SmithyService.CalculateRepairCost(Roster);
+        bool hasDamaged = SmithyService.CountDamagedArmorPieces(Roster) > 0;
+        bool canRepair = Economy != null && repairCost > 0 && Economy.Gold >= repairCost && hasDamaged;
+        string repairReason = !hasDamaged ? "所有装备耐久完好" : "金币不足";
+        var btnRepair = CreateActionButton($"全副修理 ({repairCost}金) -- 恢复所有装备耐久", canRepair, repairReason);
+        btnRepair.Pressed += () => ApplyResult(SmithyService.RepairAll(Roster, SpendGold));
+        container.AddChild(btnRepair);
+
+        bool hasWeapon = Roster?.Leader?.PrimaryMainHand != null;
+        int sharpenCost = FacilityPricingService.GetSharpenCost(Roster?.Leader?.PrimaryMainHand);
+        bool canSharpen = Economy != null && Economy.Gold >= sharpenCost && hasWeapon;
+        var btnSharpen = CreateActionButton($"磨砺武器 ({sharpenCost}金) -- 队长主手武器伤害永久+1", canSharpen, hasWeapon ? "金币不足" : "队长未装备主手武器");
+        btnSharpen.Pressed += () => ApplyResult(SmithyService.SharpenLeaderWeapon(Roster, SpendGold));
+        container.AddChild(btnSharpen);
+
+        bool hasArmor = Roster?.Leader?.Armor != null;
+        int reinforceCost = FacilityPricingService.GetReinforceCost(Roster?.Leader?.Armor);
+        bool canReinforce = Economy != null && Economy.Gold >= reinforceCost && hasArmor;
+        var btnReinforce = CreateActionButton($"加固防具 ({reinforceCost}金) -- 队长身甲装甲阈值永久+1", canReinforce, hasArmor ? "金币不足" : "队长未装备身甲");
+        btnReinforce.Pressed += () => ApplyResult(SmithyService.ReinforceLeaderArmor(Roster, SpendGold));
+        container.AddChild(btnReinforce);
+    }
 
     public void ShowSmithy(EconomyManager economy)
     {
-        _economy = economy;
-        _resultLabel.Text = "";
-        _goldLabel.Text = $"{(_economy?.Gold ?? 0)}";
+        _context = new PoiPanelContext { Economy = economy, PlayerParty = null, CurrentTown = null };
         ShowPanel();
     }
 
-    public override void HidePanel()
+    public void ShowSmithy(PoiPanelContext context)
     {
-        base.HidePanel();
-    }
-
-    // ── Content ────────────────────────────────────────────────────────────
-
-    protected override void BuildContent(VBoxContainer container)
-    {
-        // Title
-        container.AddChild(CreateTitleLabel("铁匠铺"));
-
-        // Description
-        container.AddChild(CreateBodyLabel("经验丰富的铁匠可以帮你修理和强化装备。"));
-
-        // Gold header
-        var header = new HBoxContainer();
-        var headerTitle = CreateBodyLabel("金币:");
-        headerTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        header.AddChild(headerTitle);
-
-        _goldLabel = new Label();
-        _goldLabel.Text = "0";
-        _goldLabel.AddThemeColorOverride("font_color", ThemeTextAccent);
-        header.AddChild(_goldLabel);
-        container.AddChild(header);
-
-        container.AddChild(CreateSeparatorH());
-
-        // Service buttons
-        var btnRepair = CreateButton("全副修理 (30金) — 恢复所有装备耐久", new Vector2(380, 40));
-        btnRepair.Pressed += () => DoService("repair", 30);
-        container.AddChild(btnRepair);
-
-        var btnSharpen = CreateButton("磨砺武器 (50金) — 武器伤害+1", new Vector2(380, 40));
-        btnSharpen.Pressed += () => DoService("sharpen", 50);
-        container.AddChild(btnSharpen);
-
-        var btnReinforce = CreateButton("加固防具 (80金) — AC+1", new Vector2(380, 40));
-        btnReinforce.Pressed += () => DoService("reinforce", 80);
-        container.AddChild(btnReinforce);
-
-        container.AddChild(CreateSeparatorH());
-
-        // Result
-        _resultLabel = CreateResultLabel();
-        _resultLabel.CustomMinimumSize = new Vector2(380, 40);
-        container.AddChild(_resultLabel);
-
-        // Close
-        var closeBtn = CreateButton("离开铁匠铺", new Vector2(380, 40));
-        closeBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        closeBtn.Pressed += () => { EmitSignal(SignalName.SmithyFinished); HidePanel(); };
-        container.AddChild(closeBtn);
+        _context = context;
+        ShowPanel();
     }
 
     protected override void OnCloseRequested()
@@ -91,25 +72,12 @@ public partial class SmithyPanel : POIPanelBase
         HidePanel();
     }
 
-    // ── Internal Logic ─────────────────────────────────────────────────────
+    private bool SpendGold(int amount) => Economy?.SpendGold(amount) == true;
 
-    private void DoService(string serviceType, int cost)
+    private void ApplyResult(FacilityServiceResult result)
     {
-        if (_economy != null && !_economy.SpendGold(cost))
-        {
-            _resultLabel.Text = "[color=red]金币不足！[/color]";
-            return;
-        }
-
-        _resultLabel.Text = serviceType switch
-        {
-            "repair" => "[color=green]所有装备已修理完毕，耐久完全恢复。[/color]",
-            "sharpen" => "[color=green]武器已磨砺，伤害+1！[/color]",
-            "reinforce" => "[color=green]防具已加固，AC+1！[/color]",
-            _ => "[color=green]服务完成。[/color]",
-        };
-
-        if (_economy != null)
-            _goldLabel.Text = $"{_economy.Gold}";
+        string color = result.Success ? "green" : "red";
+        SetResult($"[color={color}]{result.Message}[/color]");
+        RefreshLayout();
     }
 }

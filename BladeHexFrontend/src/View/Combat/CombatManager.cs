@@ -18,11 +18,12 @@ namespace BladeHex.Combat;
 [GlobalClass]
 public partial class CombatManager : Node
 {
-    public enum CombatState { Init, PlayerTurn, EnemyTurn, CombatEnd }
+    public enum CombatState { Init, Deployment, PlayerTurn, EnemyTurn, CombatEnd }
 
     [Signal] public delegate void TurnStartedEventHandler(int state);
     [Signal] public delegate void CombatEndedEventHandler(bool victory);
     [Signal] public delegate void SkillUsedEventHandler(Unit caster, string skillEffect, Godot.Collections.Dictionary result);
+    [Signal] public delegate void UnitTurnBeganEventHandler(Unit unit, bool isPlayerSide);
 
     // ========== 子系统 ==========
     public UnitRegistry Registry { get; } = new();
@@ -37,6 +38,9 @@ public partial class CombatManager : Node
 
     public CombatState CurrentState { get; private set; } = CombatState.Init;
     public Unit? ActiveUnit { get; set; }
+
+    /// <summary>当前先攻行动单位（由 TurnManager 驱动）</summary>
+    public Unit? CurrentInitiativeUnit { get; private set; }
 
     public AIDifficultyConfig? DifficultyConfig { get; set; }
 
@@ -57,12 +61,14 @@ public partial class CombatManager : Node
         // 订阅子系统事件
         Registry.UnitDied += OnUnitDied;
         Turns.PhaseChanged += OnPhaseChanged;
+        Turns.UnitTurnStarted += OnUnitTurnStarted;
     }
 
     public override void _ExitTree()
     {
         Registry.UnitDied -= OnUnitDied;
         Turns.PhaseChanged -= OnPhaseChanged;
+        Turns.UnitTurnStarted -= OnUnitTurnStarted;
     }
 
     // ========== 公共 API（保持向后兼容）==========
@@ -87,6 +93,17 @@ public partial class CombatManager : Node
         // 战斗开始时重置所有角色的职业技能状态
         BladeHex.Data.Globals.SkillTreesOrNull?.OnBattleStart();
 
+        // v0.6 11.8 重置所有"每场战斗 1 次"标记
+        foreach (var u in Registry.AllUnits)
+        {
+            if (u.Data == null) continue;
+            u.Data.Runtime.LifeShieldUsedThisCombat = 0;
+            u.Data.Runtime.LifeCircleUsedThisCombat = 0;
+            u.Data.Runtime.LastStandUsedThisCombat = 0;
+            u.Data.Runtime.HeroicCallUsedThisCombat = 0;
+            u.Data.Runtime.ResurrectUsedThisCombat = 0;
+        }
+
         EventBus.Instance?.Publish(EventBus.Signals.CombatStarted, new Godot.Collections.Dictionary
         {
             { "player_count", PlayerUnits.Count },
@@ -94,6 +111,41 @@ public partial class CombatManager : Node
         });
 
         Turns.StartCombat();
+    }
+
+    /// <summary>进入部署阶段 — 玩家手动放置单位</summary>
+    public void EnterDeployment()
+    {
+        Registry.LockInitialCounts();
+        CurrentState = CombatState.Deployment;
+        Turns.EnterDeployment();
+        EmitSignal(SignalName.TurnStarted, (int)CombatState.Deployment);
+    }
+
+    /// <summary>确认部署完毕，正式开始战斗</summary>
+    public void ConfirmDeployment()
+    {
+        // 战斗开始时重置所有角色的职业技能状态
+        BladeHex.Data.Globals.SkillTreesOrNull?.OnBattleStart();
+
+        // 重置所有"每场战斗 1 次"标记
+        foreach (var u in Registry.AllUnits)
+        {
+            if (u.Data == null) continue;
+            u.Data.Runtime.LifeShieldUsedThisCombat = 0;
+            u.Data.Runtime.LifeCircleUsedThisCombat = 0;
+            u.Data.Runtime.LastStandUsedThisCombat = 0;
+            u.Data.Runtime.HeroicCallUsedThisCombat = 0;
+            u.Data.Runtime.ResurrectUsedThisCombat = 0;
+        }
+
+        EventBus.Instance?.Publish(EventBus.Signals.CombatStarted, new Godot.Collections.Dictionary
+        {
+            { "player_count", PlayerUnits.Count },
+            { "enemy_count", EnemyUnits.Count },
+        });
+
+        Turns.ConfirmDeployment();
     }
 
     /// <remarks>
@@ -118,6 +170,27 @@ public partial class CombatManager : Node
         Registry.ResetActions(units);
         // 每回合开始重置职业技能回合计数
         BladeHex.Data.Globals.SkillTreesOrNull?.OnTurnStart();
+
+        // Buff 系统:回合开始 tick(持续时间递减、tick 伤害/治疗、豁免)
+        foreach (var unit in units)
+        {
+            if (unit?.Data == null || unit.CurrentHp <= 0) continue;
+            int tickDmg = BladeHex.Combat.Buff.BuffSystem.TickAll(unit.Data);
+            if (tickDmg > 0)
+            {
+                unit.CurrentHp = System.Math.Max(0, unit.CurrentHp - tickDmg);
+                unit.UpdateHpBar();
+            }
+            else if (tickDmg < 0)
+            {
+                // 治疗(tickDmg 为负值)
+                int heal = -tickDmg;
+                unit.CurrentHp = System.Math.Min(unit.GetMaxHp(), unit.CurrentHp + heal);
+                unit.UpdateHpBar();
+            }
+            // 触发 OnTurnStart 触发器
+            BladeHex.Combat.Buff.BuffSystem.FireTriggers(unit.Data, BladeHex.Combat.Buff.TriggerEvent.OnTurnStart);
+        }
     }
 
     public void EndCurrentTurn()
@@ -182,6 +255,26 @@ public partial class CombatManager : Node
         if (!caster.HasSkillEffect(skillEffect))
             return new Godot.Collections.Dictionary { { "success", false }, { "reason", "未拥有该技能" } };
 
+        // v0.6 3.3 / 10.0 技能动作限制
+        bool isSpell = SkillRegistry.IsSpell(skillEffect);
+        if (isSpell)
+        {
+            // 法术装备限制 (v0.6 10.0)：必须 Magic Focus、不能持盾、只能布甲
+            if (caster.Data != null && !CombatStats.CanCastSpells(caster.Data))
+                return new Godot.Collections.Dictionary { { "success", false }, { "reason", "需要法术媒介，且不能持盾或穿非布甲" } };
+
+            // Mana 检查
+            int manaCost = SkillRegistry.GetManaCost(skillEffect);
+            if (caster.Data != null && caster.Data.CurrentMana < manaCost)
+                return new Godot.Collections.Dictionary { { "success", false }, { "reason", $"Mana 不足 (需要 {manaCost})" } };
+        }
+        else
+        {
+            // 非 Spell 主动技能：每回合最多 1 次
+            if (caster.Data != null && caster.Data.Runtime.NonSpellSkillUsedThisTurn)
+                return new Godot.Collections.Dictionary { { "success", false }, { "reason", "本回合已使用过非法术主动技能" } };
+        }
+
         var result = SkillEffectExecutor.ExecuteActiveSkill(
             caster, skillEffect, targetCell, grid,
             AllUnits, PlayerUnits, EnemyUnits
@@ -191,6 +284,17 @@ public partial class CombatManager : Node
 
         caster.ConsumeAp(apCost);
         caster.HasActed = true;
+
+        // 扣 Mana / 标记非 Spell 主动技能
+        if (isSpell && caster.Data != null)
+        {
+            int manaCost = SkillRegistry.GetManaCost(skillEffect);
+            caster.Data.CurrentMana = System.Math.Max(0, caster.Data.CurrentMana - manaCost);
+        }
+        else if (caster.Data != null)
+        {
+            caster.Data.Runtime.NonSpellSkillUsedThisTurn = true;
+        }
 
         if (StatusEffectManagerInstance != null) ApplyStatusEffects(result);
 
@@ -312,6 +416,7 @@ public partial class CombatManager : Node
     {
         CurrentState = phase switch
         {
+            TurnManager.TurnPhase.Deployment => CombatState.Deployment,
             TurnManager.TurnPhase.PlayerTurn => CombatState.PlayerTurn,
             TurnManager.TurnPhase.EnemyTurn => CombatState.EnemyTurn,
             TurnManager.TurnPhase.CombatEnd => CombatState.CombatEnd,
@@ -326,6 +431,9 @@ public partial class CombatManager : Node
 
     private void OnUnitDied(Unit unit, bool isPlayer)
     {
+        // 通知先攻队列移除该单位
+        Turns.OnUnitDied((long)unit.GetInstanceId());
+
         if (isPlayer)
         {
             if (PlayerUnits.Count == 0) EndCombat(false);
@@ -333,6 +441,48 @@ public partial class CombatManager : Node
         else
         {
             if (EnemyUnits.Count == 0) EndCombat(true);
+        }
+    }
+
+    private void OnUnitTurnStarted(long unitId, bool isPlayerSide)
+    {
+        // 找到对应的 Unit 节点
+        Unit? unit = null;
+        foreach (var u in AllUnits)
+        {
+            if (GodotObject.IsInstanceValid(u) && (long)u.GetInstanceId() == unitId)
+            {
+                unit = u;
+                break;
+            }
+        }
+
+        CurrentInitiativeUnit = unit;
+
+        // 重置该单位的回合状态 + Buff tick
+        if (unit != null)
+        {
+            BladeHex.Data.Globals.SkillTreesOrNull?.OnTurnStart();
+
+            // Buff tick
+            if (unit.Data != null && unit.CurrentHp > 0)
+            {
+                int tickDmg = BladeHex.Combat.Buff.BuffSystem.TickAll(unit.Data);
+                if (tickDmg > 0)
+                {
+                    unit.CurrentHp = System.Math.Max(0, unit.CurrentHp - tickDmg);
+                    unit.UpdateHpBar();
+                }
+                else if (tickDmg < 0)
+                {
+                    int heal = -tickDmg;
+                    unit.CurrentHp = System.Math.Min(unit.GetMaxHp(), unit.CurrentHp + heal);
+                    unit.UpdateHpBar();
+                }
+                BladeHex.Combat.Buff.BuffSystem.FireTriggers(unit.Data, BladeHex.Combat.Buff.TriggerEvent.OnTurnStart);
+            }
+
+            EmitSignal(SignalName.UnitTurnBegan, unit, isPlayerSide);
         }
     }
 

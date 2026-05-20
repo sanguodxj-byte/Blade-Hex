@@ -35,6 +35,18 @@ public static class PassiveSkillResolver
                 if (strMod > 0) bonus += (int)(strMod * 0.5f);
             }
         }
+        // v0.6 11.2 节点 melee_damage 累加值（NodeMeleeDamage）
+        if (unit.SkillTree != null)
+            bonus += unit.SkillTree.GetMeleeDamageBonus();
+        return bonus;
+    }
+
+    /// <summary>远程伤害加成（被动 + 节点）</summary>
+    public static int GetPassiveRangedDamageBonus(Unit unit)
+    {
+        int bonus = 0;
+        if (unit.SkillTree != null)
+            bonus += unit.SkillTree.GetRangedDamageBonus();
         return bonus;
     }
 
@@ -57,7 +69,8 @@ public static class PassiveSkillResolver
     public static int GetPassiveDamageReduction(Unit unit, string damageType = "physical")
     {
         int reduction = 0;
-        if (damageType == "physical" && unit.HasSkillEffect("iron_wall")) reduction += 3;
+        // v0.6 11.8 con_b05 铁壁的 -3 已下沉到 BattleUnitModel.ApplyDamage 的入口，
+        // 这里不再重复计入 DamageInput.DamageReduction。
         if (unit.HasSkillEffect("diamond_body")) reduction += 3;
         return reduction;
     }

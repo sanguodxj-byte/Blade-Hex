@@ -115,15 +115,17 @@ public static class CharacterPresenter
             };
         }
 
-        // 优先级 3：占位符
+        // 优先级 3:占位符(程序化人形剪影,与装备占位符同风格)
         isPlaceholder = true;
-        var placeholder = new PlaceholderTexture2D { Size = new Vector2(80, 120) };
-        height = 120.0f;
+        var placeholder = UnitPlaceholderRenderer.Generate(data, placeholderColor);
+        height = placeholder.GetHeight();
+        // 纹理本身已染色 → 把外部 modulate 改为白色,避免渲染层(2D/3D)重复乘色变得更深
+        placeholderColor = Colors.White;
         return new CharacterSlotResolution
         {
             Slot = ItemData.EquipSlot.Body,
             Texture = placeholder,
-            Modulate = placeholderColor,
+            Modulate = Colors.White,
         };
     }
 
@@ -132,7 +134,28 @@ public static class CharacterPresenter
         if (item == null) return;
         var slot = item.EquipSlotTarget;
 
-        // 优先级 1：装备序列帧
+        // Body slot 已由 ResolveBody 处理(角色本体/占位人形),不允许装备覆盖。
+        // 注:历史上 ItemData.EquipSlotTarget 默认值是 Body,很多装备数据(尤其代码里
+        // hardcoded 创建的 ArmorData / WeaponData)未显式设置该字段就走默认 Body。
+        // 这里按物品类型重定向到对应可视层,避免覆盖角色本体。
+        if (slot == ItemData.EquipSlot.Body)
+        {
+            slot = item switch
+            {
+                WeaponData => ItemData.EquipSlot.Weapon,
+                ArmorData a when a.armorType == ArmorData.ArmorType.Shield
+                    => ItemData.EquipSlot.Weapon, // 盾占副手 — 共用 Weapon 层,后续可加副手槽
+                ArmorData a when a.EquipSlotTarget == ItemData.EquipSlot.Helmet
+                                || a.EquipSlotTarget == ItemData.EquipSlot.Head
+                    => ItemData.EquipSlot.Helmet,
+                ArmorData a when a.EquipSlotTarget == ItemData.EquipSlot.Hands
+                    => ItemData.EquipSlot.Hands,
+                ArmorData => ItemData.EquipSlot.Costume, // 普通盔甲 → 外层服装
+                _ => ItemData.EquipSlot.Costume,
+            };
+        }
+
+        // 优先级 1:装备序列帧
         var frames = ResourceRegistry.GetSpriteFrames(item.EquipSpriteFramesId);
         if (frames != null)
         {
@@ -140,13 +163,23 @@ public static class CharacterPresenter
             return;
         }
 
-        // 优先级 2：装备单图
+        // 优先级 2:装备单图
         var tex = ResourceRegistry.GetIcon(item.EquipTextureId);
+        if (tex == null && !string.IsNullOrEmpty(item.IconFallbackId))
+            tex = ResourceRegistry.GetIcon(item.IconFallbackId);
         if (tex != null)
         {
             result.Slots[slot] = new CharacterSlotResolution { Slot = slot, Texture = tex };
             return;
         }
-        // 没有外观资源 → 不渲染该层
+
+        // 优先级 3:程序化占位 — 根据装备类型用稀有度色画一张
+        var placeholderTex = EquipmentPlaceholderRenderer.Generate(item, item.GetRarityColor());
+        if (placeholderTex != null)
+        {
+            result.Slots[slot] = new CharacterSlotResolution { Slot = slot, Texture = placeholderTex };
+            return;
+        }
+        // 没有外观资源 + 占位也无法生成(如纯饰品)→ 不渲染该层
     }
 }

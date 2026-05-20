@@ -20,9 +20,30 @@ namespace BladeHex.Data;
 [GlobalClass]
 public partial class SaveManager : Node
 {
-    private const string SavePath = "user://sword_and_hex_save.json";
-    private const string BackupPath = "user://sword_and_hex_save_backup.json";
+    private const string FallbackSavePath = "user://sword_and_hex_save.json";
+    private const string FallbackBackupPath = "user://sword_and_hex_save_backup.json";
     private const string LegacyPath = "user://sword_and_hex_save.dat";
+
+    // ========================================
+    // 存档路径解析（按 saveId 隔离）
+    // ========================================
+
+    /// <summary>
+    /// 根据 saveId 获取玩家角色存档路径。
+    /// 有 saveId → user://saves/{saveId}/player_save.json（与地图 chunk 数据同目录）
+    /// 无 saveId → 向后兼容旧路径 user://sword_and_hex_save.json
+    /// </summary>
+    public static string GetSavePath(string? saveId)
+    {
+        if (string.IsNullOrEmpty(saveId)) return FallbackSavePath;
+        return $"user://saves/{saveId}/player_save.json";
+    }
+
+    public static string GetBackupPath(string? saveId)
+    {
+        if (string.IsNullOrEmpty(saveId)) return FallbackBackupPath;
+        return $"user://saves/{saveId}/player_save_backup.json";
+    }
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -36,42 +57,48 @@ public partial class SaveManager : Node
     // ========================================
 
     /// <summary>检查是否存在有效存档（V2 JSON 或 V1 legacy）</summary>
-    public bool HasSave() => FileAccess.FileExists(SavePath) || FileAccess.FileExists(LegacyPath);
+    public bool HasSave(string? saveId = null) => FileAccess.FileExists(GetSavePath(saveId)) || FileAccess.FileExists(LegacyPath);
 
     /// <summary>检查是否存在 V1 旧存档（需要迁移）</summary>
-    public bool HasLegacySave() => !FileAccess.FileExists(SavePath) && FileAccess.FileExists(LegacyPath);
+    public bool HasLegacySave() => !FileAccess.FileExists(FallbackSavePath) && FileAccess.FileExists(LegacyPath);
 
     // ========================================
     // 保存
     // ========================================
 
     /// <summary>保存游戏 — 从运行时数据构建存档并写入 JSON</summary>
-    public bool SaveGame(GameSaveData saveData)
+    public bool SaveGame(GameSaveData saveData, string? saveId = null)
     {
         saveData.Timestamp = (long)Time.GetUnixTimeFromSystem();
+        string savePath = GetSavePath(saveId ?? saveData.World.SaveId);
+        string backupPath = GetBackupPath(saveId ?? saveData.World.SaveId);
+
+        // 确保 saves/{saveId} 目录存在
+        EnsureParentDir(savePath);
+
         try
         {
             // 备份旧存档
-            if (FileAccess.FileExists(SavePath))
+            if (FileAccess.FileExists(savePath))
             {
-                var src = FileAccess.Open(SavePath, FileAccess.ModeFlags.Read);
+                var src = FileAccess.Open(savePath, FileAccess.ModeFlags.Read);
                 if (src != null)
                 {
                     var content = src.GetAsText();
                     src.Close();
-                    var backup = FileAccess.Open(BackupPath, FileAccess.ModeFlags.Write);
+                    var backup = FileAccess.Open(backupPath, FileAccess.ModeFlags.Write);
                     if (backup != null) { backup.StoreString(content); backup.Close(); }
                 }
             }
 
             // 写入新存档
             var json = JsonSerializer.Serialize(saveData, JsonOpts);
-            var file = FileAccess.Open(SavePath, FileAccess.ModeFlags.Write);
+            var file = FileAccess.Open(savePath, FileAccess.ModeFlags.Write);
             if (file != null)
             {
                 file.StoreString(json);
                 file.Close();
-                GD.Print($"[SaveV2] 游戏已保存: {ProjectSettings.GlobalizePath(SavePath)}");
+                GD.Print($"[SaveV2] 游戏已保存: {ProjectSettings.GlobalizePath(savePath)}");
                 return true;
             }
         }
@@ -82,20 +109,48 @@ public partial class SaveManager : Node
         return false;
     }
 
+    private static void EnsureParentDir(string path)
+    {
+        // path 格式如 user://saves/{saveId}/player_save.json
+        int lastSlash = path.LastIndexOf('/');
+        if (lastSlash < 0) return;
+        string dirPath = path[..lastSlash];
+        // 逐级创建（DirAccess 以 user:// 为根）
+        string relative = dirPath.Replace("user://", "");
+        string[] parts = relative.Split('/');
+        string current = "";
+        var dir = DirAccess.Open("user://");
+        if (dir == null) return;
+        foreach (var part in parts)
+        {
+            if (string.IsNullOrEmpty(part)) continue;
+            current = string.IsNullOrEmpty(current) ? part : $"{current}/{part}";
+            if (!dir.DirExists(current)) dir.MakeDir(current);
+        }
+    }
+
     // ========================================
     // 读取
     // ========================================
 
-    /// <summary>读取存档 — 优先 V2 JSON，回退到备份</summary>
-    public GameSaveData? LoadGame()
+    /// <summary>读取存档 — 优先 V2 JSON，回退到备份；支持 saveId 隔离路径</summary>
+    public GameSaveData? LoadGame(string? saveId = null)
     {
-        if (FileAccess.FileExists(SavePath))
+        string savePath = GetSavePath(saveId);
+        string backupPath = GetBackupPath(saveId);
+        if (FileAccess.FileExists(savePath))
         {
-            var data = LoadFromPath(SavePath);
+            var data = LoadFromPath(savePath);
             if (data != null) return data;
         }
         // 尝试备份
-        return LoadFromPath(BackupPath);
+        if (FileAccess.FileExists(backupPath))
+        {
+            var data = LoadFromPath(backupPath);
+            if (data != null) return data;
+        }
+        // 最终回退：旧版全局路径
+        return LoadFromPath(FallbackSavePath);
     }
 
     /// <summary>读取 V1 旧存档并转换为 V2 格式</summary>
@@ -142,8 +197,8 @@ public partial class SaveManager : Node
     /// <summary>删除所有存档（V2 + 备份 + V1 legacy）</summary>
     public void DeleteSave()
     {
-        DeleteFileIfExists(SavePath);
-        DeleteFileIfExists(BackupPath);
+        DeleteFileIfExists(FallbackSavePath);
+        DeleteFileIfExists(FallbackBackupPath);
         DeleteFileIfExists(LegacyPath);
     }
 
@@ -185,9 +240,15 @@ public partial class SaveManager : Node
         save.Economy.Year = economy.Year;
         save.Economy.CurrentHour = (int)economy.CurrentHour;
 
+        // 生存系统持久化字段
+        save.Economy.ConsecutiveUnpaidDays = economy.WageSys.ConsecutiveUnpaidDays;
+        save.Economy.ConsecutiveStarveDays = economy.FoodSys.ConsecutiveStarveDays;
+        save.Economy.Tools = economy.Tools;
+        save.Economy.Medicine = economy.Medicine;
+
         // 玩家角色
         save.Party.PlayerRaceId = playerRaceId;
-        save.Party.Units.Add(BuildUnitSaveData(playerUnit, isLeader: true));
+        save.Party.Units.Add(SaveDataConverter.BuildUnitSaveData(playerUnit, isLeader: true));
 
         // 背包
         foreach (var item in economy.PlayerInventory)
@@ -239,82 +300,31 @@ public partial class SaveManager : Node
         return save;
     }
 
-    /// <summary>从 UnitData 构建单位存档数据</summary>
-    public static UnitSaveData BuildUnitSaveData(UnitData unit, bool isLeader = false)
+    // ========================================
+    // 读档还原 — 将存档数据还原至 EconomyManager
+    // ========================================
+
+    /// <summary>
+    /// 将 EconomySaveData 中的数据 100% 还原至 EconomyManager 实例。
+    /// 包括四大资源存量、时间状态和生存系统累计天数。
+    /// </summary>
+    public static void RestoreEconomy(EconomyManager economy, EconomySaveData data)
     {
-        var data = new UnitSaveData
-        {
-            UnitName = unit.UnitName,
-            Level = unit.Level,
-            CurrentHp = unit.BaseMaxHp, // 运行时 HP 由调用方覆盖
-            Xp = unit.Xp,
-            Str = unit.Str,
-            Dex = unit.Dex,
-            Con = unit.Con,
-            Intel = unit.Intel,
-            Wis = unit.Wis,
-            Cha = unit.Cha,
-            BaseMaxHp = unit.BaseMaxHp,
-            Morale = unit.Morale,
-            CurrentMana = unit.CurrentMana,
-            IsLeader = isLeader,
+        economy.Gold = data.Gold;
+        economy.Food = data.Food;
+        economy.DaysPassed = data.DaysPassed > 0 ? data.DaysPassed : 1;
+        economy.Month = data.Month > 0 ? data.Month : 1;
+        economy.Year = data.Year > 0 ? data.Year : 1250;
+        economy.CurrentHour = data.CurrentHour;
+        economy.Tools = data.Tools;
+        economy.Medicine = data.Medicine;
 
-            // 装备
-            PrimaryMainHandId = (unit.PrimaryMainHand as WeaponData)?.ItemId,
-            SecondaryMainHandId = (unit.SecondaryMainHand as WeaponData)?.ItemId,
-            ArmorId = unit.Armor?.ItemId,
-            ShieldId = unit.Shield?.ItemId,
-            HelmetId = unit.Helmet?.ItemId,
-            Accessory1Id = unit.Accessory1?.ItemId,
-            Accessory2Id = unit.Accessory2?.ItemId,
-            MountId = unit.Mount?.MountId,
-        };
+        // 还原生存系统累计状态（通过专用 setter 写入 private 字段）
+        economy.WageSys.SetConsecutiveUnpaidDays(data.ConsecutiveUnpaidDays);
+        economy.FoodSys.SetConsecutiveStarveDays(data.ConsecutiveStarveDays);
 
-        // 法术
-        if (unit.KnownSpells != null)
-        {
-            foreach (var spell in unit.KnownSpells)
-            {
-                data.KnownSpells.Add(new SpellSaveData
-                {
-                    SpellId = spell.SpellId,
-                    SpellName = spell.SpellName,
-                    School = (int)spell.spellSchool,
-                    Tier = (int)spell.tier,
-                    ManaCost = spell.ManaCost,
-                });
-            }
-        }
-
-        // 法术冷却
-        if (unit.SpellCooldowns != null)
-        {
-            foreach (var key in unit.SpellCooldowns.Keys)
-                data.SpellCooldowns[key.AsString()] = unit.SpellCooldowns[key].AsInt32();
-        }
-
-        // 武器精通
-        if (unit.WeaponMastery != null)
-        {
-            foreach (WeaponData.WeaponSubtype subtype in Enum.GetValues(typeof(WeaponData.WeaponSubtype)))
-            {
-                int level = unit.WeaponMastery.GetLevelBySubtype(subtype);
-                int xp = unit.WeaponMastery.GetXpBySubtype(subtype);
-                if (level > 0 || xp > 0)
-                {
-                    data.WeaponMastery[subtype.ToString()] = new MasterySaveData { Level = level, Xp = xp };
-                }
-            }
-        }
-
-        // 消耗品
-        if (unit.Consumables != null)
-        {
-            foreach (var c in unit.Consumables)
-                if (c is ConsumableData cd) data.ConsumableIds.Add(cd.ItemId);
-        }
-
-        return data;
+        GD.Print($"[SaveV2] 经济数据已还原: 金币={data.Gold}, 食物={data.Food:F1}, 工具={data.Tools:F1}, 药品={data.Medicine:F1}");
+        GD.Print($"[SaveV2]   欠饷天数={data.ConsecutiveUnpaidDays}, 断粮天数={data.ConsecutiveStarveDays}");
     }
 
     // ========================================

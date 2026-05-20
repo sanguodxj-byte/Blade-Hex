@@ -47,6 +47,9 @@ public partial class WeaponData : ItemData
         StandardCrossbow, StrongCrossbow, SniperCrossbow,
         HeavyCrossbow, SiegeCrossbow, Ballista,
 
+        // --- 法术媒介 Catalyst (法师装备，支持 Spell 施放) ---
+        Wand, Orb, Staff,
+
         Unarmed
     }
 
@@ -62,6 +65,12 @@ public partial class WeaponData : ItemData
     [Export] public new WeightCategory Weight = WeightCategory.Medium;
     [Export] public WeaponSubtype Subtype = WeaponSubtype.Unarmed;
     [Export] public int Tier { get; set; } = 1;
+
+    /// <summary>
+    /// **已废弃** — 不再有"武器穿透修正"字段。穿透公式简化为 d20_Pen + STRPenBonus ≥ ArmorDR。
+    /// 字段保留仅为兼容旧存档；新存档应忽略，加载时强制设为 0。
+    /// </summary>
+    [Export] public int WeaponPen { get; set; } = 0;
 
     // ========================================
     // 动态属性接口
@@ -283,9 +292,16 @@ public partial class WeaponData : ItemData
     public string GetWeaponDescription()
     {
         var parts = new System.Collections.Generic.List<string>();
-        parts.Add($"伤害: {DamageDiceCount}d{DamageDiceSides}");
+        // 显示实际伤害区间，避免出现骰子记号
+        int min = DamageDiceCount;
+        int max = DamageDiceCount * DamageDiceSides;
+        parts.Add($"伤害: {min}-{max}");
         if (BonusDamageDiceCount > 0)
-            parts.Add($"+{BonusDamageDiceCount}d{BonusDamageDiceSides}");
+        {
+            int bMin = BonusDamageDiceCount;
+            int bMax = BonusDamageDiceCount * BonusDamageDiceSides;
+            parts.Add($"+{bMin}-{bMax}");
+        }
         if (BonusDamage > 0)
             parts.Add($"+{BonusDamage}");
         if (BonusAttack > 0)

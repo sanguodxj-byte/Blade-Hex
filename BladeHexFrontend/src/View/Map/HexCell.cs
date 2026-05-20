@@ -83,13 +83,17 @@ public partial class HexCell : Area3D
         var cMesh = new BoxMesh();
         var cMat = CombatMaterialManager.Instance.GetCoverMaterial(CoverType);
 
+        // 掩体尺寸缩小一档,避免遮挡角色 — 角色身高 ~120 单位、PixelSize=2 整体 ~120 显示高度。
+        // 半掩体 ≈ 角色腰部(36 单位高);全掩体 ≈ 角色胸部(60 单位高)。
         if (CoverType == 1)
         {
-            cMesh.Size = new Vector3(hexRadius * 0.6f, hexHeight * 1.5f, hexRadius * 0.6f);
+            // 半掩体:小盒 — 占地 ≈ 1/3 hex,高 36
+            cMesh.Size = new Vector3(hexRadius * 0.35f, 36f, hexRadius * 0.35f);
         }
         else
         {
-            cMesh.Size = new Vector3(hexRadius * 0.8f, hexHeight * 3.0f, hexRadius * 0.8f);
+            // 全掩体:中盒 — 占地 ≈ 1/2 hex,高 60
+            cMesh.Size = new Vector3(hexRadius * 0.5f, 60f, hexRadius * 0.5f);
         }
 
         _coverMeshInstance.Mesh = cMesh;

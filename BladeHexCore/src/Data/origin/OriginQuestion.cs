@@ -44,8 +44,14 @@ public sealed class OriginChoice
     /// <summary>属性修正（key: str/dex/con/intel/wis/cha）。</summary>
     public Dictionary<string, int> AttrMods { get; set; } = new();
 
-    /// <summary>奖励物品名（空=无）。</summary>
+    /// <summary>奖励物品显示名（UI 展示用，空=无）。</summary>
     public string ItemReward { get; set; } = "";
+
+    /// <summary>奖励物品的数据库 ID（对应 ItemDataLoader 中的实际物品，空=纯叙事道具）。</summary>
+    public string ItemRewardId { get; set; } = "";
+
+    /// <summary>奖励物品类型：weapon/armor/consumable/accessory/quiver/material。</summary>
+    public string ItemRewardType { get; set; } = "material";
 
     /// <summary>关联插图 ID（res://assets/generated_origin_illust/{id}.png）。</summary>
     public string IllustId { get; set; } = "";

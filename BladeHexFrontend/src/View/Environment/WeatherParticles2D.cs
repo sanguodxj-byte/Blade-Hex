@@ -46,7 +46,14 @@ public partial class WeatherParticles2D : CanvasLayer
     public override void _Process(double delta)
     {
         var owScene = GetParent();
-        bool shouldShow = owScene != null && owScene is Node2D n && n.Visible && _activeWeather != WeatherType.Clear;
+        // 父场景可见性检查：兼容 Node3D（OverworldScene3D）和 Node2D（旧版）
+        bool parentVisible = owScene switch
+        {
+            Node3D n3 => n3.Visible,
+            Node2D n2 => n2.Visible,
+            _ => true, // 父级既非 Node3D 也非 Node2D 时默认显示
+        };
+        bool shouldShow = owScene != null && parentVisible && _activeWeather != WeatherType.Clear;
         Visible = shouldShow;
     }
 

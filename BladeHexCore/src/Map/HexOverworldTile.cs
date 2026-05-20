@@ -147,13 +147,28 @@ public partial class HexOverworldTile : Resource
     public int RoadDirections = 0;
     public int RiverDirections = 0;
 
+    /// <summary>桥 — 道路覆盖在河流/水域上的格子（视觉与寻路的中间形态）</summary>
+    public bool IsBridge => IsRoad && (Terrain == TerrainType.River
+        || Terrain == TerrainType.ShallowWater
+        || Terrain == TerrainType.DeepWater);
+
     // ========================================
     // 定居点
     // ========================================
 
     public bool HasSettlement = false;
     public int SettlementType = 0;
+
+    /// <summary>
+    /// 占用此 hex 的 POI 名（footprint 内每个 hex 都会被赋值，含中心）。
+    /// 旧字段：原本仅用于"该 tile 上有 POI"，现在改为"被 POI footprint 覆盖"。
+    /// 兼容序列化键 "poi_id"。
+    /// </summary>
     public string PoiId = "";
+
+    /// <summary>是否为 POI footprint 的中心格（sprite 锚点 / 名字标签）</summary>
+    public bool IsPoiCenter = false;
+
     public string RegionName = "";
 
     // ========================================
@@ -370,6 +385,16 @@ public partial class HexOverworldTile : Resource
 
     public void UpdateTerrainProperties()
     {
+        // 道路覆盖在水域 / 河流上 → 桥，可通行（成本略高于普通道路）
+        if (IsRoad && (Terrain == TerrainType.River
+            || Terrain == TerrainType.ShallowWater
+            || Terrain == TerrainType.DeepWater))
+        {
+            IsPassable = true;
+            MoveCost = 0.5f;
+            return;
+        }
+
         (IsPassable, MoveCost) = Terrain switch
         {
             TerrainType.DeepWater => (false, 99.0f),
@@ -573,6 +598,7 @@ public partial class HexOverworldTile : Resource
             ["has_settlement"] = HasSettlement,
             ["settlement_type"] = SettlementType,
             ["poi_id"] = PoiId,
+            ["is_poi_center"] = IsPoiCenter,
             ["region_name"] = RegionName,
             ["visibility"] = Visibility,
         };
@@ -598,6 +624,7 @@ public partial class HexOverworldTile : Resource
         tile.HasSettlement = data.ContainsKey("has_settlement") && (bool)data["has_settlement"];
         tile.SettlementType = data.ContainsKey("settlement_type") ? (int)data["settlement_type"] : 0;
         tile.PoiId = data.ContainsKey("poi_id") ? (string)data["poi_id"] : "";
+        tile.IsPoiCenter = data.ContainsKey("is_poi_center") && (bool)data["is_poi_center"];
         tile.RegionName = data.ContainsKey("region_name") ? (string)data["region_name"] : "";
         tile.Visibility = data.ContainsKey("visibility") ? (int)data["visibility"] : 0;
         tile.UpdateTerrainProperties();

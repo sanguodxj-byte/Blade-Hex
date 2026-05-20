@@ -34,14 +34,26 @@ public sealed class TerrainSmoothingStage : IWorldStage
         var exemptTerrains = new HashSet<HexOverworldTile.TerrainType>
         {
             HexOverworldTile.TerrainType.DeepWater,
-            HexOverworldTile.TerrainType.ShallowWater,
             HexOverworldTile.TerrainType.Mountain,
-            HexOverworldTile.TerrainType.MountainSnow,
             HexOverworldTile.TerrainType.River,
             HexOverworldTile.TerrainType.Road,
+            // ShallowWater / MountainSnow 不 exempt — 让小水坑/小雪山被合并
         };
 
-        const int MinClusterSize = 50;
+        const int MinClusterSize = 30;  // 从 50 降到 30，让小块更宽容（避免大量被合并到水里）
+
+        // 某些地形需要更严格的最小尺寸：太小就不应该出现
+        // Sand：内陆沙漠应该成片，单格散点视觉混乱 → 提高到 50
+        // Wasteland：荒原同理 → 50
+        // Bog / Swamp / Jungle：极端湿地，零散看不出 → 40
+        var stricterMin = new Dictionary<HexOverworldTile.TerrainType, int>
+        {
+            [HexOverworldTile.TerrainType.Sand] = 50,
+            [HexOverworldTile.TerrainType.Wasteland] = 50,
+            [HexOverworldTile.TerrainType.Bog] = 40,
+            [HexOverworldTile.TerrainType.Swamp] = 40,
+            [HexOverworldTile.TerrainType.Jungle] = 40,
+        };
 
         var terrainGroups = new Dictionary<HexOverworldTile.TerrainType, HashSet<Vector2I>>();
         foreach (var (coord, tile) in allTiles)
@@ -81,7 +93,8 @@ public sealed class TerrainSmoothingStage : IWorldStage
                     }
                 }
 
-                if (cluster.Count < MinClusterSize)
+                if (cluster.Count < MinClusterSize
+                    || (stricterMin.TryGetValue(terrainType, out var strict) && cluster.Count < strict))
                 {
                     var replacement = FindDominantNeighborTerrain(cluster, allTiles, terrainType);
                     foreach (var pos in cluster)

@@ -44,6 +44,7 @@ public static class SaveSystemRoundtripTests
         yield return Run(nameof(Roundtrip_QuestProgress_Dictionary), Roundtrip_QuestProgress_Dictionary);
         yield return Run(nameof(Roundtrip_PlayerCoordinates_Precision), Roundtrip_PlayerCoordinates_Precision);
         yield return Run(nameof(Roundtrip_MultipleEntities_Preserved), Roundtrip_MultipleEntities_Preserved);
+        yield return Run(nameof(Roundtrip_SkillTree_Preserved), Roundtrip_SkillTree_Preserved);
     }
 
     private static (string, bool, string) Run(string name, System.Func<(bool, string)> test)
@@ -241,6 +242,43 @@ public static class SaveSystemRoundtripTests
         if (copy.Entities[2].IsAlive) return (false, "third entity should be dead");
         if (copy.Pois.Count != 1) return (false, "pois count wrong");
         if (copy.Pois[0].Prosperity != 50) return (false, "prosperity wrong");
+        return (true, "");
+    }
+
+    private static (bool, string) Roundtrip_SkillTree_Preserved()
+    {
+        var unit = new UnitSaveData
+        {
+            UnitName = "TestHero",
+            SkillTree = new SkillTreeSaveData
+            {
+                ActivatedNodes = new List<string> { "start", "str_1", "str_2" },
+                AvailableSkillPoints = 3,
+                TotalJumps = 2,
+                UsedJumps = 1,
+                CharacterLevel = 5,
+                CareerSkillUses = new Dictionary<string, int>
+                {
+                    ["double_strike"] = 2,
+                    ["whirlwind"] = 1
+                }
+            }
+        };
+
+        var copy = Roundtrip(unit);
+
+        if (copy.SkillTree == null) return (false, "SkillTree is null after roundtrip");
+        if (copy.SkillTree.CharacterLevel != 5) return (false, $"CharacterLevel: got {copy.SkillTree.CharacterLevel}");
+        if (copy.SkillTree.AvailableSkillPoints != 3) return (false, $"AvailableSkillPoints: got {copy.SkillTree.AvailableSkillPoints}");
+        if (copy.SkillTree.TotalJumps != 2) return (false, $"TotalJumps: got {copy.SkillTree.TotalJumps}");
+        if (copy.SkillTree.UsedJumps != 1) return (false, $"UsedJumps: got {copy.SkillTree.UsedJumps}");
+        
+        if (copy.SkillTree.ActivatedNodes.Count != 3) return (false, $"ActivatedNodes count: got {copy.SkillTree.ActivatedNodes.Count}");
+        if (copy.SkillTree.ActivatedNodes[1] != "str_1") return (false, "ActivatedNodes[1] wrong");
+        
+        if (copy.SkillTree.CareerSkillUses.Count != 2) return (false, "CareerSkillUses count wrong");
+        if (copy.SkillTree.CareerSkillUses["double_strike"] != 2) return (false, "double_strike count wrong");
+
         return (true, "");
     }
 

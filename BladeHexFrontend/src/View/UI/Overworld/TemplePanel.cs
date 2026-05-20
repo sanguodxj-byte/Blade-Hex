@@ -1,7 +1,10 @@
-﻿// TemplePanel.cs
-// Temple panel - Heal wounds, purchase purifying potions, cleanse curses
+// TemplePanel.cs
+// 药师所面板 — 治疗伤痛、净化诅咒、购买净化药水
+// 使用统一布局基类，只填充数据；治疗/净化规则委托给 HealingService。
 using Godot;
 using BladeHex.Data;
+using BladeHex.Strategic.Facilities;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.View.UI.Overworld;
 
@@ -11,82 +14,63 @@ public partial class TemplePanel : POIPanelBase
     [Signal]
     public delegate void TempleFinishedEventHandler();
 
-    private Label _goldLabel = null!;
-    private RichTextLabel _resultLabel = null!;
-    private EconomyManager _economy = null!;
+    private PoiPanelContext? _context;
+    private EconomyManager? Economy => _context?.Economy;
+    private PartyRoster? Roster => _context?.Roster;
 
-    // ── Panel specs ───────────────────────────────────────────────
-    protected override int PanelWidth => 400;
-    protected override int PanelHeight => 360;
+    protected override Color GetIllustrationColor() => new(0.08f, 0.12f, 0.08f, 1.0f);
+    protected override string GetIllustrationText() => "[ 药师所 ]";
+    protected override string GetPanelTitle() => "";
+    protected override string GetInfoText()
+    {
+        string gold = Economy != null ? $"金币: {Economy.Gold}" : "金币: —";
+        string wounded = Roster != null ? $"伤员: {HealingService.CountInjuredMembers(Roster)}" : "无队伍";
+        return $"药师所 | {gold} | {wounded}";
+    }
+    protected override string GetDescriptionText() => "药师的力量可以治愈伤痛，净化邪恶。炉中草药的清香弥漫整个房间。";
+    protected override string GetLeaveButtonText() => "离开药师所";
 
-    // ── Public API ────────────────────────────────────────────────
+    protected override void PopulateActions(VBoxContainer container)
+    {
+        bool hasRoster = Roster != null && Roster.Count > 0;
+
+        int minorCost = FacilityPricingService.GetHealCost(Roster, 0.5f);
+        bool canMinor = Economy != null && Economy.Gold >= minorCost && hasRoster;
+        var btnMinor = CreateActionButton($"轻度治疗 ({minorCost}金) -- 全队生命至少恢复至50%", canMinor, hasRoster ? "金币不足" : "无队伍");
+        btnMinor.Pressed += () => ApplyResult(HealingService.HealToRatio(Roster, 0.5f, minorCost, SpendGold));
+        container.AddChild(btnMinor);
+
+        int majorCost = FacilityPricingService.GetHealCost(Roster, 1.0f);
+        bool canMajor = Economy != null && Economy.Gold >= majorCost && hasRoster;
+        var btnMajor = CreateActionButton($"深度治疗 ({majorCost}金) -- 恢复全队100%生命值", canMajor, hasRoster ? "金币不足" : "无队伍");
+        btnMajor.Pressed += () => ApplyResult(HealingService.HealToRatio(Roster, 1.0f, majorCost, SpendGold));
+        container.AddChild(btnMajor);
+
+        bool hasNegativeEffects = HealingService.CountNegativeEffects(Roster) > 0;
+        int purifyCost = FacilityPricingService.GetPurifyCost(Roster);
+        bool canPurify = Economy != null && Economy.Gold >= purifyCost && hasRoster && hasNegativeEffects;
+        string purifyReason = !hasRoster ? "无队伍" : !hasNegativeEffects ? "没有负面状态" : "金币不足";
+        var btnPurify = CreateActionButton($"净化诅咒 ({purifyCost}金) -- 移除所有负面状态", canPurify, purifyReason);
+        btnPurify.Pressed += () => ApplyResult(HealingService.PurifyAll(Roster, SpendGold));
+        container.AddChild(btnPurify);
+
+        int holyWaterCost = FacilityPricingService.GetHolyWaterCost(_context?.CurrentTown?.Prosperity ?? 50);
+        bool canBuy = Economy != null && Economy.Gold >= holyWaterCost;
+        var btnHoly = CreateActionButton($"购买净化药水 ({holyWaterCost}金) -- 加入背包", canBuy, "金币不足");
+        btnHoly.Pressed += DoBuyHolyWater;
+        container.AddChild(btnHoly);
+    }
 
     public void ShowTemple(EconomyManager economy)
     {
-        _economy = economy;
-        _resultLabel.Text = "";
-        _goldLabel.Text = $"{(_economy?.Gold ?? 0)}";
+        _context = new PoiPanelContext { Economy = economy, PlayerParty = null, CurrentTown = null };
         ShowPanel();
     }
 
-    public override void HidePanel()
+    public void ShowTemple(PoiPanelContext context)
     {
-        base.HidePanel();
-    }
-
-    // ── Content ───────────────────────────────────────────────────
-
-    protected override void BuildContent(VBoxContainer container)
-    {
-        // Title
-        container.AddChild(CreateTitleLabel("药师所"));
-
-        // Description
-        container.AddChild(CreateBodyLabel("药师的力量可以治愈伤痛，净化邪恶。"));
-
-        // Gold header
-        var header = new HBoxContainer();
-        var headerTitle = CreateBodyLabel("金币:");
-        headerTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        header.AddChild(headerTitle);
-
-        _goldLabel = new Label();
-        _goldLabel.Text = "0";
-        _goldLabel.AddThemeColorOverride("font_color", ThemeTextAccent);
-        header.AddChild(_goldLabel);
-        container.AddChild(header);
-
-        container.AddChild(CreateSeparatorH());
-
-        // Service buttons
-        var btnMinor = CreateButton("轻度治疗 (15金) — 恢复50%HP", new Vector2(360, 40));
-        btnMinor.Pressed += () => Heal(15, 0.5f, "轻度治疗");
-        container.AddChild(btnMinor);
-
-        var btnMajor = CreateButton("深度治疗 (40金) — 恢复100%HP", new Vector2(360, 40));
-        btnMajor.Pressed += () => Heal(40, 1.0f, "深度治疗");
-        container.AddChild(btnMajor);
-
-        var btnPurify = CreateButton("净化诅咒 (60金) — 移除所有负面状态", new Vector2(360, 40));
-        btnPurify.Pressed += Purify;
-        container.AddChild(btnPurify);
-
-        var btnHolyWater = CreateButton("购买净化药水 (25金) — 对亡灵额外奥术伤害", new Vector2(360, 40));
-        btnHolyWater.Pressed += BuyHolyWater;
-        container.AddChild(btnHolyWater);
-
-        container.AddChild(CreateSeparatorH());
-
-        // Result
-        _resultLabel = CreateResultLabel();
-        _resultLabel.CustomMinimumSize = new Vector2(360, 40);
-        container.AddChild(_resultLabel);
-
-        // Close
-        var closeBtn = CreateButton("离开药师所", new Vector2(360, 40));
-        closeBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        closeBtn.Pressed += () => { EmitSignal(SignalName.TempleFinished); HidePanel(); };
-        container.AddChild(closeBtn);
+        _context = context;
+        ShowPanel();
     }
 
     protected override void OnCloseRequested()
@@ -95,47 +79,29 @@ public partial class TemplePanel : POIPanelBase
         HidePanel();
     }
 
-    // ── Internal Logic ────────────────────────────────────────────
+    private bool SpendGold(int amount) => Economy?.SpendGold(amount) == true;
 
-    private void Heal(int cost, float ratio, string name)
+    private void DoBuyHolyWater()
     {
-        if (_economy != null && !_economy.SpendGold(cost))
+        int cost = FacilityPricingService.GetHolyWaterCost(_context?.CurrentTown?.Prosperity ?? 50);
+        if (Economy == null || !Economy.SpendGold(cost))
         {
-            _resultLabel.Text = "[color=red]金币不足！[/color]";
+            ApplyResult(FacilityServiceResult.Fail("金币不足，无法购买净化药水。"));
             return;
         }
 
-        _resultLabel.Text = $"[color=green]{name}完成！恢复了{ratio * 100:F0}%生命值。[/color]";
-        UpdateGold();
+        var baseItem = PrototypeData.GetConsumables().TryGetValue("holy_water", out var item)
+            ? item
+            : HealingService.CreateFallbackHolyWater();
+        Economy.AddItem((ItemData)baseItem.Duplicate());
+
+        ApplyResult(FacilityServiceResult.Ok("获得净化药水 x1，已放入背包。", goldSpent: cost, affectedItems: 1));
     }
 
-    private void Purify()
+    private void ApplyResult(FacilityServiceResult result)
     {
-        if (_economy != null && !_economy.SpendGold(60))
-        {
-            _resultLabel.Text = "[color=red]金币不足！[/color]";
-            return;
-        }
-
-        _resultLabel.Text = "[color=green]净化之光笼罩全身，所有诅咒已净化。[/color]";
-        UpdateGold();
-    }
-
-    private void BuyHolyWater()
-    {
-        if (_economy != null && !_economy.SpendGold(25))
-        {
-            _resultLabel.Text = "[color=red]金币不足！[/color]";
-            return;
-        }
-
-        _resultLabel.Text = "[color=green]获得净化药水×1。对亡灵类敌人造成额外1d6奥术伤害。[/color]";
-        UpdateGold();
-    }
-
-    private void UpdateGold()
-    {
-        if (_economy != null)
-            _goldLabel.Text = $"{_economy.Gold}";
+        string color = result.Success ? "green" : "red";
+        SetResult($"[color={color}]{result.Message}[/color]");
+        RefreshLayout();
     }
 }

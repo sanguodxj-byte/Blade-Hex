@@ -72,7 +72,7 @@ public partial class CombatTransition : CanvasLayer
     private async void RunTransition()
     {
         var tree = GetTree();
-        if (tree == null) { _onComplete?.Invoke(); return; }
+        if (tree == null) { _onComplete?.Invoke(); QueueFree(); return; }
 
         var tween = CreateTween();
         tween.SetParallel(true);
@@ -132,7 +132,23 @@ public partial class CombatTransition : CanvasLayer
             await ToSignal(fadeTween, Tween.SignalName.Finished);
         }
 
-        // ── 6. 动画结束 → 执行切换 ──
+        // ── 6. 动画结束 → 执行实际场景切换 ──
         _onComplete?.Invoke();
+
+        // ── 7. 新场景已经加入，开始执行战斗场景淡入 ──
+        if (_fadeRect != null)
+        {
+            // 给新场景的资源和节点树一个微小的缓冲帧时间
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+            var fadeInTween = CreateTween();
+            fadeInTween.TweenProperty(_fadeRect, "color", new Color(0, 0, 0, 0), FadeOutDuration)
+                .SetTrans(Tween.TransitionType.Sine)
+                .SetEase(Tween.EaseType.Out);
+            await ToSignal(fadeInTween, Tween.SignalName.Finished);
+        }
+
+        // ── 8. 自我销毁 ──
+        QueueFree();
     }
 }

@@ -82,7 +82,11 @@ public partial class BattleLogPanel : PanelContainer
 
     private void Setup()
     {
-        CustomMinimumSize = new Vector2(0, 100);
+        // 不覆盖外部设的 CustomMinimumSize(CombatUI 设了 300×140)
+        // 只设最小高度兜底
+        if (CustomMinimumSize.X < 200)
+            CustomMinimumSize = new Vector2(300, 140);
+
         AddThemeStyleboxOverride("panel", UITheme.Instance!.MakePanelStyle(
             UITheme.Instance.BgTertiary,
             UITheme.Instance.BorderDefault,

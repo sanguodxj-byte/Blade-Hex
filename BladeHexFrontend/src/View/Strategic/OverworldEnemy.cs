@@ -11,6 +11,9 @@ namespace BladeHex.Strategic;
 [GlobalClass]
 public partial class OverworldEnemy : Node2D, IOverworldMapEntity
 {
+    /// <summary>玩家种族 ID（由 OverworldScene3D 在初始化时写入；用于决定 NPC 同/异族态度）</summary>
+    public static int PlayerRaceIdStatic { get; set; } = 0;
+
     private BladeHex.View.Unit.CharacterView2D? _characterView;
     private Polygon2D? _fallbackPoly;
 
@@ -133,6 +136,14 @@ public partial class OverworldEnemy : Node2D, IOverworldMapEntity
         EnemyType = (int)entity.EntityTypeEnum;
         EntityRef = entity;
 
+        // 根据实体类型给"人形 NPC"自动生成 NpcProfile
+        // —— 用以让 InteractionManager 走 humanoid 分支（交谈/交易/招募/袭击/离开）
+        // 若已外部预设 NpcProfile（具名 NPC 等），不覆盖
+        if (NpcProfile == null)
+        {
+            NpcProfile = TryCreateNpcProfileFromEntity(entity);
+        }
+
         // 构造代表角色用于 2D 多层渲染：用 EncounterUnitFactory 取队伍中第一个单位
         try
         {
@@ -147,6 +158,61 @@ public partial class OverworldEnemy : Node2D, IOverworldMapEntity
         {
             // 工厂失败不阻塞实体生成 — 保留三角占位
         }
+    }
+
+    /// <summary>根据实体类型创建对应 NpcProfile（仅人形/拟人实体）。返回 null 表示视为非人形（怪兽/巨龙等）</summary>
+    private static NPCProfile? TryCreateNpcProfileFromEntity(OverworldEntity entity)
+    {
+        // 巨型怪物 / 龙 / 魔像 — 不是 humanoid
+        if (entity.EntityTypeEnum == OverworldEntity.EntityType.EpicMonster) return null;
+
+        // RaidingParty 中的非人形种族（兽人/哥布林等也算 humanoid，但部分种族如食人魔不是）
+        // 这里宽松处理：所有 RaidingParty/Bandit/Robber/Pirate/Adventurer/Caravan/LordArmy 都视作人形
+        var npcType = entity.EntityTypeEnum switch
+        {
+            OverworldEntity.EntityType.Adventurer => NPCProfile.NpcType.Adventurer,
+            OverworldEntity.EntityType.Caravan => NPCProfile.NpcType.Merchant,
+            OverworldEntity.EntityType.LordArmy => NPCProfile.NpcType.WanderingKnight,
+            OverworldEntity.EntityType.RaidingParty => NPCProfile.NpcType.HostileHumanoid,
+            OverworldEntity.EntityType.BanditParty => NPCProfile.NpcType.HostileHumanoid,
+            OverworldEntity.EntityType.RobberParty => NPCProfile.NpcType.HostileHumanoid,
+            OverworldEntity.EntityType.PirateCrew => NPCProfile.NpcType.HostileHumanoid,
+            _ => NPCProfile.NpcType.Traveler,
+        };
+
+        // 阵营态度：
+        //  - 敌对 → Hostile
+        //  - 商队 → Friendly（中立但欢迎玩家）
+        //  - 冒险者：同族 Friendly，异族 Neutral
+        //  - 其他非敌对 → Neutral
+        NPCProfile.Attitude attitude;
+        if (entity.IsHostileToPlayer)
+        {
+            attitude = NPCProfile.Attitude.Hostile;
+        }
+        else if (npcType == NPCProfile.NpcType.Adventurer)
+        {
+            bool sameRace = entity.RaceId >= 0 && entity.RaceId == PlayerRaceIdStatic;
+            attitude = sameRace ? NPCProfile.Attitude.Friendly : NPCProfile.Attitude.Neutral;
+        }
+        else if (npcType == NPCProfile.NpcType.Merchant)
+        {
+            attitude = NPCProfile.Attitude.Friendly;
+        }
+        else
+        {
+            attitude = NPCProfile.Attitude.Neutral;
+        }
+
+        return new NPCProfile
+        {
+            npcName = entity.EntityName,
+            npcType = npcType,
+            attitude = attitude,
+            faction = entity.Faction,
+            relation = entity.IsHostileToPlayer ? -50 : (attitude == NPCProfile.Attitude.Friendly ? 20 : 0),
+            gold = entity.GoldCarried,
+        };
     }
 
     /// <summary>原始 OverworldEntity 引用（用于战斗时生成敌方单位）</summary>

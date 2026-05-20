@@ -78,7 +78,19 @@ public class UnitRegistry
             u.HasMoved = false;
             u.HasActed = false;
             u.CurrentAp = u.Model.GetMaxAp();
-            if (u.Data != null) u.Data.Runtime.IsRangedWeaponLoaded = true;
+            if (u.Data != null)
+            {
+                u.Data.Runtime.IsRangedWeaponLoaded = true;
+                u.Data.Runtime.NonSpellSkillUsedThisTurn = false;  // v0.6 3.3
+                u.Data.Runtime.AooUsedThisTurn = false;
+                u.Data.Runtime.ExtraActionsThisTurn = 0;           // v0.6 11.7
+                u.Data.Runtime.TimeWarpUsedThisTurn = false;
+                // v0.6 10.0 修订：每回合开始 Mana 恢复 floor(WIS/8)
+                int manaRegen = BladeHex.Combat.CombatStats.GetManaRegen(u.Data);
+                int maxMana = BladeHex.Combat.CombatStats.GetMaxMana(u.Data);
+                if (manaRegen > 0 && u.Data.CurrentMana < maxMana)
+                    u.Data.CurrentMana = System.Math.Min(maxMana, u.Data.CurrentMana + manaRegen);
+            }
         }
     }
 }

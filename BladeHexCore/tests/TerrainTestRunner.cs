@@ -12,6 +12,8 @@ using BladeHex.Data.Tests;
 using BladeHex.Map.Tests;
 using BladeHex.Strategic.Tests;
 using BladeHex.Tests.Strategic;
+using BladeHex.Tests.Simulation;
+using BladeHex.Tests.UI;
 using Godot;
 
 namespace BladeHex.Tests;
@@ -41,6 +43,14 @@ public partial class TerrainTestRunner : Node
 
             case "unit":
                 RunAllUnitTests();
+                break;
+
+            case "ui":
+                RunUITests();
+                break;
+
+            case "sim":
+                RunSimulation();
                 break;
 
             case "terrain":
@@ -74,11 +84,23 @@ public partial class TerrainTestRunner : Node
         int totalFailed = 0;
 
         RunSuite("CombatRuleEngineTests", CombatRuleEngineTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("CombatStateMachineTests", CombatStateMachineTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("LosCoreTests", LosCoreTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("HighLevelSanityCheck", HighLevelSanityCheck.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("HexOverworldAStarTests", HexOverworldAStarTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("ChunkAStarTests", ChunkAStarTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("OverworldSamplerTests", OverworldSamplerTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("BattleProjectionTests", BattleProjectionTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("TerrainEnumAlignmentTests", TerrainEnumAlignmentTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("BattleMapGenerationTests", BattleMapGenerationTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("SaveSystemRoundtripTests", SaveSystemRoundtripTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("TriggerEngineTests", TriggerEngineTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("QuestGeneratorTests", QuestGeneratorTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("UIConnectivityTests", UIConnectivityTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("POIPanelTests", POIPanelTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("CampaignMedicSystemTests", CampaignMedicSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("EconomySystemIntegrationTests", EconomySystemIntegrationTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("EconomyBalanceTests", EconomyBalanceTests.RunAll, ref totalPassed, ref totalFailed);
 
         GD.Print();
         GD.Print("========================================");
@@ -99,5 +121,69 @@ public partial class TerrainTestRunner : Node
         GD.Print();
         totalPassed += passed;
         totalFailed += failed;
+    }
+
+    /// <summary>
+    /// 模拟模式入口：headless 跑大批量战斗或 AI 行为评估，
+    /// 由 tools/scripts/sim.ps1 配合 SIM_BATTLES / SIM_SEED / SIM_SCENARIO 环境变量驱动。
+    /// </summary>
+    private static void RunSimulation()
+    {
+        int totalPassed = 0;
+        int totalFailed = 0;
+        RunSuite("SimulationHarness", SimulationHarness.RunAll, ref totalPassed, ref totalFailed);
+
+        GD.Print();
+        GD.Print("========================================");
+        GD.Print($"  SIMULATION DONE: {totalPassed} batch(es) ok, {totalFailed} failed");
+        GD.Print("========================================");
+    }
+
+    /// <summary>
+    /// UI 联通性测试：Core 层数据契约 + Frontend 层信号接线。
+    /// Frontend 测试通过反射调用（避免 Core→Frontend 编译时引用）。
+    /// </summary>
+    private static void RunUITests()
+    {
+        int totalPassed = 0;
+        int totalFailed = 0;
+
+        // Core 层：纯数据契约测试
+        RunSuite("UIConnectivityTests", UIConnectivityTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("POIPanelTests", POIPanelTests.RunAll, ref totalPassed, ref totalFailed);
+
+        // Frontend 层：信号接线测试（反射调用，避免编译时依赖）
+        var frontendTestType = System.Type.GetType("BladeHex.View.Data.Tests.UISignalWiringTests, BladeHexFrontend");
+        if (frontendTestType != null)
+        {
+            var runAllMethod = frontendTestType.GetMethod("RunAll", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (runAllMethod != null)
+            {
+                var result = runAllMethod.Invoke(null, null);
+                if (result is System.ValueTuple<int, int, System.Collections.Generic.List<string>> tuple)
+                {
+                    var (p, f, details) = tuple;
+                    GD.Print("--- UISignalWiringTests ---");
+                    foreach (var line in details) GD.Print(line);
+                    GD.Print($"  {p} passed, {f} failed");
+                    GD.Print();
+                    totalPassed += p;
+                    totalFailed += f;
+                }
+            }
+            else
+            {
+                GD.PrintErr("[TestRunner] UISignalWiringTests.RunAll method not found");
+            }
+        }
+        else
+        {
+            GD.PrintErr("[TestRunner] UISignalWiringTests type not found in BladeHexFrontend assembly");
+        }
+
+        GD.Print();
+        GD.Print("========================================");
+        GD.Print($"  UI TESTS: {totalPassed} passed, {totalFailed} failed");
+        GD.Print("========================================");
     }
 }

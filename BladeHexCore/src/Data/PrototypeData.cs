@@ -13,6 +13,7 @@ public static class PrototypeData
     private static readonly Dictionary<string, ArmorData> Armors;
     private static readonly Dictionary<string, ConsumableData> Consumables;
     private static readonly Dictionary<string, ItemData> Quivers;
+    private static readonly Dictionary<string, AccessoryData> Accessories;
 
     static PrototypeData()
     {
@@ -20,10 +21,12 @@ public static class PrototypeData
         Armors = ItemDataLoader.GetArmors();
         Consumables = ItemDataLoader.GetConsumables();
         Quivers = ItemDataLoader.GetQuivers();
+        Accessories = ItemDataLoader.GetAccessories();
     }
 
     public static Dictionary<string, WeaponData> GetWeapons() => Weapons;
     public static Dictionary<string, ArmorData> GetArmors() => Armors;
     public static Dictionary<string, ConsumableData> GetConsumables() => Consumables;
     public static Dictionary<string, ItemData> GetQuivers() => Quivers;
+    public static Dictionary<string, AccessoryData> GetAccessories() => Accessories;
 }

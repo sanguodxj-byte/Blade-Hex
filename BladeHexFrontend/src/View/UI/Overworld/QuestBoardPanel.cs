@@ -1,6 +1,6 @@
 // QuestBoardPanel.cs
-// Quest board panel - View and accept available quests (dynamic data version)
-// All data passed via ShowBoardDynamic, no hardcoded quest templates
+// 委托布告栏面板 — 查看和接取动态生成的任务
+// 使用统一布局基类，只填充数据
 using Godot;
 using BladeHex.Data;
 using BladeHex.Strategic;
@@ -11,14 +11,7 @@ namespace BladeHex.View.UI.Overworld;
 public partial class QuestBoardPanel : POIPanelBase
 {
     // ============================================================================
-    // 面板规格
-    // ============================================================================
-
-    protected override int PanelWidth => 450;
-    protected override int PanelHeight => 450;
-
-    // ============================================================================
-    // Signals
+    // 信号
     // ============================================================================
 
     [Signal]
@@ -28,76 +21,68 @@ public partial class QuestBoardPanel : POIPanelBase
     public delegate void BoardClosedEventHandler();
 
     // ============================================================================
-    // Fields
+    // 字段
     // ============================================================================
 
-    private VBoxContainer _questList = null!;
-    private RichTextLabel _resultLabel = null!;
-
     private QuestGenerator? _questGenerator;
+    private QuestManager? _questManager;
     private string _currentPoiId = "";
     private int _currentDay = 1;
 
-    // ============================================================================
-    // Content
-    // ============================================================================
+    // ── 数据填充 ──
 
-    protected override void BuildContent(VBoxContainer container)
+    protected override Color GetIllustrationColor() => new(0.10f, 0.08f, 0.06f, 1.0f);
+    protected override string GetIllustrationText() => "[ 布告栏 ]";
+    protected override string GetPanelTitle() => "";
+    protected override string GetInfoText() => $"布告栏 | {_currentPoiId}";
+    protected override string GetDescriptionText() => "领主发布的悬赏委托。完成任务可获得金币和声望奖励。";
+    protected override string GetLeaveButtonText() => "离开";
+
+    protected override void PopulateActions(VBoxContainer container)
     {
-        // Title
-        container.AddChild(CreateTitleLabel("Quest Board"));
-
-        // Description
-        container.AddChild(CreateBodyLabel("Bounty quests issued by the lord. Complete them for gold and experience."));
-
-        // Separator
-        container.AddChild(CreateSeparatorH());
-
-        // Scroll list
-        var scroll = new ScrollContainer();
-        scroll.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-        scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever;
-        scroll.VerticalScrollMode = ScrollContainer.ScrollMode.Auto;
-        container.AddChild(scroll);
-
-        _questList = new VBoxContainer();
-        _questList.AddThemeConstantOverride("separation", SpacingMd);
-        scroll.AddChild(_questList);
-
-        // Separator
-        container.AddChild(CreateSeparatorH());
-
-        // Result label
-        _resultLabel = CreateRichText(new Vector2(410, 40));
-        container.AddChild(_resultLabel);
-
-        // Close button
-        var closeBtn = CreateButton("Leave", new Vector2(410, 40));
-        closeBtn.Pressed += () =>
+        if (_questGenerator == null)
         {
-            EmitSignal(SignalName.BoardClosed);
-            HidePanel();
-        };
-        container.AddChild(closeBtn);
+            container.AddChild(CreateMutedLabel("暂无可接取的委托。过几天再来看看。"));
+            return;
+        }
+
+        var quests = _questGenerator.GetAvailableQuests(_currentPoiId, _currentDay);
+
+        if (quests.Count == 0)
+        {
+            container.AddChild(CreateMutedLabel("暂无可接取的委托。过几天再来看看。"));
+            return;
+        }
+
+        for (int i = 0; i < quests.Count; i++)
+        {
+            var q = quests[i];
+            var card = CreateQuestCard(q, i);
+            container.AddChild(card);
+        }
     }
 
     // ============================================================================
-    // Public API
+    // 公开接口
     // ============================================================================
 
-    /// <summary>
-    /// Dynamic quest board version (gets quests from QuestGenerator)
-    /// </summary>
-    /// <param name="questGenerator">C# QuestGenerator reference</param>
-    /// <param name="poiId">Current town POI name</param>
-    /// <param name="currentDay">Current game day</param>
+    /// <summary>动态委托版本（从 QuestGenerator 获取任务）</summary>
     public void ShowBoardDynamic(QuestGenerator questGenerator, string poiId, int currentDay)
     {
         _questGenerator = questGenerator;
+        _questManager = null;
         _currentPoiId = poiId;
         _currentDay = currentDay;
-        _resultLabel.Text = "";
-        PopulateDynamicQuests();
+        ShowPanel();
+    }
+
+    /// <summary>上下文版本：从 PoiPanelContext 获取生成器、QuestManager 与当前 POI。</summary>
+    public void ShowBoardDynamic(PoiPanelContext context)
+    {
+        _questGenerator = context.QuestGenerator;
+        _questManager = context.QuestManager;
+        _currentPoiId = context.PoiId;
+        _currentDay = context.CurrentDay;
         ShowPanel();
     }
 
@@ -108,60 +93,28 @@ public partial class QuestBoardPanel : POIPanelBase
     }
 
     // ============================================================================
-    // Dynamic quests
+    // 任务卡片
     // ============================================================================
-
-    private void PopulateDynamicQuests()
-    {
-        // Clear list
-        foreach (Node child in _questList.GetChildren())
-            child.QueueFree();
-
-        if (_questGenerator == null)
-        {
-            var emptyLabel = CreateMutedLabel("No quests available. Check back in a few days.");
-            _questList.AddChild(emptyLabel);
-            return;
-        }
-
-        var quests = _questGenerator.GetAvailableQuests(_currentPoiId, _currentDay);
-
-        if (quests.Count == 0)
-        {
-            var emptyLabel = CreateMutedLabel("No quests available. Check back in a few days.");
-            _questList.AddChild(emptyLabel);
-            return;
-        }
-
-        for (int i = 0; i < quests.Count; i++)
-        {
-            var q = quests[i];
-            var card = CreateQuestCard(q, i);
-            _questList.AddChild(card);
-        }
-    }
 
     private Control CreateQuestCard(QuestData quest, int index)
     {
-        // Card container
-        var card = CreateCard(new Vector2(410, 0));
+        var card = CreateCard(new Vector2(0, 0));
+        card.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
-        // Padding
         var innerMargin = new MarginContainer();
         innerMargin.AddThemeConstantOverride("margin_left", 10);
-        innerMargin.AddThemeConstantOverride("margin_top", 10);
-        innerMargin.AddThemeConstantOverride("margin_right", 8);
+        innerMargin.AddThemeConstantOverride("margin_top", 8);
+        innerMargin.AddThemeConstantOverride("margin_right", 10);
         innerMargin.AddThemeConstantOverride("margin_bottom", 8);
         innerMargin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         card.AddChild(innerMargin);
 
-        // Vertical layout
         var qvbox = new VBoxContainer();
         qvbox.AddThemeConstantOverride("separation", SpacingXs);
         qvbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         innerMargin.AddChild(qvbox);
 
-        // Title row
+        // 标题行
         var titleRow = new HBoxContainer();
         var titleLbl = CreateBodyLabel(quest.QuestName);
         titleLbl.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -171,44 +124,47 @@ public partial class QuestBoardPanel : POIPanelBase
         titleRow.AddChild(diffLbl);
         qvbox.AddChild(titleRow);
 
-        // Description
+        // 描述
         var descLbl = CreateMutedLabel(quest.Description);
         qvbox.AddChild(descLbl);
 
-        // Reward row
+        // 奖励行
         var rewardRow = new HBoxContainer();
-        string timeText = quest.HasTimeLimit ? $"Deadline: {quest.TimeLimitDays}d" : "No deadline";
+        string timeText = quest.HasTimeLimit ? $"期限: {quest.TimeLimitDays}天" : "无期限";
         var rewardLabel = CreateMutedLabel(
-            $"Reward: {quest.RewardGold}g | Reputation +{quest.RewardReputation} | {timeText}");
+            $"奖励: {quest.RewardGold}金 | 声望+{quest.RewardReputation} | {timeText}");
+        rewardLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         rewardRow.AddChild(rewardLabel);
 
-        // Separator
-        rewardRow.AddChild(CreateSeparatorH());
-
-        var acceptBtn = CreateButton("Accept", new Vector2(80, 28));
+        var acceptBtn = CreateButton("接取", new Vector2(80, 28));
         int capturedIndex = index;
-        acceptBtn.Pressed += () => AcceptDynamicQuest(capturedIndex);
+        acceptBtn.Pressed += () => AcceptQuest(capturedIndex);
         rewardRow.AddChild(acceptBtn);
         qvbox.AddChild(rewardRow);
 
         return card;
     }
 
-    private void AcceptDynamicQuest(int index)
+    private void AcceptQuest(int index)
     {
-        if (_questGenerator == null)
-            return;
+        if (_questGenerator == null) return;
 
-        var quest = _questGenerator.AcceptQuest(_currentPoiId, index, _currentDay);
-        if (quest != null)
+        var result = QuestAcceptanceService.AcceptFromBoard(
+            _questGenerator,
+            _currentPoiId,
+            index,
+            _currentDay,
+            _questManager != null ? _questManager.AcceptQuest : null);
+
+        if (result.Success && result.Quest != null)
         {
-            _resultLabel.Text = $"[color=green]Accepted: {quest.QuestName}[/color]";
-            EmitSignal(SignalName.QuestAccepted, quest.QuestId);
-            PopulateDynamicQuests();
+            SetResult($"[color=green]{result.Message}[/color]");
+            EmitSignal(SignalName.QuestAccepted, result.Quest.QuestId);
+            RefreshLayout();
         }
         else
         {
-            _resultLabel.Text = "[color=red]Accept failed[/color]";
+            SetResult($"[color=red]{result.Message}[/color]");
         }
     }
 }

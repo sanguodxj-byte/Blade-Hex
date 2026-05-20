@@ -227,6 +227,7 @@ public partial class CharacterSkillTree : RefCounted
     public float GetCriticalRateBonus() => AccumulatedStats.ContainsKey("critical_rate") ? AccumulatedStats["critical_rate"].AsSingle() : 0.0f;
     public int GetSpeedBonus() => AccumulatedStats.ContainsKey("speed") ? AccumulatedStats["speed"].AsInt32() : 0;
     public int GetManaMaxBonus() => AccumulatedStats.ContainsKey("mana_max") ? AccumulatedStats["mana_max"].AsInt32() : 0;
+    public int GetManaRegenBonus() => AccumulatedStats.ContainsKey("mana_regen") ? AccumulatedStats["mana_regen"].AsInt32() : 0;
     public int GetInitiativeBonus() => AccumulatedStats.ContainsKey("initiative") ? AccumulatedStats["initiative"].AsInt32() : 0;
     public int GetAllSaveBonus() => AccumulatedStats.ContainsKey("all_save") ? AccumulatedStats["all_save"].AsInt32() : 0;
     public int GetRangeBonus() => AccumulatedStats.ContainsKey("range_bonus") ? AccumulatedStats["range_bonus"].AsInt32() : 0;
@@ -514,6 +515,112 @@ public partial class CharacterSkillTree : RefCounted
             else
                 TryJumpActivate(selected.NodeId);
         }
+    }
+
+    /// <summary>
+    /// 多区域加点：按 targetRegions 顺序优先覆盖各区域至少 1 个 BIG 节点，
+    /// 再按权重把剩余点平摊。供 sim 强制生成"剑舞者(STR+DEX)"、"武圣(STR+DEX+CON)"等
+    /// 复合职业 build。
+    /// </summary>
+    /// <param name="targetRegions">想要触达的区域列表（按重要性降序，第一个最优先）</param>
+    /// <param name="bigNodesPerRegion">每个区域至少要打多少个 BIG 节点（用于 ClassTitleResolver 触发）</param>
+    public void AiAllocatePointsMultiRegion(string[] targetRegions, int bigNodesPerRegion = 1)
+    {
+        var regionMap = new Dictionary<string, SkillNodeData.Region>
+        {
+            { "str", SkillNodeData.Region.Str }, { "dex", SkillNodeData.Region.Dex },
+            { "con", SkillNodeData.Region.Con }, { "int", SkillNodeData.Region.Int },
+            { "wis", SkillNodeData.Region.Wis }, { "cha", SkillNodeData.Region.Cha },
+        };
+        var targetRegionEnums = new List<SkillNodeData.Region>();
+        foreach (var t in targetRegions)
+            if (regionMap.TryGetValue(t, out var r)) targetRegionEnums.Add(r);
+        if (targetRegionEnums.Count == 0)
+        {
+            AiAllocatePoints(1.0f, "str", "dex");
+            return;
+        }
+
+        // Phase 1: 优先打"距离 + 区域优先级"双重排序，倾向尽快进入每个目标区域
+        // 直到每个目标区域都至少有 N 个 BIG 节点
+        while (AvailableSkillPoints > 0)
+        {
+            // 计算每个目标区域当前的 BIG 节点数
+            var bigCount = new Dictionary<SkillNodeData.Region, int>();
+            foreach (var r in targetRegionEnums) bigCount[r] = 0;
+            foreach (var nid in ActivatedNodes)
+            {
+                if (!TreeData.Nodes.TryGetValue(nid, out var n)) continue;
+                if (n.CurrentNodeType == SkillNodeData.NodeType.Big
+                    || n.CurrentNodeType == SkillNodeData.NodeType.Keystone)
+                {
+                    if (bigCount.ContainsKey(n.CurrentRegion))
+                        bigCount[n.CurrentRegion]++;
+                }
+            }
+
+            // 找出还没满足 bigNodesPerRegion 的区域（按 targetRegions 顺序）
+            SkillNodeData.Region? underfilledRegion = null;
+            foreach (var r in targetRegionEnums)
+            {
+                if (bigCount[r] < bigNodesPerRegion)
+                {
+                    underfilledRegion = r;
+                    break;
+                }
+            }
+
+            var available = GetAvailableNodes();
+            if (available.Count == 0)
+            {
+                var jumpable = GetJumpableNodes();
+                if (jumpable.Count == 0) break;
+                available = jumpable;
+            }
+
+            // 排序：（1）underfilled 区域的 BIG/Keystone 节点最高分
+            //       （2）目标区域的任意节点次之
+            //       （3）其他区域最低
+            var underfilled = underfilledRegion;  // capture for lambda
+            available.Sort((a, b) =>
+            {
+                float sa = ScoreForMulti(a, targetRegionEnums, underfilled);
+                float sb = ScoreForMulti(b, targetRegionEnums, underfilled);
+                return sb.CompareTo(sa);
+            });
+
+            var selected = available[0];
+            if (selected.IsAdjacentToActivated(ActivatedSet))
+                TryActivateNode(selected.NodeId);
+            else
+                TryJumpActivate(selected.NodeId);
+        }
+    }
+
+    private float ScoreForMulti(SkillNodeData node, List<SkillNodeData.Region> targets,
+        SkillNodeData.Region? underfilled)
+    {
+        float score = 0;
+        bool isInTarget = targets.Contains(node.CurrentRegion);
+
+        if (underfilled.HasValue && node.CurrentRegion == underfilled.Value)
+        {
+            score += 200;
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Big) score += 50;
+            else if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone) score += 70;
+        }
+        else if (isInTarget)
+        {
+            score += 100;
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Big) score += 20;
+            else if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone) score += 30;
+        }
+        else if (node.CurrentRegion == SkillNodeData.Region.Transition)
+        {
+            score += 30;
+        }
+
+        return score;
     }
 
     private float AiNodeScore(SkillNodeData node, SkillNodeData.Region primaryRegion, SkillNodeData.Region secondaryRegion)

@@ -1,7 +1,10 @@
 // RestPanel.cs
-// Rest panel - Rest at inn/tavern to recover party status
+// 休息面板 — 短休息/长休息恢复队伍状态
+// 使用统一布局基类，只填充数据；恢复规则委托给 RestService。
 using Godot;
 using BladeHex.Data;
+using BladeHex.Strategic.Facilities;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.View.UI.Overworld;
 
@@ -11,89 +14,87 @@ public partial class RestPanel : POIPanelBase
     [Signal]
     public delegate void RestCompletedEventHandler(int hours);
 
-    private Label _statusLabel = null!;
-    private EconomyManager _economyManager = null!;
+    [Signal]
+    public delegate void RestFinishedEventHandler();
 
-    // ── Panel specs ────────────────────────────────────────────────────────
-    protected override int PanelWidth => 350;
-    protected override int PanelHeight => 300;
+    private PoiPanelContext? _context;
+    private EconomyManager? Economy => _context?.Economy;
+    private PartyRoster? Roster => _context?.Roster;
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    protected override Color GetIllustrationColor() => new(0.06f, 0.06f, 0.12f, 1.0f);
+    protected override string GetIllustrationText() => "[ 休息 ]";
+    protected override string GetPanelTitle() => "";
+    protected override string GetInfoText()
+    {
+        string gold = Economy != null ? $"金币: {Economy.Gold}" : "金币: —";
+        string state = Roster != null ? $"需恢复成员: {RestService.CountMembersNeedingRest(Roster)}" : "无队伍";
+        return $"休息 | {gold} | {state}";
+    }
+    protected override string GetDescriptionText() => "在安全的地方休息，让疲惫的队伍恢复体力和精力。";
+    protected override string GetLeaveButtonText() => "离开";
+
+    protected override void PopulateActions(VBoxContainer container)
+    {
+        bool hasRoster = Roster != null && Roster.Count > 0;
+        var btnShort = CreateActionButton("短休息 (免费) -- 恢复50%法力值，推进4小时", hasRoster, "无队伍");
+        btnShort.Pressed += DoShortRest;
+        container.AddChild(btnShort);
+
+        bool needsLongRest = RestService.CountMembersNeedingRest(Roster) > 0;
+        int longRestCost = FacilityPricingService.GetLongRestCost(Roster, _context?.CurrentTown?.Prosperity ?? 50);
+        bool canLong = Economy != null && Economy.Gold >= longRestCost && hasRoster && needsLongRest;
+        string reason = !hasRoster ? "无队伍" : !needsLongRest ? "队伍状态良好" : "金币不足";
+        var btnLong = CreateActionButton($"长休息 ({longRestCost}金) -- 恢复100%生命和法力，推进8小时", canLong, reason);
+        btnLong.Pressed += DoLongRest;
+        container.AddChild(btnLong);
+    }
 
     public void ShowRest(EconomyManager economy)
     {
-        _economyManager = economy;
-        if (economy != null)
-            _statusLabel.Text = $"Gold: {economy.Gold}   Food: {economy.Food:F1}";
-        else
-            _statusLabel.Text = "";
+        _context = new PoiPanelContext { Economy = economy, PlayerParty = null, CurrentTown = null };
         ShowPanel();
     }
 
-    public override void HidePanel()
+    public void ShowRest(PoiPanelContext context)
     {
-        base.HidePanel();
+        _context = context;
+        ShowPanel();
     }
 
-    // ── Content ────────────────────────────────────────────────────────────
-
-    protected override void BuildContent(VBoxContainer container)
+    protected override void OnCloseRequested()
     {
-        // Title
-        container.AddChild(CreateTitleLabel("Rest"));
-
-        // Description
-        container.AddChild(CreateBodyLabel("Rest in a safe place to recover your party."));
-
-        container.AddChild(CreateSeparatorH());
-
-        // Status
-        _statusLabel = new Label();
-        _statusLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        _statusLabel.AddThemeColorOverride("font_color", ThemeTextPrimary);
-        container.AddChild(_statusLabel);
-
-        // Short rest
-        var restShort = CreateButton("Short Rest (Free, recover 30% HP)", new Vector2(310, 40));
-        restShort.Pressed += () => DoRest(0, 0.3f);
-        container.AddChild(restShort);
-
-        // Long rest
-        var restLong = CreateButton("Long Rest (10g, recover 100% HP)", new Vector2(310, 40));
-        restLong.Pressed += () => DoRest(10, 1.0f);
-        container.AddChild(restLong);
-
-        container.AddChild(CreateSeparatorH());
-
-        // Close
-        var closeBtn = CreateButton("Leave", new Vector2(310, 40));
-        closeBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        closeBtn.Pressed += () => HidePanel();
-        container.AddChild(closeBtn);
+        EmitSignal(SignalName.RestFinished);
+        HidePanel();
     }
 
-    // ── Internal Logic ─────────────────────────────────────────────────────
+    private bool SpendGold(int amount) => Economy?.SpendGold(amount) == true;
 
-    private void DoRest(int cost, float hpRatio)
+    private void DoShortRest()
     {
-        if (_economyManager != null && cost > 0)
+        var result = RestService.ShortRest(Roster);
+        if (result.Success)
         {
-            if (!_economyManager.SpendGold(cost))
-            {
-                _statusLabel.Text = "Not enough gold!";
-                return;
-            }
+            Economy?.AdvanceTime(4.0f);
+            EmitSignal(SignalName.RestCompleted, 4);
         }
-
-        _economyManager?.AdvanceTime(8.0f);
-        _statusLabel.Text = $"Party has rested, restored {hpRatio * 100:F0}% HP.";
-        EmitSignal(SignalName.RestCompleted, 8);
-        UpdateStatus();
+        ApplyResult(result);
     }
 
-    private void UpdateStatus()
+    private void DoLongRest()
     {
-        if (_economyManager != null)
-            _statusLabel.Text += $"\nGold: {_economyManager.Gold}";
+        var result = RestService.LongRest(Roster, SpendGold);
+        if (result.Success)
+        {
+            Economy?.AdvanceTime(8.0f);
+            EmitSignal(SignalName.RestCompleted, 8);
+        }
+        ApplyResult(result);
+    }
+
+    private void ApplyResult(FacilityServiceResult result)
+    {
+        string color = result.Success ? "green" : "red";
+        SetResult($"[color={color}]{result.Message}[/color]");
+        RefreshLayout();
     }
 }

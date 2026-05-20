@@ -19,7 +19,9 @@ public sealed class TerrainStage : IWorldStage
     public void Execute(WorldBuildContext ctx)
     {
         var generator = new ChunkGenerator();
-        generator.Initialize(ctx.Seed, ctx.Config.WorldTileWidth, ctx.Config.WorldTileHeight);
+        // 根据 ChunksW 反推世界尺寸，决定模板网格
+        var (gridW, gridH) = InferTemplateGrid(ctx.Config.WorldChunksW);
+        generator.Initialize(ctx.Seed, ctx.Config.WorldTileWidth, ctx.Config.WorldTileHeight, gridW, gridH);
 
         int total = ctx.Config.WorldChunksW * ctx.Config.WorldChunksH;
         int count = 0;
@@ -35,4 +37,13 @@ public sealed class TerrainStage : IWorldStage
             }
         }
     }
+
+    /// <summary>从 ChunksW 反推世界尺寸 → 模板网格维度</summary>
+    private static (int gridW, int gridH) InferTemplateGrid(int chunksW) => chunksW switch
+    {
+        <= 21 => (1, 1),  // Small (21×12)
+        <= 36 => (2, 2),  // Medium (36×24)
+        <= 56 => (3, 3),  // Large (56×32)
+        _     => (4, 4),  // Mega (80×56)
+    };
 }

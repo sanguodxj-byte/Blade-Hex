@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Blade & Hex"
-run/main_scene="res://src/ui/main_menu/main_menu.tscn"
+run/main_scene="uid://dr5ewkoxy56af"
 config/features=PackedStringArray("4.6", "C#", "Mobile")
 config/icon="res://icon.svg"
 
@@ -25,7 +25,9 @@ AudioEventReactor="*res://BladeHexFrontend/src/View/Events/AudioEventReactor.cs"
 UITheme="*res://BladeHexFrontend/src/View/UI/UITheme.cs"
 CursorManager="*res://BladeHexFrontend/src/View/UI/CursorManager.cs"
 DebugConsole="*res://BladeHexFrontend/src/View/Debug/DebugConsole.cs"
+UIThemeTweaker="*res://BladeHexFrontend/src/View/Debug/UIThemeTweaker.cs"
 GameMenuManager="*res://BladeHexFrontend/src/View/UI/Global/GameMenuManager.cs"
+WeatherManager="*res://BladeHexFrontend/src/View/Environment/WeatherManager.cs"
 
 [display]
 

@@ -75,6 +75,46 @@ public partial class OverworldPOI : Resource
     [Export] public int Prosperity { get; set; } = 50; // 繁荣度 0-100
 
     // ========================================
+    // Scale & Footprint (比例尺统一)
+    // ========================================
+
+    /// <summary>POI 占用形状的中心 hex axial 坐标（Position 是 pixel 坐标，CenterHex 是 hex 坐标）</summary>
+    public Vector2I CenterHex { get; set; } = Vector2I.Zero;
+
+    /// <summary>Footprint 模板名（如 "solo" / "village_3" / "port_city_4"）</summary>
+    [Export] public string FootprintTemplateName { get; set; } = "solo";
+
+    /// <summary>Footprint 在大地图上的旋转方向（0~5），由世界生成 TryFit 决定</summary>
+    [Export] public int FootprintRotation { get; set; } = 0;
+
+    /// <summary>Footprint 实际占用的 hex（中心 + 旋转后的 cells）。运行时计算缓存。</summary>
+    public Vector2I[] OccupiedHexes { get; set; } = System.Array.Empty<Vector2I>();
+
+    /// <summary>POI 尺度档（来自 POIBattlePresetRegistry，运行时计算）</summary>
+    public POIScale Scale => POIBattlePresetRegistry.ScaleOf(this);
+
+    /// <summary>检查指定 hex 是否在本 POI 的 footprint 内</summary>
+    public bool ContainsHex(Vector2I hex)
+    {
+        for (int i = 0; i < OccupiedHexes.Length; i++)
+            if (OccupiedHexes[i] == hex) return true;
+        return false;
+    }
+
+    /// <summary>从 footprint 模板 + 中心 + 旋转重新计算 OccupiedHexes 缓存</summary>
+    public void RebuildOccupiedHexes()
+    {
+        var tpl = FootprintTemplateRegistry.Get(FootprintTemplateName);
+        var result = new Vector2I[tpl.Cells.Count];
+        for (int i = 0; i < tpl.Cells.Count; i++)
+        {
+            var rotated = FootprintTemplate.RotateOffset(tpl.Cells[i].Offset, FootprintRotation);
+            result[i] = new Vector2I(CenterHex.X + rotated.X, CenterHex.Y + rotated.Y);
+        }
+        OccupiedHexes = result;
+    }
+
+    // ========================================
     // 外族聚落专属
     // ========================================
 
@@ -106,8 +146,8 @@ public partial class OverworldPOI : Resource
     // ========================================
 
     [Export] public int CastleDefenseLevel { get; set; } = 1; // 1=木栅, 2=石堡, 3=要塞
-    [Export] public int GarrisonMax { get; set; } = 50;
-    [Export] public int GarrisonCurrent { get; set; } = 20;
+    [Export] public int GarrisonMax { get; set; } = 0;
+    [Export] public int GarrisonCurrent { get; set; } = 0;
 
     [Export] public LordPersonality LordPersonalityValue = LordPersonality.Balanced;
 
@@ -174,34 +214,7 @@ public partial class OverworldPOI : Resource
         _ => "未知巢穴"
     };
 
-    public string GetBattleTemplateName() => PoiTypeEnum switch
-    {
-        POIType.Settlement => SettlementRaceValue switch
-        {
-            SettlementRace.Goblin => "goblin_camp",
-            SettlementRace.Kobold => "kobold_mine",
-            SettlementRace.Minotaur => "minotaur_fortress",
-            SettlementRace.ShadowCult => "shadow_cult_hideout",
-            SettlementRace.Bandit => "bandit_camp",
-            SettlementRace.Robber => "robber_hideout",
-            SettlementRace.Pirate => "pirate_cove",
-            _ => "plain_field"
-        },
-        POIType.Lair => LairTypeValue switch
-        {
-            LairType.DragonLair => "dragon_lair",
-            LairType.AncientTomb => "ancient_tomb",
-            LairType.Ruins => "ruins_exploration",
-            LairType.GolemForge => "golem_forge",
-            LairType.BanditCamp => "bandit_camp",
-            LairType.RobberHideout => "robber_hideout",
-            LairType.PirateCove => "pirate_cove",
-            LairType.RaiderOutpost => "raider_outpost",
-            _ => "plain_field"
-        },
-        POIType.Village => "village_defense",
-        _ => "plain_field"
-    };
+    public string GetBattleTemplateName() => POIBattlePresetRegistry.Resolve(this).TemplateName;
 
     public Godot.Collections.Dictionary GetEncounterConfig()
     {
@@ -337,6 +350,10 @@ public Godot.Collections.Dictionary Serialize()
         { "poi_type", (int)PoiTypeEnum },
         { "position_x", Position.X },
         { "position_y", Position.Y },
+        { "center_hex_q", CenterHex.X },
+        { "center_hex_r", CenterHex.Y },
+        { "footprint_template", FootprintTemplateName },
+        { "footprint_rotation", FootprintRotation },
         { "owning_faction", OwningFaction },
         { "prosperity", Prosperity },
         { "settlement_race", (int)SettlementRaceValue },
@@ -382,8 +399,17 @@ public void OnDayPassed()
         Prosperity = Math.Max(0, Prosperity - 2);
     }
 
-    // 守军自然恢复
-    if (PoiTypeEnum == POIType.Castle && GarrisonCurrent < GarrisonMax)
-        GarrisonCurrent = Math.Min(GarrisonMax, GarrisonCurrent + 2);
+    // 守军自然恢复（非围攻状态下）
+    if (!IsUnderSiege && GarrisonCurrent < GarrisonMax)
+    {
+        int recovery = PoiTypeEnum switch
+        {
+            POIType.Castle => 2,   // 城堡：每天恢复 2
+            POIType.Town => 1,     // 城镇：每天恢复 1
+            _ => 0,                // 其他类型不自动恢复
+        };
+        if (recovery > 0)
+            GarrisonCurrent = Math.Min(GarrisonMax, GarrisonCurrent + recovery);
+    }
 }
 }

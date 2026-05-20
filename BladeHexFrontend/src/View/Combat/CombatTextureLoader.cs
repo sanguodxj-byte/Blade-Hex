@@ -91,7 +91,7 @@ public partial class CombatTextureLoader : RefCounted
     // ========================================
 
     private const string TopTextureDir = "res://src/assets/tiles/battle_ground/tops";
-    private const string CliffTextureDir = "res://src/assets/tiles/battle_ground/cliffs";
+    private const string CliffTextureDir = "res://assets/tiles/battle_ground/cliffs";
     private const string ProjectileTextureDir = "res://assets/sprites/projectiles";
     private const string WeaponAnimDir = "res://assets/sprites/weapons";
     private const string SceneSpriteDir = "res://assets/sprites/combat_scene";
@@ -287,6 +287,11 @@ public partial class CombatTextureLoader : RefCounted
             {
                 string cliffPath = $"{CliffTextureDir}/{cliffKey}.png";
                 var cliffTex = TryLoadTexture(cliffPath);
+                if (cliffTex == null)
+                {
+                    cliffPath = $"{CliffTextureDir}/{cliffKey}.jpeg";
+                    cliffTex = TryLoadTexture(cliffPath);
+                }
                 if (cliffTex != null)
                     _cliffTextures[cliffKey] = cliffTex;
             }

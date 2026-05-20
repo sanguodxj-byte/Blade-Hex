@@ -1,233 +1,137 @@
 // BattleResultPanel.cs
-// 战斗结算面板 — 战斗结束后显示战果总结
-// 显示：胜负 / 阵亡名单 / 获得金币 / 获得经验 / 战利品
+// 战斗结算面板 — 胜利/失败后显示经验/金币/掉落物
 using Godot;
-using BladeHex.Strategic;
+using BladeHex.Data;
+using BladeHex.UI;
 
 namespace BladeHex.UI.Combat;
 
 /// <summary>
-/// 战斗结算面板 — 战斗结束后显示战果总结
+/// 战斗结算面板。在战斗结束后弹出,显示:
+/// - 胜利/失败标题
+/// - 获得经验值
+/// - 获得金币
+/// - 掉落物品列表
+/// - "继续"按钮关闭面板
 /// </summary>
 [GlobalClass]
 public partial class BattleResultPanel : CanvasLayer
 {
-    // ============================================================================
-    // 信号
-    // ============================================================================
-    [Signal]
-    public delegate void ResultAcknowledgedEventHandler();
+    [Signal] public delegate void ContinueClickedEventHandler();
 
-    // ============================================================================
-    // 内部
-    // ============================================================================
-    private readonly UIFactory _factory = new();
-    private Control _root = null!;
-    private Label _titleLabel = null!;
-    private VBoxContainer _contentVBox = null!;
-    private Button _continueBtn = null!;
+    private UITheme Theme => UITheme.Instance!;
 
     public override void _Ready()
     {
-        Layer = 30;
-        SetupUI();
+        ProcessMode = ProcessModeEnum.Always;
     }
 
-    private void SetupUI()
+    /// <summary>显示结算面板</summary>
+    public void Show(bool victory, int xp, int gold, string[] lootNames)
     {
-        _root = new Control();
-        _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _root.Visible = false;
-        AddChild(_root);
-
+        // 全屏半透明遮罩
         var overlay = new ColorRect();
+        overlay.Color = new Color(0, 0, 0, 0.6f);
         overlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        overlay.Color = new Color(0, 0, 0, 0.7f);
         overlay.MouseFilter = Control.MouseFilterEnum.Stop;
-        _root.AddChild(overlay);
+        AddChild(overlay);
 
-        var panel = _factory.CreatePanel(new Vector2(450, 400), UITheme.Instance!.BgPrimary, UITheme.Instance.BorderHighlight);
+        // 居中面板
+        var panel = new PanelContainer();
+        panel.CustomMinimumSize = new Vector2(420, 320);
         panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
-        panel.OffsetLeft = -225;
-        panel.OffsetTop = -210;
-        panel.OffsetRight = 225;
-        panel.OffsetBottom = 210;
-        panel.MouseFilter = Control.MouseFilterEnum.Stop;
-        _root.AddChild(panel);
-
-        var margin = _factory.CreateMargin(20, 20, 15, 15);
-        margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        panel.AddChild(margin);
+        panel.AddThemeStyleboxOverride("panel",
+            Theme.MakePanelStyle(Theme.BgPrimary, Theme.BorderDefault, 2, Theme.RadiusLg, Theme.SpacingLg));
+        overlay.AddChild(panel);
 
         var vbox = new VBoxContainer();
-        vbox.AddThemeConstantOverride("separation", UITheme.Instance.SpacingMd);
-        vbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        margin.AddChild(vbox);
+        vbox.AddThemeConstantOverride("separation", Theme.SpacingMd);
+        panel.AddChild(vbox);
 
-        _titleLabel = _factory.CreateTitleLabel("", 22);
-        vbox.AddChild(_titleLabel);
+        // 标题
+        var title = new Label();
+        title.Text = victory ? "⚔ 战斗胜利!" : "✘ 战斗失败";
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        title.AddThemeFontSizeOverride("font_size", 28);
+        title.AddThemeColorOverride("font_color", victory ? Theme.TextPositive : new Color(1, 0.3f, 0.3f));
+        vbox.AddChild(title);
 
-        vbox.AddChild(_factory.CreateSeparatorH());
+        // 分隔线
+        var sep = new HSeparator();
+        vbox.AddChild(sep);
 
-        var scroll = new ScrollContainer();
-        scroll.CustomMinimumSize = new Vector2(410, 260);
-        scroll.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-        vbox.AddChild(scroll);
-
-        _contentVBox = new VBoxContainer();
-        _contentVBox.AddThemeConstantOverride("separation", UITheme.Instance.SpacingSm);
-        _contentVBox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        scroll.AddChild(_contentVBox);
-
-        _continueBtn = _factory.CreateButton("继续", new Vector2(410, 40));
-        _continueBtn.Pressed += () =>
-        {
-            HidePanel();
-            EmitSignal(SignalName.ResultAcknowledged);
-        };
-        vbox.AddChild(_continueBtn);
-    }
-
-    // ============================================================================
-    // 公开接口
-    // ============================================================================
-
-    /// <summary>
-    /// 显示战斗结果
-    /// </summary>
-    /// <param name="victory">是否胜利</param>
-    /// <param name="outcome">战斗结算数据</param>
-    public void ShowResult(bool victory, BattleOutcome? outcome)
-    {
-        foreach (Node child in _contentVBox.GetChildren())
-        {
-            child.QueueFree();
-        }
-
+        // 奖励区
         if (victory)
         {
-            _titleLabel.Text = "战斗胜利！";
-            _titleLabel.AddThemeColorOverride("font_color", new Color(0.2f, 0.9f, 0.3f));
+            var rewardGrid = new GridContainer();
+            rewardGrid.Columns = 2;
+            rewardGrid.AddThemeConstantOverride("h_separation", 20);
+            rewardGrid.AddThemeConstantOverride("v_separation", 8);
+            vbox.AddChild(rewardGrid);
+
+            AddRewardRow(rewardGrid, "经验值", $"+{xp} XP", Theme.TextAccent);
+            AddRewardRow(rewardGrid, "金币", $"+{gold} 金", new Color(1f, 0.85f, 0.3f));
+
+            if (lootNames.Length > 0)
+            {
+                var lootLabel = new Label();
+                lootLabel.Text = "掉落物品:";
+                lootLabel.AddThemeFontSizeOverride("font_size", Theme.FontSizeMd);
+                lootLabel.AddThemeColorOverride("font_color", Theme.TextSecondary);
+                vbox.AddChild(lootLabel);
+
+                foreach (var name in lootNames)
+                {
+                    var item = new Label();
+                    item.Text = $"  • {name}";
+                    item.AddThemeFontSizeOverride("font_size", Theme.FontSizeSm);
+                    item.AddThemeColorOverride("font_color", Theme.TextPrimary);
+                    vbox.AddChild(item);
+                }
+            }
         }
         else
         {
-            _titleLabel.Text = "战斗失败...";
-            _titleLabel.AddThemeColorOverride("font_color", new Color(0.9f, 0.2f, 0.2f));
+            var defeatMsg = new Label();
+            defeatMsg.Text = "队伍被击败,撤退回营地...";
+            defeatMsg.HorizontalAlignment = HorizontalAlignment.Center;
+            defeatMsg.AddThemeFontSizeOverride("font_size", Theme.FontSizeMd);
+            defeatMsg.AddThemeColorOverride("font_color", Theme.TextSecondary);
+            vbox.AddChild(defeatMsg);
         }
 
-        if (outcome == null)
+        // 弹性占位
+        var spacer = new Control();
+        spacer.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        vbox.AddChild(spacer);
+
+        // 继续按钮
+        var continueBtn = new Button();
+        continueBtn.Text = "继续";
+        continueBtn.CustomMinimumSize = new Vector2(120, 40);
+        continueBtn.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        Theme.ApplyButtonTheme(continueBtn);
+        continueBtn.Pressed += () =>
         {
-            _root.Visible = true;
-            return;
-        }
-
-        // 金币
-        int gold = outcome.GoldGranted;
-        if (gold > 0)
-        {
-            AddRow("获得金币", $"{gold} 金", new Color(1.0f, 0.85f, 0.0f));
-        }
-
-        // 经验
-        int xp = outcome.XpGranted;
-        if (xp > 0)
-        {
-            AddRow("获得经验", $"{xp} XP", new Color(0.4f, 0.8f, 1.0f));
-        }
-
-        // 存活
-        var survivors = outcome.SurvivorHp;
-        if (survivors != null && survivors.Count > 0)
-        {
-            AddSection("存活队员");
-            foreach (var kvp in survivors)
-            {
-                AddRow("  " + kvp.Key, $"HP: {kvp.Value}", new Color(0.6f, 0.9f, 0.6f));
-            }
-        }
-
-        // 阵亡
-        var dead = outcome.DeadUnitNames;
-        if (dead != null && dead.Count > 0)
-        {
-            AddSection("阵亡");
-            foreach (string name in dead)
-            {
-                AddRow("  " + name, "永久阵亡", new Color(0.9f, 0.3f, 0.3f));
-            }
-        }
-
-        // 战利品
-        var loot = outcome.LootEntries;
-        if (loot != null && loot.Count > 0)
-        {
-            AddSection("战利品");
-            foreach (LootEntry entry in loot)
-            {
-                string typeIcon = GetLootTypeIcon(entry.Type);
-                string qtyText = entry.Quantity > 1 ? $"×{entry.Quantity}" : "";
-                string valueText = entry.Value > 0 ? $"{entry.Value}金" : "";
-                AddRow($"  {typeIcon} {entry.ItemName}{qtyText}",
-                    valueText,
-                    new Color(0.9f, 0.8f, 0.4f));
-            }
-        }
-
-        _root.Visible = true;
-    }
-
-    /// <summary>
-    /// 隐藏面板
-    /// </summary>
-    public void HidePanel()
-    {
-        _root.Visible = false;
-    }
-
-    /// <summary>
-    /// 面板是否可见
-    /// </summary>
-    public bool IsPanelVisible()
-    {
-        return _root.Visible;
-    }
-
-    // ============================================================================
-    // 内部方法
-    // ============================================================================
-
-    private void AddRow(string leftText, string rightText, Color color)
-    {
-        var row = new HBoxContainer();
-        var left = _factory.CreateBodyLabel(leftText);
-        left.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        row.AddChild(left);
-        var right = _factory.CreateBodyLabel(rightText);
-        right.AddThemeColorOverride("font_color", color);
-        row.AddChild(right);
-        _contentVBox.AddChild(row);
-    }
-
-    private void AddSection(string title)
-    {
-        _contentVBox.AddChild(_factory.CreateSeparatorH());
-        var lbl = _factory.CreateBodyLabel(title);
-        lbl.AddThemeColorOverride("font_color", UITheme.Instance!.TextAccent);
-        _contentVBox.AddChild(lbl);
-    }
-
-    private static string GetLootTypeIcon(LootEntry.LootType type)
-    {
-        return type switch
-        {
-            LootEntry.LootType.Weapon     => "⚔",
-            LootEntry.LootType.Armor      => "🛡",
-            LootEntry.LootType.Shield     => "🛡",
-            LootEntry.LootType.Helmet     => "⛑",
-            LootEntry.LootType.Consumable => "🧪",
-            LootEntry.LootType.Gold       => "💰",
-            LootEntry.LootType.Material   => "📦",
-            _ => "📦",
+            Globals.AudioOrNull?.PlaySfxName("ui_click");
+            EmitSignal(SignalName.ContinueClicked);
+            QueueFree();
         };
+        vbox.AddChild(continueBtn);
+    }
+
+    private void AddRewardRow(GridContainer grid, string label, string value, Color valueColor)
+    {
+        var lbl = new Label();
+        lbl.Text = label;
+        lbl.AddThemeFontSizeOverride("font_size", Theme.FontSizeMd);
+        lbl.AddThemeColorOverride("font_color", Theme.TextSecondary);
+        grid.AddChild(lbl);
+
+        var val = new Label();
+        val.Text = value;
+        val.AddThemeFontSizeOverride("font_size", Theme.FontSizeMd + 2);
+        val.AddThemeColorOverride("font_color", valueColor);
+        grid.AddChild(val);
     }
 }

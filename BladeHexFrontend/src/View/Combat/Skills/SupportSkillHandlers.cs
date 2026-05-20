@@ -62,20 +62,30 @@ public static class SupportSkillHandlers
 
     public static void LifeCircle(in SkillHandlerContext ctx)
     {
-        int conMod = RPGRuleEngine.GetStatModifier(ctx.Attacker.Data!.Con);
+        // v0.6 11.8 con_b07: 每场战斗最多 1 次；治疗周围友军 1d10 + CON_HP_Bonus + NodeHealAmount
+        if (ctx.Attacker.Data?.Runtime.LifeCircleUsedThisCombat > 0)
+        {
+            SkillUtils.Fail(ctx.Result, "本场战斗已用过生命之环");
+            return;
+        }
+        // CON_HP_Bonus = floor(sqrt(CON/4))
+        int conScore = ctx.Attacker.Data?.Con ?? 10;
+        int conBonus = (int)System.Math.Floor(System.Math.Sqrt(conScore / 4.0));
+        int nodeHeal = ctx.Attacker.SkillTree?.GetMeleeDamageBonus() ?? 0; // 节点 heal_amount 暂用通用接口
         var neighbors = ctx.Grid != null ? HexUtils.GetNeighbors(ctx.Attacker.GridPos.X, ctx.Attacker.GridPos.Y) : Array.Empty<Vector2I>();
         foreach (var pos in neighbors)
         {
             var ally = SkillUtils.FindUnitAt(pos, ctx.Allies);
             if (ally != null && GodotObject.IsInstanceValid(ally) && ally.CurrentHp > 0)
             {
-                int heal = RPGRuleEngine.RollDice(2, 10) + conMod;
+                int heal = RPGRuleEngine.RollDice(1, 10) + conBonus + nodeHeal;
                 int actual = ally.Heal(heal);
                 ctx.Result["results"].AsGodotArray().Add(new Godot.Collections.Dictionary {
                     { "type", "heal" }, { "target", ally }, { "value", actual }
                 });
             }
         }
+        if (ctx.Attacker.Data != null) ctx.Attacker.Data.Runtime.LifeCircleUsedThisCombat = 1;
     }
 
     // ========== 增益/防御 ==========
@@ -103,11 +113,18 @@ public static class SupportSkillHandlers
 
     public static void LifeShield(in SkillHandlerContext ctx)
     {
+        // v0.6 11.8 限制：每场战斗最多 1 次
+        if (ctx.Attacker.Data?.Runtime.LifeShieldUsedThisCombat > 0)
+        {
+            SkillUtils.Fail(ctx.Result, "本场战斗已用过生命之盾");
+            return;
+        }
         int shieldAmount = (int)(ctx.Attacker.Model.GetMaxHp() * 0.3f);
         ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
             { "target", ctx.Attacker }, { "effect_id", "temp_hp" }, { "duration", 3 },
             { "stat_modifiers", new Godot.Collections.Dictionary { { "temp_hp_amount", shieldAmount } } }
         });
+        if (ctx.Attacker.Data != null) ctx.Attacker.Data.Runtime.LifeShieldUsedThisCombat = 1;
     }
 
     public static void GuardianSpirit(in SkillHandlerContext ctx)
@@ -121,15 +138,9 @@ public static class SupportSkillHandlers
 
     public static void Resurrect(in SkillHandlerContext ctx)
     {
-        Unit? deadAlly = null;
-        foreach (var ally in ctx.Allies)
-            if (ally.GridPos == ctx.TargetCell) { deadAlly = ally; break; }
-        if (deadAlly == null) { SkillUtils.Fail(ctx.Result, "目标格没有可复活的盟友"); return; }
-        int healHp = deadAlly.Model.GetMaxHp() / 2;
-        deadAlly.SetHp(healHp);
-        ctx.Result["results"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "type", "resurrect" }, { "target", deadAlly }, { "value", healHp }
-        });
+        // 全游戏无复活机制 — 本 handler 保留只为兼容旧 SkillTreeData 节点 ID 引用，
+        // 行为改为永远失败。详见 docs/法表系统.md §5.4
+        SkillUtils.Fail(ctx.Result, "本游戏不存在复活机制");
     }
 
     // ========== 领导/CHA ==========
@@ -179,6 +190,13 @@ public static class SupportSkillHandlers
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Allies);
         if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有盟友"); return; }
+        // v0.6 11.7 / 11.8: 不能指定本回合已获额外行动的单位
+        if (target.Data?.Runtime.ExtraActionsThisTurn > 0)
+        {
+            SkillUtils.Fail(ctx.Result, "目标本回合已获得过额外行动");
+            return;
+        }
+        if (target.Data != null) target.Data.Runtime.ExtraActionsThisTurn += 1;
         ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
             { "target", target }, { "effect_id", "commanded" }, { "duration", 1 },
             { "stat_modifiers", new Godot.Collections.Dictionary { { "extra_action", true } } }
@@ -240,16 +258,22 @@ public static class SupportSkillHandlers
 
     public static void HeroicCall(in SkillHandlerContext ctx)
     {
+        // v0.6 11.8 cha_b10: 每场战斗最多 1 次;半径 2 内友军命中 +2、AC +1,持续 3 回合
+        if (ctx.Attacker.Data?.Runtime.HeroicCallUsedThisCombat > 0)
+        {
+            SkillUtils.Fail(ctx.Result, "本场战斗已用过英雄号召");
+            return;
+        }
         foreach (var ally in ctx.Allies)
         {
-            if (GodotObject.IsInstanceValid(ally) && ally.CurrentHp > 0)
+            if (GodotObject.IsInstanceValid(ally) && ally.CurrentHp > 0 && ally.Data != null)
             {
-                ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-                    { "target", ally }, { "effect_id", "heroic" }, { "duration", 2 },
-                    { "stat_modifiers", new Godot.Collections.Dictionary { { "attack_bonus", 2 }, { "ac_bonus", 1 } } }
-                });
+                // 新 Buff 系统:施加 heroic_call buff
+                BladeHex.Combat.Buff.BuffSystem.Apply(ally.Data, "heroic_call", duration: 3,
+                    sourceUnitId: (int)ctx.Attacker.GetInstanceId(), source: "heroic_call");
             }
         }
+        if (ctx.Attacker.Data != null) ctx.Attacker.Data.Runtime.HeroicCallUsedThisCombat = 1;
     }
 
     // ========== 奥术攻击 ==========

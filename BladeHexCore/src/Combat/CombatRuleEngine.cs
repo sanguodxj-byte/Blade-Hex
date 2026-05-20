@@ -42,6 +42,13 @@ public static class CombatRuleEngine
 
         /// <summary>半掩体 AC 加值</summary>
         public int CoverAcBonus;
+
+        /// <summary>
+        /// 命中后追加的暴击概率（0~1）。来自技能盘 critical_rate 节点等"独立暴击概率"
+        /// 来源。命中且非自然 20 / 暴击阈值时，按此概率独立掷骰升级为暴击。
+        /// 不影响 d20 暴击阈值，避免与必中必暴规则冲突。
+        /// </summary>
+        public float BonusCritChance;
     }
 
     /// <summary>攻击检定结果</summary>
@@ -184,6 +191,17 @@ public static class CombatRuleEngine
         }
 
         result.IsHit = isHit;
+
+        // v0.6 11.5: 节点 critical_rate 独立追加暴击概率。
+        // 仅在已命中且尚未暴击时生效；不影响自然 20 必暴 / 自然 1 必失败规则。
+        if (isHit && !result.IsCritical && !result.IsFumble && input.BonusCritChance > 0f)
+        {
+            // 用 0..999 的整数桶映射 0..1，避免浮点 / 整数比较的边界踩雷。
+            int threshold = (int)(input.BonusCritChance * 1000f);
+            if (CombatRandom.RandRange(0, 999) < threshold)
+                result.IsCritical = true;
+        }
+
         return result;
     }
 

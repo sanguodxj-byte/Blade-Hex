@@ -1,5 +1,6 @@
 // TownPanel.cs
-// 城镇面板 — 进入城镇/村庄时显示设施列表，允许玩家选择交互
+// 城镇面板 — 进入城镇/村庄时显示设施列表
+// 使用统一布局基类：插画 → 信息 → 描述 → 设施列表 → 离开
 using Godot;
 using BladeHex.Strategic;
 
@@ -9,115 +10,85 @@ namespace BladeHex.View.UI.Overworld;
 public partial class TownPanel : POIPanelBase
 {
     // ============================================================================
-    // 面板规格
-    // ============================================================================
-
-    protected override int PanelWidth => 450;
-    protected override int PanelHeight => 450;
-
-    // ============================================================================
     // 信号
     // ============================================================================
 
-    [Signal]
-    public delegate void FacilitySelectedEventHandler(int facilityType);
-
-    [Signal]
-    public delegate void LeaveTownEventHandler();
+    [Signal] public delegate void FacilitySelectedEventHandler(int facilityType);
+    [Signal] public delegate void LeaveTownEventHandler();
 
     // ============================================================================
     // 字段
     // ============================================================================
 
-    private Label _townNameLabel = null!;
-    private Label _townInfoLabel = null!;
-    private RichTextLabel _townDescLabel = null!;
-    private GridContainer _facilitiesGrid = null!;
     private OverworldTown? _currentTown;
 
     // ============================================================================
-    // 内容构建
+    // 数据填充
     // ============================================================================
 
-    protected override void BuildContent(VBoxContainer container)
+    protected override Color GetIllustrationColor() => new(0.06f, 0.08f, 0.12f, 1.0f);
+
+    protected override string GetIllustrationText()
     {
-        // 城镇名称
-        _townNameLabel = CreateTitleLabel("");
-        container.AddChild(_townNameLabel);
-
-        // 城镇信息
-        _townInfoLabel = CreateMutedLabel("");
-        container.AddChild(_townInfoLabel);
-
-        // 描述
-        _townDescLabel = CreateRichText(new Vector2(410, 50));
-        container.AddChild(_townDescLabel);
-
-        // 分割线
-        container.AddChild(CreateSeparatorH());
-
-        // 设施标题
-        container.AddChild(CreateBodyLabel("设施:"));
-
-        // 设施按钮网格
-        _facilitiesGrid = new GridContainer();
-        _facilitiesGrid.Columns = 2;
-        _facilitiesGrid.AddThemeConstantOverride("h_separation", SpacingMd);
-        _facilitiesGrid.AddThemeConstantOverride("v_separation", SpacingMd);
-        container.AddChild(_facilitiesGrid);
-
-        // 分割线
-        container.AddChild(CreateSeparatorH());
-
-        // 离开按钮
-        var leaveBtn = CreateButton("离开城镇", new Vector2(410, 40));
-        leaveBtn.Pressed += () =>
+        if (_currentTown == null) return "[ 城镇 ]";
+        string type = _currentTown.TownType switch
         {
-            EmitSignal(SignalName.LeaveTown);
-            HidePanel();
+            "village" => "村庄",
+            "port" => "港口",
+            "castle" => "城堡",
+            "outpost" => "前哨站",
+            "tavern" => "旅店",
+            "mine" => "矿场",
+            "shrine" => "药师所",
+            _ => "城镇"
         };
-        container.AddChild(leaveBtn);
+        return $"[ {type} ]";
     }
 
-    // ============================================================================
-    // 公开接口
-    // ============================================================================
+    protected override string GetPanelTitle() => "";
 
-    public void ShowTown(OverworldTown town)
+    protected override string GetInfoText()
     {
-        _currentTown = town;
-        _townNameLabel.Text = town.TownName;
-
-        string typeText = town.TownType == "village" ? "村庄" : "城镇";
-        _townInfoLabel.Text = $"{typeText} · 繁荣: {town.Prosperity} · 守军: {town.Garrison}";
-        _townDescLabel.Text = town.GetDescription();
-
-        PopulateFacilities();
-        ShowPanel();
+        if (_currentTown == null) return "";
+        string typeText = _currentTown.TownType switch
+        {
+            "village" => "村庄",
+            "port" => "港口",
+            "castle" => "城堡",
+            "outpost" => "前哨站",
+            _ => "城镇"
+        };
+        return $"{_currentTown.TownName} | {typeText} | 繁荣: {_currentTown.Prosperity}";
     }
 
-    public override void HidePanel()
+    protected override string GetDescriptionText()
     {
-        base.HidePanel();
-        _currentTown = null;
-        ClearFacilities();
+        if (_currentTown == null) return "";
+        // 使用 DescriptionProvider（三因素：类型x繁荣度x种族）
+        var poiType = _currentTown.TownType switch
+        {
+            "village" => Strategic.OverworldPOI.POIType.Village,
+            "port" => Strategic.OverworldPOI.POIType.Port,
+            "castle" => Strategic.OverworldPOI.POIType.Castle,
+            "outpost" => Strategic.OverworldPOI.POIType.Outpost,
+            "tavern" => Strategic.OverworldPOI.POIType.Tavern,
+            "mine" => Strategic.OverworldPOI.POIType.Mine,
+            "shrine" => Strategic.OverworldPOI.POIType.Shrine,
+            _ => Strategic.OverworldPOI.POIType.Town,
+        };
+        var ctx = Strategic.DescriptionContext.Default;
+        ctx.PoiName = _currentTown.TownName;
+        ctx.Prosperity = _currentTown.Prosperity;
+        ctx.Garrison = _currentTown.Garrison;
+        ctx.RaceStyle = !string.IsNullOrEmpty(_currentTown.Faction) ? _currentTown.Faction : "Human";
+        return Strategic.DescriptionProvider.GetPoiDescription(poiType, ctx);
     }
 
-    protected override void OnCloseRequested()
-    {
-        EmitSignal(SignalName.LeaveTown);
-        HidePanel();
-    }
+    protected override string GetLeaveButtonText() => "离开城镇";
 
-    // ============================================================================
-    // 设施管理
-    // ============================================================================
-
-    private void PopulateFacilities()
+    protected override void PopulateActions(VBoxContainer container)
     {
-        ClearFacilities();
-        if (_currentTown == null)
-            return;
+        if (_currentTown == null) return;
 
         // 确保设施已初始化
         if (_currentTown.Facilities.Count == 0)
@@ -130,21 +101,38 @@ public partial class TownPanel : POIPanelBase
 
         foreach (var facility in _currentTown.Facilities)
         {
-            if (!facility.IsAvailable)
-                continue;
+            if (!facility.IsAvailable) continue;
 
-            var btn = CreateButton(facility.FacilityName, new Vector2(195, 50));
-            btn.TooltipText = facility.Description;
-
+            string desc = facility.Description;
+            string btnText = string.IsNullOrEmpty(desc)
+                ? facility.FacilityName
+                : $"{facility.FacilityName} -- {desc}";
+            var btn = CreateActionButton(btnText);
             int ftype = facility.FacilityTypeInt;
             btn.Pressed += () => EmitSignal(SignalName.FacilitySelected, ftype);
-            _facilitiesGrid.AddChild(btn);
+            container.AddChild(btn);
         }
     }
 
-    private void ClearFacilities()
+    // ============================================================================
+    // 公开接口
+    // ============================================================================
+
+    public void ShowTown(OverworldTown town)
     {
-        foreach (Node child in _facilitiesGrid.GetChildren())
-            child.QueueFree();
+        _currentTown = town;
+        ShowPanel();
+    }
+
+    public override void HidePanel()
+    {
+        base.HidePanel();
+        _currentTown = null;
+    }
+
+    protected override void OnCloseRequested()
+    {
+        EmitSignal(SignalName.LeaveTown);
+        HidePanel();
     }
 }

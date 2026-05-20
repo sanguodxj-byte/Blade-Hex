@@ -16,9 +16,10 @@ public class WorldCreationConfig
     /// <summary>世界大小枚举</summary>
     public enum WorldSize
     {
-        Small = 0,   // ~65k tiles, 快速测试
-        Medium = 1,  // ~221k tiles, 标准游戏
-        Large = 2,   // ~459k tiles, 史诗规模
+        Small = 0,   // ~65k tiles, 单模板
+        Medium = 1,  // ~221k tiles, 2x2 模板
+        Large = 2,   // ~459k tiles, 3x3 模板
+        Mega = 3,    // ~800k tiles, 4x4 模板
     }
 
     /// <summary>世界宽度（chunk 数）</summary>
@@ -40,14 +41,15 @@ public class WorldCreationConfig
     public int WorldTileHeight => WorldChunksH * ChunkData.ChunkSize;
 
     /// <summary>世界大小显示名称</summary>
-    public static string[] GetSizeNames() => new[] { "小型", "中型", "大型" };
+    public static string[] GetSizeNames() => new[] { "小型", "中型", "大型", "超大" };
 
     /// <summary>世界大小描述</summary>
     public static string[] GetSizeDescriptions() => new[]
     {
-        "约 6 万格 — 适合快速体验",
-        "约 22 万格 — 标准冒险",
-        "约 46 万格 — 史诗征途",
+        "约 6 万格 · 一个完整地区",
+        "约 22 万格 · 一片广阔大陆",
+        "约 46 万格 · 两个相邻地区",
+        "约 80 万格 · 多区域世界",
     };
 
     /// <summary>根据大小枚举创建配置</summary>
@@ -58,7 +60,30 @@ public class WorldCreationConfig
             WorldSize.Small => Small(seed),
             WorldSize.Medium => Medium(seed),
             WorldSize.Large => Large(seed),
+            WorldSize.Mega => Mega(seed),
             _ => Medium(seed),
+        };
+    }
+
+    /// <summary>每种大小的模板网格维度（每个网格用一个独立模板）</summary>
+    public static (int gridW, int gridH) GetTemplateGrid(WorldSize size) => size switch
+    {
+        WorldSize.Small => (1, 1),  // 单一模板：聚焦一个区域
+        WorldSize.Medium => (1, 1), // 单一模板：聚焦一个区域，规模放大
+        WorldSize.Large => (2, 2),  // 2 个相邻区域
+        WorldSize.Mega => (3, 3),   // 多个区域但不至于碎裂
+        _ => (1, 1),
+    };
+
+    /// <summary>超大世界 — 80×56 chunks ≈ 800k tiles</summary>
+    public static WorldCreationConfig Mega(int seed)
+    {
+        return new WorldCreationConfig
+        {
+            WorldChunksW = 80,
+            WorldChunksH = 56,
+            Nations = NationConfig.GetDefaultNations(),
+            MinBiomeZoneSize = 350,
         };
     }
 

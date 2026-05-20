@@ -13,7 +13,10 @@ public partial class QuickCombatContext : Resource
     /// <summary>地图模板键名，空字符串表示随机。</summary>
     [Export] public string Template { get; set; } = "";
 
-    /// <summary>战斗规模档位（0=Mercenary, 1=Knight, 2=Lord, 3=Stronghold）。</summary>
+    /// <summary>
+    /// 战斗规模档位 — 决定大地图采样范围和战斗地图大小。
+    /// 0=小型(K=0, 169格), 1=中型(K=1, 397格), 2=大型(K=2, 631格), 3=巨大(K=3, 973格)
+    /// </summary>
     [Export] public int Size { get; set; }
 
     /// <summary>玩家方单位数量（1-6）。</summary>

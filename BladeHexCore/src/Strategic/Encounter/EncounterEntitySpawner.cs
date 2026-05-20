@@ -37,6 +37,9 @@ public class EncounterEntitySpawner
     /// <summary>实体察觉玩家的视野距离</summary>
     public float EntityVisionRange = 600.0f;
 
+    /// <summary>玩家种族 ID（用于决定冒险者同/异族态度）</summary>
+    public int PlayerRaceId { get; set; } = 0;
+
     /// <summary>不活跃实体池 — 离开活跃区域的实体在此休眠等待复用</summary>
     public DormantEntityPool DormantPool { get; set; } = new();
 
@@ -154,12 +157,42 @@ public class EncounterEntitySpawner
             reused.PartyLevel = Mathf.Max(1, playerLevel + _rng.Next(-1, 2));
             reused.CurrentAIState = OverworldEntity.AIState.Patrolling;
             reused.VisionRange = EntityVisionRange;
-            reused.IsHostileToPlayer = entityType != OverworldEntity.EntityType.Caravan;
+            // Caravan 永远不敌对；Adventurer 不敌对（同族/异族 = 友好/中立）；其他保持敌对
+            reused.IsHostileToPlayer = entityType switch
+            {
+                OverworldEntity.EntityType.Caravan => false,
+                OverworldEntity.EntityType.Adventurer => false,
+                _ => true,
+            };
             return reused;
         }
 
         // 池中无可用实体，新建
         var (templateName, partySize, combatPower, faction) = GetTypeConfig(entityType, playerLevel);
+
+        // 冒险者按 70% 同族 / 30% 异族 随机分配种族
+        int raceId = -1;
+        if (entityType == OverworldEntity.EntityType.Adventurer)
+        {
+            bool sameRace = _rng.NextDouble() < 0.7;
+            if (sameRace)
+            {
+                raceId = PlayerRaceId;
+            }
+            else
+            {
+                var allRaces = BladeHex.Data.RaceData.GetAllRaces();
+                int rid;
+                int safety = 8;
+                do { rid = (int)allRaces[_rng.Next(allRaces.Length)].raceId; }
+                while (rid == PlayerRaceId && --safety > 0);
+                raceId = rid;
+            }
+        }
+
+        // 默认敌对，但 Adventurer/Caravan 是非敌对
+        bool hostileDefault = entityType != OverworldEntity.EntityType.Adventurer
+                              && entityType != OverworldEntity.EntityType.Caravan;
 
         var entity = new OverworldEntity
         {
@@ -174,7 +207,8 @@ public class EncounterEntitySpawner
             PartyLevel = Mathf.Max(1, playerLevel + _rng.Next(-1, 2)),
             CombatPower = combatPower,
             Faction = faction,
-            IsHostileToPlayer = true,
+            IsHostileToPlayer = hostileDefault,
+            RaceId = raceId,
             VisionRange = EntityVisionRange,
             CurrentAIState = OverworldEntity.AIState.Patrolling,
             IsAlive = true,

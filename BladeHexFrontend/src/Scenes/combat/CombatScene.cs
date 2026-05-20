@@ -8,6 +8,7 @@ using BladeHex.Data;
 using BladeHex.Map;
 using BladeHex.Combat;
 using BladeHex.Strategic;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Scenes;
 
@@ -63,9 +64,10 @@ public partial class CombatScene : CombatSceneBase
             variant = "boss"; // 领主/传奇生物
         else
         {
-            // 检查是否雨中战斗
-            var gs = BladeHex.Data.Globals.StateOrNull;
-            bool isRaining = gs != null && gs.Weather.Type == 0; // 0 = Rain
+            // 检查是否雨中战斗（从 Autoload 实时读取）
+            var weatherMgr = BladeHex.Data.Globals.WeatherOrNull;
+            bool isRaining = weatherMgr != null
+                && weatherMgr.GetActiveWeatherType() == BladeHex.View.Environment.WeatherType.Rain;
             variant = isRaining ? "rain" : "normal";
         }
 
@@ -85,10 +87,11 @@ public partial class CombatScene : CombatSceneBase
         }
         else
         {
-            var templateNames = generator.GetTemplateNames();
-            if (templateNames.Length == 0) { GD.PrintErr("[CombatScene] 无可用模板"); return; }
-            string randomTemplate = templateNames[GD.RandRange(0, templateNames.Length - 1)];
-            _mapData = generator.GenerateFromTemplate(randomTemplate, BattleMapGenerator.BattleSize.Mercenary);
+            // 兜底：随机选一个 preset，通过统一 pipeline 生成
+            var presetNames = BattleMapGenerator.GetAvailablePresetNames();
+            if (presetNames.Length == 0) { GD.PrintErr("[CombatScene] 无可用模板"); return; }
+            string randomPreset = presetNames[GD.RandRange(0, presetNames.Length - 1)];
+            _mapData = generator.GenerateFromTemplate(randomPreset, BattleMapGenerator.BattleSize.Mercenary);
         }
 
         _mapWidth = _mapData.Width;
@@ -114,17 +117,62 @@ public partial class CombatScene : CombatSceneBase
         var pDeploy = _mapData!.PlayerDeployment.Select(v => v.AsVector2I()).OrderBy(_ => GD.Randf()).ToList();
         var eDeploy = _mapData.EnemyDeployment.Select(v => v.AsVector2I()).OrderBy(_ => GD.Randf()).ToList();
 
-        if (PlayerRoster != null && PlayerRoster.GetDeployableMembers().Count > 0)
-            SpawnFromRoster(pDeploy);
+        if (UsePlayerDeployment())
+        {
+            // 部署模式：玩家单位只注册不放置，由部署阶段交互放置
+            SpawnPlayerUnitsForDeployment();
+        }
         else
-            SpawnHardcodedPlayer(pDeploy);
+        {
+            if (PlayerRoster != null && PlayerRoster.GetDeployableMembers().Count > 0)
+                SpawnFromRoster(pDeploy);
+            else
+                SpawnHardcodedPlayer(pDeploy);
+        }
 
+        // 敌方始终自动放置
         if (EncounterEnemies != null && EncounterEnemies.Count > 0)
             SpawnFromEncounter(eDeploy);
         else
             SpawnHardcodedEnemies(eDeploy);
 
         UpdateFov();
+    }
+
+    /// <summary>部署模式：创建玩家单位并注册，但不放置到地图上</summary>
+    private void SpawnPlayerUnitsForDeployment()
+    {
+        if (PlayerRoster != null && PlayerRoster.GetDeployableMembers().Count > 0)
+        {
+            var deployable = PlayerRoster.GetDeployableMembers();
+            int idx = 0;
+            foreach (var memberData in deployable)
+            {
+                var unit = new Unit { Data = memberData, Name = $"Player_{memberData.UnitName}" };
+                // 不调用 PlaceUnitAt — 单位不放到地图上
+                _combatManager.RegisterUnit(unit, true);
+                _combatUi.RegisterAlly(unit);
+                unit.InitDr();
+                if (idx == 0) _activePlayerUnit = unit;
+                idx++;
+            }
+        }
+        else
+        {
+            // Hardcoded fallback — 创建但不放置
+            var playerData = new UnitData
+            {
+                UnitName = "战士", Str = 16, Dex = 14, Con = 15, BaseMaxHp = 10, BaseAc = 8,
+                Armor = new ArmorData { ItemName = "链甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 4, MaxDexBonus = 2 },
+                PrimaryMainHand = new WeaponData { ItemName = "长剑", DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Slash },
+                SecondaryMainHand = new WeaponData { ItemName = "长弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Pierce },
+            };
+            var unit = new Unit { Data = playerData, Name = "PlayerWarrior" };
+            _combatManager.RegisterUnit(unit, true);
+            _combatUi.RegisterAlly(unit);
+            unit.InitDr();
+            _activePlayerUnit = unit;
+        }
     }
 
     private void SpawnFromRoster(List<Vector2I> positions)
@@ -169,7 +217,8 @@ public partial class CombatScene : CombatSceneBase
             SecondaryMainHand = new WeaponData { ItemName = "长弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Pierce },
         };
         var unit = new Unit { Data = playerData, Name = "PlayerWarrior" };
-        var pos = pDeploy.Count > 0 ? pDeploy[^1] : new Vector2I(2, 2);
+        // 优先使用部署区,fallback 用 (0,0) — PlaceUnitAt 会自动找最近可部署 cell
+        var pos = pDeploy.Count > 0 ? pDeploy[^1] : Vector2I.Zero;
         if (pDeploy.Count > 0) pDeploy.RemoveAt(pDeploy.Count - 1);
         PlaceUnitAt(unit, pos.X, pos.Y);
         _combatManager.RegisterUnit(unit, true);
@@ -191,8 +240,16 @@ public partial class CombatScene : CombatSceneBase
         foreach (var data in enemies)
         {
             var unit = new Unit { Data = data, Name = $"Enemy_{data.UnitName}" };
-            if (eDeploy.Count > 0) { var pos = eDeploy[^1]; eDeploy.RemoveAt(eDeploy.Count - 1); PlaceUnitAt(unit, pos.X, pos.Y); }
-            else PlaceUnitAt(unit, 8, deployed * 2);
+            // 优先使用部署区,fallback 用 (0,0) — PlaceUnitAt 会自动找最近可部署 cell
+            if (eDeploy.Count > 0)
+            {
+                var pos = eDeploy[^1]; eDeploy.RemoveAt(eDeploy.Count - 1);
+                PlaceUnitAt(unit, pos.X, pos.Y);
+            }
+            else
+            {
+                PlaceUnitAt(unit, 0, 0);
+            }
             _combatManager.RegisterUnit(unit, false); _combatUi.RegisterEnemy(unit); unit.InitDr();
             deployed++;
         }
@@ -224,8 +281,8 @@ public partial class CombatScene : CombatSceneBase
             int enemyCount = _combatManager.EnemyUnits.Count;
             int avgLevel = enemyCount > 0
                 ? _combatManager.EnemyUnits.Sum(e => e.Data?.Level ?? 1) / enemyCount : 1;
-            outcome.GoldGranted = avgLevel * 10 + enemyCount * 8;
-            outcome.XpGranted = avgLevel * 25 + enemyCount * 15;
+            outcome.GoldGranted = RewardPricingService.GetEncounterGold(avgLevel, enemyCount);
+            outcome.XpGranted = RewardPricingService.GetEncounterXp(avgLevel, enemyCount);
             GenerateLoot(outcome);
         }
         return outcome;
@@ -242,22 +299,22 @@ public partial class CombatScene : CombatSceneBase
 
             if (data.Armor != null)
             {
-                outcome.LootEntries.Add(new LootEntry(data.Armor.GetFullName(), LootEntry.LootType.Armor, 1, data.Armor.GetSellPrice(), data.Armor.GetArmorDescription()));
+                outcome.LootEntries.Add(new LootEntry(data.Armor.GetFullName(), LootEntry.LootType.Armor, 1, TradePricingService.GetSellPrice(data.Armor), data.Armor.GetArmorDescription()));
                 outcome.LootItems.Add(data.Armor);
             }
             if (data.Shield != null)
             {
-                outcome.LootEntries.Add(new LootEntry(data.Shield.GetFullName(), LootEntry.LootType.Shield, 1, data.Shield.GetSellPrice(), data.Shield.GetArmorDescription()));
+                outcome.LootEntries.Add(new LootEntry(data.Shield.GetFullName(), LootEntry.LootType.Shield, 1, TradePricingService.GetSellPrice(data.Shield), data.Shield.GetArmorDescription()));
                 outcome.LootItems.Add(data.Shield);
             }
             if (data.Helmet != null)
             {
-                outcome.LootEntries.Add(new LootEntry(data.Helmet.GetFullName(), LootEntry.LootType.Helmet, 1, data.Helmet.GetSellPrice(), data.Helmet.GetArmorDescription()));
+                outcome.LootEntries.Add(new LootEntry(data.Helmet.GetFullName(), LootEntry.LootType.Helmet, 1, TradePricingService.GetSellPrice(data.Helmet), data.Helmet.GetArmorDescription()));
                 outcome.LootItems.Add(data.Helmet);
             }
             if (data.PrimaryMainHand != null && GD.Randf() < 0.5f)
             {
-                outcome.LootEntries.Add(new LootEntry(data.PrimaryMainHand.GetFullName(), LootEntry.LootType.Weapon, 1, data.PrimaryMainHand.GetSellPrice(), data.PrimaryMainHand.GetWeaponDescription()));
+                outcome.LootEntries.Add(new LootEntry(data.PrimaryMainHand.GetFullName(), LootEntry.LootType.Weapon, 1, TradePricingService.GetSellPrice(data.PrimaryMainHand), data.PrimaryMainHand.GetWeaponDescription()));
                 outcome.LootItems.Add(data.PrimaryMainHand);
             }
         }
@@ -274,7 +331,7 @@ public partial class CombatScene : CombatSceneBase
                     ? (ItemData)EquipmentGenerator.GenerateRandomWeapon(null, (ItemData.Rarity)(-1), itemLevel, difficulty)
                     : (ItemData)EquipmentGenerator.GenerateRandomArmor(null, (ItemData.Rarity)(-1), itemLevel, difficulty);
                 var lootType = generated is WeaponData ? LootEntry.LootType.Weapon : LootEntry.LootType.Armor;
-                outcome.LootEntries.Add(new LootEntry(generated.GetFullName(), lootType, 1, generated.GetSellPrice(), $"{generated.GetRarityName()} | {generated.GetAffixDescriptions()}"));
+                outcome.LootEntries.Add(new LootEntry(generated.GetFullName(), lootType, 1, TradePricingService.GetSellPrice(generated), $"{generated.GetRarityName()} | {generated.GetAffixDescriptions()}"));
                 outcome.LootItems.Add(generated);
             }
         }
@@ -286,7 +343,7 @@ public partial class CombatScene : CombatSceneBase
             if (GD.Randf() < 0.35f && consumableList.Count > 0)
             {
                 var c = consumableList[(int)(GD.Randf() * consumableList.Count)];
-                outcome.LootEntries.Add(new LootEntry(c.ItemName, LootEntry.LootType.Consumable, 1, c.Price, c.Description));
+                outcome.LootEntries.Add(new LootEntry(c.ItemName, LootEntry.LootType.Consumable, 1, TradePricingService.GetSellPrice(c), c.Description));
                 outcome.LootItems.Add(c);
             }
         }

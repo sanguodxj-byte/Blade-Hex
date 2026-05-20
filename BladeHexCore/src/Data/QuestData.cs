@@ -19,6 +19,8 @@ public partial class QuestData : Resource
         Exploration,   // 探索型
         Defense,       // 防御型
         Emergency,     // 紧急型
+        Collection,    // 采集型
+        Bounty,        // 悬赏型（精英/Boss）
     }
 
     public enum QuestStatus

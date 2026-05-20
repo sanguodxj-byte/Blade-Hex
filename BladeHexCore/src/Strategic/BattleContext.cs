@@ -20,14 +20,20 @@ public partial class BattleContext : Resource
         Ambushed,  // 玩家被伏击：玩家集中混乱，敌人分散有利，首回合AC-2
     }
 
-    /// <summary>战斗规模 (对应 BattleMapGenerator.BattleSize)</summary>
+    /// <summary>战斗规模 — 决定大地图采样范围和战斗地图大小</summary>
     public enum BattleSize
     {
-        Mercenary,  // 雇佣兵（小型遭遇）
-        Knight,     // 骑士（中型遭遇）
-        Lord,       // 领主（大型遭遇）
-        Stronghold, // 据点（攻城/据点战，显著大于遭遇战）
+        Mercenary,  // 小型：K=0, 单格采样, radius=7 (169 cells)
+        Knight,     // 中型：K=1, 7格采样, radius=11 (397 cells)
+        Lord,       // 大型：K=2, 19格采样, radius=14 (631 cells)
+        Stronghold, // 巨大：K=3, 37格采样, radius=18 (973 cells)
     }
+
+    /// <summary>
+    /// R13 (2026-05-17) 主动发起战斗的一方。决定 R13#11a Castle 战中谁部署在城堡内。
+    /// 默认 Player（玩家点 POI 攻击）；POI 主动派兵攻击玩家时设为 Enemy。
+    /// </summary>
+    public enum BattleSide { Player, Enemy }
 
     // ========================================
     // 数据字段
@@ -43,6 +49,27 @@ public partial class BattleContext : Resource
     public HexOverworldGrid? OverworldGrid = null;
     public Vector2I EncounterCoord = Vector2I.Zero;
     public int PoiType = -1;
+
+    /// <summary>
+    /// 敌方相对玩家的接近方向(以战场中心为原点的六边形 axial 方向向量)。
+    /// null = 未知/不适用,DeploymentZone 退化到 q 轴左右切。
+    /// 由 EncounterSpawner 在创建战斗时计算:POI 战取 `POI.CenterHex - PlayerCoord`,野外暂未实现保持 null。
+    /// </summary>
+    public Vector2I? ApproachDirection = null;
+
+    /// <summary>
+    /// R7 (2026-05-17) 大地图天气进入战斗的覆盖。
+    /// 取值: "clear" / "rain" / "snow" / "sandstorm" / null。
+    /// 不直接引用 Frontend 的 WeatherType 枚举（避免 Core ↔ Frontend 跨层依赖），由调用方负责 ToString().ToLower()。
+    /// 未列出值或 "clear"/null 时不改写地形（仅记 info 日志）。
+    /// </summary>
+    public string? WeatherOverride = null;
+
+    /// <summary>
+    /// R13 (2026-05-17) 主动发起战斗的一方，决定 Castle 战墙内/墙外部署。
+    /// 默认 Player（玩家攻击 POI）；POI 派兵反击玩家时设为 Enemy。
+    /// </summary>
+    public BattleSide AttackingSide = BattleSide.Player;
 
     // ========================================
     // 战略层 ↔ 战斗层桥梁数据
@@ -108,6 +135,35 @@ public partial class BattleContext : Resource
 
         // 设置战斗坐标
         context.EncounterCoord = coord;
+        context.OverworldGrid = grid;
+
+        // 推导接近方向:POI 战 = POI 中心 - 玩家(玩家 coord)方向
+        if (poi != null)
+        {
+            var dq = poi.CenterHex.X - coord.X;
+            var dr = poi.CenterHex.Y - coord.Y;
+            if (dq != 0 || dr != 0)
+                context.ApproachDirection = new Vector2I(dq, dr);
+        }
+        else if (attacker != null && defender != null)
+        {
+            // R13#4 (2026-05-17) 野外遭遇:用 attacker - defender 像素坐标差转 axial 后归一化方向。
+            // 站在 defender(玩家视角)看,敌人朝哪个 axial 方向来。
+            var atkAxial = Map.HexOverworldTile.PixelToAxial(attacker.Position.X, attacker.Position.Y);
+            var defAxial = Map.HexOverworldTile.PixelToAxial(defender.Position.X, defender.Position.Y);
+            var dq = atkAxial.X - defAxial.X;
+            var dr = atkAxial.Y - defAxial.Y;
+            if (dq != 0 || dr != 0)
+                context.ApproachDirection = new Vector2I(dq, dr);
+        }
+
+        // === 比例尺统一：从 POI preset 派生战斗规模 ===
+        if (poi != null)
+        {
+            var preset = POIBattlePresetRegistry.Resolve(poi);
+            context.Size = preset.OverrideBattleSize ?? POIScaleTable.Get(preset.Scale).BattleSize;
+            context.PoiType = (int)poi.PoiTypeEnum;
+        }
 
         return context;
     }

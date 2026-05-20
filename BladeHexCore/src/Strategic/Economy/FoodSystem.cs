@@ -62,6 +62,12 @@ public class FoodSystem
     /// <summary>是否允许 HP 恢复（断粮时不恢复）</summary>
     public bool CanRestoreHp => ConsecutiveStarveDays == 0;
 
+    /// <summary>读档还原断粮天数（允许 SaveManager 直接写入 private 字段）</summary>
+    public void SetConsecutiveStarveDays(int days)
+    {
+        ConsecutiveStarveDays = days;
+    }
+
     /// <summary>序列化</summary>
     public Godot.Collections.Dictionary Serialize() => new()
     {

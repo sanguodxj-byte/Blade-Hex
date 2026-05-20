@@ -128,8 +128,8 @@ public partial class PortPanel : POIPanelBase
 
         // 港口图标文字（占位）
         var iconLabel = new Label();
-        iconLabel.Text = "⚓";
-        iconLabel.AddThemeFontSizeOverride("font_size", 40);
+        iconLabel.Text = "[ 港口 ]";
+        iconLabel.AddThemeFontSizeOverride("font_size", 20);
         iconLabel.AddThemeColorOverride("font_color", TextPortAccent);
         iconLabel.HorizontalAlignment = HorizontalAlignment.Center;
         iconLabel.VerticalAlignment = VerticalAlignment.Center;
@@ -311,7 +311,7 @@ public partial class PortPanel : POIPanelBase
     private Button MakeFerryButton(string destination, int cost)
     {
         var btn = new Button();
-        btn.Text = $"⛵ {destination}  ({cost}金)";
+        btn.Text = $"{destination}  ({cost}金)";
         btn.CustomMinimumSize = new Vector2(0, 36);
         btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         btn.AddThemeFontSizeOverride("font_size", FontSizeMd);

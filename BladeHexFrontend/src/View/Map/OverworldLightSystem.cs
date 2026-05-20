@@ -60,18 +60,13 @@ public partial class OverworldLightSystem : Node3D
     }
 
     // POI 类型 → 光源配置（只有范围和强度不同，颜色统一）
-    private static readonly Dictionary<OverworldPOI.POIType, LightConfig> _poiLightConfigs = new()
+    // 已废弃：现在使用 POIScaleTable.Get(scale) 派生 LightRange / LightEnergy
+    // 保留映射供 PlayerLight / EntityLight 使用
+    private static LightConfig PoiLightFromScale(BladeHex.Strategic.POIScale scale)
     {
-        [OverworldPOI.POIType.Town] = new LightConfig { Range = 4.0f, BaseEnergy = 1.2f },
-        [OverworldPOI.POIType.Castle] = new LightConfig { Range = 3.5f, BaseEnergy = 1.0f },
-        [OverworldPOI.POIType.Port] = new LightConfig { Range = 3.0f, BaseEnergy = 0.9f },
-        [OverworldPOI.POIType.Village] = new LightConfig { Range = 2.0f, BaseEnergy = 0.6f },
-        [OverworldPOI.POIType.Tavern] = new LightConfig { Range = 2.0f, BaseEnergy = 0.7f },
-        [OverworldPOI.POIType.Outpost] = new LightConfig { Range = 1.8f, BaseEnergy = 0.5f },
-        [OverworldPOI.POIType.Mine] = new LightConfig { Range = 1.5f, BaseEnergy = 0.4f },
-        [OverworldPOI.POIType.Farm] = new LightConfig { Range = 1.2f, BaseEnergy = 0.3f },
-        [OverworldPOI.POIType.Shrine] = new LightConfig { Range = 1.5f, BaseEnergy = 0.5f },
-    };
+        var profile = BladeHex.Strategic.POIScaleTable.Get(scale);
+        return new LightConfig { Range = profile.LightRange, BaseEnergy = profile.LightEnergy };
+    }
 
     private static readonly LightConfig PlayerLight = new() { Range = 2.0f, BaseEnergy = 0.8f };
     private static readonly LightConfig HostileEntityLight = new() { Range = 1.2f, BaseEnergy = 0.4f };
@@ -128,8 +123,7 @@ public partial class OverworldLightSystem : Node3D
             if (poi.PoiTypeEnum == OverworldPOI.POIType.Settlement) continue;
             if (poi.PoiTypeEnum == OverworldPOI.POIType.Lair) continue;
 
-            if (!_poiLightConfigs.TryGetValue(poi.PoiTypeEnum, out var config))
-                continue;
+            var config = PoiLightFromScale(poi.Scale);
 
             var light = CreateLight(config);
             var worldPos = new Vector3(poi.Position.X * PixelToWorld, LightHeight, poi.Position.Y * PixelToWorld);
@@ -206,7 +200,7 @@ public partial class OverworldLightSystem : Node3D
         foreach (var kvp in _poiLights)
         {
             if (!GodotObject.IsInstanceValid(kvp.Value)) continue;
-            var config = _poiLightConfigs.GetValueOrDefault(kvp.Key.PoiTypeEnum);
+            var config = PoiLightFromScale(kvp.Key.Scale);
             float dist = _playerPos.DistanceTo(kvp.Key.Position);
             float visibility = GetVisibilityByDistance(dist);
             kvp.Value.LightEnergy = config.BaseEnergy * nightMult * visibility;

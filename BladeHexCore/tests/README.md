@@ -57,6 +57,7 @@ $env:TEST_MODE = "unit"
 | `golden_record`  | 记录 WorldPipeline 的基线 hash         |
 | `golden_verify`  | 验证 WorldPipeline 等价性               |
 | `unit`           | 运行架构优化 R7 引入的全部单元测试     |
+| `ui`             | UI 联通性测试（数据契约 + 信号接线）   |
 
 ## 编写新测试
 

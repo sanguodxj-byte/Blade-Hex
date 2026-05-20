@@ -205,11 +205,15 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
             if (IsWaiting && !_playerMoving) deltaHours *= 8.0f;
 
             EconomyMgr.AdvanceTime(deltaHours);
-            EconomyMgr.ConsumeFood(deltaHours * 0.1f);
+            // 动态口粮行军消耗（每人每天 0.5 单位，按小时平摊）
+            EconomyMgr.ConsumeFoodByTravel(deltaHours);
         }
 
         // 昼夜循环（必须在天气之前，天气会叠加修正）
         UpdateDayNightCycle();
+
+        // 地形 hillshade — 将太阳方向同步到地形 shader
+        UpdateTerrainHillshade();
 
         // 光圈系统昼夜更新
         if (_lightSystem != null && EconomyMgr != null)
@@ -318,6 +322,18 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
         EconomyMgr = new EconomyManager();
         EconomyMgr.Name = "EconomyManager";
         GetTree().Root.CallDeferred("add_child", EconomyMgr);
+
+        // 若为读档模式，在 EconomyManager 注入场景树后立即还原经济数据
+        var gs = BladeHex.Data.Globals.StateOrNull;
+        if (gs != null && gs.Save.IsLoadingSave && !string.IsNullOrEmpty(gs.Save.CurrentSaveId))
+        {
+            var saveData = new BladeHex.Data.SaveManager().LoadGame(gs.Save.CurrentSaveId);
+            if (saveData?.Economy != null)
+            {
+                BladeHex.Data.SaveManager.RestoreEconomy(EconomyMgr, saveData.Economy);
+                GD.Print($"[OverworldScene3D] 读档还原经济数据完成，saveId={gs.Save.CurrentSaveId}");
+            }
+        }
     }
 
     private void InitPlayer(GlobalState? gs)
@@ -407,10 +423,11 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
         {
             var itemsVar = gs.OriginContext.Data["items"];
             string[] itemNames = null;
+            string[] itemIds = null;
+            string[] itemTypes = null;
             try { itemNames = itemsVar.AsStringArray(); } catch { }
             if (itemNames == null)
             {
-                // fallback: Godot Array
                 try
                 {
                     var arr = itemsVar.AsGodotArray();
@@ -420,13 +437,59 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
                 }
                 catch { }
             }
+            // 读取物品 ID 和类型（新字段）
+            if (gs.OriginContext.Data.ContainsKey("itemIds"))
+            {
+                try { itemIds = gs.OriginContext.Data["itemIds"].AsStringArray(); } catch { }
+                if (itemIds == null)
+                {
+                    try
+                    {
+                        var arr = gs.OriginContext.Data["itemIds"].AsGodotArray();
+                        itemIds = new string[arr.Count];
+                        for (int i = 0; i < arr.Count; i++)
+                            itemIds[i] = arr[i].AsString();
+                    }
+                    catch { }
+                }
+            }
+            if (gs.OriginContext.Data.ContainsKey("itemTypes"))
+            {
+                try { itemTypes = gs.OriginContext.Data["itemTypes"].AsStringArray(); } catch { }
+                if (itemTypes == null)
+                {
+                    try
+                    {
+                        var arr = gs.OriginContext.Data["itemTypes"].AsGodotArray();
+                        itemTypes = new string[arr.Count];
+                        for (int i = 0; i < arr.Count; i++)
+                            itemTypes[i] = arr[i].AsString();
+                    }
+                    catch { }
+                }
+            }
             if (itemNames != null)
             {
-                foreach (var itemName in itemNames)
+                for (int i = 0; i < itemNames.Length; i++)
                 {
-                    if (string.IsNullOrEmpty(itemName)) continue;
-                    PlayerParty.Inventory.Add(
-                        new LootEntry(itemName, LootEntry.LootType.Material, 1, 5, "出身物品"));
+                    string name = itemNames[i];
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    string id = (itemIds != null && i < itemIds.Length) ? itemIds[i] : "";
+                    string type = (itemTypes != null && i < itemTypes.Length) ? itemTypes[i] : "material";
+
+                    var lootType = type switch
+                    {
+                        "weapon" => LootEntry.LootType.Weapon,
+                        "armor" => LootEntry.LootType.Armor,
+                        "consumable" => LootEntry.LootType.Consumable,
+                        "accessory" => LootEntry.LootType.Material, // 饰品暂用 Material 类型
+                        _ => LootEntry.LootType.Material,
+                    };
+
+                    var entry = new LootEntry(name, lootType, 1, 5, "出身物品");
+                    entry.ItemDataId = id; // 关联实际物品数据库 ID
+                    PlayerParty.Inventory.Add(entry);
                 }
                 GD.Print($"[OverworldScene3D] 出身物品: {itemNames.Length} 件加入背包");
             }
@@ -443,17 +506,22 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
 
         // 3D 玩家标记
         var worldPos = CoordConverter.PixelToWorld3D(_playerPixelPos);
+        float groundY = GetGroundElevationAt(_playerPixelPos);
         _playerMesh = new MeshInstance3D();
         _playerMesh.Mesh = new SphereMesh { Radius = 0.3f, Height = 0.6f };
         var mat = new StandardMaterial3D();
         mat.AlbedoColor = new Color(0.9f, 0.15f, 0.15f);
         mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
         _playerMesh.MaterialOverride = mat;
-        _playerMesh.Position = worldPos + new Vector3(0, 0.4f, 0);
+        _playerMesh.Position = worldPos + new Vector3(0, groundY + 0.4f, 0);
         _playerMesh.Name = "PlayerMarker";
         AddChild(_playerMesh);
 
         GD.Print($"[OverworldScene3D] 玩家: {PlayerUnitData.UnitName}, 队伍: {roster}");
+
+        // 注入 ActiveRoster 到 EconomyManager，使动态军饷与口粮结算能感知队伍状态
+        EconomyMgr.ActiveRoster = roster;
+        GD.Print($"[OverworldScene3D] EconomyManager.ActiveRoster 已注入，队伍人数: {roster.Count}");
     }
 
     /// <summary>根据出身选择创建初始伙伴单位（通过模板系统）</summary>
@@ -527,6 +595,20 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
         AddChild(env);
 
         SetupDayNightCycle();
+    }
+
+    /// <summary>
+    /// 每帧更新地形 shader 的太阳方向 uniform，驱动 hillshade 明暗随时间变化。
+    /// 从 DayNightController 的太阳 rotation 推导方向向量。
+    /// </summary>
+    private void UpdateTerrainHillshade()
+    {
+        if (_sunLight == null || _renderer == null) return;
+
+        // 从 DirectionalLight3D 的旋转推导太阳方向（光线从太阳射向地面的反方向）
+        // DirectionalLight3D 的 -Z 轴是光线方向，取反得到"从地面指向太阳"
+        var sunForward = -_sunLight.GlobalTransform.Basis.Z;
+        _renderer.UpdateSunDirection(sunForward);
     }
 
     // POI 渲染已移至 OverworldScene3D.POI.cs

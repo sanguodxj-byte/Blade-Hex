@@ -1,9 +1,9 @@
 // RoadStage.cs
 // 世界生成阶段 10：在聚落（城镇/村庄/城堡/前哨/旅店/港口）之间用 A* 连接道路。
 //
-// 抽取自 WorldCreator.ConnectSettlementRoads + BuildNearestNeighborRoads + RoadAStar +
-//   GetRoadBuildCost + HeuristicDist + StampRoadPath。
-// RNG：原 BuildNearestNeighborRoads 接收 seed 但内部未使用（纯 Prim MST），保留 seed 参数仅为兼容。
+// 道路寻路使用与玩家相同的 tile.MoveCost 成本模型（HexOverworldAStar 兼容），
+// 确保生成的道路路径与玩家实际行走路径一致。
+// 唯一差异：道路允许穿越浅水/河流（建桥），玩家不允许。
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +15,7 @@ namespace BladeHex.Strategic.WorldGen.Stages;
 
 /// <summary>
 /// 阶段 10：用 Prim MST 选出聚落连接边，再对每条边做 tile 级 A* 寻路，将路径瓦片标记为道路。
+/// 寻路成本与玩家 agent（HexOverworldAStar / ChunkAStar）一致，使用 tile.MoveCost。
 /// </summary>
 public sealed class RoadStage : IWorldStage
 {
@@ -40,10 +41,24 @@ public sealed class RoadStage : IWorldStage
 
         var edges = BuildNearestNeighborRoads(settlements);
 
-        var allTiles = new Dictionary<Vector2I, HexOverworldTile>();
+        // 构建临时 Grid 供 HexOverworldAStar 使用
+        var grid = new HexOverworldGrid();
         foreach (var chunk in ctx.Chunks.Values)
             foreach (var kvp in chunk.Tiles)
-                allTiles[kvp.Key] = kvp.Value;
+                grid.Tiles[kvp.Key] = kvp.Value;
+
+        var aStar = new HexOverworldAStar(grid)
+        {
+            // 允许穿越不可通行地形（浅水/河流建桥），但惩罚高
+            IgnorePassability = true,
+            // 惩罚设为极高值：确保 A* 永远不会选择穿越深水/山脉的路径
+            // （除非完全无路可走，此时后置过滤会丢弃该路径）
+            ImpassablePenalty = 999.0f,
+            // 允许穿越浅水（建桥）
+            AllowShallowWater = true,
+            // 道路偏好：复用已有道路
+            RoadPreference = 0.3f,
+        };
 
         int roadsStamped = 0;
         foreach (var (from, to) in edges)
@@ -51,7 +66,7 @@ public sealed class RoadStage : IWorldStage
             var fromAxial = HexOverworldTile.PixelToAxial(from.Position.X, from.Position.Y);
             var toAxial = HexOverworldTile.PixelToAxial(to.Position.X, to.Position.Y);
 
-            var path = RoadAStar(fromAxial, toAxial, allTiles);
+            var path = FindRoadPath(aStar, fromAxial, toAxial, grid);
             if (path.Count >= 2)
             {
                 StampRoadPath(path, ctx.Chunks);
@@ -95,104 +110,37 @@ public sealed class RoadStage : IWorldStage
         return edges;
     }
 
-    private static List<Vector2I> RoadAStar(
-        Vector2I start, Vector2I end,
-        Dictionary<Vector2I, HexOverworldTile> allTiles)
+    /// <summary>
+    /// 使用与玩家相同的 HexOverworldAStar 寻路，附加直线偏好 tie-breaking。
+    /// 深水和山脉仍然完全阻断（不建道路穿越）。
+    /// </summary>
+    private static List<Vector2I> FindRoadPath(
+        HexOverworldAStar aStar, Vector2I start, Vector2I end, HexOverworldGrid grid)
     {
         if (start == end) return new List<Vector2I> { start };
-
-        if (!allTiles.ContainsKey(start) || !allTiles.ContainsKey(end))
+        if (!grid.HasTile(start.X, start.Y) || !grid.HasTile(end.X, end.Y))
             return new List<Vector2I>();
 
-        var openQueue = new PriorityQueue<Vector2I, float>();
-        var gScore = new Dictionary<Vector2I, float> { [start] = 0 };
-        var cameFrom = new Dictionary<Vector2I, Vector2I>();
-        var closed = new HashSet<Vector2I>();
+        // 使用 HexOverworldAStar.FindPath — 与玩家完全相同的成本模型
+        // 但 IgnorePassability=true 允许穿越浅水/河流（高惩罚）
+        var pathArray = aStar.FindPath(start, end);
 
-        openQueue.Enqueue(start, HeuristicDist(start, end));
+        if (pathArray.Length < 2) return new List<Vector2I>();
 
-        int maxIter = 50000;
-        int iter = 0;
-
-        while (openQueue.Count > 0 && iter < maxIter)
+        // 过滤：如果路径穿越了深水或山脉，放弃（这些地形不应建道路）
+        var path = new List<Vector2I>(pathArray.Length);
+        foreach (var coord in pathArray)
         {
-            iter++;
-            var current = openQueue.Dequeue();
-            if (closed.Contains(current)) continue;
-            closed.Add(current);
-
-            if (current == end)
-            {
-                var path = new List<Vector2I>();
-                var node = end;
-                while (node != start)
-                {
-                    path.Add(node);
-                    node = cameFrom[node];
-                }
-                path.Add(start);
-                path.Reverse();
-                return path;
-            }
-
-            float currentG = gScore[current];
-
-            for (int dir = 0; dir < 6; dir++)
-            {
-                var neighbor = HexOverworldTile.GetNeighbor(current.X, current.Y, dir);
-                if (closed.Contains(neighbor)) continue;
-                if (!allTiles.TryGetValue(neighbor, out var nTile)) continue;
-                if (!nTile.IsPassable) continue;
-                if (nTile.Terrain == HexOverworldTile.TerrainType.ShallowWater ||
-                    nTile.Terrain == HexOverworldTile.TerrainType.DeepWater) continue;
-
-                float moveCost = GetRoadBuildCost(nTile);
-                float tentativeG = currentG + moveCost;
-
-                if (!gScore.ContainsKey(neighbor) || tentativeG < gScore[neighbor])
-                {
-                    gScore[neighbor] = tentativeG;
-                    cameFrom[neighbor] = current;
-                    float f = tentativeG + HeuristicDist(neighbor, end);
-                    openQueue.Enqueue(neighbor, f);
-                }
-            }
+            var tile = grid.GetTile(coord.X, coord.Y);
+            if (tile == null) return new List<Vector2I>();
+            if (tile.Terrain == HexOverworldTile.TerrainType.DeepWater
+                || tile.Terrain == HexOverworldTile.TerrainType.Mountain
+                || tile.Terrain == HexOverworldTile.TerrainType.MountainSnow)
+                return new List<Vector2I>(); // 路径不可行
+            path.Add(coord);
         }
 
-        return new List<Vector2I>();
-    }
-
-    private static float GetRoadBuildCost(HexOverworldTile tile)
-    {
-        if (tile.IsRoad) return 1.0f;
-        return tile.Terrain switch
-        {
-            HexOverworldTile.TerrainType.Road => 1.0f,
-            HexOverworldTile.TerrainType.Plains => 1.0f,
-            HexOverworldTile.TerrainType.Grassland => 1.0f,
-            HexOverworldTile.TerrainType.Savanna => 1.2f,
-            HexOverworldTile.TerrainType.Wasteland => 1.5f,
-            HexOverworldTile.TerrainType.Sand => 2.0f,
-            HexOverworldTile.TerrainType.Taiga => 2.5f,
-            HexOverworldTile.TerrainType.Snow => 3.0f,
-            HexOverworldTile.TerrainType.Forest => 4.0f,
-            HexOverworldTile.TerrainType.Hills => 4.0f,
-            HexOverworldTile.TerrainType.Rocky => 5.0f,
-            HexOverworldTile.TerrainType.DenseForest => 6.0f,
-            HexOverworldTile.TerrainType.Jungle => 7.0f,
-            HexOverworldTile.TerrainType.Swamp or HexOverworldTile.TerrainType.Bog => 8.0f,
-            HexOverworldTile.TerrainType.ShallowWater => 15.0f,
-            HexOverworldTile.TerrainType.Ice => 10.0f,
-            _ => 3.0f,
-        };
-    }
-
-    private static float HeuristicDist(Vector2I a, Vector2I b)
-    {
-        int dq = Math.Abs(a.X - b.X);
-        int dr = Math.Abs(a.Y - b.Y);
-        int ds = Math.Abs((-a.X - a.Y) - (-b.X - b.Y));
-        return (dq + dr + ds) / 2.0f;
+        return path;
     }
 
     private static void StampRoadPath(List<Vector2I> path, Dictionary<Vector2I, ChunkData> chunks)
@@ -208,6 +156,8 @@ public sealed class RoadStage : IWorldStage
 
             tile.IsRoad = true;
             tile.MoveCost = 0.2f;
+            // 重新评估 IsPassable / MoveCost：道路覆盖在水/河流上变成桥
+            tile.UpdateTerrainProperties();
 
             if (i > 0)
             {

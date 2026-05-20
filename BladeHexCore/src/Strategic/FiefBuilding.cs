@@ -1,6 +1,7 @@
 // FiefBuilding.cs
 // 封地建筑数据 — 可放置在六边格上的城防/经济建筑
 using Godot;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -64,7 +65,7 @@ public partial class FiefBuilding : Resource
         get
         {
             var cfg = BuildingDataLoader.GetConfig(Type);
-            return cfg?.Cost ?? 100;
+            return FiefEconomyPricingService.GetBuildCost(Type, cfg?.Cost ?? 100);
         }
     }
 

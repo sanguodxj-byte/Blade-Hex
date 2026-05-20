@@ -28,7 +28,7 @@ public sealed class ConditionalDamageDiceAbility : EquipmentAbility
     public override string GetTooltipText()
     {
         string condText = ConditionText(Condition);
-        return $"{condText}+{DiceCount}d{DiceSides}{DamageType}伤害";
+        return $"{condText}+{DiceCount}-{DiceCount * DiceSides}{DamageType}伤害";
     }
 
     public override void OnDealDamage(DealDamageContext ctx)
@@ -117,7 +117,7 @@ public sealed class ExtraDamageDiceAbility : EquipmentAbility
     public int DiceSides { get; init; }
 
     public override string GetTooltipText()
-        => $"附带{DiceCount}d{DiceSides}额外伤害";
+        => $"附带{DiceCount}-{DiceCount * DiceSides}额外伤害";
 
     public override void OnDealDamage(DealDamageContext ctx)
     {

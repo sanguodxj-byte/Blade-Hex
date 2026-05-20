@@ -6,7 +6,7 @@ using System.Linq;
 namespace BladeHex.Combat;
 
 /// <summary>
-/// 技能注册表 — 纯数据类，存储所有技能效果配置
+/// 技能注册表 — 从 JSON 加载技能效果配置
 /// 作为技能数据的单一真相源
 /// </summary>
 public static class SkillRegistry
@@ -41,557 +41,25 @@ public static class SkillRegistry
     }
 
     // ============================================================================
-    // 技能注册表数据
+    // JSON 驱动加载
     // ============================================================================
 
-    private static readonly Dictionary<string, Godot.Collections.Dictionary> Registry = new()
+    private static Dictionary<string, Godot.Collections.Dictionary>? _cached;
+    private const string JsonPath = "res://BladeHexFrontend/src/View/Combat/skill_configs.json";
+    private const string ModPath = "user://mods/skills_config/";
+
+    private static Dictionary<string, Godot.Collections.Dictionary> Registry
     {
-        // STR 力量区域 — 主动技能
-        { "double_attack", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "连击" },
-            { "description", "攻击2次，第二次-3命中" },
-            { "vfx", "melee_combo" },
-            { "action_cost", 4 }
-        }},
-        { "whirlwind", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "旋风斩" },
-            { "description", "攻击周围所有敌人" },
-            { "vfx", "whirlwind" },
-            { "action_cost", 5 }
-        }},
-        { "battle_cry", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "战斗怒吼" },
-            { "description", "震慑周围敌人下回合攻击-2，友军士气+3" },
-            { "vfx", "war_cry" },
-            { "action_cost", 4 }
-        }},
-        { "blood_vortex", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "血腥漩涡" },
-            { "description", "横扫周围所有敌人，每命中1个恢复1d6 HP" },
-            { "vfx", "blood_vortex" },
-            { "action_cost", 5 }
-        }},
+        get
+        {
+            if (_cached != null) return _cached;
+            _cached = LoadFromJson();
+            return _cached;
+        }
+    }
 
-        // STR 力量区域 — 被动技能
-        { "melee_hit_plus_1", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "基础剑术" },
-            { "description", "近战命中+1" }
-        }},
-        { "weapon_mastery", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "武器精通" },
-            { "description", "武器伤害+10%/级（不加护甲/盾牌任何数值）" }
-        }},
-        { "critical_x3", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "重击" },
-            { "description", "暴击伤害x3" }
-        }},
-        { "iron_will", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "坚韧意志" },
-            { "description", "致命伤害时强韧豁免DC15存活于1HP" }
-        }},
-        { "berserk_power", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "狂暴之力" },
-            { "description", "近战伤害+50%" },
-            { "cost", "AC-3，不能使用盾牌" }
-        }},
-        { "heavy_armor", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "重甲精通" },
-            { "description", "AC+3，速度-1" }
-        }},
-        { "critical_master", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "暴击大师" },
-            { "description", "暴击伤害×3" }
-        }},
-        { "bloodthirst", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "嗜血" },
-            { "description", "近战击杀后获得额外行动" },
-            { "cost", "每回合首次受伤+50%" }
-        }},
-
-        // DEX 灵巧区域 — 主动技能
-        { "aimed_shot", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.RangedSingle },
-            { "name", "精准射击" },
-            { "description", "瞄准后射击优势+伤害x2" },
-            { "vfx", "aimed_shot" },
-            { "action_cost", 8 }
-        }},
-        { "double_shot", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.RangedSingle },
-            { "name", "双重射击" },
-            { "description", "射击2个目标各-2命中" },
-            { "vfx", "double_shot" },
-            { "action_cost", 6 }
-        }},
-        { "scatter_shot", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.AoeCone },
-            { "name", "散射" },
-            { "description", "锥形范围射击" },
-            { "vfx", "scatter_shot" },
-            { "action_cost", 6 }
-        }},
-        { "stealth", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.Self },
-            { "name", "隐匿" },
-            { "description", "进入潜行状态" },
-            { "vfx", "stealth" },
-            { "action_cost", 4 }
-        }},
-        { "shadow_clone", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.Self },
-            { "name", "影分身" },
-            { "description", "位移+残影，下次攻击自动闪避1次" },
-            { "vfx", "shadow_clone" },
-            { "action_cost", 4 }
-        }},
-        { "trick_arrow", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.RangedSingle },
-            { "name", "元素箭" },
-            { "description", "1d10+随机debuff(失明/倒地/震慑)" },
-            { "vfx", "trick_arrow" },
-            { "action_cost", 4 }
-        }},
-        { "poison_blade", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "毒刃" },
-            { "description", "攻击附带中毒" },
-            { "vfx", "poison_blade" },
-            { "action_cost", 3 }
-        }},
-        { "multi_shot", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.RangedAoe },
-            { "name", "连射" },
-            { "description", "连射3支箭攻击区域内目标" },
-            { "vfx", "multi_shot" },
-            { "action_cost", 6 }
-        }},
-        { "blind_arrow", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.RangedSingle },
-            { "name", "盲射" },
-            { "description", "命中后目标-4命中持续2回合" },
-            { "vfx", "blind_arrow" },
-            { "action_cost", 4 }
-        }},
-        { "shadow_strike", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "暗影突袭" },
-            { "description", "潜行状态下突袭，伤害翻倍" },
-            { "vfx", "shadow_strike" },
-            { "action_cost", 5 }
-        }},
-        { "sword_dance", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "剑舞" },
-            { "description", "攻击周围所有敌人（高伤害倍率）" },
-            { "vfx", "sword_dance" },
-            { "action_cost", 6 }
-        }},
-        { "trap_master", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.Self },
-            { "name", "陷阱大师" },
-            { "description", "放置陷阱，触发时造成伤害+减速" },
-            { "vfx", "trap" },
-            { "action_cost", 4 }
-        }},
-        { "lightning_reflex", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "闪电反射" },
-            { "description", "先攻+5，首轮攻击优势" },
-            { "cost", "AC-1" }
-        }},
-        { "meteor_shower", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.RangedActive },
-            { "target", (int)TargetType.RangedAoe },
-            { "name", "流星箭雨" },
-            { "description", "区域箭雨2d8伤害" },
-            { "vfx", "meteor_shower" },
-            { "action_cost", 8 }
-        }},
-
-        // CON 体魄区域
-        { "shield_bash", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MeleeActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "盾击" },
-            { "description", "攻击+推开目标1格" },
-            { "vfx", "shield_bash" },
-            { "action_cost", 5 }
-        }},
-        { "taunt", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "嘲讽" },
-            { "description", "强制周围敌人攻击自己" },
-            { "vfx", "taunt" },
-            { "action_cost", 4 }
-        }},
-        { "unyielding_bulwark", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.Self },
-            { "name", "不屈壁垒" },
-            { "description", "受伤减半+临时HP" },
-            { "vfx", "bulwark" },
-            { "action_cost", 4 }
-        }},
-        { "fortify", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "坚守" },
-            { "description", "受伤时临时AC+2" }
-        }},
-        { "iron_wall", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "铁壁" },
-            { "description", "物理伤害减免3" }
-        }},
-        { "unyielding", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "不屈" },
-            { "description", "HP<25%时受到伤害减半" }
-        }},
-        { "life_shield", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.Self },
-            { "name", "生命护盾" },
-            { "description", "获得临时护盾=30%最大HP" },
-            { "vfx", "life_shield" },
-            { "action_cost", 4 }
-        }},
-        { "immortal_body", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "不灭之躯" },
-            { "description", "HP归0时CON检定DC15存活于1HP（每战1次）" },
-            { "cost", "速度-2" }
-        }},
-        { "life_circle", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.HealActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "生命之环" },
-            { "description", "治疗周围友军2d10+CON修正" },
-            { "vfx", "life_circle" },
-            { "action_cost", 5 }
-        }},
-        { "giant_strength", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "巨人之力" },
-            { "description", "近战伤害+3，单手武器视为双手" }
-        }},
-        { "field_medic", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.HealActive },
-            { "target", (int)TargetType.SingleAlly },
-            { "name", "战地医疗" },
-            { "description", "恢复友军HP并解除流血/中毒" },
-            { "vfx", "heal" },
-            { "action_cost", 4 }
-        }},
-
-        // INT 智力区域
-        { "mana_shield", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.Self },
-            { "name", "魔力护盾" },
-            { "description", "消耗5魔力获得护盾" },
-            { "vfx", "mana_shield" },
-            { "action_cost", 4 }
-        }},
-        { "time_warp", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.Self },
-            { "name", "时间扭曲" },
-            { "description", "消耗10魔力获得额外次要行动" },
-            { "vfx", "time_warp" },
-            { "action_cost", 4 }
-        }},
-        { "spell_hit_plus_1", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "基础法术" },
-            { "description", "法术命中+1" }
-        }},
-        { "arcane_burst", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "奥术爆发" },
-            { "description", "2d8奥术伤害" },
-            { "vfx", "arcane_burst" },
-            { "action_cost", 5 }
-        }},
-        { "mana_drain", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "法力汲取" },
-            { "description", "吸取目标法力恢复自身" },
-            { "vfx", "mana_drain" },
-            { "action_cost", 4 }
-        }},
-        { "chain_lightning", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "连锁闪电" },
-            { "description", "闪电跳跃攻击最多3个目标" },
-            { "vfx", "chain_lightning" },
-            { "action_cost", 6 }
-        }},
-        { "spell_reflect", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "法术反射" },
-            { "description", "每回合反射1次法术" }
-        }},
-        { "arcane_bomb", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.AoeSmall },
-            { "name", "奥术炸弹" },
-            { "description", "3d6范围奥术伤害" },
-            { "vfx", "arcane_bomb" },
-            { "action_cost", 6 }
-        }},
-        { "absolute_focus", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "绝对专注" },
-            { "description", "法术强度+4" }
-        }},
-        { "knowledge_power", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "知识之力" },
-            { "description", "法术伤害+INT修正值" }
-        }},
-        { "void_gate", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.Self },
-            { "name", "虚空之门" },
-            { "description", "传送至目标位置" },
-            { "vfx", "void_gate" },
-            { "action_cost", 5 }
-        }},
-        { "fate_eye", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "命运之眼" },
-            { "description", "每回合可重骰1次失败豁免" },
-            { "cost", "法力上限-10" }
-        }},
-
-        // WIS 感知区域
-        { "basic_heal", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.HealActive },
-            { "target", (int)TargetType.SingleAlly },
-            { "name", "基础治疗" },
-            { "description", "恢复友军1d8+WIS修正HP" },
-            { "vfx", "heal" },
-            { "action_cost", 4 }
-        }},
-        { "blessing", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.SingleAlly },
-            { "name", "祈福" },
-            { "description", "友军加成" },
-            { "vfx", "blessing" },
-            { "action_cost", 4 }
-        }},
-        { "group_heal", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.HealActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "群体治疗" },
-            { "description", "治疗周围友军1d6+WIS修正" },
-            { "vfx", "group_heal" },
-            { "action_cost", 5 }
-        }},
-        { "purifying_flame", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.AoeSmall },
-            { "name", "净化之焰" },
-            { "description", "照亮区域+亡灵额外伤害" },
-            { "vfx", "purifying_flame" },
-            { "action_cost", 5 }
-        }},
-        { "guardian_spirit", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.SingleAlly },
-            { "name", "守护之灵" },
-            { "description", "替目标挡下一次致命攻击" },
-            { "vfx", "guardian_spirit" },
-            { "action_cost", 5 }
-        }},
-        { "resurrect", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.HealActive },
-            { "target", (int)TargetType.SingleAlly },
-            { "name", "复活" },
-            { "description", "复活倒下友军恢复50%HP" },
-            { "vfx", "resurrect" },
-            { "action_cost", 8 }
-        }},
-        { "arcane_judgment", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "奥术审判" },
-            { "description", "3d10奥术伤害" },
-            { "vfx", "arcane_judgment" },
-            { "action_cost", 7 }
-        }},
-        { "life_mastery", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "生命精通" },
-            { "description", "治疗效果+50%" }
-        }},
-        { "oracle", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.Self },
-            { "name", "神谕" },
-            { "description", "揭示隐藏敌人/陷阱" },
-            { "vfx", "oracle" },
-            { "action_cost", 3 }
-        }},
-        { "elemental_storm", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.MagicActive },
-            { "target", (int)TargetType.RangedAoe },
-            { "name", "元素风暴" },
-            { "description", "区域2d8元素伤害" },
-            { "vfx", "elemental_storm" },
-            { "action_cost", 7 }
-        }},
-        { "soul_guardian", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "灵魂守护" },
-            { "description", "友军死亡时触发恢复（每战1次）" },
-            { "cost", "自身最大HP-10%" }
-        }},
-
-        // CHA 魅力区域
-        { "war_cry", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "战吼" },
-            { "description", "范围内友军加攻" },
-            { "vfx", "war_cry" },
-            { "action_cost", 4 }
-        }},
-        { "inspire", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAllies },
-            { "name", "鼓舞士气" },
-            { "description", "所有友军士气+2" },
-            { "vfx", "inspire" },
-            { "action_cost", 4 }
-        }},
-        { "command", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.SingleAlly },
-            { "name", "指挥" },
-            { "description", "指令友军立即行动一次" },
-            { "vfx", "command" },
-            { "action_cost", 5 }
-        }},
-        { "rally", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "集结" },
-            { "description", "周围友军攻击+2持续2回合" },
-            { "vfx", "rally" },
-            { "action_cost", 4 }
-        }},
-        { "diplomat", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.OutOfCombat },
-            { "target", (int)TargetType.Self },
-            { "name", "外交官" },
-            { "description", "商店/招募-15%" }
-        }},
-        { "shadow_deal", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.SingleEnemy },
-            { "name", "暗影交易" },
-            { "description", "贿赂敌人使其退出战斗" },
-            { "vfx", "shadow_deal" },
-            { "action_cost", 6 }
-        }},
-        { "command_aura", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Passive },
-            { "target", (int)TargetType.Self },
-            { "name", "指挥光环" },
-            { "description", "周围友军攻击+1，AC+1" }
-        }},
-        { "intimidate", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAdjacent },
-            { "name", "威慑" },
-            { "description", "周围敌人攻击-2持续3回合" },
-            { "vfx", "intimidate" },
-            { "action_cost", 4 }
-        }},
-        { "royal_presence", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "王者之威" },
-            { "description", "全队豁免+2" },
-            { "cost", "自身最大HP-20%" }
-        }},
-        { "heroic_call", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.SupportActive },
-            { "target", (int)TargetType.AllAllies },
-            { "name", "英雄号召" },
-            { "description", "所有友军攻击+2，AC+1持续2回合" },
-            { "vfx", "heroic_call" },
-            { "action_cost", 6 }
-        }},
-        { "merchant_empire", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.OutOfCombat },
-            { "target", (int)TargetType.Self },
-            { "name", "商业帝国" },
-            { "description", "金币+20%，稀有物品概率+15%" }
-        }},
-        { "vow_of_vengeance", new Godot.Collections.Dictionary {
-            { "category", (int)SkillCategory.Keystone },
-            { "target", (int)TargetType.Self },
-            { "name", "复仇誓言" },
-            { "description", "标记目标对其伤害+25%，目标死亡全队恢复10%" },
-            { "cost", "不能治疗被标记目标以外的敌人" }
-        }}
-    };
+    /// <summary>强制重新加载（热重载用）</summary>
+    public static void Reload() { _cached = null; }
 
     // ============================================================================
     // 查询接口
@@ -624,5 +92,186 @@ public static class SkillRegistry
     public static string[] GetAllActiveSkillIds()
     {
         return Registry.Keys.Where(IsActiveSkill).ToArray();
+    }
+
+    /// <summary>
+    /// 是否为 Spell（v0.6 10.0）。Spell 不计入"每回合 1 次非 Spell 主动技能"限制，
+    /// 但需要法术媒介、不能持盾、只能穿布甲，并消耗 Mana。
+    /// </summary>
+    public static bool IsSpell(string skillEffect)
+    {
+        var cfg = GetSkillConfig(skillEffect);
+        if (cfg.ContainsKey("is_spell")) return cfg["is_spell"].AsBool();
+        // 兜底：MagicActive 视为 Spell
+        if (cfg.ContainsKey("category"))
+        {
+            int cat = cfg["category"].AsInt32();
+            if (cat == (int)SkillCategory.MagicActive) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Spell 的 Mana 消耗。非 Spell 或未配置返回 0。</summary>
+    public static int GetManaCost(string skillEffect)
+    {
+        var cfg = GetSkillConfig(skillEffect);
+        if (cfg.ContainsKey("mana_cost")) return cfg["mana_cost"].AsInt32();
+        return 0;
+    }
+
+    /// <summary>技能施法/攻击射程（格）。0=自身，1=近战邻格。</summary>
+    public static int GetRange(string skillEffect)
+    {
+        var cfg = GetSkillConfig(skillEffect);
+        if (cfg.ContainsKey("range")) return cfg["range"].AsInt32();
+        // 根据 target 类型推断默认值
+        string target = cfg.ContainsKey("target") ? cfg["target"].AsString() : "Self";
+        return target switch
+        {
+            "Self" => 0,
+            "SingleEnemy" or "AllAdjacent" => 1,
+            "RangedSingle" or "RangedAoe" => 6,
+            "AoeSmall" or "AoeCone" => 4,
+            "SingleAlly" => 3,
+            "AllAllies" => 0,
+            _ => 1,
+        };
+    }
+
+    /// <summary>技能 AOE 半径（格）。0=单体/无溅射。</summary>
+    public static int GetAoeRadius(string skillEffect)
+    {
+        var cfg = GetSkillConfig(skillEffect);
+        if (cfg.ContainsKey("aoe_radius")) return cfg["aoe_radius"].AsInt32();
+        // 根据 target 类型推断
+        string target = cfg.ContainsKey("target") ? cfg["target"].AsString() : "Self";
+        return target switch
+        {
+            "AllAdjacent" => 1,
+            "AoeSmall" => 1,
+            "RangedAoe" => 2,
+            _ => 0,
+        };
+    }
+
+    /// <summary>获取技能目标类型字符串。</summary>
+    public static string GetTargetType(string skillEffect)
+    {
+        var cfg = GetSkillConfig(skillEffect);
+        return cfg.ContainsKey("target") ? cfg["target"].AsString() : "Self";
+    }
+
+    // ============================================================================
+    // JSON 解析
+    // ============================================================================
+
+    private static Dictionary<string, Godot.Collections.Dictionary> LoadFromJson()
+    {
+        var dict = new Dictionary<string, Godot.Collections.Dictionary>();
+
+        // 内置技能
+        LoadSkillsFromFile(JsonPath, dict);
+
+        // Mod 技能
+        if (DirAccess.DirExistsAbsolute(ModPath))
+        {
+            using var dir = DirAccess.Open(ModPath);
+            if (dir != null)
+            {
+                dir.ListDirBegin();
+                string fileName = dir.GetNext();
+                while (!string.IsNullOrEmpty(fileName))
+                {
+                    if (fileName.EndsWith(".json"))
+                        LoadSkillsFromFile(ModPath + fileName, dict);
+                    fileName = dir.GetNext();
+                }
+                dir.ListDirEnd();
+            }
+        }
+
+        if (dict.Count == 0)
+        {
+            GD.PushError("[SkillRegistry] No skills loaded! Check skill_configs.json.");
+        }
+        else
+        {
+            GD.Print($"[SkillRegistry] Loaded {dict.Count} skills");
+        }
+
+        return dict;
+    }
+
+    private static void LoadSkillsFromFile(string path, Dictionary<string, Godot.Collections.Dictionary> dict)
+    {
+        if (!FileAccess.FileExists(path)) return;
+
+        using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+        if (file == null) return;
+
+        var json = new Json();
+        if (json.Parse(file.GetAsText()) != Error.Ok)
+        {
+            GD.PushError($"[SkillRegistry] JSON parse error in {path}: {json.GetErrorMessage()}");
+            return;
+        }
+
+        if (json.Data.VariantType != Variant.Type.Array) return;
+        var arr = json.Data.AsGodotArray();
+
+        for (int i = 0; i < arr.Count; i++)
+        {
+            if (arr[i].VariantType != Variant.Type.Dictionary) continue;
+            var entry = arr[i].AsGodotDictionary();
+
+            try
+            {
+                var skillDict = ParseSkillEntry(entry);
+                string id = entry.ContainsKey("id") ? entry["id"].AsString() : "";
+                if (!string.IsNullOrEmpty(id))
+                    dict[id] = skillDict;
+            }
+            catch (Exception ex)
+            {
+                GD.PushError($"[SkillRegistry] Failed to parse {path}[{i}]: {ex.Message}");
+            }
+        }
+    }
+
+    private static Godot.Collections.Dictionary ParseSkillEntry(Godot.Collections.Dictionary entry)
+    {
+        var result = new Godot.Collections.Dictionary();
+
+        // category: string -> int
+        if (entry.ContainsKey("category"))
+        {
+            string catStr = entry["category"].AsString();
+            if (Enum.TryParse<SkillCategory>(catStr, out var cat))
+                result["category"] = (int)cat;
+            else
+                result["category"] = 0;
+        }
+
+        // target: string -> int
+        if (entry.ContainsKey("target"))
+        {
+            string tgtStr = entry["target"].AsString();
+            if (Enum.TryParse<TargetType>(tgtStr, out var tgt))
+                result["target"] = (int)tgt;
+            else
+                result["target"] = 0;
+        }
+
+        // 直接复制的字段
+        if (entry.ContainsKey("name")) result["name"] = entry["name"];
+        if (entry.ContainsKey("description")) result["description"] = entry["description"];
+        if (entry.ContainsKey("vfx")) result["vfx"] = entry["vfx"];
+        if (entry.ContainsKey("action_cost")) result["action_cost"] = entry["action_cost"].AsInt32();
+        if (entry.ContainsKey("mana_cost")) result["mana_cost"] = entry["mana_cost"].AsInt32();
+        if (entry.ContainsKey("is_spell")) result["is_spell"] = entry["is_spell"].AsBool();
+        if (entry.ContainsKey("cost")) result["cost"] = entry["cost"];
+        if (entry.ContainsKey("range")) result["range"] = entry["range"].AsInt32();
+
+        return result;
     }
 }

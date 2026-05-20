@@ -313,8 +313,21 @@ public partial class RoadRenderer : Node
     {
         var result = new List<HexOverworldTile>();
 
-        // 检查所有 6 个方向的邻居，只要邻居也是道路就视为连接
-        // 不依赖 RoadDirections 位掩码（可能因 A* 路径跳跃而不完整）
+        // 优先使用 RoadDirections 位掩码（由 RoadStage A* 精确设置）
+        // 只连接实际路径中相邻的瓦片，避免不同路径段之间产生虚假连接（三角形）
+        if (tile.RoadDirections != 0)
+        {
+            for (int dir = 0; dir < 6; dir++)
+            {
+                if ((tile.RoadDirections & (1 << dir)) == 0) continue;
+                var nCoord = HexOverworldTile.GetNeighbor(tile.Coord.X, tile.Coord.Y, dir);
+                if (_allRoadTiles.TryGetValue(nCoord, out var neighbor))
+                    result.Add(neighbor);
+            }
+            return result;
+        }
+
+        // 回退：无位掩码数据时（旧存档），使用全邻居扫描
         for (int dir = 0; dir < 6; dir++)
         {
             var nCoord = HexOverworldTile.GetNeighbor(tile.Coord.X, tile.Coord.Y, dir);

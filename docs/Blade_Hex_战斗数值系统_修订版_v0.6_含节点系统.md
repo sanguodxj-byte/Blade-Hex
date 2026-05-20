@@ -2,6 +2,31 @@
 
 > 数据版本：2026-05-11-v0.6
 > 修订说明：继承 v0.5；加入技能盘节点系统与 NodeBonus 统一结算；节点加成不直接改写基础属性；新增节点命中、节点平伤、节点暴击率、节点 AC、节点治疗、节点 Mana、额外行动限制、节点主动技能 Spell/非 Spell 分类；对部分高风险节点进行平衡修订。
+>
+> **2026-05-17 增补（代码同步）**：以下规则代码已实装但本版文档未明确写入，本次反向回填：
+> - **暴击受伤减免**：防御方按 WIS 减少受暴击伤害（公式见 §6.7）
+> - **状态效果实例化字段**：状态效果除 id/duration 外，还包含 `tick_damage_count/sides/type`、`save_to_remove`、`save_dc`、`removes_effects`、`breaks_on_attack`、`can_spread` 等字段
+> - **装备/饰品 HP 加成**：MaxHP 公式补充装备词缀和饰品 HP 加成（详见 §2.2）
+> - **头盔不再扣 AP**：v0.6 起头盔 ApPenalty 不计入 MaxAP（详见 §3.1）
+> - **视野系统已废除**：远程攻击不再做二元 LOS 阻挡，改为路径上累计命中惩罚（详见 §8.6）
+>
+> ⚠ **2026-05-17 全游戏核心约束**：**本游戏完全没有复活机制**。HP 归零即永久阵亡。任何 spell / 技能 / 道具 / 节点 / 剧情都不能让阵亡单位复活。`wis_b03 复活`、`resurrect` spell 等条目已废除。详见 `docs/法表系统.md` §5.4。
+>
+> **2026-05-17 §11.8 节点修订实装清单**：以下 v0.6 节点平衡修订已落地代码：
+> - `str_b06 嗜血`：被动触发；每回合最多 1 次；近战击杀后获得 4 AP 额外行动池（仅普攻/移动）
+> - `str_b03 旋风斩`：节点平伤对每个目标按 50% 结算
+> - `str_b08 血腥漩涡`：每次使用最多恢复 3d6 HP；AOE 节点平伤每目标 50%
+> - `dex_b03 连珠箭`：3 支箭、每支 -2 命中；节点平伤每支 50%
+> - `con_b03 不屈`：HP < 25% 时 HP 伤害 ×0.5；不影响盾牌/护甲耐久
+> - `con_b04 生命之盾`：每场战斗最多 1 次
+> - `con_b05 铁壁`：每次受物理伤害 -3，单包最低保留 1 点
+> - `con_b07 生命之环`：每场战斗最多 1 次
+> - `cha_b09 指挥`：不能指定本回合已获额外行动的单位
+> - `cha_b10 英雄号召`：每场战斗最多 1 次
+> - ~~`wis_b03 复活`：每场战斗最多 1 次~~ **已废除（无复活机制）**
+> - 行动经济：v0.6 11.7 每回合最多 1 次额外行动；非 Spell 主动技能 1 回合 1 次（CombatManager.UseSkill 已 enforce）
+> - 武器系统：v0.6 6.3 独立穿透 d20 + STRPenBonus 已实装；6.9 武器重量 Lv.5 分支已实装；6.2 盾牌远程减免已实装；7.1-7.6 v0.6 武器表数值已写入 WeaponRegistry。**2026-05-17 修订**：移除 `WeaponPen` 字段（不再有武器穿透修正），穿透只受 STR + d20 决定；移除"等级追加伤害骰"（v0.5 旧机制 `level/20+1`），等级伤害成长走武器精通 + tier 升级。
+> - Spell 装备限制：v0.6 10.0 法术媒介、禁盾、布甲（DR ≤ 3）检查已实装；Mana 公式 `10 + INT + Level/2` 已实装
 
 ---
 
@@ -47,7 +72,11 @@ $$BaseHP = 10$$
 
 $$CON\_HP\_Bonus = \lfloor\sqrt{CON / 4}\rfloor$$
 
-$$MaxHP = 10 + CON\_HP\_Bonus \times Level + NodeMaxHP + TemporaryHPMaxBonus$$
+$$MaxHP = 10 + CON\_HP\_Bonus \times Level + EquipmentHPBonus + AccessoryHPBonus + NodeMaxHP + TemporaryHPMaxBonus$$
+
+> `EquipmentHPBonus`：装备词缀提供的 HP 加成（如 "+15 HP" 词缀）
+> `AccessoryHPBonus`：饰品（戒指、项链等）的固定 HP 加成
+> 装备和饰品 HP 加成在 v0.6 文档中遗漏，但代码（`CombatStats.GetMaxHp`）已实装，属于平衡设计的一部分
 
 | CON | 每级 HP 加成 |
 |:---:|:---:|
@@ -79,6 +108,7 @@ $$MaxAP = 12 + \text{Mod(DEX)} + \lfloor\text{Mod(CON)} / 2\rfloor - ArmorAPPena
 
 *   `ArmorAPPenalty`：护甲 AP 惩罚。
 *   `ShieldAPPenalty`：盾牌 AP 惩罚。
+*   **头盔 ApPenalty 不计入 MaxAP**（v0.6 起）。重盔已通过 AC/MaxDex 限制承担成本，再扣 AP 会过度惩罚。
 *   无护甲或无盾牌时，对应惩罚值为 0。
 
 ### 3.2 动作 AP 消耗表
@@ -88,6 +118,17 @@ $$MaxAP = 12 + \text{Mod(DEX)} + \lfloor\text{Mod(CON)} / 2\rfloor - ArmorAPPena
 | 原地转身 | 0 | - |
 | 使用消耗品 | 4 | - |
 | 切换武器 | 2 | - |
+
+### 3.2.1 移动可通过性 (Movement Passability)
+
+> 2026-05-17 增补：明确所有移动场景的"占用 / 阻挡"规则。
+
+- **敌方单位的格不可穿越**：单位不能将路径中任意一格设置为对方单位占用的格。即使有足够 AP，也无法"穿过"敌人继续走到敌后。
+- **友方单位的格不能停留，但可以穿越**：路径可以经过友军占用的格（解释为闪身让位），终点不能停在友军格上。
+- **路被堵死则无法到达**：若从起点到目标格的所有可行路径都被敌方单位封锁，则该次移动无效（直接放弃移动或触发 AI 重新规划）。
+- **应用范围**：常规移动、冲锋、传送以外的位移技能（撤退、击退）均遵循此规则。`Force Wall`、`Holy Sanctuary` 等屏障型 Spell 同样视为不可穿越的占用。
+- **传送 / 闪现例外**：明确标注为"瞬移"的能力（如旧 `void_gate` 已废除；未来若有传送系 Spell）不受此规则约束，但终点格仍须空闲。
+- **设计意图**：让前排坦克通过卡位真正发挥"控制走廊"的作用，迫使敌方绕行或破阵；同时让"路被堵死"成为有效战术。AOE 法术、跨单位射击命中惩罚、ZoC 借机攻击都建立在此约束之上。
 | 武器攻击 | 见武器表 | - |
 | 武器装填 | 见武器表 | - |
 
@@ -163,7 +204,7 @@ $$CriticalThreshold = 20 - WISCritTier$$
 
 $$CritMultiplier = 2.0 + WISCritTier \times 0.1$$
 
-| WIS | WISCritTier | 暴击阈值 | 理论暴击率 | 暴击倍率 |
+| WIS | WISCritTier | 武器暴击阈值 | 理论暴击率 | 武器暴击倍率 |
 |:---:|:---:|:---:|:---:|:---:|
 | 3-14 | 0 | 20 | 5% | 2.0x |
 | 18 | 1 | 19+ | 10% | 2.1x |
@@ -181,6 +222,7 @@ $$CritMultiplier = 2.0 + WISCritTier \times 0.1$$
 3.  若自然 d20 结果 $\geq CriticalThreshold$ 但不是 20，则必须先通过正常命中判定，才视为暴击。
 4.  命中加成不会降低暴击阈值，除非特殊规则明确说明。
 5.  暴击倍率默认使用 `CritMultiplier`。重型武器 Lv.5 精通效果会在最终暴击倍率上额外乘以 1.2，见 6.7。
+6.  **2026-05-17 修订**：WIS 暴击曲线对**所有武器攻击**（近战、远程、投掷、弓弩）都生效。**法术（Spell）永远不能暴击**（已是 §2.5 法表设计）。这意味着 WIS 系（刺客）通过任何武器都能放大爆发，但施法路线不享受暴击收益。
 
 ### 4.5 检定状态
 *   **优势 (Advantage)**：2d20 取高。
@@ -291,16 +333,16 @@ AP 惩罚为正数惩罚值，会从 MaxAP 中扣除。
 
 穿透判定与命中判定完全独立。只有当伤害进入身体护甲/HP 结算阶段时，才进行穿透判定。
 
-$$d20_{Pen} + \text{WeaponPen} + \text{STRPenBonus} \geq \text{目标 ArmorDR} \Rightarrow \text{穿透}$$
+$$d20_{Pen} + \text{STRPenBonus} \geq \text{目标 ArmorDR} \Rightarrow \text{穿透}$$
 
 $$STRPenBonus = \lfloor\sqrt{STR / 4}\rfloor$$
 
 *   `d20_Pen`：独立的穿透 d20，不使用命中判定的自然骰。
-*   `WeaponPen`：武器穿透修正，见武器表。
 *   `STRPenBonus`：力量穿透加成。
 *   **自然 20**：强制穿透。
 *   **无护甲 (Data.Armor == null)**：自动穿透。
 *   盾牌不参与穿透判定。
+*   **2026-05-17 修订**：移除 `WeaponPen`（武器穿透修正字段）。穿透只受 STR + d20 决定，伤害类型差异通过 §6.4 伤害分配表体现。武器表 §7.x 中的"穿透修正"列已废弃。
 
 ### 6.4 伤害分配比例表
 
@@ -351,6 +393,23 @@ $$FinalCritMultiplier = CritMultiplier \times 1.2$$
 否则：
 
 $$FinalCritMultiplier = CritMultiplier$$
+
+#### 6.7.1 防御方暴击受伤减免 (Critical Damage Taken)
+
+防御方的 WIS 同时降低自身受暴击伤害的程度（双向曲线：高 WIS 既增加自身暴击爆发，也降低受暴击爆发）：
+
+$$CritDamageTakenMultiplier = \max(0.2, 1.0 - WISCritTier \times 0.1)$$
+
+最终伤害公式中，若为暴击则乘以防御方的 `CritDamageTakenMultiplier`。代价：低 WIS 角色更容易被暴击斩杀。
+
+| 防御方 WIS | WISCritTier | 受暴击伤害倍率 |
+|:---:|:---:|:---:|
+| 3-14 | 0 | 1.0×（无减免） |
+| 18 | 1 | 0.9× |
+| 32 | 2 | 0.8× |
+| 50 | 3 | 0.7× |
+| 144 | 5 | 0.5× |
+| 196+ | 6+ | 0.4×~ 下限 0.2× |
 
 ### 6.8 武器精通轨道 (Mastery)
 
@@ -431,91 +490,91 @@ $$FinalCritMultiplier = CritMultiplier$$
 
 ### 7.1 轻/中/重型 砍伤 (Slash)
 
-| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 穿透修正 | 射程 |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| 匕首 (Dagger) | 1d4 | 2 | +0 | +0 | 1 |
-| 萨克斯短刀 (Seax) | 1d6 | 3 | +0 | +0 | 1 |
-| 廓尔喀刀 (Kukri) | 1d4 | 2 | +1 | +0 | 1 |
-| 武装剑 (ArmingSword) | 1d10 | 4 | +0 | +1 | 1 |
-| 战斧 (BattleAxe) | 1d12 | 4 | +0 | +1 | 1 |
-| 游牧弯刀 (NomadSaber) | 1d8 | 4 | +1 | +1 | 1 |
-| 巨剑 (Greatsword) | 3d6 | 6 | +0 | +2 | 1 |
-| 巨斧 (GreatAxe) | 2d10 | 6 | +0 | +2 | 1 |
-| 偃月刀 (Glaive) | 2d8 | 6 | +1 | +2 | 2 |
+| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 射程 |
+|:---|:---:|:---:|:---:|:---:|
+| 匕首 (Dagger) | 1d4 | 2 | +0 | 1 |
+| 萨克斯短刀 (Seax) | 1d6 | 3 | +0 | 1 |
+| 廓尔喀刀 (Kukri) | 1d4 | 2 | +1 | 1 |
+| 武装剑 (ArmingSword) | 1d10 | 4 | +0 | 1 |
+| 战斧 (BattleAxe) | 1d12 | 4 | +0 | 1 |
+| 游牧弯刀 (NomadSaber) | 1d8 | 4 | +1 | 1 |
+| 巨剑 (Greatsword) | 3d6 | 6 | +0 | 1 |
+| 巨斧 (GreatAxe) | 2d10 | 6 | +0 | 1 |
+| 偃月刀 (Glaive) | 2d8 | 6 | +1 | 2 |
 
 ### 7.2 轻/中/重型 刺伤 (Pierce)
 
-| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 穿透修正 | 射程 |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| 锥刺 (Stiletto) | 1d4 | 2 | +0 | +2 | 1 |
-| 穿甲短剑 (SpikedDagger)| 1d6 | 2 | +0 | +2 | 1 |
-| 刺剑 (Rapier) | 1d8 | 3 | +1 | +2 | 1 |
-| 步兵长矛 (InfantrySpear)| 1d10 | 4 | +0 | +3 | 2 |
-| 阔头矛 (BroadSpear) | 1d12 | 5 | +0 | +3 | 1 |
-| 锥头矛 (Awlpike) | 1d8 | 4 | +1 | +3 | 3 |
-| 骑士长枪 (Lance) | 2d10 | 6 | +0 | +4 | 2 |
-| 长柄斧 (Voulge) | 2d8 | 6 | +0 | +4 | 2 |
-| 三叉戟 (Trident) | 2d6 | 6 | +1 | +4 | 2 |
+| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 射程 |
+|:---|:---:|:---:|:---:|:---:|
+| 锥刺 (Stiletto) | 1d4 | 2 | +0 | 1 |
+| 穿甲短剑 (SpikedDagger)| 1d6 | 2 | +0 | 1 |
+| 刺剑 (Rapier) | 1d8 | 3 | +1 | 1 |
+| 步兵长矛 (InfantrySpear)| 1d10 | 4 | +0 | 2 |
+| 阔头矛 (BroadSpear) | 1d12 | 5 | +0 | 1 |
+| 锥头矛 (Awlpike) | 1d8 | 4 | +1 | 3 |
+| 骑士长枪 (Lance) | 2d10 | 6 | +0 | 2 |
+| 长柄斧 (Voulge) | 2d8 | 6 | +0 | 2 |
+| 三叉戟 (Trident) | 2d6 | 6 | +1 | 2 |
 
 ### 7.3 轻/中/重型 钝伤 (Crush)
 
-| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 穿透修正 | 射程 |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| 木棒 (Club) | 1d6 | 3 | +0 | +1 | 1 |
-| 轻战锤 (LightHammer) | 1d8 | 3 | +0 | +1 | 1 |
-| 铁手套 (Cestus) | 1d4 | 2 | +1 | +1 | 1 |
-| 翼形锤矛 (WingedMace) | 1d12 | 4 | +0 | +2 | 1 |
-| 军用锤 (MilitaryHammer)| 2d8 | 5 | +0 | +2 | 1 |
-| 连枷 (Flail) | 1d10 | 4 | +1 | +2 | 1 |
-| 大锤 (Maul) | 3d8 | 7 | +0 | +3 | 1 |
-| 巨型木棒 (Greatclub) | 2d12 | 7 | +0 | +3 | 1 |
-| 长柄战锤 (Polehammer) | 2d10 | 7 | +1 | +3 | 2 |
+| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 射程 |
+|:---|:---:|:---:|:---:|:---:|
+| 木棒 (Club) | 1d6 | 3 | +0 | 1 |
+| 轻战锤 (LightHammer) | 1d8 | 3 | +0 | 1 |
+| 铁手套 (Cestus) | 1d4 | 2 | +1 | 1 |
+| 翼形锤矛 (WingedMace) | 1d12 | 4 | +0 | 1 |
+| 军用锤 (MilitaryHammer)| 2d8 | 5 | +0 | 1 |
+| 连枷 (Flail) | 1d10 | 4 | +1 | 1 |
+| 大锤 (Maul) | 3d8 | 7 | +0 | 1 |
+| 巨型木棒 (Greatclub) | 2d12 | 7 | +0 | 1 |
+| 长柄战锤 (Polehammer) | 2d10 | 7 | +1 | 2 |
 
 ### 7.4 投掷武器 (Thrown)
 
-| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 穿透修正 | 射程 | 伤害类型 |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| 飞刀 (ThrowingKnife)| 1d4 | 2 | +0 | +0 | 4 | Slash |
-| 飞镖 (Dart) | 1d4 | 2 | +0 | +2 | 5 | Pierce |
-| 飞斧 (Francisca) | 1d6 | 3 | +1 | +1 | 3 | Slash |
-| 标枪 (Javelin) | 1d8 | 4 | +0 | +3 | 6 | Pierce |
-| 重标枪 (Pilum) | 1d10 | 5 | +0 | +4 | 5 | Pierce |
-| 渔叉 (Harpoon) | 1d4 | 4 | +1 | +3 | 4 | Pierce |
-| 投石 (StoneThrow) | 1d4 | 5 | +0 | +1 | 6 | Crush |
-| 特重标枪 (HeavyJavelin)| 1d12 | 6 | +0 | +4 | 4 | Pierce |
-| 投掷飞锤 (ThrowingHammer)|1d8 | 5 | +1 | +2 | 3 | Crush |
+| 子类型 (Subtype) | 基础伤害骰 | AP消耗 | 命中修正 | 射程 | 伤害类型 |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| 飞刀 (ThrowingKnife)| 1d4 | 2 | +0 | 4 | Slash |
+| 飞镖 (Dart) | 1d4 | 2 | +0 | 5 | Pierce |
+| 飞斧 (Francisca) | 1d6 | 3 | +1 | 3 | Slash |
+| 标枪 (Javelin) | 1d8 | 4 | +0 | 6 | Pierce |
+| 重标枪 (Pilum) | 1d10 | 5 | +0 | 5 | Pierce |
+| 渔叉 (Harpoon) | 1d4 | 4 | +1 | 4 | Pierce |
+| 投石 (StoneThrow) | 1d4 | 5 | +0 | 6 | Crush |
+| 特重标枪 (HeavyJavelin)| 1d12 | 6 | +0 | 4 | Pierce |
+| 投掷飞锤 (ThrowingHammer)|1d8 | 5 | +1 | 3 | Crush |
 
 ### 7.5 弓系武器 (Bows)
 
 弓系武器默认造成 Pierce 伤害。
 
-| 子类型 (Subtype) | 基础伤害骰 | 发射AP | 命中修正 | 穿透修正 | 射程 |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| 短弓 (Shortbow) | 1d6 | 4 | +0 | +1 | 8 |
-| 狩猎弓 (HuntingBow) | 1d8 | 5 | +0 | +1 | 10 |
-| 游牧弓 (NomadBow) | 1d4 | 4 | +1 | +1 | 7 |
-| 强弓 (Strongbow) | 1d8 | 5 | +0 | +2 | 10 |
-| 反曲弓 (RecurveBow) | 1d10 | 6 | +0 | +2 | 12 |
-| 战弓 (WarBow) | 1d8 | 5 | +1 | +2 | 11 |
-| 长弓 (Longbow) | 1d10 | 7 | +0 | +3 | 15 |
-| 复合长弓 (CompositeLongbow)|2d6| 8 | +0 | +3 | 14 |
-| 巨弓 (Greatbow) | 1d10 | 7 | +1 | +3 | 13 |
+| 子类型 (Subtype) | 基础伤害骰 | 发射AP | 命中修正 | 射程 |
+|:---|:---:|:---:|:---:|:---:|
+| 短弓 (Shortbow) | 1d6 | 4 | +0 | 8 |
+| 狩猎弓 (HuntingBow) | 1d8 | 5 | +0 | 10 |
+| 游牧弓 (NomadBow) | 1d4 | 4 | +1 | 7 |
+| 强弓 (Strongbow) | 1d8 | 5 | +0 | 10 |
+| 反曲弓 (RecurveBow) | 1d10 | 6 | +0 | 12 |
+| 战弓 (WarBow) | 1d8 | 5 | +1 | 11 |
+| 长弓 (Longbow) | 1d10 | 7 | +0 | 15 |
+| 复合长弓 (CompositeLongbow)|2d6| 8 | +0 | 14 |
+| 巨弓 (Greatbow) | 1d10 | 7 | +1 | 13 |
 
 ### 7.6 弩系武器 (Crossbows)
 
-弩系武器默认造成 Pierce 伤害。弩的对甲优势主要通过较高的 `WeaponPen` 体现。
+弩系武器默认造成 Pierce 伤害。
 
-| 子类型 (Subtype) | 基础伤害骰 | 发射AP | 装填AP | 命中修正 | 穿透修正 | 射程 |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| 手弩 (PistolCrossbow)| 1d4 | 5 | 2 | +1 | +2 | 6 |
-| 轻弩 (LightCrossbow) | 1d8 | 5 | 4 | +0 | +3 | 10 |
-| 猎弩 (HuntingCrossbow)| 1d10 | 5 | 3 | +0 | +3 | 12 |
-| 标准弩 (StandardCrossbow)|1d10 | 6 | 5 | +0 | +3 | 12 |
-| 强弩 (StrongCrossbow)| 1d12 | 7 | 6 | +0 | +4 | 11 |
-| 狙击弩 (SniperCrossbow)| 1d8 | 6 | 7 | +1 | +4 | 16 |
-| 重弩 (HeavyCrossbow) | 2d6 | 8 | 8 | +0 | +4 | 14 |
-| 攻城弩 (SiegeCrossbow)| 2d8 | 9 | 10 | +0 | +5 | 13 |
-| 床弩 (Ballista) | 1d12 | 8 | 12 | +1 | +5 | 18 |
+| 子类型 (Subtype) | 基础伤害骰 | 发射AP | 装填AP | 命中修正 | 射程 |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| 手弩 (PistolCrossbow)| 1d4 | 5 | 2 | +1 | 6 |
+| 轻弩 (LightCrossbow) | 1d8 | 5 | 4 | +0 | 10 |
+| 猎弩 (HuntingCrossbow)| 1d10 | 5 | 3 | +0 | 12 |
+| 标准弩 (StandardCrossbow)|1d10 | 6 | 5 | +0 | 12 |
+| 强弩 (StrongCrossbow)| 1d12 | 7 | 6 | +0 | 11 |
+| 狙击弩 (SniperCrossbow)| 1d8 | 6 | 7 | +1 | 16 |
+| 重弩 (HeavyCrossbow) | 2d6 | 8 | 8 | +0 | 14 |
+| 攻城弩 (SiegeCrossbow)| 2d8 | 9 | 10 | +0 | 13 |
+| 床弩 (Ballista) | 1d12 | 8 | 12 | +1 | 18 |
 
 ---
 
@@ -560,6 +619,30 @@ $$RangedHitPenalty = -2 \times InterveningUnits$$
 *   自然 1 仍然必定未命中。
 *   该规则不默认启用友军误伤；若需要更高难度，可将友军误伤作为独立可选规则。
 
+### 8.6 视线 / 掩体 / 高地命中惩罚 (LOS Path Penalty)
+
+> v0.6 设计变更（视野系统已废除）：远程攻击不再有"视野半径"。所有单位永远看见整张战场。LOS 不再做二元阻挡，改为**路径上累计命中惩罚**，由 `CombatRuleEngine.AttackInput.AccuracyMod` 累加。
+> 该模型适合中小型战场（≤30×30 格），保持视觉简单。未来引入 50×50+ 大型战场时再考虑加回视野半径。
+
+远程攻击的射线沿途累加以下惩罚：
+
+| 路径上每格 | 命中惩罚 |
+|:---|:---:|
+| 阻挡视线地形（山、密林、墙壁） | -4 |
+| 全掩体（cover_level ≥ 2） | -4 |
+| 半掩体（cover_level == 1） | -2 |
+| 中间单位（友军或敌军） | -2 |
+| 防御模式 / 持军团塔盾的中间单位 | -3（替代 -2） |
+
+特殊规则：
+
+*   攻击者高出目标元 ≥ 2 级时，**地形惩罚作废**（站山头能越过墙射），但中间单位惩罚仍计入。
+*   自然 20 仍然必定命中目标。
+*   自然 1 仍然必定未命中。
+*   实装位置：`LosCore.GetPathPenalty`（核心层），`LineOfSight.GetPathPenalty`（Frontend 适配层）。
+
+旧版"二元 LOS 阻挡"仅保留给特殊场景（如直线法术不能穿墙）使用，调用 `LosCore.HasLos`（已标 `Obsolete` 警告）。
+
 ---
 
 ## 9. 士气参数 (Morale)
@@ -584,7 +667,15 @@ $$RangedHitPenalty = -2 \times InterveningUnits$$
 
 **Spell**：不计入每回合 1 次非 Spell 主动技能限制，但必须满足施法条件并消耗 Mana。
 
-$$MaxMana = 10 + INT + \lfloor Level / 2 \rfloor + NodeManaMax$$
+$$MaxMana = 10 + INT + \lfloor Level / 2 \rfloor + \lfloor WIS / 4 \rfloor + NodeManaMax$$
+
+> **2026-05-17 修订**：WIS 提供 Mana 上限加成 `floor(WIS / 4)`。原意是让 WIS 暴击系也能稍微沾施法（混合 build 顺手），但单 WIS（刺客）不靠施法输出 — Spell 仍需 INT 主属性支撑伤害公式。
+
+**Mana 战斗内恢复**：
+
+$$ManaRegenPerTurn = \lfloor WIS / 8 \rfloor + NodeManaRegen$$
+
+每回合开始（玩家方/敌方各自的回合开始）Mana += ManaRegen，上限不超过 MaxMana。让 WIS 系成为"耐久续航"，让纯 INT 法师只能靠初始池 + 节点 Mana 上限。
 
 施法条件：
 
@@ -615,21 +706,23 @@ $$MaxMana = 10 + INT + \lfloor Level / 2 \rfloor + NodeManaMax$$
 | trick_arrow | 单体 | 4 | 伤害 1d10；附加 1 种状态 (失明/倒地/震慑) |
 
 ### 10.3 法术与辅助 (Magic & Support Active)
+
+> ⚠ **2026-05-17 重构**：原 §10.3 的散件 spell 列表（arcane_burst / chain_lightning / arcane_bomb / time_warp / void_gate / mana_shield / shadow_clone 等）**已被废弃**，迁移到独立法表 `docs/法表系统.md`。法师改为通过 5 个 INT 大节点解锁"1-5 环法术槽"，每槽随机抽取该环位的法术（毁灭 / 幻术 / 附魔 / 防护 / 生命 5 系，每系 5 环 = 25 法术总池）。本表保留下方非 Spell 战术主动技能：
+
 | 技能ID | 分类 | 目标类型 | AP | Mana | 数值效果 |
 |:---|:---:|:---|:---:|:---:|:---|
 | battle_cry | 非 Spell | 周围(半径1) | 4 | 0 | 敌方攻击力 -2；友方士气 +3 |
 | stealth | 非 Spell | 自身 | 4 | 0 | 挂载状态：隐匿 (Stealth) |
-| shadow_clone | Spell | 自身 | 4 | 8 | 触发位移；下一次受击命中率固定为 0% |
 | taunt | 非 Spell | 周围(半径1) | 4 | 0 | 强制修改范围内敌方 AI 目标值为施法者 |
 | unyielding_bulwark| 非 Spell | 自身 | 4 | 0 | 当回合受到所有伤害乘数 0.5x；获得临时 HP |
-| mana_shield | Spell | 自身 | 4 | 8 | 获得魔法护盾状态 |
-| time_warp | Spell | 自身 | 4 | 12 | 获取 1 个次要动作序列 |
 
 ### 10.4 治疗 (Healing Active)
+
+> ⚠ **2026-05-17 重构**：基础治疗 spell 已迁移到法表 `docs/法表系统.md` 生命系（治疗轻伤 1 环 / 治疗重伤 2 环 / 群体治疗 3 环 / 再生术 4 环 / 生命之歌 5 环）。生命系**不允许伤害**，**不允许复活**（全游戏无复活机制）。仅保留下方"非 Spell 急救"：
+
 | 技能ID | 分类 | 目标类型 | AP | Mana | 数值效果 |
 |:---|:---:|:---|:---:|:---:|:---|
 | field_medic | 非 Spell | 单体友军 | 4 | 0 | 恢复 HP；移除状态 (流血, 中毒) |
-| basic_heal | Spell | 单体友军 | 6 | 6 | 恢复 HP，数值公式：$1d8 + \text{Mod(WIS)}$ |
 
 ### 10.5 被动 (Passive)
 | 技能ID | 类别 | 数值效果 | 代价 |
@@ -860,27 +953,65 @@ $$FinalHeal = BaseHeal \times HealingMultiplier$$
 
 | ID | 名称 | 原定位 | v0.6 修订效果 | 修订目的 |
 |:---|:---|:---|:---|:---|
-| int_b02 | 奥术爆发 | Spell | AP 6；Mana 8；单体 2d8 奥术伤害；使用 `NodeSpellHit` 命中。 | 给单体法术明确资源成本 |
-| int_b03 | 连锁闪电 | Spell | AP 7；Mana 12；最多跳跃 3 个目标；第 1 目标 100% 伤害，第 2 目标 75%，第 3 目标 50%；节点法伤按 11.4.2 结算。 | 控制多目标法伤叠加 |
-| int_b04 | 法术反射 | 被动 | 每回合最多 1 次。受到敌方 Spell 命中时，进行 INT 检定；成功则反射或抵消，具体由法术等级决定。 | 限制反射频率 |
-| int_b09 | 时间扭曲 | Spell | AP 6；Mana 12；重新获得 1 个主行动。每名施法者每回合最多施放 1 次；由此获得的主行动不能再次施放 Time Warp 或产生额外行动。 | 防止行动循环失控 |
-| int_b05 | 奥术炸弹 | Spell AOE | AP 8；Mana 14；范围奥术爆炸 3d6；最多影响 4 个目标；不能暴击；节点法伤按 11.4.2 结算。 | 控制 AOE 法术 |
+| int_b02 | 法术研习·1 环 | 法术槽 | 激活时随机获得 1 个 1 环 spell（5 学派任选）。详见 `docs/法表系统.md`。 | 替代旧"奥术爆发"；接入 25 法术池 |
+| int_b03 | 法术研习·2 环 | 法术槽 | 激活时随机获得 1 个 2 环 spell。需要先激活 int_b02。 | 替代旧"连锁闪电"|
+| int_b05 | 法术研习·3 环 | 法术槽 | 激活时随机获得 1 个 3 环 spell。需要先激活 int_b03。 | 替代旧"奥术炸弹"|
+| int_b09 | 法术研习·4 环 | 法术槽 | 激活时随机获得 1 个 4 环 spell。需要先激活 int_b05。 | 替代旧"时间扭曲"|
+| int_b11 | 法术研习·5 环 | 法术槽 | 激活时随机获得 1 个 5 环 spell。需要先激活 int_b09。 | 替代旧"虚空之门"|
+| int_b04 | 法术反射 | 被动 | 每回合最多 1 次。受到敌方 Spell 命中时，进行 INT 检定；成功则反射或抵消。注意：与防护系 `Counterspell`（2 环 spell）独立，互不冲突。 | 限制反射频率 |
+| int_b08 | 魔力汲取 | 主动（非 Spell）| AP 4；Mana 0（不消耗）；单体 6 格；攻击 d20+Mod(INT) vs AC，命中后将目标 1d6 Mana 转移到自身。 | 法师续航工具，不受法表替代 |
 | int_b10 | 知识就是力量 | 被动 | 法术伤害额外 +Mod(INT)。单体法术全额；多目标法术主目标全额、其他目标 50%。 | 防止 INT 修正随目标数线性爆炸 |
-| int_b11 | 虚空之门 | Spell | AP 6；Mana 10；传送至视野内合法位置；传送后本回合不能再施放伤害 Spell。 | 防止位移后爆发过强 |
 | int_ks01 | 绝对专注 | Keystone | 法术 DC +4；不能学习其他体系的 Spell；非 Spell 技能不受影响。 | 强化专精法师，但保留普通技能空间 |
 
 #### WIS 修订节点
 
+> **2026-05-17 重设计**：WIS 从"治疗主属性"重定位为"暴击/刺杀主属性 + 法力续航"。
+> 治疗 / spell 类节点全部迁移到法表（详见 `docs/法表系统.md`），WIS 节点改为：
+>
+> - **小节点**：critical_rate（暴击率）/ mana_max / mana_regen 加成
+> - **大节点（主动）**：法力涌动 / 爆头突袭 / 影刃涂毒 / 暗杀 / 影遁
+> - **大节点（被动）**：致命猎杀 / 死灵之锋
+> - **Keystone**：刺客本能（暴击爆发，禁重甲/盾）
+>
+> ID 保持不变（兼容存档），但 `EffectId`、名称、效果均已重写。
+
 | ID | 名称 | 原定位 | v0.6 修订效果 | 修订目的 |
 |:---|:---|:---|:---|:---|
-| wis_b01 | 基础治疗 | Spell | AP 6；Mana 6；治疗 `1d8 + Mod(WIS) + NodeHealAmount`。 | 与 v0.5 基础治疗一致 |
-| wis_b02 | 群体治疗 | Spell | AP 8；Mana 10；治疗周围最多 4 名友军 `1d6 + Mod(WIS) + NodeHealAmount`。 | 控制群疗拖战斗 |
-| wis_b06 | 守护之灵 | Spell | AP 6；Mana 8；为 1 名友军附加守护。该友军本场战斗下次受到致命伤害时，伤害归零并移除守护。每名目标每场战斗最多 1 次。 | 保留强保护，限制重复 |
-| wis_b03 | 复活 | Spell | AP 10；Mana 20；每场战斗最多 1 次；复活 1 名阵亡队友，恢复 50% MaxHP，并附加 2 回合虚弱：伤害 -25%、治疗接受量 -25%。 | 复活强但不无代价 |
-| wis_b05 | 神圣制裁 | Spell | AP 8；Mana 12；对邪恶目标造成 3d10 神圣伤害；非邪恶目标伤害减半。 | 明确特攻定位 |
-| wis_b08 | 元素风暴 | Spell AOE | AP 8；Mana 12；区域内最多 4 个敌人受 2d8 自然伤害；不能暴击；节点法伤按 11.4.2。 | 控制法术 AOE |
-| wis_b09 | 灵魂守护 | 被动 | 每场战斗限 1 次。当友军 HP 降至 0 时自动触发，恢复 `1d10 + Mod(WIS) + NodeHealAmount`。优先级低于守护之灵。 | 防止保护链重复触发 |
-| wis_ks01 | 神之手 | Keystone | 治疗效果 +50%；不能造成任何伤害，包括武器、Spell、反伤、毒伤。可使用非伤害控制、治疗、复活、净化。 | 纯治疗核心定位 |
+| wis_s01 | 暴击直觉 | small | `critical_rate +0.02` | 单 WIS = 刺客的入口 |
+| wis_s02 | 法力觉醒 | small | `mana_max +3` | 续航向小节点 |
+| wis_s03 | 影刃训练 | small | `critical_rate +0.03` | 暴击曲线 |
+| wis_s06 | 心灵专注 | small | `mana_max +3, mana_regen +1` | 法力续航 |
+| wis_s09 | 致命专注 | small | `critical_rate +0.02, wis_check +1` | 进入暴击曲线 |
+| wis_b01 | 法力涌动 | 主动 | 非 Spell；AP 4；每场 1 次。立即将自身 Mana 恢复至上限。 | 替代旧 basic_heal（生命系迁法表）|
+| wis_b02 | 爆头突袭 | 主动 | 非 Spell；AP 8；下一次武器攻击必定暴击且伤害 ×1.5；不可与精准射击同回合使用。 | WIS 单点爆发主技能 |
+| wis_b04 | 致命猎杀 | 被动 | 对当前 HP <30% 敌人，攻击命中 +2、暴击率 +10%（不影响法术）。 | 暴击与残血协同 |
+| wis_b06 | 影刃涂毒 | 主动 | 非 Spell；AP 3；下次武器攻击附加 1d4×3 回合中毒（复用 DEX `poison_blade`）。 | 提供持续输出窗口 |
+| wis_b03 | 守护祝福 | 主动（贤者用）| 周围友军 +AC/豁免增益（INT+WIS 贤者跨界用，Sim 暂未触发）。 | 保留 INT+WIS 贤者跨界点 |
+| wis_b05 | 净化领域 | 主动（贤者用）| 周围友军移除负面状态并恢复少量 HP（贤者跨界用）。 | 同上 |
+| wis_b07 | 暗杀 | 主动 | 非 Spell；AP 8；每场 1 次。指定 HP <30% 的敌方单位直接斩杀（豁免无效，无视 AC/DR）；boss 改为造成 50% 当前 HP 真伤。 | 残血斩杀，刺客经典手感 |
+| wis_b08 | 影遁 | 主动 | 非 Spell；AP 4；进入潜行（复用 DEX `stealth`）；潜行+爆头突袭/暗杀爆发。 | 与暴击主动技能协同 |
+| wis_b09 | 死灵之锋 | 被动 | 击杀任意敌人后，下一次攻击暴击率 +10%、伤害 +20%（持续 1 回合或直至触发）。 | 击杀奖励循环，鼓励雪崩节奏 |
+| wis_s05 | 影刃大师 | small | `critical_rate +0.05, mana_max +5` | 高环刺客小节点 |
+| wis_s07 | 法力洪流 | small | `mana_max +5, mana_regen +1` | 续航 keystone 路径 |
+| wis_s10 | 致命之眼 | small | `critical_rate +0.05` | 高暴击曲线 |
+| wis_s11 | 智慧之眼 | small | `wis_check +3` | 暗杀前置 |
+| wis_s12 | 完美专注 | small | `critical_rate +0.05, mana_regen +1` | 暗杀+续航 |
+| wis_s13 | 致命爆击 | small | `critical_rate +0.05` | 影遁前置 |
+| wis_s14 | 暴击本能 | small | `critical_rate +0.03` | 死灵之锋前置 |
+| wis_ks01 | 刺客本能 | Keystone | 暴击倍率 +0.5x（基础 2.0 → 2.5）；暴击率 +5%；不能装备重甲（DR>5）；不能使用盾牌。 | 刺客玻璃爆发定位 |
+
+**已废除节点**（节点 ID 重定位，旧名 / 效果在新设计中无对应）：
+
+| 旧 ID | 旧名称 | 废除原因 | 新 ID 用途 |
+|:---|:---|:---|:---|
+| wis_b01 | 基础治疗 | 治疗迁法表生命系 | wis_b01 = 法力涌动 |
+| wis_b02 | 群体治疗 | 治疗迁法表生命系 | wis_b02 = 爆头突袭 |
+| wis_b04 | 净化之焰 | 灵光系迁法表毁灭 / 防护 | wis_b04 = 致命猎杀 |
+| wis_b06 | 守护之灵 | 防护迁法表防护系 | wis_b06 = 影刃涂毒 |
+| wis_b07 | 神谕 | 探索类，不再做大节点 | wis_b07 = 暗杀 |
+| wis_b08 | 元素风暴 | AOE 迁法表毁灭系 | wis_b08 = 影遁 |
+| wis_b09 | 灵魂守护 | 违反"无复活"约束 | wis_b09 = 死灵之锋 |
+| wis_ks01 | 生命精通 | 治疗 keystone 迁法表 | wis_ks01 = 刺客本能 |
 
 #### CHA 修订节点
 
@@ -913,7 +1044,7 @@ $$FinalHeal = BaseHeal \times HealingMultiplier$$
 | DEX | 远程 / 刺客 / 机动 | 高命中、高先攻、隐匿、远程与偷袭 | 怕盾墙、跨单位惩罚、被贴脸 |
 | CON | 阵线 / 坦克 / 反盾 | 高 HP、高 AC、减伤、临时 HP | 输出慢，容易被绕过或被法术克制 |
 | INT | 玻璃大炮法师 | 法术命中、Mana、AOE、传送、时间 | 布甲、无盾、魔力武器占双手、Mana 限制 |
-| WIS | 治疗 / 保护 / 复活 | 治疗量、复活、守护、神圣特攻 | 输出受限，神之手完全禁伤害 |
+| WIS | 治疗 / 保护 / 净化 | 治疗量、守护、净化（无复活，无伤害） | 输出受限，神之手完全禁伤害 |
 | CHA | 指挥 / 光环 / 行动经济 | 团队命中、AC、士气、额外行动 | 自身偏脆，额外行动受严格限制 |
 
 ---

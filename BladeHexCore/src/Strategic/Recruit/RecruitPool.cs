@@ -1,9 +1,10 @@
-﻿// RecruitPool.cs
+﻿﻿// RecruitPool.cs
 // 城镇招募池 — 每个 POI 维护一份可招募列表，按周刷新
 using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -61,15 +62,11 @@ public partial class RecruitPool : Resource
 
             // 按模板覆盖名字前缀
             unit.UnitName = $"{GetTemplateName(templateId)}·{unit.UnitName}";
-
-            int baseCost = 30 + level * 20;
-            int baseWage = 5 + level * 5;
-
             Available.Add(new RecruitableUnit
             {
                 TemplateId = templateId,
-                Cost = baseCost + rng.Next(20),
-                WeeklyWage = baseWage + rng.Next(5),
+                Cost = RecruitPricingService.GetRecruitCost(unit, poiTier, prosperity: 45 + poiTier * 20) + rng.Next(10),
+                WeeklyWage = RecruitPricingService.GetWeeklyWage(unit, poiTier) + rng.Next(3),
                 Unit = unit,
             });
         }

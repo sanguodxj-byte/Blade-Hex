@@ -227,8 +227,10 @@ public sealed class RiverStage : IWorldStage
         if (tile == null || tile.IsRoad || tile.IsRiver) return;
         if (tile.Terrain == HexOverworldTile.TerrainType.DeepWater) return;
 
-        tile.IsRiver = true;
-        tile.SetTerrain(HexOverworldTile.TerrainType.River);
-        allRiverTiles.Add(coord);
+        // 河流加宽：只改地形为 ShallowWater，不设置 IsRiver。
+        // 这样 RiverRenderer 只追踪主流，不会把 expansion 当成分叉，
+        // 避免一条河被切成几十个 1-2 格的渲染段。
+        tile.SetTerrain(HexOverworldTile.TerrainType.ShallowWater);
+        // 不再 allRiverTiles.Add(coord);
     }
 }

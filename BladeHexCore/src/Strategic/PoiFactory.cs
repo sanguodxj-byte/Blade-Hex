@@ -76,7 +76,25 @@ public partial class PoiFactory : RefCounted
         {
             poi.CastleDefenseLevel = entry.ContainsKey("castle_defense_level") ? (int)entry["castle_defense_level"] : 2;
             poi.GarrisonMax = entry.ContainsKey("garrison_max") ? (int)entry["garrison_max"] : 50;
-            poi.GarrisonCurrent = entry.ContainsKey("garrison_current") ? (int)entry["garrison_current"] : 20;
+            poi.GarrisonCurrent = entry.ContainsKey("garrison_current") ? (int)entry["garrison_current"] : 30;
+        }
+        else
+        {
+            // 非城堡类型：根据类型设置合理的默认驻军
+            int defaultMax = poi.PoiTypeEnum switch
+            {
+                OverworldPOI.POIType.Town => 80,
+                OverworldPOI.POIType.Port => 50,
+                OverworldPOI.POIType.Outpost => 40,
+                OverworldPOI.POIType.Village => 25,
+                OverworldPOI.POIType.Mine => 20,
+                OverworldPOI.POIType.Farm => 15,
+                OverworldPOI.POIType.Tavern => 10,
+                OverworldPOI.POIType.Shrine => 8,
+                _ => 0,
+            };
+            poi.GarrisonMax = entry.ContainsKey("garrison_max") ? (int)entry["garrison_max"] : defaultMax;
+            poi.GarrisonCurrent = entry.ContainsKey("garrison_current") ? (int)entry["garrison_current"] : defaultMax;
         }
 
         return poi;

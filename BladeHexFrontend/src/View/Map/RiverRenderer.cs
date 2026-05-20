@@ -97,83 +97,107 @@ public partial class RiverRenderer : Node2D
 
     private List<List<Vector2I>> TraceRiverSegments(HashSet<Vector2I> riverTiles)
     {
-        var segments = new List<List<Vector2I>>();
-        var visited = new HashSet<Vector2I>();
+        // 思路：把河流网络拆成"端点-端点"或"端点-分叉点"的简单路径段。
+        // 每条 edge 只属于一个 segment，分叉点作为段的终点 + 下一段的起点。
+        // 这样确保所有河流瓦片都被 trace 至少一次，平滑后渲染连续，分叉自然过渡。
 
-        // 找端点（1 个河流邻居）作为追踪起点
-        var startPoints = new List<Vector2I>();
+        var segments = new List<List<Vector2I>>();
+        if (riverTiles.Count == 0) return segments;
+
+        // 每条无向 edge 用 (min, max) 元组保证唯一
+        var usedEdges = new HashSet<(Vector2I, Vector2I)>();
+
+        static (Vector2I, Vector2I) EdgeKey(Vector2I a, Vector2I b)
+        {
+            // 用 hash 比较保证 (a,b) 与 (b,a) 是同一 key
+            int aH = a.X * 73856093 ^ a.Y * 19349663;
+            int bH = b.X * 73856093 ^ b.Y * 19349663;
+            return aH < bH ? (a, b) : (b, a);
+        }
+
+        // 1) 从端点（1 邻居）出发追踪
+        // 2) 端点全部用完后，从分叉点（≥3 邻居）出发处理剩余 branch
+        // 3) 仍有未用 edge 时，从普通格出发处理纯环
+
+        var endpoints = new List<Vector2I>();
+        var junctions = new List<Vector2I>();
         foreach (var coord in riverTiles)
         {
             int nbCount = CountRiverNeighbors(coord, riverTiles);
-            if (nbCount == 1 || nbCount >= 3)
-                startPoints.Add(coord);
+            if (nbCount == 1) endpoints.Add(coord);
+            else if (nbCount >= 3) junctions.Add(coord);
         }
 
-        if (startPoints.Count == 0 && riverTiles.Count > 0)
+        // 先从端点 trace
+        foreach (var start in endpoints)
+            TraceFromNode(start, riverTiles, usedEdges, segments);
+
+        // 再从分叉点 trace 剩余 branch
+        foreach (var start in junctions)
+            TraceFromNode(start, riverTiles, usedEdges, segments);
+
+        // 最后处理纯环（没有端点和分叉点的情况，如完全闭环）
+        foreach (var start in riverTiles)
+            TraceFromNode(start, riverTiles, usedEdges, segments);
+
+        return segments;
+    }
+
+    /// <summary>
+    /// 从给定节点出发，沿未用过的 edge 走到端点或分叉点，
+    /// 把走过的 edge 标记 used，把路径作为一个 segment 加入 segments。
+    /// 该节点的每个未用 branch 都会产生一个 segment。
+    /// </summary>
+    private static void TraceFromNode(
+        Vector2I start,
+        HashSet<Vector2I> riverTiles,
+        HashSet<(Vector2I, Vector2I)> usedEdges,
+        List<List<Vector2I>> segments)
+    {
+        static (Vector2I, Vector2I) EdgeKey(Vector2I a, Vector2I b)
         {
-            var enumerator = riverTiles.GetEnumerator();
-            enumerator.MoveNext();
-            startPoints.Add(enumerator.Current);
+            int aH = a.X * 73856093 ^ a.Y * 19349663;
+            int bH = b.X * 73856093 ^ b.Y * 19349663;
+            return aH < bH ? (a, b) : (b, a);
         }
 
-        foreach (var start in startPoints)
+        var neighbors = GetRiverNeighbors(start, riverTiles);
+        foreach (var nb in neighbors)
         {
-            if (visited.Contains(start)) continue;
+            if (usedEdges.Contains(EdgeKey(start, nb))) continue;
 
-            var neighbors = GetRiverNeighbors(start, riverTiles);
-            foreach (var firstStep in neighbors)
+            var segment = new List<Vector2I> { start, nb };
+            usedEdges.Add(EdgeKey(start, nb));
+
+            var prev = start;
+            var current = nb;
+
+            // 沿无分叉路径一直走，遇到端点或分叉点停下
+            while (true)
             {
-                if (visited.Contains(firstStep) && visited.Contains(start)) continue;
+                int curNbCount = CountRiverNeighbors(current, riverTiles);
+                if (curNbCount != 2) break; // 端点 (1) 或分叉 (≥3) 停止
 
-                var segment = new List<Vector2I> { start };
-                visited.Add(start);
-
-                var current = firstStep;
-                var prev = start;
-
-                while (riverTiles.Contains(current) && !visited.Contains(current))
+                // 找下一格（必须是 current 的邻居中除 prev 之外的那一个）
+                Vector2I? next = null;
+                foreach (var n in GetRiverNeighbors(current, riverTiles))
                 {
-                    segment.Add(current);
-                    visited.Add(current);
-
-                    var next = GetNextRiverTile(current, prev, riverTiles);
-                    if (next == null) break;
-                    prev = current;
-                    current = next.Value;
+                    if (n == prev) continue;
+                    if (usedEdges.Contains(EdgeKey(current, n))) continue;
+                    next = n;
+                    break;
                 }
-
-                if (riverTiles.Contains(current) && segment.Count > 1 && current != segment[^1])
-                    segment.Add(current);
-
-                if (segment.Count >= 2)
-                    segments.Add(segment);
-            }
-        }
-
-        // 处理未追踪的环路
-        foreach (var coord in riverTiles)
-        {
-            if (visited.Contains(coord)) continue;
-
-            var segment = new List<Vector2I>();
-            var current = coord;
-            Vector2I? prev = null;
-
-            while (!visited.Contains(current) && riverTiles.Contains(current))
-            {
-                segment.Add(current);
-                visited.Add(current);
-                var next = GetNextRiverTile(current, prev ?? current, riverTiles);
-                prev = current;
-                current = next ?? current;
                 if (next == null) break;
+
+                segment.Add(next.Value);
+                usedEdges.Add(EdgeKey(current, next.Value));
+                prev = current;
+                current = next.Value;
             }
 
             if (segment.Count >= 2)
                 segments.Add(segment);
         }
-
-        return segments;
     }
 
     private static int CountRiverNeighbors(Vector2I coord, HashSet<Vector2I> riverTiles)

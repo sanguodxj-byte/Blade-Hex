@@ -31,4 +31,11 @@ public interface ICombatSceneAdapter
 
     /// <summary>播放指定音效</summary>
     void PlaySfx(string sfxName);
+
+    /// <summary>在目标单位头顶弹出伤害/治疗/未命中数字</summary>
+    /// <param name="target">目标单位</param>
+    /// <param name="amount">数值;>0 = 伤害,&lt;0 = 治疗,=0 时配合 missLabel</param>
+    /// <param name="isCritical">是否暴击</param>
+    /// <param name="missLabel">非空时显示该字符串(如 "Miss"),amount 被忽略</param>
+    void ShowDamageNumber(Unit target, int amount, bool isCritical = false, string? missLabel = null);
 }

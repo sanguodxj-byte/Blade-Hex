@@ -104,9 +104,12 @@ public static class DescriptionProvider
     // 内部
     // ========================================
 
+    private static readonly Random _rng = new();
+
     private static string SelectVariant(string[] pool, string name, int day)
     {
         if (pool.Length == 0) return "";
+        // 同一名称+同一天（3天周期）内描述稳定
         int seed = Math.Abs((name ?? "").GetHashCode() ^ (day / 3));
         return pool[seed % pool.Length];
     }

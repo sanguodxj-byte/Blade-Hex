@@ -1,7 +1,9 @@
 ﻿// RaceData.cs
-// 种族数据资源 — 5个可玩种族的属性修正、种族特性、初始好感
+// 种族数据资源 — 从 races.json 加载
 // 对应策划案 12-种族与招募.md + 05-角色与职业.md
 using Godot;
+using System;
+using System.Collections.Generic;
 
 namespace BladeHex.Data;
 
@@ -28,7 +30,6 @@ public partial class RaceData : Resource
     [Export] public Race raceId = Race.Human;
     [Export] public string RaceName { get; set; } = "人类";
 
-    // 属性修正
     [Export] public int StrMod;
     [Export] public int DexMod;
     [Export] public int ConMod;
@@ -36,33 +37,26 @@ public partial class RaceData : Resource
     [Export] public int WisMod;
     [Export] public int ChaMod;
 
-    // 种族特性列表
     [Export] public string[] RacialTraits = [];
-
-    // 种族特性描述
     [Export] public string TraitsDescription { get; set; } = "";
-
-    // 招募难度系数（1.0=标准，越高越难）
     [Export] public float RecruitmentDifficulty { get; set; } = 1.0f;
-
-    // 初始好感度表（种族ID → 好感值）
     [Export] public Godot.Collections.Dictionary StartingFavor = new();
-
-    // 适合的职业倾向
     [Export] public string[] SuitableTendencies = [];
 
     // ========================================
-    // 静态工厂：返回5个硬编码种族
+    // JSON 驱动加载
     // ========================================
 
-    public static RaceData[] GetAllRaces() =>
-    [
-        CreateHuman(),
-        CreateElf(),
-        CreateDwarf(),
-        CreateHalfOrc(),
-        CreateHalfElf(),
-    ];
+    private static RaceData[]? _cached;
+    private const string JsonPath = "res://BladeHexCore/src/Data/character/races.json";
+    private const string ModPath = "user://mods/races/";
+
+    public static RaceData[] GetAllRaces()
+    {
+        if (_cached != null) return _cached;
+        _cached = LoadFromJson();
+        return _cached;
+    }
 
     public static RaceData GetRaceById(Race id)
     {
@@ -71,92 +65,135 @@ public partial class RaceData : Resource
         return GetAllRaces()[0];
     }
 
-    public static string GetRaceName(Race id) => id switch
-    {
-        Race.Human => "人类",
-        Race.Elf => "精灵",
-        Race.Dwarf => "矮人",
-        Race.HalfOrc => "半兽人",
-        Race.HalfElf => "半精灵",
-        _ => "未知",
-    };
+    public static string GetRaceName(Race id) => GetRaceById(id).RaceName;
+
+    /// <summary>强制重新加载（热重载用）</summary>
+    public static void Reload() { _cached = null; }
 
     // ========================================
-    // 各种族定义
+    // JSON 解析
     // ========================================
 
-    private static RaceData CreateHuman() => new()
+    private static RaceData[] LoadFromJson()
     {
-        raceId = Race.Human,
-        RaceName = "人类",
-        StrMod = 1, DexMod = 1, ConMod = 1, IntMod = 1, WisMod = 1, ChaMod = 1,
-        RacialTraits = ["versatile"],
-        TraitsDescription = "多才多艺：额外获得1个技能点。全属性+1。",
-        RecruitmentDifficulty = 0.5f,
-        StartingFavor = new Godot.Collections.Dictionary
-        {
-            { "human", 20 }, { "elf", 5 }, { "dwarf", 10 }, { "half_orc", -5 }, { "half_elf", 5 },
-        },
-        SuitableTendencies = ["全能"],
-    };
+        var list = new List<RaceData>();
 
-    private static RaceData CreateElf() => new()
-    {
-        raceId = Race.Elf,
-        RaceName = "精灵",
-        DexMod = 2, IntMod = 1, ConMod = -1,
-        RacialTraits = ["dark_vision", "elf_weapon_proficiency"],
-        TraitsDescription = "黑暗视觉：夜间/洞穴无惩罚。精灵武器熟练：长剑/长弓+1命中。DEX+2, INT+1, CON-1。",
-        RecruitmentDifficulty = 1.0f,
-        StartingFavor = new Godot.Collections.Dictionary
-        {
-            { "human", 5 }, { "elf", 25 }, { "dwarf", 0 }, { "half_orc", -15 }, { "half_elf", 15 },
-        },
-        SuitableTendencies = ["法师", "游侠", "游荡者"],
-    };
+        // 内置种族
+        LoadRacesFromFile(JsonPath, list);
 
-    private static RaceData CreateDwarf() => new()
-    {
-        raceId = Race.Dwarf,
-        RaceName = "矮人",
-        ConMod = 2, StrMod = 1, DexMod = -1,
-        RacialTraits = ["poison_resistance", "dwarven_resilience"],
-        TraitsDescription = "毒素抗性：强韧豁免优势。矮人韧性：HP+1/级。CON+2, STR+1, DEX-1。",
-        RecruitmentDifficulty = 1.0f,
-        StartingFavor = new Godot.Collections.Dictionary
+        // Mod 种族
+        if (DirAccess.DirExistsAbsolute(ModPath))
         {
-            { "human", 10 }, { "elf", 0 }, { "dwarf", 25 }, { "half_orc", -20 }, { "half_elf", 5 },
-        },
-        SuitableTendencies = ["战士", "守护骑士", "贤者"],
-    };
+            using var dir = DirAccess.Open(ModPath);
+            if (dir != null)
+            {
+                dir.ListDirBegin();
+                string fileName = dir.GetNext();
+                while (!string.IsNullOrEmpty(fileName))
+                {
+                    if (fileName.EndsWith(".json"))
+                        LoadRacesFromFile(ModPath + fileName, list);
+                    fileName = dir.GetNext();
+                }
+                dir.ListDirEnd();
+            }
+        }
 
-    private static RaceData CreateHalfOrc() => new()
-    {
-        raceId = Race.HalfOrc,
-        RaceName = "半兽人",
-        StrMod = 2, ConMod = 1, IntMod = -2, ChaMod = -1,
-        RacialTraits = ["rage", "threat_instinct"],
-        TraitsDescription = "狂暴：HP低于50%时伤害+2。威胁直觉：先攻+2。STR+2, CON+1, INT-2, CHA-1。",
-        RecruitmentDifficulty = 2.0f,
-        StartingFavor = new Godot.Collections.Dictionary
+        if (list.Count == 0)
         {
-            { "human", -10 }, { "elf", -20 }, { "dwarf", -15 }, { "half_orc", 20 }, { "half_elf", -5 },
-        },
-        SuitableTendencies = ["战士", "野蛮人", "游侠"],
-    };
+            GD.PushError("[RaceData] No races loaded! Using emergency fallback.");
+            list.Add(new RaceData { raceId = Race.Human, RaceName = "人类" });
+        }
 
-    private static RaceData CreateHalfElf() => new()
+        GD.Print($"[RaceData] Loaded {list.Count} races");
+        return list.ToArray();
+    }
+
+    private static void LoadRacesFromFile(string path, List<RaceData> list)
     {
-        raceId = Race.HalfElf,
-        RaceName = "半精灵",
-        ChaMod = 2,
-        RacialTraits = ["dual_heritage", "social_talent"],
-        TraitsDescription = "双重血统：人类和精灵聚居地都视为友好。社交天赋：交涉/招募价格-10%。CHA+2，自选2项+1。",
-        RecruitmentDifficulty = 0.8f,
-        StartingFavor = new Godot.Collections.Dictionary
+        if (!FileAccess.FileExists(path)) return;
+
+        using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+        if (file == null) return;
+
+        var json = new Json();
+        if (json.Parse(file.GetAsText()) != Error.Ok)
         {
-            { "human", 10 }, { "elf", 15 }, { "dwarf", 5 }, { "half_orc", -5 }, { "half_elf", 25 },
-        },
-        SuitableTendencies = ["守护骑士", "贤者", "游荡者", "法师"],
-    };
+            GD.PushError($"[RaceData] JSON parse error in {path}: {json.GetErrorMessage()}");
+            return;
+        }
+
+        if (json.Data.VariantType != Variant.Type.Array) return;
+        var arr = json.Data.AsGodotArray();
+
+        for (int i = 0; i < arr.Count; i++)
+        {
+            if (arr[i].VariantType != Variant.Type.Dictionary) continue;
+            var dict = arr[i].AsGodotDictionary();
+
+            try
+            {
+                var race = ParseRaceEntry(dict);
+                list.Add(race);
+            }
+            catch (Exception ex)
+            {
+                GD.PushError($"[RaceData] Failed to parse {path}[{i}]: {ex.Message}");
+            }
+        }
+    }
+
+    private static RaceData ParseRaceEntry(Godot.Collections.Dictionary dict)
+    {
+        string idStr = dict.ContainsKey("id") ? dict["id"].AsString() : "Human";
+        if (!Enum.TryParse<Race>(idStr, out var raceEnum))
+            raceEnum = Race.Human;
+
+        var data = new RaceData
+        {
+            raceId = raceEnum,
+            RaceName = dict.ContainsKey("name") ? dict["name"].AsString() : idStr,
+            StrMod = OptInt(dict, "str_mod", 0),
+            DexMod = OptInt(dict, "dex_mod", 0),
+            ConMod = OptInt(dict, "con_mod", 0),
+            IntMod = OptInt(dict, "int_mod", 0),
+            WisMod = OptInt(dict, "wis_mod", 0),
+            ChaMod = OptInt(dict, "cha_mod", 0),
+            TraitsDescription = dict.ContainsKey("traits_desc") ? dict["traits_desc"].AsString() : "",
+            RecruitmentDifficulty = dict.ContainsKey("recruitment_difficulty")
+                ? (float)dict["recruitment_difficulty"].AsDouble() : 1.0f,
+        };
+
+        // 种族特性数组
+        if (dict.ContainsKey("traits") && dict["traits"].VariantType == Variant.Type.Array)
+        {
+            var traitsArr = dict["traits"].AsGodotArray();
+            data.RacialTraits = new string[traitsArr.Count];
+            for (int i = 0; i < traitsArr.Count; i++)
+                data.RacialTraits[i] = traitsArr[i].AsString();
+        }
+
+        // 初始好感度
+        if (dict.ContainsKey("starting_favor") && dict["starting_favor"].VariantType == Variant.Type.Dictionary)
+        {
+            var favorDict = dict["starting_favor"].AsGodotDictionary();
+            data.StartingFavor = new Godot.Collections.Dictionary();
+            foreach (var key in favorDict.Keys)
+                data.StartingFavor[key.AsString()] = favorDict[key].AsInt32();
+        }
+
+        // 适合职业
+        if (dict.ContainsKey("suitable_tendencies") && dict["suitable_tendencies"].VariantType == Variant.Type.Array)
+        {
+            var tendArr = dict["suitable_tendencies"].AsGodotArray();
+            data.SuitableTendencies = new string[tendArr.Count];
+            for (int i = 0; i < tendArr.Count; i++)
+                data.SuitableTendencies[i] = tendArr[i].AsString();
+        }
+
+        return data;
+    }
+
+    private static int OptInt(Godot.Collections.Dictionary dict, string key, int def)
+        => dict.ContainsKey(key) ? dict[key].AsInt32() : def;
 }

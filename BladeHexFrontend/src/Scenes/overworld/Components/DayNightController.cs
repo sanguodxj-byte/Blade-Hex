@@ -59,7 +59,8 @@ public partial class DayNightController : Node
         if (_sunLight == null || _worldEnv == null || _economy == null || _timeGradient == null)
             return;
 
-        float timeRatio = _economy.CurrentHour / 24.0f;
+        float hour = _economy.CurrentHour;
+        float timeRatio = hour / 24.0f;
         Color tint = _timeGradient.Sample(timeRatio);
 
         // 能量范围：夜间最低 0.5（而非 0.3），保证地图始终可读
@@ -72,6 +73,29 @@ public partial class DayNightController : Node
         _sunLight.LightEnergy = BaseSunEnergy;
         _worldEnv.AmbientLightColor = BaseAmbientColor;
         _worldEnv.AmbientLightEnergy = BaseAmbientEnergy;
+
+        // 太阳方向:根据时刻模拟真实轨迹,用 lerp 平滑过渡避免阴影波纹
+        const float sunriseHour = 6f, sunsetHour = 18f;
+        bool isDaytime = hour >= sunriseHour && hour <= sunsetHour;
+
+        Vector3 targetRotation;
+        if (isDaytime)
+        {
+            float dayProgress = (hour - sunriseHour) / (sunsetHour - sunriseHour);
+            float elevation = 5f + 55f * Mathf.Sin(dayProgress * Mathf.Pi);
+            float azimuth = Mathf.Lerp(90f, 270f, dayProgress);
+            targetRotation = new Vector3(-elevation, azimuth, 0);
+        }
+        else
+        {
+            targetRotation = new Vector3(-30f, 150f, 0);
+        }
+
+        // 平滑过渡(避免阴影级联跳变导致波纹)
+        _sunLight.RotationDegrees = _sunLight.RotationDegrees.Lerp(targetRotation, 0.02f);
+
+        // 阴影稳定性设置
+        _sunLight.DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel2Splits;
     }
 
     // ========================================

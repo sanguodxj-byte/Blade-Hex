@@ -95,6 +95,9 @@ public sealed class TerrainVisualProfile
     /// <summary>程序化shader调色板：高光色（最高明度）</summary>
     public Color PaletteLight = new Color(0.75f, 0.65f, 0.45f);
 
+    /// <summary>程序化shader地形纹理风格（0=平原, 1=森林, 2=水域, 3=山地, 4=沙漠, 5=雪地, 6=道路, 7=沼泽）</summary>
+    public int PatternType = 0;
+
     // ========================================
     // 便捷方法
     // ========================================

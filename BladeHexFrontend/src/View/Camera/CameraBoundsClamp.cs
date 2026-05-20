@@ -32,75 +32,94 @@ public static class CameraBoundsClamp
     /// 限制 Camera3D 正交相机的位置在指定 AABB 范围内。
     /// 假设相机沿 X 轴旋转 <paramref name="tiltDegrees"/> 度（典型 -45° 俯视），
     /// 视线落地点 = (camX, 0, camZ - camY * tan(|tilt|))。
+    ///
+    /// <paramref name="topInsetRatio"/> / <paramref name="bottomInsetRatio"/>：
+    /// 上下 UI 遮挡占视口高度的比例（0~1），用于把"有效视口"视为 UI 之间的部分。
+    /// 例如顶栏 60px、底栏 200px、视口 1080px → top=0.056, bottom=0.185。
+    ///
+    /// 当有效可见范围 ≥ 世界范围时，把"有效视口中心"对齐到世界中央，
+    /// 这样即使下方 UI 较厚，世界也不会被压在 UI 后面。
     /// </summary>
-    /// <param name="currentPos">相机当前世界位置</param>
-    /// <param name="orthoSize">Camera3D.Size — 屏幕垂直方向覆盖的世界单位</param>
-    /// <param name="tiltDegrees">相机绕 X 轴旋转角度（典型 -45），用于计算视线落地偏移</param>
-    /// <param name="worldBounds">需要保持视线落地点在内的世界 AABB</param>
-    /// <param name="viewportAspect">视口宽高比（width / height）</param>
-    /// <returns>限制后的相机世界位置</returns>
     public static Vector3 Clamp3DOrtho(
         Vector3 currentPos, float orthoSize, float tiltDegrees,
-        Aabb worldBounds, float viewportAspect)
+        Aabb worldBounds, float viewportAspect,
+        float topInsetRatio = 0f, float bottomInsetRatio = 0f)
     {
-        // 视线方向相对水平的角度（-45 度俯视 → 视线 45 度向下）
         float tiltRad = Mathf.DegToRad(Mathf.Abs(tiltDegrees));
+        float sinT = Mathf.Max(0.0001f, Mathf.Sin(tiltRad));
+        float tanT = Mathf.Max(0.0001f, Mathf.Tan(tiltRad));
 
-        // 视线落地点 Z 偏移：camZ - camY / tan(tilt)
-        // -45 度时 tan = 1，所以偏移 = camY
-        float lookAtZOffset = currentPos.Y / Mathf.Max(0.0001f, Mathf.Tan(tiltRad));
+        float lookAtZOffset = currentPos.Y / tanT;
 
-        // 屏幕可见的世界范围（半径）
-        float halfHeight = orthoSize * 0.5f;
-        float halfWidth = halfHeight * viewportAspect;
-        // Z 方向因为倾斜，可见深度 = orthoSize / cos(tilt)
-        float halfDepth = halfHeight / Mathf.Cos(tiltRad);
+        // 有效视口高度比（夹住一个非零下界，避免 UI 占满时除零）
+        float effRatio = Mathf.Max(0.05f, 1f - topInsetRatio - bottomInsetRatio);
+        // 屏幕"可见区域中心"相对屏幕中心的偏移比例：top 重 → 中心向下偏 → 落地点 Z 增大
+        float centerShiftRatio = (topInsetRatio - bottomInsetRatio) * 0.5f;
 
-        // 视线落地点 X = camX, Z = camZ - lookAtZOffset
+        float halfWidth = orthoSize * 0.5f * viewportAspect;
+        // 有效视口在 Z 方向覆盖 = orthoSize * effRatio / sin(tilt)
+        float halfDepth = orthoSize * effRatio * 0.5f / sinT;
+        // 落地中心 Z 偏移 = orthoSize * centerShiftRatio / sin(tilt)
+        float depthOffset = orthoSize * centerShiftRatio / sinT;
+
+        // 落地点（屏幕几何中心对应地面）
         float lookAtX = currentPos.X;
         float lookAtZ = currentPos.Z - lookAtZOffset;
+        // 真正"想要居中显示的目标点"= 落地点 + UI 偏移
+        float visibleX = lookAtX;
+        float visibleZ = lookAtZ + depthOffset;
 
-        // 限制视线落地点在 worldBounds 范围内
-        // X 方向：屏幕中央 ± halfWidth 必须与 worldBounds 重叠
-        float minLookX = worldBounds.Position.X + halfWidth;
-        float maxLookX = worldBounds.Position.X + worldBounds.Size.X - halfWidth;
-        // 如果可见范围 > 边界范围，居中
-        if (minLookX > maxLookX)
-            lookAtX = worldBounds.Position.X + worldBounds.Size.X * 0.5f;
+        float worldCenterX = worldBounds.Position.X + worldBounds.Size.X * 0.5f;
+        float worldCenterZ = worldBounds.Position.Z + worldBounds.Size.Z * 0.5f;
+
+        // X：可见范围 ≥ 世界范围时居中，否则 clamp
+        if (halfWidth * 2.0f >= worldBounds.Size.X)
+        {
+            visibleX = worldCenterX;
+        }
         else
-            lookAtX = Mathf.Clamp(lookAtX, minLookX, maxLookX);
+        {
+            float minLookX = worldBounds.Position.X + halfWidth;
+            float maxLookX = worldBounds.Position.X + worldBounds.Size.X - halfWidth;
+            visibleX = Mathf.Clamp(visibleX, minLookX, maxLookX);
+        }
 
-        // Z 方向同理
-        float minLookZ = worldBounds.Position.Z + halfDepth;
-        float maxLookZ = worldBounds.Position.Z + worldBounds.Size.Z - halfDepth;
-        if (minLookZ > maxLookZ)
-            lookAtZ = worldBounds.Position.Z + worldBounds.Size.Z * 0.5f;
+        // Z：同上，但用"有效深度"
+        if (halfDepth * 2.0f >= worldBounds.Size.Z)
+        {
+            visibleZ = worldCenterZ;
+        }
         else
-            lookAtZ = Mathf.Clamp(lookAtZ, minLookZ, maxLookZ);
+        {
+            float minLookZ = worldBounds.Position.Z + halfDepth;
+            float maxLookZ = worldBounds.Position.Z + worldBounds.Size.Z - halfDepth;
+            visibleZ = Mathf.Clamp(visibleZ, minLookZ, maxLookZ);
+        }
 
-        // 反推相机位置
+        // 反推回相机 lookAt 的 X / Z
+        lookAtX = visibleX;
+        lookAtZ = visibleZ - depthOffset;
+
         return new Vector3(lookAtX, currentPos.Y, lookAtZ + lookAtZOffset);
     }
 
     /// <summary>
-    /// 计算让整个 <paramref name="worldBounds"/> 完全可见所需的最大正交尺寸。
-    /// 用于限制玩家滚轮缩小到能看见全部战场为止。
+    /// 计算让整个 <paramref name="worldBounds"/> 完全可见于"有效视口"所需的最大正交尺寸。
+    /// 有效视口 = 视口高度 × (1 - top - bottom)；UI 越厚需要的 ortho size 越大。
     /// </summary>
-    public static float MaxOrthoSizeToFit(Aabb worldBounds, float tiltDegrees, float viewportAspect)
+    public static float MaxOrthoSizeToFit(
+        Aabb worldBounds, float tiltDegrees, float viewportAspect,
+        float topInsetRatio = 0f, float bottomInsetRatio = 0f)
     {
         float tiltRad = Mathf.DegToRad(Mathf.Abs(tiltDegrees));
-        float cosT = Mathf.Cos(tiltRad);
+        float sinT = Mathf.Max(0.0001f, Mathf.Sin(tiltRad));
 
-        // 横向：bounds.X 宽必须 ≤ orthoSize * aspect
-        // → orthoSize ≥ bounds.X / aspect
         float sizeForWidth = worldBounds.Size.X / Mathf.Max(0.001f, viewportAspect);
+        // 有效深度 = orthoSize * effRatio / sin(tilt) 必须 ≥ worldZ
+        // → orthoSize ≥ worldZ * sin(tilt) / effRatio
+        float effRatio = Mathf.Max(0.05f, 1f - topInsetRatio - bottomInsetRatio);
+        float sizeForDepth = worldBounds.Size.Z * sinT / effRatio;
 
-        // Z 方向：可见深度 = orthoSize / cos(tilt)
-        // 要让 bounds.Z ≤ orthoSize / cos(tilt)
-        // → orthoSize ≥ bounds.Z * cos(tilt)
-        float sizeForDepth = worldBounds.Size.Z * cosT;
-
-        // 取较大值确保两个方向都能完全容纳
         return Mathf.Max(sizeForWidth, sizeForDepth);
     }
 

@@ -115,6 +115,7 @@ public partial class DebugConsole : Node
 
         BuildUi();
         RegisterBuiltinCommands();
+        BladeHex.Debug.LuaDebugCommands.Register(this);
         LogInfo("[Debug] 控制台已就绪。按 ` 切换，F5 刷新，/ 聚焦命令。输入 help 查看命令。");
     }
 

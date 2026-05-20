@@ -59,6 +59,8 @@ public partial class RadialMenu : Control
     /// <summary>
     /// 设置径向菜单选项。
     /// Dictionary 格式: {"显示标签": "动作标识", ...}
+    /// ≤ 5 个选项:圆形排列(径向菜单)
+    /// > 5 个选项:垂直列表排列(避免重叠)
     /// </summary>
     public void Setup(Godot.Collections.Dictionary options)
     {
@@ -71,6 +73,14 @@ public partial class RadialMenu : Control
         if (count == 0)
             return;
 
+        if (count <= 5)
+            SetupRadial(options, count);
+        else
+            SetupList(options, count);
+    }
+
+    private void SetupRadial(Godot.Collections.Dictionary options, int count)
+    {
         float angleStep = Mathf.Tau / count;
         float currentAngle = -Mathf.Pi / 2; // 从顶部开始
 
@@ -79,36 +89,11 @@ public partial class RadialMenu : Control
             string label = key.AsString();
             string actionName = options[key].AsString();
 
-            var btn = new Button();
-            btn.Text = label;
-            btn.CustomMinimumSize = new Vector2(60, 40);
+            var btn = CreateMenuButton(label, actionName);
 
-            // 美化按钮
-            var style = new StyleBoxFlat();
-            style.BgColor = ThemeRef.BgPrimary;
-            style.SetBorderWidthAll(1);
-            style.BorderColor = ThemeRef.BorderDefault;
-            style.SetCornerRadiusAll(ThemeRef.RadiusRound);
-            style.SetContentMarginAll(ThemeRef.SpacingSm);
-            btn.AddThemeStyleboxOverride("normal", style);
-            btn.AddThemeFontSizeOverride("font_size", ThemeRef.FontSizeSm);
-
-            // 计算位置
+            // 计算位置(圆形排列)
             var pos = new Vector2(Mathf.Cos(currentAngle), Mathf.Sin(currentAngle)) * Radius;
             btn.Position = pos - btn.CustomMinimumSize / 2;
-
-            btn.Pressed += () =>
-            {
-                BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_click");
-                EmitSignal(SignalName.ActionSelected, actionName);
-                Hide();
-            };
-
-            string capturedAction = actionName;
-            btn.MouseEntered += () =>
-            {
-                EmitSignal(SignalName.ActionHovered, capturedAction);
-            };
 
             AddChild(btn);
             _buttons.Add(btn);
@@ -116,14 +101,88 @@ public partial class RadialMenu : Control
         }
     }
 
+    private void SetupList(Godot.Collections.Dictionary options, int count)
+    {
+        // 垂直列表:从中心上方开始向下排列,居中对齐
+        float btnHeight = 36f;
+        float btnWidth = 180f;
+        float gap = 4f;
+        float totalHeight = count * btnHeight + (count - 1) * gap;
+        float startY = -totalHeight / 2f;
+
+        int idx = 0;
+        foreach (var key in options.Keys)
+        {
+            string label = key.AsString();
+            string actionName = options[key].AsString();
+
+            var btn = CreateMenuButton(label, actionName);
+            btn.CustomMinimumSize = new Vector2(btnWidth, btnHeight);
+
+            // 垂直排列,水平居中
+            float y = startY + idx * (btnHeight + gap);
+            btn.Position = new Vector2(-btnWidth / 2f, y);
+
+            AddChild(btn);
+            _buttons.Add(btn);
+            idx++;
+        }
+    }
+
+    private Button CreateMenuButton(string label, string actionName)
+    {
+        var btn = new Button();
+        btn.Text = label;
+        btn.CustomMinimumSize = new Vector2(60, 40);
+
+        // 美化按钮
+        var style = new StyleBoxFlat();
+        style.BgColor = ThemeRef.BgPrimary;
+        style.SetBorderWidthAll(1);
+        style.BorderColor = ThemeRef.BorderDefault;
+        style.SetCornerRadiusAll(ThemeRef.RadiusRound);
+        style.SetContentMarginAll(ThemeRef.SpacingSm);
+        btn.AddThemeStyleboxOverride("normal", style);
+        btn.AddThemeFontSizeOverride("font_size", ThemeRef.FontSizeSm);
+
+        btn.Pressed += () =>
+        {
+            BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_click");
+            EmitSignal(SignalName.ActionSelected, actionName);
+            Hide();
+        };
+
+        string capturedAction = actionName;
+        btn.MouseEntered += () =>
+        {
+            EmitSignal(SignalName.ActionHovered, capturedAction);
+        };
+
+        return btn;
+    }
+
     // ============================================================================
     // _Draw
     // ============================================================================
     public override void _Draw()
     {
-        // 绘制半透明轮盘底图
-        DrawCircle(Vector2.Zero, Radius + 30, new Color(0.05f, 0.05f, 0.1f, 0.8f));
-        DrawArc(Vector2.Zero, Radius + 30, 0, Mathf.Tau, 32, ThemeRef.BorderDefault, 2.0f, true);
+        if (_buttons.Count <= 5)
+        {
+            // 径向模式:圆形底图
+            DrawCircle(Vector2.Zero, Radius + 30, new Color(0.05f, 0.05f, 0.1f, 0.8f));
+            DrawArc(Vector2.Zero, Radius + 30, 0, Mathf.Tau, 32, ThemeRef.BorderDefault, 2.0f, true);
+        }
+        else
+        {
+            // 列表模式:圆角矩形底图
+            float btnHeight = 36f;
+            float gap = 4f;
+            float totalHeight = _buttons.Count * btnHeight + (_buttons.Count - 1) * gap + 20f;
+            float width = 200f;
+            var rect = new Rect2(-width / 2f, -totalHeight / 2f, width, totalHeight);
+            DrawRect(rect, new Color(0.05f, 0.05f, 0.1f, 0.85f));
+            DrawRect(rect, ThemeRef.BorderDefault, false, 1.5f);
+        }
     }
 
     // ============================================================================

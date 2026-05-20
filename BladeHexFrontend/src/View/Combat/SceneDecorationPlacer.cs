@@ -45,11 +45,11 @@ public partial class SceneDecorationPlacer : Node3D
     /// <summary>每个格子放置装饰的概率（0.0~1.0）</summary>
     private const float DecorationChance = 0.3f;
 
-    /// <summary>装饰精灵的像素大小</summary>
-    private const float SpritePixelSize = 0.02f;
+    /// <summary>装饰精灵的像素大小(基础值;角色 sprite 用 PixelSize=2,装饰物显著小一档避免遮挡)</summary>
+    private const float SpritePixelSize = 0.5f;
 
-    /// <summary>装饰精灵 Y 轴基础偏移（放在格子顶面上方）</summary>
-    private const float BaseYOffset = 30.0f;
+    /// <summary>装饰精灵 Y 轴基础偏移(放在格子顶面上方)</summary>
+    private const float BaseYOffset = 8.0f;
 
     // ========================================
     // 状态
@@ -116,8 +116,14 @@ public partial class SceneDecorationPlacer : Node3D
         // 随机选择一个装饰类型
         string spriteId = spriteIds[(int)(GD.Randf() * spriteIds.Length)];
 
-        // 从 CombatTextureLoader 获取纹理
+        // 优先级 1:从 CombatTextureLoader 获取真实纹理
         var texture = CombatTextureLoader.Instance.GetSceneSprite(spriteId);
+        // 优先级 2:占位 — BattlePropRegistry 在贴图缺失时返回紫色占位
+        // 这样美术资产没准备好时战场仍有可见装饰物
+        if (texture == null)
+        {
+            texture = BladeHex.View.Map.BattlePropRegistry.GetTexture(spriteId);
+        }
         if (texture == null) return;
 
         // 创建 Sprite3D

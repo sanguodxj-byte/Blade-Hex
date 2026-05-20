@@ -153,6 +153,16 @@ public partial class BattleUnitModel
     /// <param name="weaponWeight">武器重量类别（影响穿透系数分桶：Light/Medium → 高杀伤，Heavy → 高破甲）</param>
     /// <param name="attackerMastery">攻击者武器精通（为 null 则不归因 XP）</param>
     /// <param name="weaponSubtype">打击所用的武器子类型（归因精通 XP）</param>
+    /// <param name="weaponPen">
+    /// 武器穿透修正 (v0.6 6.3)。穿透公式: d20_Pen + WeaponPen + STRPenBonus ≥ ArmorDR。
+    /// 默认 0 表示赤手 / 法术 / 未配置武器。
+    /// </param>
+    /// <param name="strPenBonus">
+    /// 攻击者力量穿透加成 = floor(sqrt(STR/4))。由调用方计算后传入避免循环依赖。
+    /// </param>
+    /// <param name="mediumLv5Mastery">
+    /// 攻击者武器为 Medium 重量且精通 ≥ Lv.5 (v0.6 6.9)。装甲伤害 ×1.2，不影响 HP / 盾牌。
+    /// </param>
     public DamageResult ApplyDamage(
         DamageSource source,
         int amount,
@@ -160,15 +170,35 @@ public partial class BattleUnitModel
         int naturalRoll = 20,
         WeaponData.WeightCategory weaponWeight = WeaponData.WeightCategory.Medium,
         WeaponMastery? attackerMastery = null,
-        WeaponData.WeaponSubtype weaponSubtype = WeaponData.WeaponSubtype.Unarmed)
+        WeaponData.WeaponSubtype weaponSubtype = WeaponData.WeaponSubtype.Unarmed,
+        int weaponPen = 0,
+        int strPenBonus = 0,
+        bool mediumLv5Mastery = false)
     {
         if (amount <= 0)
             return new DamageResult { RemainingHp = CurrentHp };
 
-        // --- 穿透判定 ---
+        // v0.6 11.8 con_b05 铁壁：每次受到物理伤害 -3，单个伤害包最低保留 1 点
+        bool isPhysical = damageType == WeaponData.DamageType.Slash
+            || damageType == WeaponData.DamageType.Pierce
+            || damageType == WeaponData.DamageType.Crush;
+        if (isPhysical && Data.Runtime.SkillTree?.HasSkillEffect("iron_wall") == true)
+        {
+            amount = System.Math.Max(1, amount - 3);
+        }
+
+        // --- 穿透判定 (v0.6 6.3) ---
+        // 与命中检定的 d20 完全独立，避免"自然 1 必败但穿透判定仍可成立"的逻辑漏洞。
+        // 公式: d20_Pen + STRPenBonus ≥ ArmorDR
+        // 自然 20 强制穿透；无护甲自动穿透。
         bool noArmor = Data.Armor == null;
         int armorDrThreshold = Data.Armor?.DrThreshold ?? 0;
-        bool isPenetrated = noArmor || (naturalRoll >= armorDrThreshold) || (naturalRoll == 20);
+        int penRoll = noArmor ? 20 : CombatRandom.RollD20();
+        bool isPenetrated = noArmor
+            || penRoll == 20
+            || (penRoll + strPenBonus) >= armorDrThreshold;
+        // 兼容历史调用：传入 naturalRoll == 20 时也强制穿透（攻击检定的自然 20 必暴必穿）
+        if (naturalRoll == 20) isPenetrated = true;
 
         // --- HP / DR 伤害分配（查 DamagePenetrationTable）---
         int hpDamage = 0;
@@ -204,6 +234,10 @@ public partial class BattleUnitModel
             {
                 hpDamage = (int)(hpDamage * 1.5f);
             }
+
+            // v0.6 6.9 中型武器 Lv.5+ 精通：装甲伤害 ×1.2（仅装甲耐久，不影响 HP / 盾牌）
+            if (mediumLv5Mastery && drDamage > 0)
+                drDamage = (int)(drDamage * 1.2f);
         }
 
         // --- 应用 DR 损耗（战斗 DR + 护甲耐久）---
@@ -223,6 +257,13 @@ public partial class BattleUnitModel
         }
 
         // --- 应用 HP 伤害 ---
+        // v0.6 11.8 con_b03 不屈：HP 低于 25% 时，进入 HP 的伤害 ×0.5；不影响盾牌与身体护甲耐久
+        if (hpDamage > 0 && Data.Runtime.SkillTree?.HasSkillEffect("unyielding") == true)
+        {
+            int maxHp = CombatStats.GetMaxHp(Data);
+            if (maxHp > 0 && (float)CurrentHp / maxHp < 0.25f)
+                hpDamage = System.Math.Max(1, (int)(hpDamage * 0.5f));
+        }
         if (hpDamage > 0)
             CurrentHp = System.Math.Max(0, CurrentHp - hpDamage);
 

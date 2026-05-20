@@ -23,8 +23,8 @@ public partial class SkillTreeUI : PanelContainer
     private const float HexSize = 48.0f;
     private const float PanSpeed = 500.0f;
 
-    /// <summary>方格网格间距（节点之间的距离）</summary>
-    private const float GridSpacing = 22.0f;
+    /// <summary>方格网格间距（节点之间的距离） — 扩展以避免相邻重叠</summary>
+    private const float GridSpacing = 52.0f;
 
     /// <summary>正六边形半径（以网格单位计）— 决定六边形大小</summary>
     private const int HexagonRadius = 20;
@@ -424,6 +424,9 @@ public partial class SkillTreeUI : PanelContainer
     {
         if (_treeData == null) return;
 
+        // 0. 绘制背景科技感六边形点阵晶格（底色）
+        _DrawGridLattice();
+
         bool hasSkillPoints = (_characterTree?.AvailableSkillPoints ?? 0) > 0;
 
         // 1. 绘制连线
@@ -442,10 +445,7 @@ public partial class SkillTreeUI : PanelContainer
 
     private void DrawConnections()
     {
-        // 1. 绘制六边形外轮廓（坐标系边界，不画内部网格连线）
-        _DrawHexagonOutline();
-
-        // 2. 绘制实际节点之间的技能连线（手工定义的 Neighbors）
+        // 1. 绘制实际节点之间的技能连线（手工定义的 Neighbors）
         foreach (var pair in _treeData!.Nodes)
         {
             string nodeId = pair.Key;
@@ -459,22 +459,29 @@ public partial class SkillTreeUI : PanelContainer
                 bool fa = _characterTree?.IsActivated(nodeId) ?? false;
                 bool ta = _characterTree?.IsActivated(nid) ?? false;
 
+                var regionColor = Theme.GetRegionColor(pair.Value.CurrentRegion);
                 Color lineColor;
                 float lineWidth;
+
                 if (fa && ta)
                 {
-                    lineColor = new Color(0.8f, 0.85f, 1.0f, 0.9f);
-                    lineWidth = 2.5f * _zoom;
+                    // 绘制外圈光晕
+                    Color haloColor = new Color(regionColor.R, regionColor.G, regionColor.B, 0.22f);
+                    _drawContainer.DrawLine(from, to, haloColor, 6.5f * _zoom);
+                    
+                    // 核心能量实线
+                    lineColor = new Color(0.92f, 0.94f, 1.0f, 0.95f);
+                    lineWidth = 2.2f * _zoom;
                 }
                 else if (fa || ta)
                 {
-                    lineColor = new Color(0.5f, 0.5f, 0.6f, 0.6f);
-                    lineWidth = 1.8f * _zoom;
+                    lineColor = new Color(regionColor.R * 0.7f, regionColor.G * 0.7f, regionColor.B * 0.7f, 0.6f);
+                    lineWidth = 1.6f * _zoom;
                 }
                 else
                 {
-                    lineColor = new Color(0.35f, 0.35f, 0.42f, 0.5f);
-                    lineWidth = 1.2f * _zoom;
+                    lineColor = new Color(0.2f, 0.22f, 0.28f, 0.45f);
+                    lineWidth = 1.0f * _zoom;
                 }
 
                 _drawContainer.DrawLine(from, to, lineColor, lineWidth);
@@ -549,45 +556,80 @@ public partial class SkillTreeUI : PanelContainer
         var regionColor = Theme.GetRegionColor(node.CurrentRegion);
         float radius = GetNodeRadius(node);
 
-        // --- 绘制圆形节点 ---
-        if (activated)
+        // --- 绘制节点（区分普通、大技能、Keystone 核心） ---
+        if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone)
         {
-            // 实心圆 — 已点亮
-            _drawContainer.DrawCircle(pos, radius, regionColor);
-            // 外圈光晕
-            _drawContainer.DrawArc(pos, radius + 2.0f * _zoom, 0, MathF.Tau, 32,
-                new Color(regionColor.R, regionColor.G, regionColor.B, 0.4f), 1.5f * _zoom);
-        }
-        else if (available && hasSkillPoints)
-        {
-            // 空心圆 + 高亮边框 — 可点亮（有技能点时）
-            _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 32,
-                new Color(regionColor.R, regionColor.G, regionColor.B, 0.8f), 2.0f * _zoom);
-            // 内部微弱填充
-            _drawContainer.DrawCircle(pos, radius * 0.6f,
-                new Color(regionColor.R, regionColor.G, regionColor.B, 0.15f));
+            // Keystone 天赋使用炫酷的双重同心环
+            if (activated)
+            {
+                // 激活状态：充盈的主色实心圆 + 亮色外粗环
+                _drawContainer.DrawCircle(pos, radius * 0.5f, regionColor);
+                _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 36, regionColor, 3.0f * _zoom);
+                // 外层软光晕
+                _drawContainer.DrawArc(pos, radius + 3.0f * _zoom, 0, MathF.Tau, 36, 
+                    new Color(regionColor.R, regionColor.G, regionColor.B, 0.35f), 1.5f * _zoom);
+            }
+            else if (available && hasSkillPoints)
+            {
+                // 可激活：双层高亮空心环，带虚线般的美感
+                _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 36, regionColor, 2.0f * _zoom);
+                _drawContainer.DrawArc(pos, radius * 0.6f, 0, MathF.Tau, 24, 
+                    new Color(regionColor.R, regionColor.G, regionColor.B, 0.6f), 1.0f * _zoom);
+            }
+            else
+            {
+                // 未激活：暗淡的双空心环
+                float alpha = available ? 0.5f : 0.25f;
+                _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 24, 
+                    new Color(regionColor.R, regionColor.G, regionColor.B, alpha), 1.5f * _zoom);
+                _drawContainer.DrawArc(pos, radius * 0.6f, 0, MathF.Tau, 18, 
+                    new Color(regionColor.R, regionColor.G, regionColor.B, alpha * 0.7f), 0.8f * _zoom);
+            }
         }
         else
         {
-            // 空心圆 — 未点亮/不可用
-            float alpha = available ? 0.5f : 0.25f;
-            _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 24,
-                new Color(regionColor.R, regionColor.G, regionColor.B, alpha), 1.0f * _zoom);
+            // 常规节点（Start, Big, Small）
+            if (activated)
+            {
+                // 实心圆 — 已点亮
+                _drawContainer.DrawCircle(pos, radius, regionColor);
+                // 外圈光晕
+                _drawContainer.DrawArc(pos, radius + 2.0f * _zoom, 0, MathF.Tau, 32,
+                    new Color(regionColor.R, regionColor.G, regionColor.B, 0.4f), 1.5f * _zoom);
+            }
+            else if (available && hasSkillPoints)
+            {
+                // 空心圆 + 高亮边框 — 可点亮（有技能点时）
+                _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 32,
+                    new Color(regionColor.R, regionColor.G, regionColor.B, 0.85f), 2.0f * _zoom);
+                // 内部粒子微弱填充
+                _drawContainer.DrawCircle(pos, radius * 0.5f,
+                    new Color(regionColor.R, regionColor.G, regionColor.B, 0.2f));
+            }
+            else
+            {
+                // 空心圆 — 未点亮/不可用
+                float alpha = available ? 0.55f : 0.25f;
+                _drawContainer.DrawArc(pos, radius, 0, MathF.Tau, 24,
+                    new Color(regionColor.R, regionColor.G, regionColor.B, alpha), 1.2f * _zoom);
+            }
         }
 
-        // --- 选中高亮 ---
+        // --- 选中与 Hover 状态外发光光圈 ---
         if (isSelected)
         {
-            _drawContainer.DrawArc(pos, radius + 4.0f * _zoom, 0, MathF.Tau, 32,
-                new Color(1.0f, 1.0f, 1.0f, 0.7f), 2.0f * _zoom);
+            // 夺目的金色流光外环
+            _drawContainer.DrawArc(pos, radius + 4.5f * _zoom, 0, MathF.Tau, 36,
+                new Color(1.0f, 0.85f, 0.3f, 0.85f), 2.0f * _zoom);
         }
         else if (isHovered)
         {
+            // 白色半透明轻微呼吸发光
             _drawContainer.DrawArc(pos, radius + 3.0f * _zoom, 0, MathF.Tau, 32,
-                new Color(1.0f, 1.0f, 1.0f, 0.3f), 1.0f * _zoom);
+                new Color(1.0f, 1.0f, 1.0f, 0.4f), 1.2f * _zoom);
         }
 
-        // --- 节点名称（仅在有技能点且可点亮时显示，或已点亮的大节点/Keystone）---
+        // --- 节点名称：带精致圆角半透明黑色底框，隔绝背景连线打扰 ---
         bool showName = false;
         if (activated && node.CurrentNodeType != SkillNodeData.NodeType.Small)
             showName = true;
@@ -596,14 +638,36 @@ public partial class SkillTreeUI : PanelContainer
         else if (isSelected || isHovered)
             showName = true;
 
-        if (showName && _zoom >= 0.5f)
+        if (showName && _zoom >= 0.45f)
         {
             float fontSize = node.CurrentNodeType == SkillNodeData.NodeType.Small ? 10.0f : 12.0f;
             fontSize *= _zoom;
-            var nameColor = activated ? regionColor : new Color(0.8f, 0.8f, 0.85f, 0.9f);
-            var namePos = pos + new Vector2(0, radius + 10.0f * _zoom);
-            _drawContainer.DrawString(ThemeDB.FallbackFont, namePos,
-                node.NodeName, HorizontalAlignment.Center, -1, (int)fontSize, nameColor);
+            var nameColor = activated ? new Color(1.0f, 0.98f, 0.95f) : new Color(0.85f, 0.85f, 0.9f, 0.9f);
+            
+            var font = ThemeDB.FallbackFont;
+            string nameText = node.NodeName;
+            
+            // 测算文本物理尺寸以构造完美贴合的底框
+            Vector2 stringSize = font.GetStringSize(nameText, HorizontalAlignment.Center, -1, (int)fontSize);
+            
+            float padX = 7.0f * _zoom;
+            float padY = 3.5f * _zoom;
+            Vector2 boxSize = new Vector2(stringSize.X + padX * 2, stringSize.Y + padY * 2);
+            
+            var namePos = pos + new Vector2(0, radius + 15.0f * _zoom);
+            Vector2 boxPos = namePos - new Vector2(boxSize.X / 2.0f, stringSize.Y + padY);
+
+            // 1. 绘制暗色毛玻璃感背景框
+            Color bgBoxColor = new Color(0.02f, 0.02f, 0.04f, 0.85f);
+            _drawContainer.DrawRect(new Rect2(boxPos, boxSize), bgBoxColor, true);
+            
+            // 2. 绘制微弱的同色纤细包边，使 UI 拥有极高的设计一致性
+            Color boxBorderColor = activated ? new Color(regionColor.R, regionColor.G, regionColor.B, 0.4f) : new Color(0.4f, 0.4f, 0.5f, 0.25f);
+            _drawContainer.DrawRect(new Rect2(boxPos, boxSize), boxBorderColor, false, 1.0f);
+
+            // 3. 绘制文字
+            _drawContainer.DrawString(font, namePos,
+                nameText, HorizontalAlignment.Center, -1, (int)fontSize, nameColor);
         }
     }
 

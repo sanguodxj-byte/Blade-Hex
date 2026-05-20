@@ -152,7 +152,9 @@ public partial class MainMenu : CanvasLayer
 
         _CreateMenuButton("新的起点", "new_game", menuVbox);
         _CreateMenuButton("继续旅程", "continue", menuVbox);
-        _CreateMenuButton("快速游戏", "quick_game", menuVbox);
+        _CreateMenuButton("开始战役", "campaign", menuVbox);
+        if (BladeHex.Data.Contexts.CampaignContext.HasCheckpoint())
+            _CreateMenuButton("继续战役", "campaign_continue", menuVbox);
         _CreateMenuButton("快速战斗", "quick_combat", menuVbox);
         _CreateMenuButton("设置", "settings", menuVbox);
         _CreateMenuButton("退出", "exit", menuVbox);
@@ -236,11 +238,13 @@ public partial class MainMenu : CanvasLayer
             case "continue":
                 ShowSaveManagementPanel();
                 break;
-            case "quick_game":
-                gs.Save.IsLoadingSave = false;
-                gs.WorldGen.IsQuickGame = true;
-                gs.OriginContext.Data = new Godot.Collections.Dictionary();
-                LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.QuickGame);
+            case "campaign":
+                gs.Campaign.Reset();
+                BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/scenes/campaign/campaign_scene.tscn");
+                break;
+            case "campaign_continue":
+                if (gs.Campaign.LoadCheckpoint())
+                    BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/scenes/campaign/campaign_scene.tscn");
                 break;
             case "quick_combat":
                 ShowQuickCombatSetup();

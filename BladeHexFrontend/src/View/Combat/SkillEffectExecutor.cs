@@ -28,65 +28,46 @@ public static class SkillEffectExecutor
 
     private static readonly Dictionary<string, SkillHandler> Handlers = new()
     {
-        // --- STR 近战 ---
-        ["double_attack"] = MeleeSkillHandlers.DoubleAttack,
-        ["whirlwind"] = MeleeSkillHandlers.Whirlwind,
-        ["battle_cry"] = MeleeSkillHandlers.BattleCry,
-        ["blood_vortex"] = MeleeSkillHandlers.BloodVortex,
-        ["bloodthirst"] = MeleeSkillHandlers.Bloodthirst,
-        ["sword_dance"] = MeleeSkillHandlers.SwordDance,
-        ["shield_bash"] = MeleeSkillHandlers.ShieldBash,
+        // --- 全部主动技能已迁移到 Lua: scripts/skills/ ---
+        // C# 注册表仅保留无法迁移的特殊条目
 
-        // --- DEX 远程 ---
-        ["aimed_shot"] = RangedSkillHandlers.AimedShot,
-        ["double_shot"] = RangedSkillHandlers.DoubleShot,
-        ["scatter_shot"] = RangedSkillHandlers.ScatterShot,
-        ["multi_shot"] = RangedSkillHandlers.MultiShot,
-        ["blind_arrow"] = RangedSkillHandlers.BlindArrow,
-        ["trick_arrow"] = RangedSkillHandlers.TrickArrow,
-        ["meteor_shower"] = RangedSkillHandlers.MeteorShower,
+        // --- 法术研习槽（UI 层特殊处理，不走 Lua）---
+        ["spell_slot_1"] = StubSpellSlot,
+        ["spell_slot_2"] = StubSpellSlot,
+        ["spell_slot_3"] = StubSpellSlot,
+        ["spell_slot_4"] = StubSpellSlot,
+        ["spell_slot_5"] = StubSpellSlot,
 
-        // --- DEX 潜行 ---
-        ["stealth"] = StealthSkillHandlers.Stealth,
-        ["shadow_clone"] = StealthSkillHandlers.ShadowClone,
-        ["poison_blade"] = StealthSkillHandlers.PoisonBlade,
-        ["shadow_strike"] = StealthSkillHandlers.ShadowStrike,
-        ["trap_master"] = StealthSkillHandlers.TrapMaster,
+        // --- 占位 stub（等法表系统实装）---
+        ["ward_blessing"] = StubNoOp,
+        ["purify_field"] = StubNoOp,
 
-        // --- INT 法术 ---
-        ["mana_shield"] = MagicSkillHandlers.ManaShield,
-        ["time_warp"] = MagicSkillHandlers.TimeWarp,
-        ["arcane_burst"] = MagicSkillHandlers.ArcaneBurst,
-        ["mana_drain"] = MagicSkillHandlers.ManaDrain,
-        ["chain_lightning"] = MagicSkillHandlers.ChainLightning,
-        ["arcane_bomb"] = MagicSkillHandlers.ArcaneBomb,
-        ["void_gate"] = MagicSkillHandlers.VoidGate,
-
-        // --- WIS/CON 治疗与防御 ---
-        ["basic_heal"] = SupportSkillHandlers.BasicHeal,
-        ["field_medic"] = SupportSkillHandlers.FieldMedic,
-        ["group_heal"] = SupportSkillHandlers.GroupHeal,
-        ["life_circle"] = SupportSkillHandlers.LifeCircle,
-        ["blessing"] = SupportSkillHandlers.Blessing,
-        ["unyielding_bulwark"] = SupportSkillHandlers.UnyieldingBulwark,
-        ["life_shield"] = SupportSkillHandlers.LifeShield,
-        ["guardian_spirit"] = SupportSkillHandlers.GuardianSpirit,
+        // --- 复活（设计上禁用）---
         ["resurrect"] = SupportSkillHandlers.Resurrect,
-        ["purifying_flame"] = SupportSkillHandlers.PurifyingFlame,
-        ["arcane_judgment"] = SupportSkillHandlers.ArcaneJudgment,
-        ["oracle"] = SupportSkillHandlers.Oracle,
-        ["elemental_storm"] = SupportSkillHandlers.ElementalStorm,
-
-        // --- CHA 领导 ---
-        ["war_cry"] = SupportSkillHandlers.WarCry,
-        ["inspire"] = SupportSkillHandlers.Inspire,
-        ["taunt"] = SupportSkillHandlers.Taunt,
-        ["command"] = SupportSkillHandlers.Command,
-        ["rally"] = SupportSkillHandlers.Rally,
-        ["shadow_deal"] = SupportSkillHandlers.ShadowDeal,
-        ["intimidate"] = SupportSkillHandlers.Intimidate,
-        ["heroic_call"] = SupportSkillHandlers.HeroicCall,
     };
+
+    // ============================================================================
+    // 法表 v1.3 临时占位 stub
+    // ============================================================================
+
+    /// <summary>
+    /// 法术研习槽节点的 stub。spell_slot_X 不通过 UseSkill 调用 — 节点激活时
+    /// UI 层调出"选系面板"，从该环位的 5 系（毁灭/幻术/附魔/防护/生命）中选 1 个，
+    /// 把对应法术写入 LearnedSpells。详见 docs/法表系统.md §5.1
+    /// </summary>
+    private static void StubSpellSlot(in SkillHandlerContext ctx)
+    {
+        SkillUtils.Fail(ctx.Result, "法术槽节点 — 请通过节点激活面板选择法术学派");
+    }
+
+    /// <summary>
+    /// 占位 stub：等法表系统实装后替换为正式 handler。
+    /// </summary>
+    private static void StubNoOp(in SkillHandlerContext ctx)
+    {
+        SkillUtils.Fail(ctx.Result, "技能尚未实装");
+    }
+
 
     // ============================================================================
     // 基础接口（保持向后兼容）
@@ -131,19 +112,24 @@ public static class SkillEffectExecutor
             { "status_effects", new Godot.Collections.Array() }
         };
 
-        // 注册表分发
+        // 注册表分发：C# Handler 优先，Lua 脚本 fallback
+        var ctx = new SkillHandlerContext
+        {
+            Attacker = attacker,
+            TargetCell = targetCell,
+            Grid = grid,
+            Enemies = enemies,
+            Allies = allies,
+            Result = result,
+        };
+
         if (Handlers.TryGetValue(skillEffect, out var handler))
         {
-            var ctx = new SkillHandlerContext
-            {
-                Attacker = attacker,
-                TargetCell = targetCell,
-                Grid = grid,
-                Enemies = enemies,
-                Allies = allies,
-                Result = result,
-            };
             handler(in ctx);
+        }
+        else if (LuaSkillBridge.Execute(skillEffect, in ctx))
+        {
+            // Lua 脚本已处理（成功或失败都由脚本内部设置 result）
         }
         else
         {

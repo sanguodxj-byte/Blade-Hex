@@ -93,6 +93,222 @@ public partial class HexOverworldGenerator : RefCounted
     }
 
     // ========================================
+    // 战斗用小型大地图生成（参数化重载）
+    // ========================================
+
+    /// <summary>
+    /// 战斗地图用小型大地图生成参数
+    /// </summary>
+    public sealed class BattleGridParams
+    {
+        /// <summary>高程偏置 [-0.5, 0.5]：正值 = 多山/丘陵，负值 = 多低地/水域</summary>
+        public float ElevationBias = 0.0f;
+        /// <summary>湿度偏置 [-0.5, 0.5]：正值 = 多森林/沼泽，负值 = 多沙漠/荒原</summary>
+        public float MoistureBias = 0.0f;
+        /// <summary>温度偏置 [-0.5, 0.5]：正值 = 炎热，负值 = 寒冷</summary>
+        public float TemperatureBias = 0.0f;
+        /// <summary>是否注入道路</summary>
+        public bool InjectRoad = false;
+        /// <summary>是否注入河流</summary>
+        public bool InjectRiver = false;
+        /// <summary>高程噪声频率倍率（默认1.0）</summary>
+        public float ElevationFreqScale = 1.0f;
+        /// <summary>湿度噪声频率倍率</summary>
+        public float MoistureFreqScale = 1.0f;
+    }
+
+    /// <summary>
+    /// 生成战斗用小型大地图 — 复用核心管线，但适配小尺寸：
+    /// - 噪声频率按尺寸自动缩放（保证足够的地形变化）
+    /// - 无边缘衰减（小地图不需要海洋边界）
+    /// - 河流/道路用简化注入（A* 在小地图上不适用）
+    /// - 跳过区域/命名（战斗不需要）
+    /// </summary>
+    public HexOverworldGrid GenerateForBattle(int width, int height, int worldSeed, BattleGridParams p)
+    {
+        Seed = worldSeed;
+        GD.Seed((ulong)Seed);
+
+        // 噪声频率按尺寸缩放：大地图 64 格用 0.025，小地图 8 格需要 ~0.025 * (64/8) = 0.2
+        // 但不能太高否则过于碎片化，取折中 = baseFreq * sqrt(64/width)
+        float sizeScale = Mathf.Sqrt((float)DefaultWidth / Mathf.Max(width, 4));
+
+        _noiseElev = new FastNoiseLite
+        {
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex,
+            Seed = Seed,
+            Frequency = ElevationFreq * sizeScale * p.ElevationFreqScale,
+            FractalType = FastNoiseLite.FractalTypeEnum.Fbm,
+            FractalOctaves = 3,  // 小地图减少 octave（避免过碎）
+            FractalLacunarity = 2.0f,
+            FractalGain = 0.45f,
+        };
+        _noiseMoist = new FastNoiseLite
+        {
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex,
+            Seed = Seed + 1000,
+            Frequency = MoistureFreq * sizeScale * p.MoistureFreqScale,
+            FractalType = FastNoiseLite.FractalTypeEnum.Fbm,
+            FractalOctaves = 2,
+            FractalLacunarity = 2.0f,
+            FractalGain = 0.4f,
+        };
+        _noiseTemp = new FastNoiseLite
+        {
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex,
+            Seed = Seed + 2000,
+            Frequency = TemperatureFreq * sizeScale,
+            FractalType = FastNoiseLite.FractalTypeEnum.Fbm,
+            FractalOctaves = 2,
+        };
+        _noiseDetail = new FastNoiseLite
+        {
+            NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular,
+            Seed = Seed + 3000,
+            Frequency = 0.05f * sizeScale,
+            CellularDistanceFunction = FastNoiseLite.CellularDistanceFunctionEnum.Euclidean,
+        };
+
+        Grid = new HexOverworldGrid();
+        Grid.Initialize(width, height);
+        Grid.SeedValue = Seed;
+
+        // 第1步：基础层（带偏置，无边缘衰减）
+        foreach (var t in Grid.Tiles.Values)
+        {
+            int q = t.Coord.X;
+            int r = t.Coord.Y;
+
+            float rawElev = _noiseElev!.GetNoise2D(q, r);
+            // 无边缘衰减 — 小地图不需要海洋边界
+            // 将噪声映射到 [0.25, 0.75] 基础范围（避免极端值），再加偏置
+            float elev = 0.25f + (rawElev + 1.0f) * 0.25f + p.ElevationBias;
+            t.Elevation = Mathf.Clamp(elev, 0.05f, 0.95f);
+
+            float rawMoist = _noiseMoist.GetNoise2D(q, r);
+            t.Moisture = Mathf.Clamp((rawMoist + 1.0f) * 0.5f + p.MoistureBias, 0.0f, 1.0f);
+
+            // 温度：纯噪声 + 偏置（小地图不用纬度梯度）
+            float rawTemp = _noiseTemp.GetNoise2D(q, r);
+            // 保留海拔降温效果（与大地图一致）
+            float altitudePenalty = Mathf.Clamp(t.Elevation - 0.5f, 0.0f, 0.5f) * 0.6f;
+            t.Temperature = Mathf.Clamp((rawTemp + 1.0f) * 0.5f + p.TemperatureBias - altitudePenalty, 0.0f, 1.0f);
+        }
+
+        // 第2步：BiomeRules 决策（与大地图完全一致）
+        AssignBiomeTerrains();
+
+        // 第3步：平滑（1 pass，小地图不需要太多）
+        SmoothTerrain(1);
+
+        // 第4步：海岸线修正（复用大地图逻辑）
+        FixCoastlines();
+
+        // 跳过：区域定义/命名（战斗不需要）
+
+        // 第5步：线性特征注入
+        if (p.InjectRiver)
+            InjectBattleRiver(width, height);
+        if (p.InjectRoad)
+            InjectBattleRoad(width, height);
+
+        // 第6步：最终化（与大地图一致）
+        FinalizeTerrain();
+
+        return Grid;
+    }
+
+    /// <summary>战斗小地图河流注入：从高处向低处流，带随机弯曲</summary>
+    private void InjectBattleRiver(int width, int height)
+    {
+        // 找最高点和最低点
+        HexOverworldTile? highest = null, lowest = null;
+        foreach (var t in Grid!.Tiles.Values)
+        {
+            if (highest == null || t.Elevation > highest.Elevation) highest = t;
+            if (lowest == null || t.Elevation < lowest.Elevation) lowest = t;
+        }
+        if (highest == null || lowest == null) return;
+
+        // 从高到低画线，带随机偏移模拟弯曲
+        var line = HexOverworldTile.CubeLine(
+            HexOverworldTile.AxialToCube(highest.Coord.X, highest.Coord.Y),
+            HexOverworldTile.AxialToCube(lowest.Coord.X, lowest.Coord.Y));
+
+        foreach (var coord in line)
+        {
+            var tile = Grid.GetTile(coord.X, coord.Y);
+            if (tile == null) continue;
+            if (tile.Terrain == HexOverworldTile.TerrainType.Mountain
+                || tile.Terrain == HexOverworldTile.TerrainType.MountainSnow) continue;
+
+            tile.IsRiver = true;
+            tile.SetTerrain(HexOverworldTile.TerrainType.River);
+
+            // 20% 概率扩展到邻居（模拟河宽）
+            if (GD.Randf() < 0.20f)
+            {
+                int dir = (int)(GD.Randf() * 6);
+                var nCoord = HexOverworldTile.GetNeighbor(coord.X, coord.Y, dir);
+                var nTile = Grid.GetTile(nCoord.X, nCoord.Y);
+                if (nTile != null && nTile.IsPassable && !nTile.IsRiver && !nTile.IsRoad)
+                {
+                    nTile.IsRiver = true;
+                    nTile.SetTerrain(HexOverworldTile.TerrainType.ShallowWater);
+                }
+            }
+        }
+    }
+
+    /// <summary>战斗小地图道路注入：横穿地图，沿可通行地形蜿蜒</summary>
+    private void InjectBattleRoad(int width, int height)
+    {
+        // 从左侧中间到右侧中间
+        int startR = height / 2;
+        int endR = height / 2;
+
+        // 找左侧和右侧的可通行格
+        HexOverworldTile? startTile = null, endTile = null;
+        foreach (var t in Grid!.Tiles.Values)
+        {
+            if (t.Coord.Y == startR && t.IsPassable && !t.IsRiver)
+            {
+                if (startTile == null || t.Coord.X < startTile.Coord.X) startTile = t;
+                if (endTile == null || t.Coord.X > endTile.Coord.X) endTile = t;
+            }
+        }
+        if (startTile == null || endTile == null) return;
+
+        // 用 CubeLine 画直线道路
+        var line = HexOverworldTile.CubeLine(
+            HexOverworldTile.AxialToCube(startTile.Coord.X, startTile.Coord.Y),
+            HexOverworldTile.AxialToCube(endTile.Coord.X, endTile.Coord.Y));
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            var tile = Grid.GetTile(line[i].X, line[i].Y);
+            if (tile == null) continue;
+
+            // 河流上的道路 = 桥
+            tile.IsRoad = true;
+            if (!tile.IsRiver)
+                tile.MoveCost = 0.5f;
+
+            // 设置方向位
+            if (i > 0)
+            {
+                int dirFrom = GetDirection(line[i - 1], line[i]);
+                if (dirFrom >= 0) tile.RoadDirections = tile.SetDirectionBit(tile.RoadDirections, dirFrom);
+            }
+            if (i < line.Length - 1)
+            {
+                int dirTo = GetDirection(line[i], line[i + 1]);
+                if (dirTo >= 0) tile.RoadDirections = tile.SetDirectionBit(tile.RoadDirections, dirTo);
+            }
+        }
+    }
+
+    // ========================================
     // 第0步: 噪声初始化
     // ========================================
 

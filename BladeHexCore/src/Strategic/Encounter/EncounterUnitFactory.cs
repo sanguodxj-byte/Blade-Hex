@@ -1,4 +1,4 @@
-﻿// EncounterUnitFactory.cs
+﻿﻿﻿// EncounterUnitFactory.cs
 // 遭遇单位工厂 — 把 EncounterData 的模板 ID 列表转成可部署的 UnitData 列表
 //
 // 用途：大地图遭遇触发时，生成敌方 UnitData 传给 CombatScene
@@ -6,6 +6,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -183,10 +184,6 @@ public static class EncounterUnitFactory
     /// </summary>
     public static (int gold, int xp) CalculateRewards(EncounterData encounter)
     {
-        int baseGold = encounter.EncounterLevel * 10 + encounter.PartySize * 5;
-        int baseXp = encounter.EncounterLevel * 25 + encounter.PartySize * 10;
-
-        // 类型修正
         float multiplier = encounter.Type switch
         {
             EncounterType.WildMonsters => 1.0f,
@@ -196,7 +193,8 @@ public static class EncounterUnitFactory
             _ => 1.0f,
         };
 
-        return ((int)(baseGold * multiplier), (int)(baseXp * multiplier));
+        return (RewardPricingService.GetEncounterGold(encounter.EncounterLevel, encounter.PartySize, multiplier),
+            RewardPricingService.GetEncounterXp(encounter.EncounterLevel, encounter.PartySize, multiplier));
     }
 
     /// <summary>
@@ -204,9 +202,6 @@ public static class EncounterUnitFactory
     /// </summary>
     public static (int gold, int xp) CalculateRewardsFromEntity(OverworldEntity entity)
     {
-        int baseGold = entity.PartyLevel * 15 + entity.PartySize * 8 + entity.GoldCarried;
-        int baseXp = entity.PartyLevel * 30 + entity.PartySize * 15;
-
         float multiplier = entity.EntityTypeEnum switch
         {
             OverworldEntity.EntityType.RaidingParty => 1.2f,
@@ -217,6 +212,7 @@ public static class EncounterUnitFactory
             _ => 1.0f,
         };
 
-        return ((int)(baseGold * multiplier), (int)(baseXp * multiplier));
+        return (RewardPricingService.GetEncounterGold(entity.PartyLevel, entity.PartySize, multiplier, entity.GoldCarried),
+            RewardPricingService.GetEncounterXp(entity.PartyLevel, entity.PartySize, multiplier));
     }
 }

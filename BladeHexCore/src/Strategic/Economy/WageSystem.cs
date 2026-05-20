@@ -134,6 +134,12 @@ public class WageSystem
         }
     }
 
+    /// <summary>读档还原欺饷天数（允许 SaveManager 直接写入 private 字段）</summary>
+    public void SetConsecutiveUnpaidDays(int days)
+    {
+        ConsecutiveUnpaidDays = days;
+    }
+
     /// <summary>序列化</summary>
     public Godot.Collections.Dictionary Serialize() => new()
     {

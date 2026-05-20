@@ -53,12 +53,24 @@ public partial class EnvironmentAudioComponent : Node
     // ========================================================================
 
     [Export] public bool EnableBgmIntervals { get; set; } = true;
-    [Export] public float MinSilenceTime { get; set; } = 60.0f;
-    [Export] public float MaxSilenceTime { get; set; } = 240.0f;
+    /// <summary>BGM 结束后的最短静音（秒）。需要充足留白，让玩家长时间沉浸在环境里。</summary>
+    [Export] public float MinSilenceTime { get; set; } = 120.0f;
+    /// <summary>BGM 结束后的最长静音（秒）。</summary>
+    [Export] public float MaxSilenceTime { get; set; } = 360.0f;
     /// <summary>BGM 结束后，再次随机延长静音的概率（0~1）— 用于偶发的"长留白"</summary>
-    [Export] public float ExtendedSilenceChance { get; set; } = 0.35f;
+    [Export] public float ExtendedSilenceChance { get; set; } = 0.5f;
     /// <summary>触发长留白时的额外秒数（追加在普通静音之后）</summary>
-    [Export] public float ExtendedSilenceBonus { get; set; } = 180.0f;
+    [Export] public float ExtendedSilenceBonus { get; set; } = 300.0f;
+    /// <summary>静音结束后真正播放 BGM 的概率（&lt;1 时直接进入下一段静音，进一步加大留白）。</summary>
+    [Export] public float BgmPlayChance { get; set; } = 0.6f;
+
+    /// <summary>大地图上非雨环境音的"概率播放"配置 — 一段播放后留白再触发。</summary>
+    [Export] public float AmbientBurstMin { get; set; } = 25.0f;
+    [Export] public float AmbientBurstMax { get; set; } = 55.0f;
+    [Export] public float AmbientGapMin { get; set; } = 60.0f;
+    [Export] public float AmbientGapMax { get; set; } = 180.0f;
+    /// <summary>每个间歇周期决定是否真正播放的概率（&lt;1 时跳过本轮，进一步加大留白）。</summary>
+    [Export] public float AmbientPlayChance { get; set; } = 0.7f;
 
     // ========================================================================
     // 内部引用
@@ -67,6 +79,10 @@ public partial class EnvironmentAudioComponent : Node
     private AudioManager? _audioManager;
     private Timer? _silenceTimer;
     private Timer? _thunderTimer;
+    /// <summary>大地图非雨环境音的间歇定时器（播放/留白循环）</summary>
+    private Timer? _ambientCycleTimer;
+    /// <summary>当前是否处于"环境音播放中"阶段（true）或"静音留白"阶段（false）</summary>
+    private bool _ambientBurstActive;
 
     private static readonly Random _rng = new();
 
@@ -92,6 +108,11 @@ public partial class EnvironmentAudioComponent : Node
         _silenceTimer = new Timer { OneShot = true };
         _silenceTimer.Timeout += OnSilenceTimerTimeout;
         AddChild(_silenceTimer);
+
+        // 初始化大地图环境音的间歇定时器
+        _ambientCycleTimer = new Timer { OneShot = true };
+        _ambientCycleTimer.Timeout += OnAmbientCycleTimeout;
+        AddChild(_ambientCycleTimer);
     }
 
     public override void _ExitTree()
@@ -237,7 +258,12 @@ public partial class EnvironmentAudioComponent : Node
             return;
         }
 
-        // 基础静音时长（60~240 秒随机）
+        ScheduleNextBgmSilence();
+    }
+
+    private void ScheduleNextBgmSilence()
+    {
+        // 基础静音时长（更长的留白）
         float randomSilence = (float)(_rng.NextDouble() * (MaxSilenceTime - MinSilenceTime) + MinSilenceTime);
 
         // 概率性长留白：偶尔追加额外静音时间（让玩家更长时间沉浸在环境音里）
@@ -249,6 +275,16 @@ public partial class EnvironmentAudioComponent : Node
 
     private void OnSilenceTimerTimeout()
     {
+        // 大地图非触发场景下，按概率决定本轮是否真的播放 BGM
+        bool isOverworldFreeArea = CurrentScenario == (int)AudioManager.Scenario.Overworld
+            && CurrentProximity == ProximityType.None;
+        if (isOverworldFreeArea && _rng.NextDouble() > BgmPlayChance)
+        {
+            // 跳过本轮，继续等待下一段留白
+            ScheduleNextBgmSilence();
+            return;
+        }
+
         EvaluateAndPlayBgm(2.0f);
     }
 
@@ -289,13 +325,13 @@ public partial class EnvironmentAudioComponent : Node
 
     /// <summary>
     /// 昼夜切换时更新环境底噪。
-    /// 仅在无天气干扰时生效。
+    /// 仅在无天气干扰时生效。大地图夜间底噪也走间歇 + 概率播放。
     /// </summary>
     private void TransitionTimeAmbient(TimeOfDay oldTime, TimeOfDay newTime, float fadeTime)
     {
         if (_audioManager == null) return;
 
-        // 停止旧的昼夜底噪
+        // 停止旧的昼夜底噪（无论是连续循环还是间歇式都先停下）
         string oldAmbient = GetAmbientForTime(oldTime);
         if (!string.IsNullOrEmpty(oldAmbient))
             _audioManager.StopAmbient(oldAmbient, fadeTime);
@@ -304,7 +340,8 @@ public partial class EnvironmentAudioComponent : Node
         if (CurrentWeather == WeatherType.Clear || CurrentWeather == WeatherType.Cloudy)
         {
             string newAmbient = GetAmbientForTime(newTime);
-            if (!string.IsNullOrEmpty(newAmbient))
+            // 大地图自由探索：昼夜底噪不连续循环，由地形循环承担节奏；触发式场景保持原行为
+            if (!string.IsNullOrEmpty(newAmbient) && !UseIntermittentAmbient())
                 _audioManager.PlayAmbient(newAmbient, -15.0f);
             PlayTerrainAmbient();
         }
@@ -312,6 +349,8 @@ public partial class EnvironmentAudioComponent : Node
 
     // ────────────────────────────────────────────────────────────────
     // 地形底噪（与天气互斥，天气优先）
+    //   大地图上以"概率播放 + 留白"方式间歇播放，避免持续刷耳朵；
+    //   触发式（场景切换、天气如雨声）保持原本的连续循环。
     // ────────────────────────────────────────────────────────────────
 
     private string _activeTerrainAmbient = "";
@@ -320,21 +359,92 @@ public partial class EnvironmentAudioComponent : Node
     {
         if (_audioManager == null) return;
         string newTerrain = GetAmbientForBiome(CurrentBiome);
-        if (newTerrain == _activeTerrainAmbient) return;
+        if (newTerrain == _activeTerrainAmbient && _ambientCycleTimer != null && _ambientCycleTimer.TimeLeft > 0)
+            return; // 已在循环中且没换地形，不重置
 
-        if (!string.IsNullOrEmpty(_activeTerrainAmbient))
+        // 换地形：先停掉旧的
+        if (!string.IsNullOrEmpty(_activeTerrainAmbient) && _activeTerrainAmbient != newTerrain)
             _audioManager.StopAmbient(_activeTerrainAmbient, 3.0f);
 
         _activeTerrainAmbient = newTerrain;
-        if (!string.IsNullOrEmpty(newTerrain))
+        if (string.IsNullOrEmpty(newTerrain)) return;
+
+        // 大地图自由探索阶段：用间歇式播放给环境留白
+        if (UseIntermittentAmbient())
+        {
+            StartAmbientCycle(initialDelay: 0.0f);
+        }
+        else
+        {
+            // 战斗 / 城镇等触发式场景：保持原本的连续循环
             _audioManager.PlayAmbient(newTerrain, -14.0f);
+        }
     }
 
     private void StopTerrainAmbient(float fadeTime)
     {
-        if (_audioManager == null || string.IsNullOrEmpty(_activeTerrainAmbient)) return;
-        _audioManager.StopAmbient(_activeTerrainAmbient, fadeTime);
+        if (_audioManager == null) return;
+        _ambientCycleTimer?.Stop();
+        _ambientBurstActive = false;
+        if (!string.IsNullOrEmpty(_activeTerrainAmbient))
+            _audioManager.StopAmbient(_activeTerrainAmbient, fadeTime);
         _activeTerrainAmbient = "";
+    }
+
+    /// <summary>当前是否应使用"间歇 + 概率"环境音（大地图自由探索且无连续型天气）。</summary>
+    private bool UseIntermittentAmbient()
+    {
+        if (CurrentScenario != (int)AudioManager.Scenario.Overworld) return false;
+        if (CurrentProximity != ProximityType.None) return false; // 城镇/营地等触发场景保持连续
+        // 雨声为持续氛围，不走间歇播放（雨声本身已在 TransitionAmbient 中以连续循环播放）
+        // 这里地形音也让位给天气，所以无需特殊处理
+        return true;
+    }
+
+    private void StartAmbientCycle(float initialDelay)
+    {
+        if (_ambientCycleTimer == null) return;
+        _ambientCycleTimer.Stop();
+        _ambientBurstActive = false; // 即将进入"播放"阶段，由 timeout 推进
+        _ambientCycleTimer.Start(Mathf.Max(0.05f, initialDelay));
+    }
+
+    private void OnAmbientCycleTimeout()
+    {
+        if (_audioManager == null || string.IsNullOrEmpty(_activeTerrainAmbient)) return;
+
+        // 若条件已不再适用（进城/战斗/天气切换），自动停掉并退出循环
+        if (!UseIntermittentAmbient())
+        {
+            _ambientBurstActive = false;
+            return;
+        }
+
+        if (!_ambientBurstActive)
+        {
+            // 处于"留白"阶段结束 → 决定本轮是否真的播放（概率播放）
+            if (_rng.NextDouble() > AmbientPlayChance)
+            {
+                // 跳过本轮，继续留白
+                float skipGap = (float)(_rng.NextDouble() * (AmbientGapMax - AmbientGapMin) + AmbientGapMin);
+                _ambientCycleTimer?.Start(skipGap);
+                return;
+            }
+
+            // 真正播放一段（淡入由 PlayAmbient 内部处理）
+            _audioManager.PlayAmbient(_activeTerrainAmbient, -14.0f);
+            _ambientBurstActive = true;
+            float burstLen = (float)(_rng.NextDouble() * (AmbientBurstMax - AmbientBurstMin) + AmbientBurstMin);
+            _ambientCycleTimer?.Start(burstLen);
+        }
+        else
+        {
+            // 播放阶段结束 → 淡出并进入留白
+            _audioManager.StopAmbient(_activeTerrainAmbient, 2.0f);
+            _ambientBurstActive = false;
+            float gap = (float)(_rng.NextDouble() * (AmbientGapMax - AmbientGapMin) + AmbientGapMin);
+            _ambientCycleTimer?.Start(gap);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────

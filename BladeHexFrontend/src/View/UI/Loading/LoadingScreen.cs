@@ -224,6 +224,10 @@ public partial class LoadingScreen : CanvasLayer
         _elapsedTime = 0.0f;
         _resourceReady = false;
         _isLoading = true;
+        _waitingForSceneReady = false;
+
+        // 重置背景透明度（_FadeOut 会将其设为 0）
+        _bg.Color = new Color(_bg.Color.R, _bg.Color.G, _bg.Color.B, 1.0f);
 
         // 新游戏和快速游戏使用最小时长，其他类型不限制
         _useMinDuration = phaseType == PhaseType.NewWorld || phaseType == PhaseType.QuickGame;
@@ -256,9 +260,14 @@ public partial class LoadingScreen : CanvasLayer
         var err = ResourceLoader.LoadThreadedRequest(_scenePath);
         if (err != Error.Ok)
         {
-            GD.PushError($"LoadingScreen: 加载失败: {_scenePath}");
-            _resourceReady = true; // 标记完成以便退出
-            _FinishLoad();
+            GD.PushWarning($"LoadingScreen: LoadThreadedRequest 返回 {err}，尝试同步加载: {_scenePath}");
+            _resourceReady = true;
+            // 线程加载请求失败（可能是资源已缓存），标记就绪让 _Process 或直接完成
+            if (!_useMinDuration)
+            {
+                _FinishLoadFallback();
+            }
+            // 使用最小时长时，由 _Process 在时间到达后调用 _FinishLoad
             return;
         }
 
@@ -290,7 +299,7 @@ public partial class LoadingScreen : CanvasLayer
             {
                 GD.PushError($"LoadingScreen: 加载失败: {status}");
                 _resourceReady = true;
-                _FinishLoad();
+                _FinishLoadFallback();
                 break;
             }
             await Task.Delay(50);
@@ -309,9 +318,31 @@ public partial class LoadingScreen : CanvasLayer
         _DoSceneTransition();
     }
 
+    /// <summary>
+    /// 回退加载路径：当 LoadThreadedRequest 失败时使用同步加载。
+    /// </summary>
+    private void _FinishLoadFallback()
+    {
+        _isLoading = false;
+        _targetProgress = 1.0f;
+        _displayedProgress = 1.0f;
+        _progressBar.Value = 100.0;
+        _progressPercentLabel.Text = "100%";
+        _tipsDisplay.ShowLastTip();
+
+        _DoSceneTransitionFallback();
+    }
+
     private void _DoSceneTransition()
     {
-        var resource = (PackedScene)ResourceLoader.LoadThreadedGet(_scenePath);
+        var resource = ResourceLoader.LoadThreadedGet(_scenePath) as PackedScene;
+
+        if (resource == null)
+        {
+            GD.PushWarning($"LoadingScreen: LoadThreadedGet 返回 null，回退到同步加载: {_scenePath}");
+            _DoSceneTransitionFallback();
+            return;
+        }
 
         // 切换前清理 /root 下的游离节点（手动 AddChild 上去的旧战斗场景等）
         BladeHex.View.SceneTransition.CleanupOrphanNodes(GetTree());
@@ -322,6 +353,18 @@ public partial class LoadingScreen : CanvasLayer
 
         // 新场景初始化完成后会调用 LoadingScreen.NotifySceneReady() 触发淡出
         // 如果 3 秒内没收到通知，自动淡出（兜底）
+        _sceneReadyTimeout = 3.0f;
+        _waitingForSceneReady = true;
+    }
+
+    /// <summary>
+    /// 同步加载回退路径：直接用 ChangeSceneToFile。
+    /// </summary>
+    private void _DoSceneTransitionFallback()
+    {
+        BladeHex.View.SceneTransition.CleanupOrphanNodes(GetTree());
+        GetTree().ChangeSceneToFile(_scenePath);
+
         _sceneReadyTimeout = 3.0f;
         _waitingForSceneReady = true;
     }
@@ -360,6 +403,13 @@ public partial class LoadingScreen : CanvasLayer
     {
         if (!_isLoading && !Visible) return;
 
+        // 安全恢复：如果加载已完成、不在等待场景就绪、但仍然可见，强制淡出
+        if (!_isLoading && Visible && !_waitingForSceneReady)
+        {
+            _FadeOut();
+            return;
+        }
+
         // 等待新场景初始化完成的超时检查
         if (_waitingForSceneReady)
         {
@@ -389,7 +439,12 @@ public partial class LoadingScreen : CanvasLayer
             // 时间到达且资源已就绪 → 完成加载
             if (_elapsedTime >= MinLoadDurationSec && _resourceReady)
             {
-                _FinishLoad();
+                // 检查线程加载是否可用，否则走回退路径
+                var status = ResourceLoader.LoadThreadedGetStatus(_scenePath);
+                if (status == ResourceLoader.ThreadLoadStatus.Loaded)
+                    _FinishLoad();
+                else
+                    _FinishLoadFallback();
                 return;
             }
         }

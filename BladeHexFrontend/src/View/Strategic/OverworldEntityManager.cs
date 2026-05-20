@@ -170,6 +170,13 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
     /// <summary>玩家等级（影响敌方等级缩放，由 OverworldScene3D 设置）</summary>
     public int PlayerLevel { get; set; } = 1;
 
+    /// <summary>玩家种族（影响 Adventurer 同/异族判定，由 OverworldScene3D 设置）</summary>
+    public int PlayerRaceId
+    {
+        get => _encounterSpawner.PlayerRaceId;
+        set => _encounterSpawner.PlayerRaceId = value;
+    }
+
     /// <summary>
     /// 检查玩家是否触发遭遇（有敌对实体距离玩家足够近）
     /// 替代旧的 check_chunk_encounters 调用
@@ -226,14 +233,14 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
     // 玩家交互查询（Frontend 专属）
     // ========================================
 
-    /// <summary>检测玩家附近的敌对实体</summary>
+    /// <summary>检测玩家附近的实体（敌方/友方/中立都触发，由交互系统按阵营生成不同选项）</summary>
     public OverworldEntity? CheckPlayerEncounters(Vector2 playerPos)
     {
         OverworldEntity? closest = null;
         float closestDist = 80.0f; // 需要几乎撞在一起才触发
         foreach (var entity in Entities)
         {
-            if (!entity.IsAlive || entity.EntityTypeEnum == OverworldEntity.EntityType.Caravan) continue;
+            if (!entity.IsAlive) continue;
             float d = playerPos.DistanceTo(entity.Position);
             if (d < closestDist) { closestDist = d; closest = entity; }
         }

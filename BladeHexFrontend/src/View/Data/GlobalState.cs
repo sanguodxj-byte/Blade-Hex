@@ -17,7 +17,6 @@ namespace BladeHex.Data;
 ///   <item><see cref="Save"/> — 存档加载状态</item>
 ///   <item><see cref="WorldGen"/> — 世界生成参数</item>
 ///   <item><see cref="QuickCombat"/> — 快速战斗配置</item>
-///   <item><see cref="Weather"/> — 天气快照</item>
 ///   <item><see cref="OriginContext"/> — 出身选择数据</item>
 /// </list>
 /// </summary>
@@ -31,8 +30,8 @@ public partial class GlobalState : Node
     [Export] public SaveContext Save { get; set; } = new();
     [Export] public WorldGenContext WorldGen { get; set; } = new();
     [Export] public QuickCombatContext QuickCombat { get; set; } = new();
-    [Export] public WeatherContext Weather { get; set; } = new();
     [Export] public PlayerOriginContext OriginContext { get; set; } = new();
+    [Export] public CampaignContext Campaign { get; set; } = new();
 
     // ========================================
     // 设置相关（薄包装，仍保留在 GlobalState）

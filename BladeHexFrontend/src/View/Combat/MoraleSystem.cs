@@ -146,11 +146,11 @@ public static class MoraleSystem
         int level = unit.Data!.Morale;
         return level switch
         {
-            >= MoraleHighThreshold => new MoraleEffects { CritBonus = 0.20f, FumbleRate = 0.0f, AcModifier = 0, Name = "高昂" },
-            >= MoraleLowThreshold => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 0.0f, AcModifier = 0, Name = "正常" },
-            >= MoraleBrokenThreshold => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 0.20f, AcModifier = 0, Name = "低落" },
-            >= MoraleRoutThreshold => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 0.40f, AcModifier = -2, Name = "崩溃" },
-            _ => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 1.0f, AcModifier = -2, Name = "溃逃" },
+            >= MoraleHighThreshold => new MoraleEffects { CritBonus = 0.20f, FumbleRate = 0.0f, AcModifier = 0, HitBonus = 2, Name = "高昂" },
+            >= MoraleLowThreshold => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 0.0f, AcModifier = 0, HitBonus = 0, Name = "正常" },
+            >= MoraleBrokenThreshold => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 0.20f, AcModifier = 0, HitBonus = -1, Name = "低落" },
+            >= MoraleRoutThreshold => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 0.40f, AcModifier = -2, HitBonus = -2, Name = "崩溃" },
+            _ => new MoraleEffects { CritBonus = 0.0f, FumbleRate = 1.0f, AcModifier = -2, HitBonus = -4, Name = "溃逃" },
         };
     }
 
@@ -206,6 +206,7 @@ public static class MoraleSystem
         public float CritBonus;
         public float FumbleRate;
         public int AcModifier;
+        public int HitBonus;
         public string Name;
     }
 

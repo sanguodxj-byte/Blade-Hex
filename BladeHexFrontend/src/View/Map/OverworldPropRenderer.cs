@@ -93,9 +93,10 @@ public partial class OverworldPropRenderer : Node3D
             var props = OverworldPropScatter.Generate(tile.Coord, tile.Terrain, _worldSeed);
             if (props.Count == 0) continue;
 
+            float tileElevY = GetTileElevationY(tile);
             foreach (var propData in props)
             {
-                AddPropToBucket(propData, tile.PixelPos);
+                AddPropToBucket(propData, tile.PixelPos, tileElevY);
                 anyNew = true;
             }
         }
@@ -159,7 +160,7 @@ public partial class OverworldPropRenderer : Node3D
     // 内部：桶管理
     // ========================================
 
-    private void AddPropToBucket(OverworldPropData propData, Vector2 tilePixelPos)
+    private void AddPropToBucket(OverworldPropData propData, Vector2 tilePixelPos, float tileElevY = 0.0f)
     {
         if (!_buckets.TryGetValue(propData.PropId, out var bucket))
         {
@@ -179,7 +180,7 @@ public partial class OverworldPropRenderer : Node3D
 
         // Transform：位置在底部，QuadMesh 的 pivot 在中心所以需要 Y 偏移
         float worldHeight = bucket.SpriteHeight * SpriteWorldScale * propData.Scale;
-        float yPos = BaseElevation + worldHeight * 0.5f;
+        float yPos = tileElevY + BaseElevation + worldHeight * 0.5f;
 
         var basis = new Basis(
             new Vector3(scaleX, 0, 0),
@@ -189,6 +190,28 @@ public partial class OverworldPropRenderer : Node3D
 
         bucket.Transforms.Add(transform);
         bucket.Dirty = true;
+    }
+
+    /// <summary>计算 tile 的高程 Y（与 HexOverworldRenderer3D 一致）</summary>
+    private static float GetTileElevationY(HexOverworldTile tile)
+    {
+        const float ElevationScale = 0.8f;
+        const float ElevationBaseline = 0.5f;
+        float baseElev = (tile.Elevation - ElevationBaseline) * ElevationScale;
+        float terrainBonus = tile.Terrain switch
+        {
+            HexOverworldTile.TerrainType.Mountain => 0.45f,
+            HexOverworldTile.TerrainType.MountainSnow => 0.55f,
+            HexOverworldTile.TerrainType.Hills => 0.12f,
+            HexOverworldTile.TerrainType.Rocky => 0.08f,
+            HexOverworldTile.TerrainType.DeepWater => -0.18f,
+            HexOverworldTile.TerrainType.ShallowWater => -0.10f,
+            HexOverworldTile.TerrainType.River => -0.08f,
+            HexOverworldTile.TerrainType.Swamp => -0.05f,
+            HexOverworldTile.TerrainType.Bog => -0.04f,
+            _ => 0.0f,
+        };
+        return baseElev + terrainBonus;
     }
 
     private PropBucket CreateBucket(string propId)

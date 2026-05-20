@@ -6,40 +6,248 @@
         "id": "human_q1",
         "text": "你的人类童年是怎样度过的？",
         "choices": [
-          { "id": "farm",    "text": "在田间劳作，帮父母收割庄稼", "summary": "田间劳作", "attrMods": {"str": 2, "intel": -1, "cha": -1}, "itemReward": "镰刀",     "illustId": "human_childhood_farm" },
-          { "id": "scholar", "text": "跟随一位老学者识字读书",       "summary": "师从学者", "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "羊皮纸笔记", "illustId": "human_childhood_scholar" },
-          { "id": "street",  "text": "在街巷中摸爬滚打，学会了察言观色", "summary": "街巷求生", "attrMods": {"dex": 2, "con": -1, "wis": -1}, "itemReward": "破旧匕首",   "illustId": "human_childhood_street" },
-          { "id": "temple",  "text": "在神殿中侍奉祭司，聆听神谕",   "summary": "神殿侍奉", "attrMods": {"wis": 2, "dex": -1, "str": -1}, "itemReward": "圣水瓶",     "illustId": "human_childhood_temple" }
+          {
+            "id": "farm",
+            "text": "在田间劳作，帮父母收割庄稼",
+            "summary": "田间劳作",
+            "attrMods": {
+              "str": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "农用短刀",
+            "illustId": "human_childhood_farm",
+            "itemRewardId": "seax",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "scholar",
+            "text": "跟随一位老学者识字读书",
+            "summary": "师从学者",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "学徒魔杖",
+            "illustId": "human_childhood_scholar",
+            "itemRewardId": "wand_apprentice",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "street",
+            "text": "在街巷中摸爬滚打，学会了察言观色",
+            "summary": "街巷求生",
+            "attrMods": {
+              "dex": 2,
+              "con": -1,
+              "wis": -1
+            },
+            "itemReward": "破旧匕首",
+            "illustId": "human_childhood_street",
+            "itemRewardId": "dagger",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "temple",
+            "text": "在神殿中侍奉祭司，聆听神谕",
+            "summary": "神殿侍奉",
+            "attrMods": {
+              "wis": 2,
+              "dex": -1,
+              "str": -1
+            },
+            "itemReward": "圣水瓶",
+            "illustId": "human_childhood_temple",
+            "itemRewardId": "holy_water",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "human_q2",
         "text": "你在哪座城镇长大？",
         "choices": [
-          { "id": "port",     "text": "繁华的港口城市，商贾云集",   "summary": "港口城市", "attrMods": {"cha": 2, "str": -1, "con": -1},   "itemReward": "海图",       "illustId": "human_port_city" },
-          { "id": "frontier", "text": "边境要塞，时刻警惕蛮族入侵", "summary": "边境要塞", "attrMods": {"str": 2, "cha": -1, "intel": -1}, "itemReward": "锁子甲片",   "illustId": "human_frontier_fort" },
-          { "id": "academy",  "text": "内陆学院城，书卷气息浓厚",   "summary": "学院城",   "attrMods": {"intel": 2, "str": -1, "dex": -1}, "itemReward": "古籍",       "illustId": "human_academy" },
-          { "id": "village",  "text": "偏远山村，民风淳朴而坚韧",   "summary": "偏远山村", "attrMods": {"con": 2, "cha": -1, "intel": -1}, "itemReward": "猎弓",       "illustId": "human_village" }
+          {
+            "id": "port",
+            "text": "繁华的港口城市，商贾云集",
+            "summary": "港口城市",
+            "attrMods": {
+              "cha": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "水手弯刀",
+            "illustId": "human_port_city",
+            "itemRewardId": "nomad_saber",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "frontier",
+            "text": "边境要塞，时刻警惕蛮族入侵",
+            "summary": "边境要塞",
+            "attrMods": {
+              "str": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "边境镶钉甲",
+            "illustId": "human_frontier_fort",
+            "itemRewardId": "studded_leather",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "academy",
+            "text": "内陆学院城，书卷气息浓厚",
+            "summary": "学院城",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "聚能法球",
+            "illustId": "human_academy",
+            "itemRewardId": "orb_basic",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "village",
+            "text": "偏远山村，民风淳朴而坚韧",
+            "summary": "偏远山村",
+            "attrMods": {
+              "con": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "猎弓",
+            "illustId": "human_village",
+            "itemRewardId": "shortbow",
+            "itemRewardType": "weapon"
+          }
         ]
       },
       {
         "id": "human_q3",
         "text": "成年之前，你学会了什么谋生手段？",
         "choices": [
-          { "id": "blacksmith", "text": "铁匠学徒，锤炼了我的臂力", "summary": "铁匠学徒", "attrMods": {"str": 2, "dex": -1, "cha": -1},   "itemReward": "铁锤",   "illustId": "human_blacksmith" },
-          { "id": "hunter",     "text": "猎人向导，在林中追踪猎物", "summary": "猎人向导", "attrMods": {"dex": 2, "intel": -1, "cha": -1}, "itemReward": "兽皮",   "illustId": "human_hunter" },
-          { "id": "caravan",    "text": "商队护卫，见多识广",       "summary": "商队护卫", "attrMods": {"con": 2, "intel": -1, "wis": -1}, "itemReward": "短剑",   "illustId": "human_caravan" },
-          { "id": "scribe",     "text": "抄写员，为贵族誊录文书",   "summary": "抄写员",   "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "墨水瓶", "illustId": "human_scribe" }
+          {
+            "id": "blacksmith",
+            "text": "铁匠学徒，锤炼了我的臂力",
+            "summary": "铁匠学徒",
+            "attrMods": {
+              "str": 2,
+              "dex": -1,
+              "cha": -1
+            },
+            "itemReward": "铁匠锤",
+            "illustId": "human_blacksmith",
+            "itemRewardId": "light_hammer",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "hunter",
+            "text": "猎人向导，在林中追踪猎物",
+            "summary": "猎人向导",
+            "attrMods": {
+              "dex": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "兽皮甲",
+            "illustId": "human_hunter",
+            "itemRewardId": "leather",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "caravan",
+            "text": "商队护卫，见多识广",
+            "summary": "商队护卫",
+            "attrMods": {
+              "con": 2,
+              "intel": -1,
+              "wis": -1
+            },
+            "itemReward": "护卫佩剑",
+            "illustId": "human_caravan",
+            "itemRewardId": "arming_sword",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "scribe",
+            "text": "抄写员，为贵族誊录文书",
+            "summary": "抄写员",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "墨水瓶",
+            "illustId": "human_scribe",
+            "itemRewardId": "mana_potion",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "human_q4",
         "text": "是什么让你离开故土，踏上未知的道路？",
         "choices": [
-          { "id": "war",       "text": "家园被战火吞噬，我必须变得更强",   "summary": "战火驱逐", "attrMods": {"str": 2, "cha": -1, "intel": -1}, "itemReward": "破损盾牌", "illustId": "human_departure_war" },
-          { "id": "knowledge", "text": "我渴望见识这个世界的奥秘与真相",   "summary": "求知欲望", "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "旅行笔记", "illustId": "human_departure_knowledge" },
-          { "id": "revenge",   "text": "有人欠我一笔血债，我要亲手讨回",   "summary": "复仇之路", "attrMods": {"dex": 2, "wis": -1, "cha": -1},   "itemReward": "目标画像", "illustId": "human_departure_revenge" },
-          { "id": "fate",      "text": "命运的低语引导着我，我无法抗拒",   "summary": "命运召唤", "attrMods": {"wis": 2, "dex": -1, "str": -1},   "itemReward": "神秘符记", "illustId": "human_departure_fate" }
+          {
+            "id": "war",
+            "text": "家园被战火吞噬，我必须变得更强",
+            "summary": "战火驱逐",
+            "attrMods": {
+              "str": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "破损木盾",
+            "illustId": "human_departure_war",
+            "itemRewardId": "light_wooden_shield",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "knowledge",
+            "text": "我渴望见识这个世界的奥秘与真相",
+            "summary": "求知欲望",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "旅行绷带",
+            "illustId": "human_departure_knowledge",
+            "itemRewardId": "bandage",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "revenge",
+            "text": "有人欠我一笔血债，我要亲手讨回",
+            "summary": "复仇之路",
+            "attrMods": {
+              "dex": 2,
+              "wis": -1,
+              "cha": -1
+            },
+            "itemReward": "复仇飞刀",
+            "illustId": "human_departure_revenge",
+            "itemRewardId": "throwing_knife",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "fate",
+            "text": "命运的低语引导着我，我无法抗拒",
+            "summary": "命运召唤",
+            "attrMods": {
+              "wis": 2,
+              "dex": -1,
+              "str": -1
+            },
+            "itemReward": "神秘药剂",
+            "illustId": "human_departure_fate",
+            "itemRewardId": "antidote",
+            "itemRewardType": "consumable"
+          }
         ]
       }
     ],
@@ -48,40 +256,248 @@
         "id": "elf_q1",
         "text": "精灵漫长的孩童时代，你是如何度过的？",
         "choices": [
-          { "id": "play",   "text": "在林间嬉戏，与百年古树为伴", "summary": "林间嬉戏", "attrMods": {"dex": 2, "intel": -1, "str": -1}, "itemReward": "木叶护符",   "illustId": "elf_childhood_play" },
-          { "id": "epic",   "text": "聆听长老吟诵失落的史诗",     "summary": "聆听史诗", "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "精灵歌谣集", "illustId": "elf_childhood_epic" },
-          { "id": "stars",  "text": "跟随母亲学习星辰与月相之术", "summary": "星辰之术", "attrMods": {"wis": 2, "str": -1, "cha": -1},   "itemReward": "星象盘",     "illustId": "elf_childhood_stars" },
-          { "id": "dance",  "text": "在月光下练习剑舞与轻步",     "summary": "月下剑舞", "attrMods": {"dex": 2, "cha": -1, "con": -1},   "itemReward": "训练用细剑", "illustId": "elf_childhood_dance" }
+          {
+            "id": "play",
+            "text": "在林间嬉戏，与百年古树为伴",
+            "summary": "林间嬉戏",
+            "attrMods": {
+              "dex": 2,
+              "intel": -1,
+              "str": -1
+            },
+            "itemReward": "轻步皮靴",
+            "illustId": "elf_childhood_play",
+            "itemRewardId": "leather_boots",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "epic",
+            "text": "聆听长老吟诵失落的史诗",
+            "summary": "聆听史诗",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "吟游魔杖",
+            "illustId": "elf_childhood_epic",
+            "itemRewardId": "wand_apprentice",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "stars",
+            "text": "跟随母亲学习星辰与月相之术",
+            "summary": "星辰之术",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "cha": -1
+            },
+            "itemReward": "星象法球",
+            "illustId": "elf_childhood_stars",
+            "itemRewardId": "orb_basic",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "dance",
+            "text": "在月光下练习剑舞与轻步",
+            "summary": "月下剑舞",
+            "attrMods": {
+              "dex": 2,
+              "cha": -1,
+              "con": -1
+            },
+            "itemReward": "训练用细剑",
+            "illustId": "elf_childhood_dance",
+            "itemRewardId": "rapier",
+            "itemRewardType": "weapon"
+          }
         ]
       },
       {
         "id": "elf_q2",
         "text": "在漫长的精灵岁月中，你将青春献给了什么？",
         "choices": [
-          { "id": "swords",     "text": "星辉下的剑舞，追求刀锋的极致",         "summary": "剑舞修行",   "attrMods": {"dex": 2, "con": -1, "cha": -1},   "itemReward": "精灵细剑",     "illustId": "elf_sword_dance" },
-          { "id": "library",    "text": "古老图书馆中研读失落的奥术",           "summary": "奥术研究",   "attrMods": {"intel": 2, "str": -1, "dex": -1}, "itemReward": "奥术卷轴",     "illustId": "elf_library" },
-          { "id": "world_tree", "text": "在世界树的枝桠间冥想百年",             "summary": "世界树冥想", "attrMods": {"wis": 2, "str": -1, "cha": -1},   "itemReward": "世界树叶",     "illustId": "elf_world_tree" },
-          { "id": "humans",     "text": "游历人类王国，学习他们短暂而炽热的生活方式", "summary": "游历人间", "attrMods": {"cha": 2, "wis": -1, "con": -1},   "itemReward": "人类货币若干", "illustId": "elf_among_humans" }
+          {
+            "id": "swords",
+            "text": "星辉下的剑舞，追求刀锋的极致",
+            "summary": "剑舞修行",
+            "attrMods": {
+              "dex": 2,
+              "con": -1,
+              "cha": -1
+            },
+            "itemReward": "精灵细剑",
+            "illustId": "elf_sword_dance",
+            "itemRewardId": "rapier",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "library",
+            "text": "古老图书馆中研读失落的奥术",
+            "summary": "奥术研究",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "奥术药水",
+            "illustId": "elf_library",
+            "itemRewardId": "mana_potion",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "world_tree",
+            "text": "在世界树的枝桠间冥想百年",
+            "summary": "世界树冥想",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "cha": -1
+            },
+            "itemReward": "世界树叶露",
+            "illustId": "elf_world_tree",
+            "itemRewardId": "antidote",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "humans",
+            "text": "游历人类王国，学习他们短暂而炽热的生活方式",
+            "summary": "游历人间",
+            "attrMods": {
+              "cha": 2,
+              "wis": -1,
+              "con": -1
+            },
+            "itemReward": "人类干粮",
+            "illustId": "elf_among_humans",
+            "itemRewardId": "rations",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "elf_q3",
         "text": "你的族人如何看待你？",
         "choices": [
-          { "id": "archer",   "text": "天赋异禀的弓手，百步穿杨",       "summary": "天赋弓手",   "attrMods": {"dex": 2, "str": -1, "intel": -1}, "itemReward": "精灵长弓", "illustId": "elf_archer" },
-          { "id": "rebel",    "text": "离经叛道者，对古老传统不屑一顾", "summary": "离经叛道",   "attrMods": {"str": 2, "wis": -1, "intel": -1}, "itemReward": "破损徽记", "illustId": "elf_rebel" },
-          { "id": "observer", "text": "沉默的观察者，洞悉一切却从不开口", "summary": "沉默观察者", "attrMods": {"wis": 2, "cha": -1, "str": -1},   "itemReward": "观察笔记", "illustId": "elf_observer" },
-          { "id": "artisan",  "text": "精灵工匠，以魔法编织器物",       "summary": "精灵工匠",   "attrMods": {"intel": 2, "con": -1, "str": -1}, "itemReward": "魔法工具", "illustId": "elf_artisan" }
+          {
+            "id": "archer",
+            "text": "天赋异禀的弓手，百步穿杨",
+            "summary": "天赋弓手",
+            "attrMods": {
+              "dex": 2,
+              "str": -1,
+              "intel": -1
+            },
+            "itemReward": "精灵长弓",
+            "illustId": "elf_archer",
+            "itemRewardId": "longbow",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "rebel",
+            "text": "离经叛道者，对古老传统不屑一顾",
+            "summary": "离经叛道",
+            "attrMods": {
+              "str": 2,
+              "wis": -1,
+              "intel": -1
+            },
+            "itemReward": "叛逆战斧",
+            "illustId": "elf_rebel",
+            "itemRewardId": "battle_axe",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "observer",
+            "text": "沉默的观察者，洞悉一切却从不开口",
+            "summary": "沉默观察者",
+            "attrMods": {
+              "wis": 2,
+              "cha": -1,
+              "str": -1
+            },
+            "itemReward": "兜帽皮帽",
+            "illustId": "elf_observer",
+            "itemRewardId": "leather_cap",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "artisan",
+            "text": "精灵工匠，以魔法编织器物",
+            "summary": "精灵工匠",
+            "attrMods": {
+              "intel": 2,
+              "con": -1,
+              "str": -1
+            },
+            "itemReward": "工匠法杖",
+            "illustId": "elf_artisan",
+            "itemRewardId": "staff_oak",
+            "itemRewardType": "weapon"
+          }
         ]
       },
       {
         "id": "elf_q4",
         "text": "是什么驱使你走出永恒之林，踏入凡俗世界？",
         "choices": [
-          { "id": "war",       "text": "古林被铁与火侵蚀，我要追讨这笔债", "summary": "古林之债", "attrMods": {"str": 2, "cha": -1, "intel": -1}, "itemReward": "焦黑树枝",     "illustId": "elf_departure_war" },
-          { "id": "knowledge", "text": "一卷失落的手稿指向某个遥远的真相", "summary": "追寻真相", "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "残篇手稿",     "illustId": "elf_departure_knowledge" },
-          { "id": "yearning",  "text": "永恒的宁静令人窒息，我渴望短暂者的炽烈", "summary": "渴望炽烈", "attrMods": {"cha": 2, "wis": -1, "con": -1},   "itemReward": "人类纪念品", "illustId": "elf_departure_yearning" },
-          { "id": "fate",      "text": "梦境中的星辰指引我前行",         "summary": "星辰指引", "attrMods": {"wis": 2, "dex": -1, "str": -1},   "itemReward": "星辰罗盘",     "illustId": "elf_departure_fate" }
+          {
+            "id": "war",
+            "text": "古林被铁与火侵蚀，我要追讨这笔债",
+            "summary": "古林之债",
+            "attrMods": {
+              "str": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "焦黑火油",
+            "illustId": "elf_departure_war",
+            "itemRewardId": "fire_oil",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "knowledge",
+            "text": "一卷失落的手稿指向某个遥远的真相",
+            "summary": "追寻真相",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "残篇药水",
+            "illustId": "elf_departure_knowledge",
+            "itemRewardId": "mana_potion",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "yearning",
+            "text": "永恒的宁静令人窒息，我渴望短暂者的炽烈",
+            "summary": "渴望炽烈",
+            "attrMods": {
+              "cha": 2,
+              "wis": -1,
+              "con": -1
+            },
+            "itemReward": "人类纪念干粮",
+            "illustId": "elf_departure_yearning",
+            "itemRewardId": "rations",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "fate",
+            "text": "梦境中的星辰指引我前行",
+            "summary": "星辰指引",
+            "attrMods": {
+              "wis": 2,
+              "dex": -1,
+              "str": -1
+            },
+            "itemReward": "星辰药水",
+            "illustId": "elf_departure_fate",
+            "itemRewardId": "health_potion",
+            "itemRewardType": "consumable"
+          }
         ]
       }
     ],
@@ -90,40 +506,248 @@
         "id": "dwarf_q1",
         "text": "在矮人氏族的石厅中，你的童年是什么样的？",
         "choices": [
-          { "id": "forge",    "text": "在锻造炉旁递工具，看父辈打铁",   "summary": "炉旁学徒", "attrMods": {"str": 2, "dex": -1, "cha": -1},   "itemReward": "小铁锤",   "illustId": "dwarf_childhood_forge" },
-          { "id": "mine",     "text": "在矿洞深处帮长辈拣选矿石",       "summary": "矿洞拣石", "attrMods": {"con": 2, "intel": -1, "cha": -1}, "itemReward": "矿石样本", "illustId": "dwarf_childhood_mine" },
-          { "id": "rune",     "text": "跟随符文师抄录古老的卢恩",       "summary": "抄录卢恩", "attrMods": {"intel": 2, "str": -1, "dex": -1}, "itemReward": "卢恩石板", "illustId": "dwarf_childhood_rune" },
-          { "id": "brewery",  "text": "在酒窖里偷尝长辈酿造的烈酒",     "summary": "酒窖偷酒", "attrMods": {"cha": 2, "wis": -1, "dex": -1},   "itemReward": "酒囊",     "illustId": "dwarf_childhood_brewery" }
+          {
+            "id": "forge",
+            "text": "在锻造炉旁递工具，看父辈打铁",
+            "summary": "炉旁学徒",
+            "attrMods": {
+              "str": 2,
+              "dex": -1,
+              "cha": -1
+            },
+            "itemReward": "小铁锤",
+            "illustId": "dwarf_childhood_forge",
+            "itemRewardId": "light_hammer",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "mine",
+            "text": "在矿洞深处帮长辈拣选矿石",
+            "summary": "矿洞拣石",
+            "attrMods": {
+              "con": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "矿石磨刀石",
+            "illustId": "dwarf_childhood_mine",
+            "itemRewardId": "whetstone",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "rune",
+            "text": "跟随符文师抄录古老的卢恩",
+            "summary": "抄录卢恩",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "卢恩刻杖",
+            "illustId": "dwarf_childhood_rune",
+            "itemRewardId": "wand_apprentice",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "brewery",
+            "text": "在酒窖里偷尝长辈酿造的烈酒",
+            "summary": "酒窖偷酒",
+            "attrMods": {
+              "cha": 2,
+              "wis": -1,
+              "dex": -1
+            },
+            "itemReward": "矮人烈酒",
+            "illustId": "dwarf_childhood_brewery",
+            "itemRewardId": "health_potion",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "dwarf_q2",
         "text": "在矮人堡垒的深处，你的氏族以什么闻名？",
         "choices": [
-          { "id": "forge_clan",   "text": "锻造传奇武器的铸造大师",       "summary": "铸造氏族", "attrMods": {"str": 2, "dex": -1, "cha": -1},   "itemReward": "氏族战锤",     "illustId": "dwarf_forge_clan" },
-          { "id": "mine_clan",    "text": "开凿最深矿脉的矿工先驱",       "summary": "矿工氏族", "attrMods": {"con": 2, "intel": -1, "cha": -1}, "itemReward": "矿工镐",       "illustId": "dwarf_mine" },
-          { "id": "rune_clan",    "text": "守护符文秘密的卢恩铭刻师",     "summary": "符文氏族", "attrMods": {"intel": 2, "dex": -1, "str": -1}, "itemReward": "符文护符",     "illustId": "dwarf_rune" },
-          { "id": "brewery_clan", "text": "酿造传世佳酿的酒窖守护者",     "summary": "酿酒氏族", "attrMods": {"cha": 2, "str": -1, "dex": -1},   "itemReward": "上等矮人麦酒", "illustId": "dwarf_brewery" }
+          {
+            "id": "forge_clan",
+            "text": "锻造传奇武器的铸造大师",
+            "summary": "铸造氏族",
+            "attrMods": {
+              "str": 2,
+              "dex": -1,
+              "cha": -1
+            },
+            "itemReward": "氏族战锤",
+            "illustId": "dwarf_forge_clan",
+            "itemRewardId": "winged_mace",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "mine_clan",
+            "text": "开凿最深矿脉的矿工先驱",
+            "summary": "矿工氏族",
+            "attrMods": {
+              "con": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "矿工镐棒",
+            "illustId": "dwarf_mine",
+            "itemRewardId": "club",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "rune_clan",
+            "text": "守护符文秘密的卢恩铭刻师",
+            "summary": "符文氏族",
+            "attrMods": {
+              "intel": 2,
+              "dex": -1,
+              "str": -1
+            },
+            "itemReward": "符文护符",
+            "illustId": "dwarf_rune",
+            "itemRewardId": "amulet_of_vitality",
+            "itemRewardType": "accessory"
+          },
+          {
+            "id": "brewery_clan",
+            "text": "酿造传世佳酿的酒窖守护者",
+            "summary": "酿酒氏族",
+            "attrMods": {
+              "cha": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "上等矮人麦酒",
+            "illustId": "dwarf_brewery",
+            "itemRewardId": "health_potion",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "dwarf_q3",
         "text": "你第一次拿起战斧是在什么时候？",
         "choices": [
-          { "id": "young",   "text": "五岁时就在父亲的铁砧旁挥锤",   "summary": "自幼习武", "attrMods": {"str": 2, "intel": -1, "wis": -1}, "itemReward": "短斧",         "illustId": "dwarf_young_warrior" },
-          { "id": "coming",  "text": "成年礼上，为了证明自己的勇气", "summary": "成年礼",   "attrMods": {"con": 2, "cha": -1, "dex": -1},   "itemReward": "战斧",         "illustId": "dwarf_coming_of_age" },
-          { "id": "scholar", "text": "从未拿过——我的武器是知识",   "summary": "知识为刃", "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "石板典籍",     "illustId": "dwarf_scholar" },
-          { "id": "forced",  "text": "当地精入侵时，被迫拿起武器",   "summary": "被迫应战", "attrMods": {"dex": 2, "intel": -1, "cha": -1}, "itemReward": "实用工兵斧",   "illustId": "dwarf_forced_fight" }
+          {
+            "id": "young",
+            "text": "五岁时就在父亲的铁砧旁挥锤",
+            "summary": "自幼习武",
+            "attrMods": {
+              "str": 2,
+              "intel": -1,
+              "wis": -1
+            },
+            "itemReward": "短斧刃",
+            "illustId": "dwarf_young_warrior",
+            "itemRewardId": "kukri",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "coming",
+            "text": "成年礼上，为了证明自己的勇气",
+            "summary": "成年礼",
+            "attrMods": {
+              "con": 2,
+              "cha": -1,
+              "dex": -1
+            },
+            "itemReward": "成年礼战斧",
+            "illustId": "dwarf_coming_of_age",
+            "itemRewardId": "battle_axe",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "scholar",
+            "text": "从未拿过——我的武器是知识",
+            "summary": "知识为刃",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "石板法球",
+            "illustId": "dwarf_scholar",
+            "itemRewardId": "orb_basic",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "forced",
+            "text": "当地精入侵时，被迫拿起武器",
+            "summary": "被迫应战",
+            "attrMods": {
+              "dex": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "工兵短刀",
+            "illustId": "dwarf_forced_fight",
+            "itemRewardId": "seax",
+            "itemRewardType": "weapon"
+          }
         ]
       },
       {
         "id": "dwarf_q4",
         "text": "是什么让你离开石厅，前往日光下的世界？",
         "choices": [
-          { "id": "relic",   "text": "氏族圣物失窃，我必须夺回它",     "summary": "圣物失窃", "attrMods": {"str": 2, "cha": -1, "intel": -1}, "itemReward": "圣物拓本", "illustId": "dwarf_departure_relic" },
-          { "id": "mine",    "text": "古籍记载的失落矿脉在远方等待",   "summary": "失落矿脉", "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "古老矿图", "illustId": "dwarf_departure_mine" },
-          { "id": "elder",   "text": "族中长老说，我的命运在地表之上", "summary": "长老指引", "attrMods": {"wis": 2, "dex": -1, "str": -1},   "itemReward": "长老信物", "illustId": "dwarf_departure_elder" },
-          { "id": "revenge", "text": "某个仇家逃到了人类的土地",       "summary": "追讨仇家", "attrMods": {"dex": 2, "wis": -1, "cha": -1},   "itemReward": "通缉令",   "illustId": "dwarf_departure_revenge" }
+          {
+            "id": "relic",
+            "text": "氏族圣物失窃，我必须夺回它",
+            "summary": "圣物失窃",
+            "attrMods": {
+              "str": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "圣物盾牌",
+            "illustId": "dwarf_departure_relic",
+            "itemRewardId": "infantry_round_shield",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "mine",
+            "text": "古籍记载的失落矿脉在远方等待",
+            "summary": "失落矿脉",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "探矿工具",
+            "illustId": "dwarf_departure_mine",
+            "itemRewardId": "camp_kit",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "elder",
+            "text": "族中长老说，我的命运在地表之上",
+            "summary": "长老指引",
+            "attrMods": {
+              "wis": 2,
+              "dex": -1,
+              "str": -1
+            },
+            "itemReward": "长老信物戒",
+            "illustId": "dwarf_departure_elder",
+            "itemRewardId": "ring_of_power",
+            "itemRewardType": "accessory"
+          },
+          {
+            "id": "revenge",
+            "text": "某个仇家逃到了人类的土地",
+            "summary": "追讨仇家",
+            "attrMods": {
+              "dex": 2,
+              "wis": -1,
+              "cha": -1
+            },
+            "itemReward": "追踪飞刀",
+            "illustId": "dwarf_departure_revenge",
+            "itemRewardId": "throwing_knife",
+            "itemRewardType": "weapon"
+          }
         ]
       }
     ],
@@ -132,40 +756,248 @@
         "id": "halforc_q1",
         "text": "作为混血孩子，你的成长岁月是怎样的？",
         "choices": [
-          { "id": "fight",    "text": "在部落中以拳头证明自己",         "summary": "拳头立威", "attrMods": {"str": 2, "intel": -1, "cha": -1}, "itemReward": "兽牙项链",       "illustId": "halforc_childhood_fight" },
-          { "id": "wild",     "text": "在荒野中独自捕猎为生",           "summary": "荒野独行", "attrMods": {"dex": 2, "cha": -1, "intel": -1}, "itemReward": "粗制猎弓",       "illustId": "halforc_childhood_wild" },
-          { "id": "hidden",   "text": "被人类母亲偷偷带走，藏在边境村庄", "summary": "藏身村庄", "attrMods": {"wis": 2, "str": -1, "dex": -1},   "itemReward": "母亲的护身符", "illustId": "halforc_childhood_hidden" },
-          { "id": "wander",   "text": "两边都不接纳——我自小流浪",     "summary": "自小流浪", "attrMods": {"con": 2, "cha": -1, "intel": -1}, "itemReward": "破布包袱",       "illustId": "halforc_childhood_wander" }
+          {
+            "id": "fight",
+            "text": "在部落中以拳头证明自己",
+            "summary": "拳头立威",
+            "attrMods": {
+              "str": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "兽牙拳套",
+            "illustId": "halforc_childhood_fight",
+            "itemRewardId": "cestus",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "wild",
+            "text": "在荒野中独自捕猎为生",
+            "summary": "荒野独行",
+            "attrMods": {
+              "dex": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "粗制猎弓",
+            "illustId": "halforc_childhood_wild",
+            "itemRewardId": "hunting_bow",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "hidden",
+            "text": "被人类母亲偷偷带走，藏在边境村庄",
+            "summary": "藏身村庄",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "母亲的解毒剂",
+            "illustId": "halforc_childhood_hidden",
+            "itemRewardId": "antidote",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "wander",
+            "text": "两边都不接纳——我自小流浪",
+            "summary": "自小流浪",
+            "attrMods": {
+              "con": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "破布绷带",
+            "illustId": "halforc_childhood_wander",
+            "itemRewardId": "bandage",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "halforc_q2",
         "text": "在部落中，你靠什么赢得尊重？",
         "choices": [
-          { "id": "arena",   "text": "赤手空拳击败了最强的挑战者",       "summary": "拳斗胜者", "attrMods": {"str": 3, "intel": -2, "cha": -1}, "itemReward": "战斗护腕", "illustId": "halforc_arena" },
-          { "id": "hunt",    "text": "在荒野中独自猎杀了一头巨熊",       "summary": "猎熊者",   "attrMods": {"con": 2, "cha": -1, "intel": -1}, "itemReward": "熊皮披风", "illustId": "halforc_hunt" },
-          { "id": "cunning", "text": "用计谋让两个敌对部落自相残杀",     "summary": "诡计者",   "attrMods": {"intel": 2, "str": -1, "con": -1}, "itemReward": "毒药小瓶", "illustId": "halforc_cunning" },
-          { "id": "outcast", "text": "我从未被接纳——我是被驱逐的弃儿", "summary": "被驱逐者", "attrMods": {"wis": 2, "str": -1, "cha": -1},   "itemReward": "残破图腾", "illustId": "halforc_outcast" }
+          {
+            "id": "arena",
+            "text": "赤手空拳击败了最强的挑战者",
+            "summary": "拳斗胜者",
+            "attrMods": {
+              "str": 3,
+              "intel": -2,
+              "cha": -1
+            },
+            "itemReward": "战斗拳套",
+            "illustId": "halforc_arena",
+            "itemRewardId": "cestus_t2",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "hunt",
+            "text": "在荒野中独自猎杀了一头巨熊",
+            "summary": "猎熊者",
+            "attrMods": {
+              "con": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "熊皮甲",
+            "illustId": "halforc_hunt",
+            "itemRewardId": "leather",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "cunning",
+            "text": "用计谋让两个敌对部落自相残杀",
+            "summary": "诡计者",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "毒油瓶",
+            "illustId": "halforc_cunning",
+            "itemRewardId": "fire_oil",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "outcast",
+            "text": "我从未被接纳——我是被驱逐的弃儿",
+            "summary": "被驱逐者",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "cha": -1
+            },
+            "itemReward": "残破绷带",
+            "illustId": "halforc_outcast",
+            "itemRewardId": "bandage",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "halforc_q3",
         "text": "人类的血液在你体内低语着什么？",
         "choices": [
-          { "id": "calm",     "text": "克制怒火，用冷静的头脑思考",       "summary": "克制怒火", "attrMods": {"wis": 2, "str": -1, "dex": -1},   "itemReward": "冥想念珠", "illustId": "halforc_calm" },
-          { "id": "rage",     "text": "拥抱狂暴，让敌人在恐惧中颤抖",     "summary": "拥抱狂暴", "attrMods": {"str": 2, "wis": -1, "intel": -1}, "itemReward": "战吼号角", "illustId": "halforc_rage" },
-          { "id": "blend",    "text": "学会微笑，用人类的方式融入社会",   "summary": "融入社会", "attrMods": {"cha": 2, "str": -1, "con": -1},   "itemReward": "整洁衣服", "illustId": "halforc_blend" },
-          { "id": "conflict", "text": "两种血脉的冲突让我比任何人都坚韧", "summary": "血脉冲突", "attrMods": {"con": 2, "cha": -1, "dex": -1},   "itemReward": "双面徽章", "illustId": "halforc_conflict" }
+          {
+            "id": "calm",
+            "text": "克制怒火，用冷静的头脑思考",
+            "summary": "克制怒火",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "冥想药水",
+            "illustId": "halforc_calm",
+            "itemRewardId": "health_potion",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "rage",
+            "text": "拥抱狂暴，让敌人在恐惧中颤抖",
+            "summary": "拥抱狂暴",
+            "attrMods": {
+              "str": 2,
+              "wis": -1,
+              "intel": -1
+            },
+            "itemReward": "狂暴巨斧",
+            "illustId": "halforc_rage",
+            "itemRewardId": "great_axe",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "blend",
+            "text": "学会微笑，用人类的方式融入社会",
+            "summary": "融入社会",
+            "attrMods": {
+              "cha": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "整洁布衣",
+            "illustId": "halforc_blend",
+            "itemRewardId": "cloth",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "conflict",
+            "text": "两种血脉的冲突让我比任何人都坚韧",
+            "summary": "血脉冲突",
+            "attrMods": {
+              "con": 2,
+              "cha": -1,
+              "dex": -1
+            },
+            "itemReward": "双面铁盔",
+            "illustId": "halforc_conflict",
+            "itemRewardId": "iron_helm",
+            "itemRewardType": "armor"
+          }
         ]
       },
       {
         "id": "halforc_q4",
         "text": "是什么驱使你离开荒原，走向文明世界？",
         "choices": [
-          { "id": "war",    "text": "酋长被屠戮，我要让仇敌的鲜血染红草原", "summary": "血染草原", "attrMods": {"str": 2, "cha": -1, "intel": -1}, "itemReward": "酋长牙坠",     "illustId": "halforc_departure_war" },
-          { "id": "totem",  "text": "祖先的图腾召唤我前往远方",             "summary": "图腾召唤", "attrMods": {"wis": 2, "dex": -1, "str": -1},   "itemReward": "祖灵骨笛",     "illustId": "halforc_departure_totem" },
-          { "id": "weary",  "text": "我厌倦了部落的争斗，想找一个属于自己的位置", "summary": "厌倦争斗", "attrMods": {"cha": 2, "str": -1, "wis": -1},   "itemReward": "和平烟杆", "illustId": "halforc_departure_weary" },
-          { "id": "hunt",   "text": "某个传说中的猎物，只有越过边境才能找到", "summary": "传说猎物", "attrMods": {"dex": 2, "wis": -1, "cha": -1},   "itemReward": "猎物足印拓本", "illustId": "halforc_departure_hunt" }
+          {
+            "id": "war",
+            "text": "酋长被屠戮，我要让仇敌的鲜血染红草原",
+            "summary": "血染草原",
+            "attrMods": {
+              "str": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "酋长飞斧",
+            "illustId": "halforc_departure_war",
+            "itemRewardId": "francisca",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "totem",
+            "text": "祖先的图腾召唤我前往远方",
+            "summary": "图腾召唤",
+            "attrMods": {
+              "wis": 2,
+              "dex": -1,
+              "str": -1
+            },
+            "itemReward": "祖灵圣水",
+            "illustId": "halforc_departure_totem",
+            "itemRewardId": "holy_water",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "weary",
+            "text": "我厌倦了部落的争斗，想找一个属于自己的位置",
+            "summary": "厌倦争斗",
+            "attrMods": {
+              "cha": 2,
+              "str": -1,
+              "wis": -1
+            },
+            "itemReward": "和平干粮",
+            "illustId": "halforc_departure_weary",
+            "itemRewardId": "rations",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "hunt",
+            "text": "某个传说中的猎物，只有越过边境才能找到",
+            "summary": "传说猎物",
+            "attrMods": {
+              "dex": 2,
+              "wis": -1,
+              "cha": -1
+            },
+            "itemReward": "猎物标枪",
+            "illustId": "halforc_departure_hunt",
+            "itemRewardId": "javelin",
+            "itemRewardType": "weapon"
+          }
         ]
       }
     ],
@@ -174,40 +1006,248 @@
         "id": "halfelf_q1",
         "text": "在两族之间长大，你的童年记忆里有什么？",
         "choices": [
-          { "id": "elven", "text": "在精灵母亲的森林家中度过", "summary": "精灵森林", "attrMods": {"dex": 2, "con": -1, "str": -1},   "itemReward": "精灵护身符", "illustId": "halfelf_childhood_elven" },
-          { "id": "human", "text": "在人类父亲的村庄里长大",   "summary": "人类村庄", "attrMods": {"con": 2, "wis": -1, "dex": -1},   "itemReward": "人类护身符", "illustId": "halfelf_childhood_human" },
-          { "id": "split", "text": "两边轮流住，从未真正属于哪一方", "summary": "两边轮住", "attrMods": {"wis": 2, "cha": -1, "con": -1},   "itemReward": "双语手册",   "illustId": "halfelf_childhood_split" },
-          { "id": "alone", "text": "被双方亲族遗弃，独自长大",     "summary": "独自长大", "attrMods": {"intel": 2, "str": -1, "cha": -1}, "itemReward": "自制弹弓",   "illustId": "halfelf_childhood_alone" }
+          {
+            "id": "elven",
+            "text": "在精灵母亲的森林家中度过",
+            "summary": "精灵森林",
+            "attrMods": {
+              "dex": 2,
+              "con": -1,
+              "str": -1
+            },
+            "itemReward": "精灵皮靴",
+            "illustId": "halfelf_childhood_elven",
+            "itemRewardId": "leather_boots",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "human",
+            "text": "在人类父亲的村庄里长大",
+            "summary": "人类村庄",
+            "attrMods": {
+              "con": 2,
+              "wis": -1,
+              "dex": -1
+            },
+            "itemReward": "人类皮帽",
+            "illustId": "halfelf_childhood_human",
+            "itemRewardId": "leather_cap",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "split",
+            "text": "两边轮流住，从未真正属于哪一方",
+            "summary": "两边轮住",
+            "attrMods": {
+              "wis": 2,
+              "cha": -1,
+              "con": -1
+            },
+            "itemReward": "双语药水",
+            "illustId": "halfelf_childhood_split",
+            "itemRewardId": "mana_potion",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "alone",
+            "text": "被双方亲族遗弃，独自长大",
+            "summary": "独自长大",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "cha": -1
+            },
+            "itemReward": "自制飞镖",
+            "illustId": "halfelf_childhood_alone",
+            "itemRewardId": "dart",
+            "itemRewardType": "weapon"
+          }
         ]
       },
       {
         "id": "halfelf_q2",
         "text": "你在两个世界之间长大，更亲近哪一边？",
         "choices": [
-          { "id": "elven_side", "text": "精灵一侧——我继承了他们的优雅与敏锐", "summary": "精灵血脉", "attrMods": {"dex": 2, "con": -1, "str": -1}, "itemReward": "精灵短弓", "illustId": "halfelf_elven_side" },
-          { "id": "human_side", "text": "人类一侧——我拥有他们的适应力与野心", "summary": "人类血脉", "attrMods": {"con": 2, "wis": -1, "dex": -1}, "itemReward": "人类短剑", "illustId": "halfelf_human_side" },
-          { "id": "loner",      "text": "两边都不属于——我只属于我自己",     "summary": "独行者",   "attrMods": {"wis": 2, "cha": -1, "con": -1}, "itemReward": "孤狼徽记", "illustId": "halfelf_loner" },
-          { "id": "diplomat",   "text": "我学会了在两个世界之间斡旋调停",     "summary": "调停者",   "attrMods": {"cha": 2, "str": -1, "wis": -1}, "itemReward": "双族信物", "illustId": "halfelf_diplomat" }
+          {
+            "id": "elven_side",
+            "text": "精灵一侧——我继承了他们的优雅与敏锐",
+            "summary": "精灵血脉",
+            "attrMods": {
+              "dex": 2,
+              "con": -1,
+              "str": -1
+            },
+            "itemReward": "精灵短弓",
+            "illustId": "halfelf_elven_side",
+            "itemRewardId": "shortbow",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "human_side",
+            "text": "人类一侧——我拥有他们的适应力与野心",
+            "summary": "人类血脉",
+            "attrMods": {
+              "con": 2,
+              "wis": -1,
+              "dex": -1
+            },
+            "itemReward": "人类短剑",
+            "illustId": "halfelf_human_side",
+            "itemRewardId": "arming_sword",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "loner",
+            "text": "两边都不属于——我只属于我自己",
+            "summary": "独行者",
+            "attrMods": {
+              "wis": 2,
+              "cha": -1,
+              "con": -1
+            },
+            "itemReward": "孤狼野营具",
+            "illustId": "halfelf_loner",
+            "itemRewardId": "camp_kit",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "diplomat",
+            "text": "我学会了在两个世界之间斡旋调停",
+            "summary": "调停者",
+            "attrMods": {
+              "cha": 2,
+              "str": -1,
+              "wis": -1
+            },
+            "itemReward": "外交礼品药",
+            "illustId": "halfelf_diplomat",
+            "itemRewardId": "health_potion",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "halfelf_q3",
         "text": "你的混血身份带给你最大的天赋是什么？",
         "choices": [
-          { "id": "endurance", "text": "精灵的夜视与人类的耐力",         "summary": "双重体质",   "attrMods": {"con": 2, "intel": -1, "cha": -1}, "itemReward": "夜行斗篷", "illustId": "halfelf_endurance" },
-          { "id": "intuition", "text": "读懂任何人心思的直觉",           "summary": "读心直觉",   "attrMods": {"wis": 2, "str": -1, "dex": -1},   "itemReward": "占卜骨签", "illustId": "halfelf_intuition" },
-          { "id": "charm",     "text": "在任何文化中都能如鱼得水的魅力", "summary": "跨文化魅力", "attrMods": {"cha": 2, "con": -1, "wis": -1},   "itemReward": "鲁特琴",   "illustId": "halfelf_charm" },
-          { "id": "craft",     "text": "精灵的灵巧双手与人类的创造力",   "summary": "灵巧创造",   "attrMods": {"dex": 2, "str": -1, "con": -1},   "itemReward": "工艺工具", "illustId": "halfelf_craft" }
+          {
+            "id": "endurance",
+            "text": "精灵的夜视与人类的耐力",
+            "summary": "双重体质",
+            "attrMods": {
+              "con": 2,
+              "intel": -1,
+              "cha": -1
+            },
+            "itemReward": "夜行皮甲",
+            "illustId": "halfelf_endurance",
+            "itemRewardId": "leather",
+            "itemRewardType": "armor"
+          },
+          {
+            "id": "intuition",
+            "text": "读懂任何人心思的直觉",
+            "summary": "读心直觉",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "占卜护腕",
+            "illustId": "halfelf_intuition",
+            "itemRewardId": "bracer_of_archery",
+            "itemRewardType": "accessory"
+          },
+          {
+            "id": "charm",
+            "text": "在任何文化中都能如鱼得水的魅力",
+            "summary": "跨文化魅力",
+            "attrMods": {
+              "cha": 2,
+              "con": -1,
+              "wis": -1
+            },
+            "itemReward": "鲁特琴弦干粮",
+            "illustId": "halfelf_charm",
+            "itemRewardId": "rations",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "craft",
+            "text": "精灵的灵巧双手与人类的创造力",
+            "summary": "灵巧创造",
+            "attrMods": {
+              "dex": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "工艺磨刀石",
+            "illustId": "halfelf_craft",
+            "itemRewardId": "whetstone",
+            "itemRewardType": "consumable"
+          }
         ]
       },
       {
         "id": "halfelf_q4",
         "text": "是什么驱使你独自上路？",
         "choices": [
-          { "id": "revenge", "text": "有人因我的混血身份伤害了我所爱的人", "summary": "因爱仇恨", "attrMods": {"str": 2, "cha": -1, "intel": -1}, "itemReward": "信物残片", "illustId": "halfelf_departure_revenge" },
-          { "id": "home",    "text": "我想找到一个真正属于我自己的归宿",   "summary": "寻找归宿", "attrMods": {"wis": 2, "str": -1, "con": -1},   "itemReward": "旅行地图", "illustId": "halfelf_departure_home" },
-          { "id": "blood",   "text": "某种古老血脉的低语在召唤我",         "summary": "血脉召唤", "attrMods": {"intel": 2, "str": -1, "dex": -1}, "itemReward": "古老吊坠", "illustId": "halfelf_departure_blood" },
-          { "id": "prove",   "text": "我想看看，混血的我能在世上走多远",   "summary": "证明自己", "attrMods": {"cha": 2, "str": -1, "wis": -1},   "itemReward": "干粮包",   "illustId": "halfelf_departure_prove" }
+          {
+            "id": "revenge",
+            "text": "有人因我的混血身份伤害了我所爱的人",
+            "summary": "因爱仇恨",
+            "attrMods": {
+              "str": 2,
+              "cha": -1,
+              "intel": -1
+            },
+            "itemReward": "仇恨锥刺",
+            "illustId": "halfelf_departure_revenge",
+            "itemRewardId": "stiletto",
+            "itemRewardType": "weapon"
+          },
+          {
+            "id": "home",
+            "text": "我想找到一个真正属于我自己的归宿",
+            "summary": "寻找归宿",
+            "attrMods": {
+              "wis": 2,
+              "str": -1,
+              "con": -1
+            },
+            "itemReward": "旅行绷带",
+            "illustId": "halfelf_departure_home",
+            "itemRewardId": "bandage",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "blood",
+            "text": "某种古老血脉的低语在召唤我",
+            "summary": "血脉召唤",
+            "attrMods": {
+              "intel": 2,
+              "str": -1,
+              "dex": -1
+            },
+            "itemReward": "古血药水",
+            "illustId": "halfelf_departure_blood",
+            "itemRewardId": "mana_potion",
+            "itemRewardType": "consumable"
+          },
+          {
+            "id": "prove",
+            "text": "我想看看，混血的我能在世上走多远",
+            "summary": "证明自己",
+            "attrMods": {
+              "cha": 2,
+              "str": -1,
+              "wis": -1
+            },
+            "itemReward": "干粮包",
+            "illustId": "halfelf_departure_prove",
+            "itemRewardId": "rations",
+            "itemRewardType": "consumable"
+          }
         ]
       }
     ]
@@ -216,10 +1256,42 @@
     "id": "companion",
     "text": "当你将要出发时，你最忠实的伙伴追了上来。那是谁？",
     "choices": [
-      { "id": "dog",   "text": "一条忠诚的猎犬，从小跟着你长大",         "summary": "忠犬相随",   "attrMods": {}, "itemReward": "", "illustId": "companion_dog",   "isCompanion": true },
-      { "id": "bear",  "text": "一头被你救下的幼熊，如今已长得壮硕",     "summary": "幼熊追随",   "attrMods": {}, "itemReward": "", "illustId": "companion_bear",  "isCompanion": true },
-      { "id": "girl",  "text": "一个神秘的少女，你从未见过她却似曾相识", "summary": "神秘少女",   "attrMods": {}, "itemReward": "", "illustId": "companion_girl",  "isCompanion": true },
-      { "id": "slime", "text": "一团……史莱姆？它在你脚边弹跳着，似乎很开心", "summary": "史莱姆伙伴", "attrMods": {}, "itemReward": "", "illustId": "companion_slime", "isCompanion": true }
+      {
+        "id": "dog",
+        "text": "一条忠诚的猎犬，从小跟着你长大",
+        "summary": "忠犬相随",
+        "attrMods": {},
+        "itemReward": "",
+        "illustId": "companion_dog",
+        "isCompanion": true
+      },
+      {
+        "id": "bear",
+        "text": "一头被你救下的幼熊，如今已长得壮硕",
+        "summary": "幼熊追随",
+        "attrMods": {},
+        "itemReward": "",
+        "illustId": "companion_bear",
+        "isCompanion": true
+      },
+      {
+        "id": "girl",
+        "text": "一个神秘的少女，你从未见过她却似曾相识",
+        "summary": "神秘少女",
+        "attrMods": {},
+        "itemReward": "",
+        "illustId": "companion_girl",
+        "isCompanion": true
+      },
+      {
+        "id": "slime",
+        "text": "一团……史莱姆？它在你脚边弹跳着，似乎很开心",
+        "summary": "史莱姆伙伴",
+        "attrMods": {},
+        "itemReward": "",
+        "illustId": "companion_slime",
+        "isCompanion": true
+      }
     ]
   }
 }

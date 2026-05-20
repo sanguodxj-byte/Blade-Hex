@@ -81,7 +81,7 @@ public partial class OverworldCamera3D : Camera3D
         Projection = ProjectionType.Orthogonal;
         Size = BaseOrthoSize;
         Near = 0.1f;
-        Far = 200.0f;
+        Far = 2000.0f; // 充足远裁切：即使大世界缩到极致也能显示完整
         Current = true;
 
         ApplyCameraAngle();
@@ -104,6 +104,16 @@ public partial class OverworldCamera3D : Camera3D
         {
             input = input.Normalized();
             _panTarget += input * PanSpeed * _zoomLevel * dt;
+            // 把 _panTarget 限制在世界范围内（防止越走越远导致回弹延迟）
+            if (BoundsController != null && BoundsController.IsInitialized)
+            {
+                float radClamp = Mathf.DegToRad(PitchAngle);
+                var camOffsetClamp = new Vector3(0, Distance * Mathf.Sin(radClamp), Distance * Mathf.Cos(radClamp));
+                var posTarget = _panTarget + camOffsetClamp;
+                var clampedTarget = BoundsController.ClampPosition(
+                    posTarget, BaseOrthoSize * _zoomTarget, GetViewportAspect());
+                _panTarget = clampedTarget - camOffsetClamp;
+            }
         }
 
         // 平滑插值
@@ -121,22 +131,22 @@ public partial class OverworldCamera3D : Camera3D
         }
 
         // 计算相机位置
+        // Distance 必须 ≥ Size/(2·tan(pitch)) + 安全余量，否则缩小后屏幕底部会被
+        // 近裁面/相机原点截掉（地面射线起点跑到相机后方）。
         float rad = Mathf.DegToRad(PitchAngle);
-        var newPos = _panCurrent + new Vector3(0, Distance * Mathf.Sin(rad), Distance * Mathf.Cos(rad));
+        float effDistance = ComputeEffectiveDistance(Size, rad);
+        var newPos = _panCurrent + new Vector3(0, effDistance * Mathf.Sin(rad), effDistance * Mathf.Cos(rad));
 
         // 边界限制：位置
         if (BoundsController != null && BoundsController.IsInitialized)
         {
             float aspect = GetViewportAspect();
-            var clampedPos = BoundsController.ClampPosition(newPos, Size, aspect);
-            // 把 clamp 结果反推到 _panCurrent / _panTarget，避免下一帧又漂出边界
-            if (!clampedPos.IsEqualApprox(newPos))
-            {
-                var camOffset = new Vector3(0, Distance * Mathf.Sin(rad), Distance * Mathf.Cos(rad));
-                _panCurrent = clampedPos - camOffset;
-                _panTarget = _panCurrent;
-            }
-            newPos = clampedPos;
+            newPos = BoundsController.ClampPosition(newPos, Size, aspect);
+            // 反推到 _panCurrent，但保留 _panTarget 让用户输入继续生效
+            // 只有当用户没有按 WASD 时才同步 _panTarget，避免持续推靠边时锁死
+            var camOffset = new Vector3(0, effDistance * Mathf.Sin(rad), effDistance * Mathf.Cos(rad));
+            _panCurrent = newPos - camOffset;
+            // 不同步 _panTarget — 这是关键。让下一帧 _panCurrent.Lerp(_panTarget) 仍朝原方向移动
         }
 
         Position = newPos;
@@ -250,7 +260,8 @@ public partial class OverworldCamera3D : Camera3D
         if (ExternalControl)
         {
             float rad = Mathf.DegToRad(PitchAngle);
-            Position = new Vector3(x, Distance * Mathf.Sin(rad), z + Distance * Mathf.Cos(rad));
+            float d = ComputeEffectiveDistance(Size, rad);
+            Position = new Vector3(x, d * Mathf.Sin(rad), z + d * Mathf.Cos(rad));
         }
     }
 
@@ -262,7 +273,20 @@ public partial class OverworldCamera3D : Camera3D
     {
         RotationDegrees = new Vector3(-PitchAngle, 0, 0);
         float rad = Mathf.DegToRad(PitchAngle);
-        Position = new Vector3(0, Distance * Mathf.Sin(rad), Distance * Mathf.Cos(rad));
+        float d = ComputeEffectiveDistance(Size, rad);
+        Position = new Vector3(0, d * Mathf.Sin(rad), d * Mathf.Cos(rad));
+    }
+
+    /// <summary>
+    /// 根据当前正交尺寸计算需要的相机距离。
+    /// 必须满足 Cy = D·sin(θ) > halfHeight·cos(θ)，否则屏幕底部地面射线起点
+    /// 跑到相机后方/近裁面之外，导致缩小时屏幕下方一大块被裁掉。
+    /// </summary>
+    private float ComputeEffectiveDistance(float orthoSize, float pitchRad)
+    {
+        // 最小所需 Distance = (orthoSize/2) / tan(θ) ；额外 1.5× 余量保证半透明云层等也不被近裁
+        float minD = (orthoSize * 0.5f) / Mathf.Max(0.0001f, Mathf.Tan(pitchRad)) * 1.5f;
+        return Mathf.Max(Distance, minD);
     }
 
     private void ClampZoomTarget()

@@ -1,4 +1,4 @@
-﻿// UnitData.cs
+// UnitData.cs
 // 单位基础数据资源 (RPG 核心版本)
 // 对应策划案 05/06 — 完整装备槽位、敌方模板、词缀加成
 using Godot;
@@ -61,6 +61,7 @@ public partial class UnitData : Resource
 
     [Export] public string UnitName { get; set; } = "未命名单位";
     [Export] public int Level { get; set; } = 1;
+    [Export] public bool IsWounded { get; set; }
 
     // ========================================
     // 六维属性

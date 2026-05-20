@@ -39,7 +39,28 @@ public partial class Unit : Node3D, IFightable
     public float CurrentAp { get; set; } = 0.0f;
     public bool UsingPrimaryWeapon { get; set; } = true;
 
-    public CharacterSkillTree? SkillTree { get; set; } = null;
+    /// <summary>当前朝向(0-5,六方向)。读 Data.Runtime.Facing,写时同步刷新视觉。</summary>
+    public int Facing
+    {
+        get => Data?.Runtime.Facing ?? 0;
+        set
+        {
+            if (Data != null) Data.Runtime.Facing = ((value % 6) + 6) % 6;
+            RenderNode?.SetFacing(Facing);
+        }
+    }
+
+    private CharacterSkillTree? _skillTree;
+    public CharacterSkillTree? SkillTree
+    {
+        get => _skillTree;
+        set
+        {
+            _skillTree = value;
+            // 镜像到 Runtime 让纯逻辑代码（BattleUnitModel / CombatRuleEngine）能访问
+            if (Data != null) Data.Runtime.SkillTree = value;
+        }
+    }
 
     // ==========================================
     // IFightable 接口实现
@@ -134,6 +155,8 @@ public partial class Unit : Node3D, IFightable
             RenderNode.Name = "CharacterRenderNode";
             AddChild(RenderNode);
             RenderNode.Setup(this);
+            // 应用初始朝向(SetFacing 会镜像武器/盾到正确侧)
+            RenderNode.SetFacing(Facing);
 
             if (RenderBus != null)
                 RenderBus.Register(this, RenderNode);
@@ -165,22 +188,32 @@ public partial class Unit : Node3D, IFightable
     private void InitHealthBarState()
     {
         if (_healthBar == null || !IsInstanceValid(_healthBar)) return;
-        _healthBar.SetState(CurrentHp, GetMaxHp(), Data?.Armor);
+        int maxMana = Data != null ? BladeHex.Combat.CombatStats.GetMaxMana(Data) : 0;
+        int curMana = Data?.CurrentMana ?? 0;
+        _healthBar.SetFullState(CurrentHp, GetMaxHp(), Data?.Armor, curMana, maxMana);
     }
 
-    /// <summary>更新 HP 条显示（血量变化时调用，向后兼容入口）。</summary>
+    /// <summary>更新 HP 条显示(血量变化时调用,向后兼容入口)。</summary>
     public void UpdateHpBar()
     {
         _healthBar?.SetHp(CurrentHp, GetMaxHp());
     }
 
-    /// <summary>更新装甲条显示（护甲值变化时调用，向后兼容入口）。</summary>
+    /// <summary>更新装甲条显示(护甲值变化时调用,向后兼容入口)。</summary>
     public void UpdateArmorBar()
     {
         if (_healthBar == null) return;
         int maxArmor = Data?.Armor?.MaxArmorPoints ?? 0;
         int currentArmor = Data?.Armor?.CurrentArmorPoints ?? 0;
         _healthBar.SetArmor(currentArmor, maxArmor);
+    }
+
+    /// <summary>更新法力条显示(法术施放后调用)。</summary>
+    public void UpdateManaBar()
+    {
+        if (_healthBar == null || Data == null) return;
+        int maxMana = BladeHex.Combat.CombatStats.GetMaxMana(Data);
+        _healthBar.SetMana(Data.CurrentMana, maxMana);
     }
 
     // ==========================================
@@ -200,6 +233,22 @@ public partial class Unit : Node3D, IFightable
         direction.Y = 0; // 只在 XZ 平面移动
         if (direction.LengthSquared() < 0.01f) return;
         RenderNode.PlayAttackLunge(direction.Normalized());
+    }
+
+    /// <summary>选中微动画 — 向上弹跳</summary>
+    public void PlaySelectBounce()
+    {
+        RenderNode?.PlaySelectBounce();
+    }
+
+    /// <summary>闪避微动画 — 向攻击者反方向后退</summary>
+    public void PlayDodgeBack(Vector3 attackerWorldPos)
+    {
+        if (RenderNode == null) return;
+        var direction = (attackerWorldPos - GlobalPosition);
+        direction.Y = 0;
+        if (direction.LengthSquared() < 0.01f) return;
+        RenderNode.PlayDodgeBack(direction.Normalized());
     }
 
 // ==========================================
@@ -224,6 +273,8 @@ public partial class Unit : Node3D, IFightable
     public int GetEffectiveAc(Unit? attacker = null)
     {
         int passiveAcBonus = PassiveSkillResolver.GetPassiveAcBonus(this);
+        // 节点 AC 加成（技能盘 ac 节点；v0.6 11.6 NodeAC，独立加入，不受 MaxDex 限制）
+        passiveAcBonus += SkillTree?.GetAcBonus() ?? 0;
         var moraleEffects = MoraleSystem.GetMoraleEffects(this);
         bool isDefending = Data?.Runtime.IsDefending ?? false;
         return Model.GetEffectiveAc(isDefending, passiveAcBonus, moraleEffects.AcModifier);

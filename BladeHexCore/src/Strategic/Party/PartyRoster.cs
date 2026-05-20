@@ -1,4 +1,4 @@
-﻿// PartyRoster.cs
+// PartyRoster.cs
 // 雇佣兵团队伍名册 — 骑砍/战场兄弟核心数据模型
 //
 // 职责：
@@ -119,10 +119,10 @@ public partial class PartyRoster : Resource
     // 战斗相关
     // ========================================
 
-    /// <summary>获取可参战的成员（HP > 0 的活人）</summary>
+    /// <summary>获取可参战的成员（HP > 0 且未重伤的活人）</summary>
     public List<UnitData> GetDeployableMembers()
     {
-        return Members.Where(m => GetCurrentHp(m) > 0).ToList();
+        return Members.Where(m => GetCurrentHp(m) > 0 && !m.IsWounded).ToList();
     }
 
     /// <summary>获取已阵亡的成员（HP <= 0）</summary>
@@ -175,6 +175,7 @@ public partial class PartyRoster : Resource
     /// <summary>获取单位当前 HP</summary>
     public static int GetCurrentHp(UnitData unit)
     {
+        if (unit.IsWounded) return 0;
         // UnitData.Runtime.CurrentHp 是战斗运行时字段
         // 大地图上用 Runtime.CurrentHp 持久化当前 HP
         return unit.Runtime.CurrentHp > 0 ? unit.Runtime.CurrentHp : unit.BaseMaxHp;
@@ -215,6 +216,7 @@ public partial class PartyRoster : Resource
                 ["morale"] = m.Morale,
                 ["portrait_id"] = m.PortraitId,
                 ["sprite_frames_id"] = m.SpriteFramesId,
+                ["is_wounded"] = m.IsWounded,
             };
             membersArray.Add(memberDict);
         }
@@ -255,6 +257,7 @@ public partial class PartyRoster : Resource
                 unit.Morale = memberDict.ContainsKey("morale") ? memberDict["morale"].AsInt32() : 50;
                 unit.PortraitId = memberDict.ContainsKey("portrait_id") ? memberDict["portrait_id"].AsString() : "";
                 unit.SpriteFramesId = memberDict.ContainsKey("sprite_frames_id") ? memberDict["sprite_frames_id"].AsString() : "";
+                unit.IsWounded = memberDict.ContainsKey("is_wounded") && memberDict["is_wounded"].AsBool();
 
                 int raceId = memberDict.ContainsKey("race_id") ? memberDict["race_id"].AsInt32() : 0;
                 unit.Race = RaceData.GetRaceById((RaceData.Race)raceId);

@@ -2,6 +2,7 @@
 // 封地数据 — 玩家拥有的六边形领地，含建筑、驻军、经济
 using Godot;
 using System.Collections.Generic;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic;
 
@@ -34,8 +35,8 @@ public partial class FiefData : Resource
     // ============================================================================
     // 计算属性
     // ============================================================================
-    public int DailyIncome => Population * Prosperity / 100;
-    public int DailyFood => GetBuildingBonus(FiefBuilding.BuildingType.Farmland, 5);
+    public int DailyIncome => FiefEconomyPricingService.GetDailyIncome(this);
+    public int DailyFood => FiefEconomyPricingService.GetDailyFood(this);
     public int DefenseRating => WallLevel * 10 + GetTowerCount() * 5 + GarrisonCount * 2;
 
     public int TaxRate => 20; // 上缴领主的比例（未来可根据声望调整）

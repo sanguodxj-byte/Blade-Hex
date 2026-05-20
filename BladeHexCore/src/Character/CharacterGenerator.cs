@@ -43,9 +43,10 @@ public static class CharacterGenerator
         unitData.Wis = Mathf.Max(1, baseAttrs["wis"]);
         unitData.Cha = Mathf.Max(1, baseAttrs["cha"]);
 
-        unitData.BaseMaxHp = 20 + Mathf.FloorToInt(Mathf.Sqrt(unitData.Con) * level / 2.0f);
+        // v0.6: BaseMaxHp 固定为 10，HP 增长来自 CON_HP_Bonus × Level（见 RPGRuleEngine.CalculateMaxHp）
+        unitData.BaseMaxHp = 10;
         if (race != null && Array.IndexOf(race.RacialTraits, "dwarven_resilience") >= 0)
-            unitData.BaseMaxHp += level;
+            unitData.BaseMaxHp += level; // 矮人种族特性：每级额外 HP
 
         unitData.BaseAc = 8;
         unitData.BaseMoveRange = 4;
@@ -54,7 +55,8 @@ public static class CharacterGenerator
         if (race != null && Array.IndexOf(race.RacialTraits, "threat_instinct") >= 0)
             unitData.BaseInitiative += 2;
 
-        unitData.CurrentMana = 10 + RPGRuleEngine.GetStatModifier(unitData.Intel) * 2;
+        // v0.6 10.0 MaxMana = 10 + INT + floor(Level/2)
+        unitData.CurrentMana = BladeHex.Combat.CombatStats.GetMaxMana(unitData);
         unitData.CastingAbility = "intel";
         unitData.SkillPoints = 5 + (level - 1);
         unitData.Runtime.Loyalty = 50;
@@ -168,7 +170,29 @@ public static class CharacterGenerator
         unitData.enemyType = enemyType;
         unitData.ThreatLevel = cr;
         unitData.aiStrategy = strategy;
-        unitData.Level = Mathf.Max(1, Mathf.RoundToInt(cr));
+
+        // CR -> level: invariant with GetCrFromLevel(level) = floor(level/6).
+        // Use the inverse so passing GetCrFromLevel(120)=20 reconstructs level=120.
+        unitData.Level = Mathf.Max(1, RPGRuleEngine.GetLevelFromCr(cr));
+
+        // Pick a humanoid race for naming purposes (even if enemyType isn't humanoid,
+        // we still need *something* to feed NameGenerator).
+        var race = enemyType == UnitData.EnemyType.Humanoid
+            ? RaceData.GetAllRaces()[GD.Randi() % (uint)RaceData.GetAllRaces().Length]
+            : RaceData.GetAllRaces()[0];
+        unitData.Race = race;
+
+        // Generate a sensible name. Append type suffix for non-humanoids so the UI
+        // doesn't show "Aelar" for an undead skeleton.
+        string baseName = NameGenerator.GenerateFullName(race.raceId, unitData.Level);
+        unitData.UnitName = enemyType switch
+        {
+            UnitData.EnemyType.Humanoid => baseName,
+            UnitData.EnemyType.Undead   => $"亡灵·{baseName}",
+            UnitData.EnemyType.Beast    => $"野兽·{baseName}",
+            UnitData.EnemyType.Demon    => $"恶魔·{baseName}",
+            _                           => baseName,
+        };
 
         var attrs = AllocateAttrsForEnemy(unitData.Level, enemyType);
         unitData.Str = attrs["str"]; unitData.Dex = attrs["dex"]; unitData.Con = attrs["con"];
@@ -189,8 +213,8 @@ public static class CharacterGenerator
         unitData.Resistances = resistances.ToArray();
         unitData.Immunities = immunities.ToArray();
 
-        int estLevel = Mathf.Max(1, (int)(cr * 4));
-        unitData.BaseMaxHp = 20 + Mathf.FloorToInt(Mathf.Sqrt(unitData.Con) * estLevel / 2.0f);
+        // v0.6: BaseMaxHp 固定 10；HP 来自 CON_HP_Bonus × Level
+        unitData.BaseMaxHp = 10;
         unitData.BaseAc = 8;
         unitData.BaseMoveRange = 4;
         unitData.Morale = 0;
@@ -254,7 +278,13 @@ public static class CharacterGenerator
     {
         // 7种倾向模板，随机选一个
         int roll = (int)(GD.Randi() % 7);
-        return roll switch
+        return GetTendencyWeights(roll);
+    }
+
+    /// <summary>按 id 取倾向模板（0..6）。供 sim 选定 build 类型生成。</summary>
+    public static Dictionary<string, float> GetTendencyWeights(int tendency)
+    {
+        return tendency switch
         {
             0 => new() { ["str"] = 2.5f, ["dex"] = 1f, ["con"] = 1.8f, ["intel"] = 0.5f, ["wis"] = 0.7f, ["cha"] = 0.8f }, // 战士
             1 => new() { ["str"] = 0.7f, ["dex"] = 2.5f, ["con"] = 0.8f, ["intel"] = 0.8f, ["wis"] = 1.5f, ["cha"] = 0.7f }, // 游侠
@@ -264,6 +294,85 @@ public static class CharacterGenerator
             5 => new() { ["str"] = 0.8f, ["dex"] = 1f, ["con"] = 0.8f, ["intel"] = 1.2f, ["wis"] = 2.5f, ["cha"] = 1f },     // 贤者
             _ => new() { ["str"] = 1.8f, ["dex"] = 1.8f, ["con"] = 1f, ["intel"] = 0.7f, ["wis"] = 0.7f, ["cha"] = 1f },     // 斗士
         };
+    }
+
+    /// <summary>按倾向模板生成角色（供 sim 测试 build 平衡用）。</summary>
+    public static UnitData GenerateCharacterWithTendency(int tendency, int level = 1, long seedVal = -1)
+    {
+        if (seedVal >= 0) GD.Seed((ulong)seedVal);
+        var weights = GetTendencyWeights(tendency);
+        return _GenerateCharacterWithWeights(weights, level);
+    }
+
+    /// <summary>按显式属性权重生成角色（供 BuildProfiles sim 用）。</summary>
+    public static UnitData GenerateCharacterWithWeights(Dictionary<string, float> weights, int level = 1, long seedVal = -1)
+    {
+        if (seedVal >= 0) GD.Seed((ulong)seedVal);
+        return _GenerateCharacterWithWeights(new Dictionary<string, float>(weights), level);
+    }
+
+    private static UnitData _GenerateCharacterWithWeights(Dictionary<string, float> weights, int level)
+    {
+        var race = RaceData.GetAllRaces()[GD.Randi() % (uint)RaceData.GetAllRaces().Length];
+        if (race != null)
+        {
+            if (race.StrMod > 0) weights["str"]   = weights.GetValueOrDefault("str", 1.0f) + race.StrMod * 0.5f;
+            if (race.DexMod > 0) weights["dex"]   = weights.GetValueOrDefault("dex", 1.0f) + race.DexMod * 0.5f;
+            if (race.ConMod > 0) weights["con"]   = weights.GetValueOrDefault("con", 1.0f) + race.ConMod * 0.5f;
+            if (race.IntMod > 0) weights["intel"] = weights.GetValueOrDefault("intel", 1.0f) + race.IntMod * 0.5f;
+            if (race.WisMod > 0) weights["wis"]   = weights.GetValueOrDefault("wis", 1.0f) + race.WisMod * 0.5f;
+            if (race.ChaMod > 0) weights["cha"]   = weights.GetValueOrDefault("cha", 1.0f) + race.ChaMod * 0.5f;
+        }
+
+        int totalPoints = RPGRuleEngine.GetTotalAttrPoints(level);
+        string[] keys = RPGRuleEngine.AttrKeys;
+        var attrs = new Dictionary<string, int>();
+        foreach (var key in keys) attrs[key] = RPGRuleEngine.AttrMin;
+        int remaining = totalPoints - RPGRuleEngine.AttrMin * 6;
+        float totalWeight = 0f;
+        foreach (var key in keys) totalWeight += weights.GetValueOrDefault(key, 1.0f);
+        foreach (var key in keys)
+        {
+            float w = weights.GetValueOrDefault(key, 1.0f);
+            attrs[key] += Mathf.RoundToInt(w / totalWeight * remaining);
+        }
+        int diff = totalPoints - SumAttrs(attrs);
+        while (diff > 0)
+        {
+            string k = keys[GD.Randi() % (uint)keys.Length];
+            if (attrs[k] < RPGRuleEngine.AttrMax) { attrs[k]++; diff--; }
+        }
+        while (diff < 0)
+        {
+            string k = keys[GD.Randi() % (uint)keys.Length];
+            if (attrs[k] > RPGRuleEngine.AttrMin) { attrs[k]--; diff++; }
+        }
+        if (race != null) attrs = ApplyRaceModifiers(attrs, race);
+
+        var unitData = new UnitData();
+        unitData.Level = Mathf.Max(1, level);
+        unitData.UnitName = NameGenerator.GenerateFullName(race?.raceId ?? RaceData.Race.Human, unitData.Level);
+        unitData.Xp = RPGRuleEngine.GetXpForLevel(level);
+        unitData.Race = race;
+        unitData.UnspentAttrPoints = 0;
+        unitData.Str = Mathf.Max(1, attrs["str"]);
+        unitData.Dex = Mathf.Max(1, attrs["dex"]);
+        unitData.Con = Mathf.Max(1, attrs["con"]);
+        unitData.Intel = Mathf.Max(1, attrs["intel"]);
+        unitData.Wis = Mathf.Max(1, attrs["wis"]);
+        unitData.Cha = Mathf.Max(1, attrs["cha"]);
+        unitData.BaseMaxHp = 10;
+        if (race != null && Array.IndexOf(race.RacialTraits, "dwarven_resilience") >= 0)
+            unitData.BaseMaxHp += level;
+        unitData.BaseAc = 8;
+        unitData.BaseMoveRange = 4;
+        unitData.BaseInitiative = 0;
+        unitData.CurrentMana = BladeHex.Combat.CombatStats.GetMaxMana(unitData);
+        unitData.CastingAbility = "intel";
+        unitData.SkillPoints = 5 + (level - 1);
+        unitData.Runtime.Loyalty = 50;
+        EquipStartingGear(unitData);
+        return unitData;
     }
 
     static Dictionary<string, int> AllocateAttrsForEnemy(int level, UnitData.EnemyType enemyType)
@@ -373,10 +482,10 @@ public static class CharacterGenerator
         u.Con = Mathf.Max(1, attrs["con"]); u.Intel = Mathf.Max(1, attrs["intel"]);
         u.Wis = Mathf.Max(1, attrs["wis"]); u.Cha = Mathf.Max(1, attrs["cha"]);
         u.UnspentAttrPoints = 0;
-        u.BaseMaxHp = 20 + Mathf.FloorToInt(Mathf.Sqrt(u.Con) * targetLevel / 2.0f);
+        u.BaseMaxHp = 10;
         if (u.Race != null && Array.IndexOf(u.Race.RacialTraits, "dwarven_resilience") >= 0)
             u.BaseMaxHp += targetLevel;
-        u.CurrentMana = 10 + RPGRuleEngine.GetStatModifier(u.Intel) * 2;
+        u.CurrentMana = BladeHex.Combat.CombatStats.GetMaxMana(u);
     }
 
     // ========================================================================
@@ -416,7 +525,8 @@ public static class CharacterGenerator
         unitData.Intel = attrs["intel"]; unitData.Wis = attrs["wis"]; unitData.Cha = attrs["cha"];
         unitData.UnspentAttrPoints = 0;
 
-        unitData.BaseMaxHp = 20 + Mathf.FloorToInt(Mathf.Sqrt(unitData.Con) * targetLevel / 2.0f)
+        // v0.6: BaseMaxHp 固定 10；模板的 hp_bonus 字段保留（手工设计的特殊单位调整）
+        unitData.BaseMaxHp = 10
             + (tpl.ContainsKey("hp_bonus") ? tpl["hp_bonus"].AsInt32() : 0);
         unitData.BaseAc = 8 + (tpl.ContainsKey("ac_bonus") ? tpl["ac_bonus"].AsInt32() : 0);
         unitData.BaseMoveRange = 4;
@@ -445,7 +555,7 @@ public static class CharacterGenerator
         var spellIds = tpl.ContainsKey("spells") ? (Godot.Collections.Array)tpl["spells"] : null;
         if (spellIds != null && spellIds.Count > 0)
         {
-            unitData.CurrentMana = 10 + RPGRuleEngine.GetStatModifier(unitData.Intel) * targetLevel;
+            unitData.CurrentMana = BladeHex.Combat.CombatStats.GetMaxMana(unitData);
             unitData.CastingAbility = "intel";
             AssignSpells(unitData, spellIds, targetLevel);
         }

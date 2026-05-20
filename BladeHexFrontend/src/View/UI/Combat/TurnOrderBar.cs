@@ -24,7 +24,6 @@ public partial class TurnOrderBar : HBoxContainer
     // ============================================================================
     // 内部控件
     // ============================================================================
-    private Label _turnLabel = null!;
     private readonly List<Control> _unitIcons = new();
     private int _activeIndex = -1;
     private UIFactory _factory = null!;
@@ -60,21 +59,14 @@ public partial class TurnOrderBar : HBoxContainer
         style.SetContentMarginAll(6);
         panelBg.AddThemeStyleboxOverride("panel", style);
         panelBg.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        panelBg.CustomMinimumSize = new Vector2(580, 0);
         AddChild(panelBg);
 
         var hbox = new HBoxContainer();
-        hbox.AddThemeConstantOverride("separation", 8);
+        hbox.AddThemeConstantOverride("separation", 4);
         panelBg.AddChild(hbox);
 
-        // 回合数/阶段标签
-        _turnLabel = _factory.CreateBodyLabel("第 1 回合", _theme.TextAccent);
-        _turnLabel.AddThemeFontSizeOverride("font_size", _theme.FontSizeLg);
-        _turnLabel.CustomMinimumSize = new Vector2(160, 0);
-        hbox.AddChild(_turnLabel);
-
-        hbox.AddChild(_factory.CreateSeparatorV());
-
-        // 滚动区域显示单位图标
+        // 滚动区域显示单位图标（不再显示回合文字，已移至顶部）
         var scroll = _factory.CreateScrollContainer(true);
         scroll.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         hbox.AddChild(scroll);
@@ -88,20 +80,14 @@ public partial class TurnOrderBar : HBoxContainer
     // 公开接口
     // ============================================================================
 
-    /// <summary>设置回合数</summary>
+    /// <summary>设置回合数（已移至顶部，此处保留兼容）</summary>
     public void SetTurnNumber(int turn)
     {
-        _turnLabel.Text = $"第 {turn} 回合";
     }
 
-    /// <summary>设置回合阶段文字</summary>
+    /// <summary>设置回合阶段文字（已移至顶部，此处保留兼容）</summary>
     public void SetPhaseText(string text, Color? color = null)
     {
-        _turnLabel.Text = text;
-        if (color.HasValue)
-        {
-            _turnLabel.AddThemeColorOverride("font_color", color.Value);
-        }
     }
 
     /// <summary>设置单位顺序列表</summary>
@@ -117,7 +103,24 @@ public partial class TurnOrderBar : HBoxContainer
         }
         _unitIcons.Clear();
 
-        foreach (var unit in units)
+        // 重排列表：当前行动单位放最左侧，后续按先攻顺序排列
+        var reordered = new List<Unit>();
+        if (activeUnit != null && units.Contains(activeUnit))
+        {
+            int activeIdx = units.IndexOf(activeUnit);
+            // 从 active 开始循环排列
+            for (int i = 0; i < units.Count; i++)
+            {
+                int idx = (activeIdx + i) % units.Count;
+                reordered.Add(units[idx]);
+            }
+        }
+        else
+        {
+            reordered.AddRange(units);
+        }
+
+        foreach (var unit in reordered)
         {
             if (unit == null || !GodotObject.IsInstanceValid(unit))
                 continue;
@@ -128,6 +131,17 @@ public partial class TurnOrderBar : HBoxContainer
             _iconContainer.AddChild(icon);
             _unitIcons.Add(icon);
         }
+
+        // 滚动到最左侧（确保当前行动单位可见）
+        ScrollToStart();
+    }
+
+    /// <summary>滚动到列表最左侧</summary>
+    private void ScrollToStart()
+    {
+        // 找到父 ScrollContainer 并重置滚动位置
+        if (_iconContainer?.GetParent() is ScrollContainer scroll)
+            scroll.ScrollHorizontal = 0;
     }
 
     /// <summary>高亮当前行动单位</summary>
@@ -159,7 +173,8 @@ public partial class TurnOrderBar : HBoxContainer
     private PanelContainer _CreateUnitIcon(Unit unit, bool isActive)
     {
         var icon = new PanelContainer();
-        icon.CustomMinimumSize = new Vector2(40, 40);
+        icon.CustomMinimumSize = new Vector2(48, 48);
+        icon.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         icon.SetMeta("unit_ref", unit);
 
         StyleBoxFlat style;

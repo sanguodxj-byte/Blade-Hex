@@ -129,7 +129,7 @@ public partial class EquipmentAffix : Resource
         if (AttackBonus != 0) parts.Add($"命中{AttackBonus:+#;-#;#}");
         if (DamageBonus != 0) parts.Add($"伤害{DamageBonus:+#;-#;#}");
         if (DamageDiceCountBonus > 0 && DamageDiceSidesBonus > 0)
-            parts.Add($"+{DamageDiceCountBonus}d{DamageDiceSidesBonus}伤害");
+            parts.Add($"+{DamageDiceCountBonus}-{DamageDiceCountBonus * DamageDiceSidesBonus}伤害");
         if (CritRangeBonus != 0) parts.Add($"暴击范围{CritRangeBonus:+#;-#;#}");
         if (CritMultiplierBonus != 0) parts.Add($"暴击倍率{CritMultiplierBonus:+#;-#;#}");
 
@@ -142,7 +142,7 @@ public partial class EquipmentAffix : Resource
         {
             var condText = ConditionText(Condition);
             if (ConditionalDamageDiceCount > 0)
-                parts.Add($"{condText}:+{ConditionalDamageDiceCount}d{ConditionalDamageDiceSides}{ConditionalDamageType}伤害");
+                parts.Add($"{condText}:+{ConditionalDamageDiceCount}-{ConditionalDamageDiceCount * ConditionalDamageDiceSides}{ConditionalDamageType}伤害");
             if (ConditionalAttackBonus != 0)
                 parts.Add($"{condText}:命中{ConditionalAttackBonus:+#;-#;#}");
         }

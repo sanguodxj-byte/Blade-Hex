@@ -195,7 +195,7 @@ TOTAL: 60 passed, 0 failed
 
 ### 实际范围调整
 
-原 spec 计划把 OverworldScene3D 的 9 个 partial 全部抽成独立 Component，主类瘦身到 < 300 行。**实际只抽了 2 个干净的（DayNight + Roads）**，其余 7 个 partial 保留并记录原因。
+原 spec 计划把 OverworldScene3D 的 9 个 partial 全部抽成独立 Component，主类瘦身到 < 300 行。**实际抽出 5 个 Component**（DayNightController / RoadRenderer / OverworldAudioController / MinimapController / POIController）。WeatherController 抽出后用户报告破坏迷雾/视角行为，已回退；FogController 文件存在但未接通运行（孤儿）。其余 partial 保留。
 
 ### 决策依据
 
@@ -203,49 +203,182 @@ TOTAL: 60 passed, 0 failed
 
 | Partial | 耦合度 | 抽取后净收益 |
 |---------|--------|---------|
-| **DayNight.cs** | 低（仅暴露 BaseSun/AmbientEnergy/Color 给 Weather） | ✅ 已抽 |
-| **Roads.cs** | 低（独立渲染器，外部仅 1 个回调） | ✅ 已抽 |
-| Weather.cs | 高（依赖 DayNight 基础光照、读 cloudLayer / windSystem / sandstormTint / overworldUi / envAudio 7 处） | ❌ 保留 partial |
-| Fog.cs | 高（被 POI / Weather / 领土 / 玩家位置共享 _fog 引用） | ❌ 保留 partial |
-| POI.cs | 高（与 Fog / Interaction / Light 共享 _poiEntered / _lastInteractedPoi 状态机） | ❌ 保留 partial |
-| Entities.cs | 高（与 Navigation / Encounter / EconomyMgr 跨域调用） | ❌ 保留 partial |
+| **DayNight.cs** | 低（仅暴露 BaseSun/AmbientEnergy/Color 给 Weather） | ✅ 已抽 → DayNightController |
+| **Roads.cs** | 低（独立渲染器，外部仅 1 个回调） | ✅ 已抽 → RoadRenderer |
+| **Misc.cs 音频段** | 低（_envAudio 仅 Weather.OnWeatherChanged 调用 SetWeather） | ✅ 已抽 → OverworldAudioController |
+| **Misc.cs 小地图段** | 中（依赖 fog / chunkManager / pois / camera；信号回调 OnMinimapClicked / OnMinimapPoiClicked 通过事件转发） | ✅ 已抽 → MinimapController |
+| **POI.cs** | 中（_poiEntered 状态由 Interaction partial 共享，但渲染 + 接近检测可独立） | ✅ 已抽 → POIController（_poiEntered 仍在主类） |
+| **Weather.cs** | 高（依赖 9 个外部对象） | ⚠️ 抽出后破坏迷雾/视角行为，已回退保留 partial。具体差异未定位（最可能：UI 通知回调、CloudLayer 联动时序、debug API 入口或 init 时序）；后续重新做时需要 step-by-step 切换 + 每步手测 |
+| Fog.cs | 高（被 Weather 共享 _cloudLayer/_windSystem 所有权 + POI / 领土 / 玩家位置共享 _fog 引用） | ⚠️ Components/FogController.cs 已存在但未接通；保留 partial |
+| Entities.cs | 高（与 Navigation / Encounter / EconomyMgr / ZoCManager / RecruitService / QuestManager / FiefManager 跨域调用） | ❌ 保留 partial |
 | Navigation.cs | 高（与 Entities / Path 共享导航 region 状态） | ❌ 保留 partial |
 | Interaction.cs | 高（POI / Encounter / UI 多向调用入口） | ❌ 保留 partial |
-| Misc.cs | 中-高（杂项：Hotkey / Minimap / Audio / Save，应按子领域再拆） | ❌ 保留 partial |
+| Misc.cs 其它（热键 / 信息提示 / 调试控制台 / 存档） | 中-高（每段独立但都强依赖主场景状态） | ❌ 保留 partial |
 
-### 抽取的两个 Component 模式
+### 抽取的五个 Component 模式
 
 ```
 [Node] DayNightController
   - 注入：DirectionalLight3D, Godot.Environment, EconomyManager
   - API: Initialize(...) / Tick() / BaseSunEnergy 等只读属性
-  - 主类调用：SetupDayNightCycle() / UpdateDayNightCycle() forward 到 controller
+  - 主类 forward：SetupDayNightCycle() / UpdateDayNightCycle() → controller
 
 [Node] RoadRenderer
   - 注入：HexOverworldGrid, ChunkManager?, Node3D meshParent
   - API: Initialize(...) / RenderAll() / OnNewChunk(chunk, coord)
-  - 主类调用：RenderRoadsAndRivers() / OnNewChunkRoads() forward 到 controller
+  - 主类 forward：RenderRoadsAndRivers() / OnNewChunkRoads() → controller
+
+[Node] OverworldAudioController
+  - 注入：HexOverworldGrid, ChunkManager?, EconomyManager
+  - API: Initialize(...) / Tick(dt, playerPixelPos) / SetWeather(weatherType)
+  - 主类 forward：InitAudio() / UpdateAudio(dt) → controller
+  - Weather.cs partial 通过 _envAudio?.SetWeather() 兼容路径调用
+
+[Node] MinimapController
+  - 注入：FogOfWar?, ChunkManager?, List<OverworldPOI>, OverworldCamera3D
+  - API: Initialize(...) / Tick(playerPixelPos) / Panel { get } / RebakeTerrain() / MapClicked + PoiClicked 事件
+  - 主类 forward：InitMinimap() 订阅事件 / UpdateMinimap() → controller.Tick()
+  - Entities.cs 通过 _minimap?.Panel 拿到内部 Control 给 CombatTransition 使用
+
+[Node] POIController
+  - 注入：List<OverworldPOI>, FogOfWar?, HexOverworldGrid, Node3D markerParent
+  - API: Initialize(...) / RenderAll(playerPixelPos) / CheckEnter(...) / PlayerEnteredPoi 事件
+  - 主类 forward：RenderWorldPOIs() 订阅事件 / CheckPOIEnter() → controller.CheckEnter()
+  - _poiEntered 状态保留在主类（Interaction partial 引用）
 ```
 
-主类对应的 partial 文件退化为 thin forwarder（< 50 行），保留方法名以避免改动调用点。
+主类对应的 partial 文件退化为 thin forwarder（30~55 行），保留方法名以避免改动调用点。
 
 ### 保留 partial 的合理性
 
-剩余 7 个 partial 的"组件化"会有以下问题：
+剩余 partial（Weather / Fog / Entities / Navigation / Interaction / Misc 剩余段）的"组件化"会有以下问题：
 
-1. **要么需要把大量私有字段提到 IOverworldContext 接口上**（破坏封装）
-2. **要么需要把 partial 之间的隐式耦合改为显式 setter / event**（工作量大且增加噪声）
-3. **要么需要把多个 partial 合并成单个超级 Component**（违背组件化初衷）
+1. **Weather**：尝试抽出后用户报告**破坏迷雾和大地图视角移动**，已回退。教训：多依赖组件抽取需要 step-by-step + 每步手测验证，不能一次替换 9 个依赖
+2. **Fog**：拥有 _cloudLayer 和 _windSystem，但 Weather 也使用它们；Components/FogController.cs 已写但未接通运行
+3. **Entities**：与 Navigation / Encounter / EconomyMgr / ZoCManager / RecruitService / QuestManager / FiefManager 7 个子系统跨域调用
+4. **Navigation**：与 Entities / Path 共享导航 region 状态
+5. **Interaction**：POI / Encounter / UI 多向调用入口
+6. **Misc 剩余段**（热键 / 信息提示 / 调试控制台 / 存档）：各自独立但都强依赖主场景状态
 
-**结论：** Sprint 6 的核心价值在于建立"主类持有 Component + Initialize 注入"的模式，已通过 DayNight / Roads 两个示范完成。后续重构（如 partial 间耦合再增长时）可按此模式继续抽取，本 Sprint 不强制 100% 完成。
+**结论：** Sprint 6 的核心价值在于建立"主类持有 Component + Initialize 注入 + 事件回调"的模式，已通过 5 个示范完成。后续重构（如 partial 间耦合再增长时）可按此模式继续抽取，但**对于依赖面 ≥ 5 个的高耦合 partial，必须 step-by-step 切换 + 每步手测验证**。
+
+### Weather 抽取失败的复盘
+
+虽然单元测试 81 全过、编译 0 错误，但用户实测出运行时 bug。可能差异点（仅猜测，未实际定位）：
+
+1. **UI 通知回调**：原 partial 直接 `_overworldUi?.UpdateWeatherDisplay(weatherName)`，重构后改为 `Action<string>` lambda 捕获 — 闭包延迟可能导致 UI 时序错位
+2. **CloudLayer/WindSystem 联动**：原 partial 与 Fog partial 共享所有权（同一 partial class 字段），重构后变为外部注入，可能 Fog 端的修改没传播给 Weather
+3. **debug API 入口**：`DebugSetWeather` / `GetCurrentWeather` 等公开方法的调用语义改变
+4. **InitWeatherSystem 时序**：原 partial 在 `_Ready` 中按顺序赋值字段，重构后变为 `_weather.Initialize(9 个依赖)` 一次性传入，某个依赖此时可能尚未就绪
+5. **粒子系统父节点**：`AddChild(_weatherParticles2D)` 原为 scene → particles，重构后变为 controller → particles，CanvasLayer 上的渲染层级可能受影响
+
+**重做时的建议工作流：**
+
+```
+1. 创建 WeatherController 但不接通
+2. 把原 partial 中的 _weatherMgr 字段改为 controller 的 getter 转发，保持其它逻辑在 partial
+3. 编译 + 手测：迷雾、视角、天气切换全过
+4. 把 InitWeatherSystem 的 WeatherManager 创建移到 controller，partial 仅 forward
+5. 编译 + 手测
+6. 逐步迁移 _weatherParticles2D / _sandstormTint / OnWeatherChanged / UpdateWeatherVisuals / ...
+   每步独立提交 + 手测
+```
 
 ### 主类行数
 
 - 重构前 OverworldScene3D 主体：550 行 + 9 个 partial（约 3500 行）
-- 重构后：主体 550 行 + 7 个 partial（约 3300 行）+ Components/{DayNight,Road} 470 行
-- 不达成 < 300 行验收目标，但**抽取的 470 行 Component 代码可独立测试与替换**，比 partial 形式有结构性进步
+- 重构后：主体 550 行 + 5 个保留 partial（约 2300 行：Weather / Fog / Entities / Navigation / Interaction + Misc 剩余）+ Components/{DayNight,Road,Audio,Minimap,POI} ~870 行（FogController 499 行未接通不计）
+- 不达成 < 300 行验收目标，但**抽取的 ~870 行 Component 代码可独立测试与替换**，比 partial 形式有结构性进步
 
 ### 编译基线
 
 - BladeHexFrontend：0 错误，1 既有 CS8600 警告（与本 Sprint 无关）
 - 自动化测试：`TEST_MODE=unit` 输出 `TOTAL: 76 passed, 0 failed`（其中 60 来自 Sprint 7，16 来自后续 WIP）
+
+
+---
+
+## Weather 同步实施（2026-05 完成）
+
+### 起因
+
+用户希望大地图与战斗场景的天气**完全同步**（共用一套逻辑、状态实时一致），不只是进入战斗时的快照。当前实现：
+
+- 大地图：OverworldScene3D 内部 `_weatherMgr = new WeatherManager()`，进战斗前调 `WriteWeatherToGlobalState` 把 `Type` 写到 `gs.Weather`
+- 战斗：`CombatWeatherSetup` 读 `gs.Weather.Type` 建独立粒子，`Intensity` 字段从未被写入（存量 bug）
+- 战斗中天气是冻结的，回大地图后 WeatherManager 重新创建状态归零
+
+### 决策：组件化 vs Autoload 化
+
+最初想法是把 OverworldScene3D.Weather partial 抽成 `WeatherController` 组件（与 DayNight/Road/POI 等并列）。但实际发现：
+
+- Weather partial 中的"管理 WeatherManager 实例 + 视觉副作用"那一坨**只服务大地图**（CanvasLayer 粒子、屏幕色调、视觉光照修正都依赖大地图相机）
+- 战斗场景**用不上**这些（已有自己的 GpuParticles3D + 战场静态发射器）
+- 大地图和战斗**真正共享**的只有 `WeatherManager` 状态机本身（哪种天气、当前强度）
+
+**结论：把 WeatherManager 升级为 Autoload Singleton 才是正解**，组件化 partial 反而走偏。这与 Sprint 1 的全局对象决策树吻合（跨场景需要 → Autoload）。
+
+### 实施
+
+1. `WeatherManager` 加 `[Autoload Singleton]` 注释
+2. `project.godot` 注册 `WeatherManager` autoload
+3. `Globals.cs` 加 `Globals.Weather` / `WeatherOrNull` 入口
+4. `OverworldScene3D.Weather` partial：`_weatherMgr = Globals.Weather`，订阅 `WeatherChanged` 信号；`_ExitTree` 解绑
+5. 删除 `WriteWeatherToGlobalState`
+6. `CombatWeatherSetup` / `CombatScene` / `QuickCombatScene` 都从 `gs.Weather.Type` 改为 `Globals.WeatherOrNull.GetActiveWeatherType()`
+7. `QuickCombatSetup` 玩家选天气改调 `Globals.Weather.SetWeatherImmediate()`
+8. `WeatherContext` 标 `[Obsolete]`，保留作为存档兼容空壳（下一轮清理删）
+
+### 收益
+
+- 大地图与战斗共用同一份 WeatherManager 实例，**状态实时同步**
+- 修复存量 bug：`gs.Weather.Intensity` 从未被写入
+- 战斗中天气会持续 tick（如果战斗场景需要），回大地图天气状态延续不丢
+- 不动 partial 结构，无回归风险（与失败的 WeatherController 组件化对比，这次用最小改动达成同步目标）
+
+### 失败实验留下的产物
+
+`Components/WeatherController.cs` 仍保留为**纯函数 helper**：
+- `CalculateGameplayFactors(weather, intensity)` — 移速/视野/遭遇率三因子
+- `CalculateCloudParams(weather)` — 云层视觉参数
+- `CalculateVisualParams(weather, intensity)` — 光照色调修正
+
+这些纯函数从 partial 中剥离出来，可独立单元测试，partial 仅做调度调用。这是组件化失败实验留下的有价值副产品。
+
+
+---
+
+## Spec 关闭（2026-05）
+
+架构优化 spec 全部 7 个 Sprint 完成，主要产出：
+
+| Sprint | 状态 | 关键产出 |
+|--------|------|----------|
+| Sprint 1 | ✅ 完成 | 全局对象三类规范、GlobalState 拆分、Globals 入口、5 个伪单例下放 |
+| Sprint 2 | ✅ 完成 | WorldHasher / WorldPipeline / 12 个 Stage、WorldCreator 1900→25 行 |
+| Sprint 3 | ✅ 完成 | origin_questions.json 数据外置、OriginSelect 1018→690 行 |
+| Sprint 4 | ✅ 完成 | 工程清理 39 个 .py + 24 个 .txt 删除、SaveManager v1 退役、SaveSystemV2→SaveSystem |
+| Sprint 5 | ✅ 完成 | EventBus 强类型 API、7 个 record Payload、AudioEventReactor 5 个核心订阅迁移 |
+| Sprint 6 | ✅ 部分完成 | 5 个 Component 抽出（DayNight/Road/Audio/Minimap/POI）+ WeatherController 静态 helper + WeatherManager Autoload 化（同步真目标） |
+| Sprint 7 | ✅ 完成 | UnitHealthBarComponent 抽出、60 个单元测试、TEST_MODE=unit headless 工作流 |
+
+**未达成的指标：**
+- OverworldScene3D 主类未瘦身到 < 300 行（当前 550 行 + 4 个保留 partial）—— 详见 Sprint 6 决策
+- WorldPipeline golden seed test 的 BASELINES 字典未填充 baseline hash（用户未跑过 RecordBaseline）—— 等价性靠手测验证
+- 部分跳过项（DamagePenetrationTableTests / WeaponMasteryTests / SkillExecutionResult 类型化）记录为未来工作
+
+**编译基线：**
+- BladeHexCore：0 错误，0 警告
+- BladeHexFrontend：0 错误，2 既有警告（CS8600 + CS8604，与 spec 无关）
+
+**测试基线：**
+- 96 unit tests passed / 0 failed
+- WorldPipeline 等价性由用户手测验证（非自动化）
+
+**spec 整体时长：** 2026-05（连续推进，间或停下手测和处理用户其它 WIP 工作）
+
+**后续待办（独立任务，不属于本 spec）：**
+- WeatherContext 完全删除（当前标 [Obsolete] 留作存档兼容空壳）
+- FogController 接通运行（当前文件存在但孤儿）
+- WorldPipeline Baselines 录入 + golden seed test 自动化
+- 战斗模拟器（用户已自行推进中）

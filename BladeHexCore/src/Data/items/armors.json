@@ -6,13 +6,16 @@
   { "id": "chain_mail", "name": "链甲", "type": "Medium", "dr": 11, "max_dex": 3, "ap_penalty": 2, "price": 150 },
   { "id": "half_plate", "name": "半板甲", "type": "Heavy", "dr": 15, "max_dex": 1, "ap_penalty": 4, "price": 300 },
   { "id": "full_plate", "name": "全板甲", "type": "Heavy", "dr": 18, "max_dex": 0, "ap_penalty": 5, "price": 600 },
-  { "id": "light_wooden_shield", "name": "轻木盾", "type": "Shield", "dr": 3, "ap_penalty": 0, "price": 25 },
-  { "id": "infantry_round_shield", "name": "步兵圆盾", "type": "Shield", "dr": 4, "ap_penalty": 0, "price": 50 },
-  { "id": "infantry_heavy_shield", "name": "步兵重盾", "type": "Shield", "dr": 5, "ap_penalty": 1, "price": 80 },
-  { "id": "knight_shield", "name": "骑士盾", "type": "Shield", "dr": 6, "ap_penalty": 1, "price": 120 },
-  { "id": "legion_tower_shield", "name": "军团塔盾", "type": "Shield", "dr": 8, "ap_penalty": 2, "price": 200 },
+  { "id": "light_wooden_shield", "name": "轻木盾", "type": "Shield", "dr": 3, "ap_penalty": 0, "price": 25, "ranged_mult": 0.50 },
+  { "id": "infantry_round_shield", "name": "步兵圆盾", "type": "Shield", "dr": 4, "ap_penalty": 0, "price": 50, "ranged_mult": 0.45 },
+  { "id": "infantry_heavy_shield", "name": "步兵重盾", "type": "Shield", "dr": 5, "ap_penalty": 1, "price": 80, "ranged_mult": 0.35 },
+  { "id": "knight_shield", "name": "骑士盾", "type": "Shield", "dr": 6, "ap_penalty": 1, "price": 120, "ranged_mult": 0.30 },
+  { "id": "legion_tower_shield", "name": "军团塔盾", "type": "Shield", "dr": 8, "ap_penalty": 2, "price": 200, "ranged_mult": 0.25 },
   { "id": "leather_cap", "name": "皮帽", "type": "Light", "dr": 2, "ap_penalty": 0, "price": 15, "slot": "Helmet" },
   { "id": "iron_helm", "name": "铁盔", "type": "Medium", "dr": 4, "ap_penalty": 0, "price": 60, "slot": "Helmet" },
   { "id": "great_helm", "name": "大头盔", "type": "Heavy", "dr": 6, "ap_penalty": 1, "price": 120, "slot": "Helmet" },
-  { "id": "knight_helm", "name": "骑士全盔", "type": "Heavy", "dr": 8, "ap_penalty": 1, "price": 200, "slot": "Helmet" }
+  { "id": "knight_helm", "name": "骑士全盔", "type": "Heavy", "dr": 8, "ap_penalty": 1, "price": 200, "slot": "Helmet" },
+  { "id": "leather_boots", "name": "皮靴", "type": "Light", "dr": 1, "ap_penalty": 0, "price": 15, "slot": "Feet" },
+  { "id": "iron_boots", "name": "铁靴", "type": "Medium", "dr": 3, "ap_penalty": 0, "price": 60, "slot": "Feet" },
+  { "id": "plate_boots", "name": "板甲战靴", "type": "Heavy", "dr": 5, "ap_penalty": 1, "price": 150, "slot": "Feet" }
 ]

@@ -94,9 +94,10 @@ public partial class QuickCombatSetup : CanvasLayer
         // 规模
         AddLabel(grid, "战斗规模");
         _sizeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        _sizeOption.AddItem("小型 (15×10)", 0);
-        _sizeOption.AddItem("中型 (18×12)", 1);
-        _sizeOption.AddItem("大型 (24×16)", 2);
+        _sizeOption.AddItem("小型 (169格)", 0);
+        _sizeOption.AddItem("中型 (397格)", 1);
+        _sizeOption.AddItem("大型 (631格)", 2);
+        _sizeOption.AddItem("巨大 (973格)", 3);
         _sizeOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_sizeOption);
 
@@ -169,7 +170,10 @@ public partial class QuickCombatSetup : CanvasLayer
         _templateOption.AddItem("沙漠冲突", 6);
         _templateOption.AddItem("村庄防御", 7);
         _templateOption.AddItem("遗迹探索", 8);
+        _templateOption.AddItem("攻城战", 9);
+        _templateOption.AddItem("守城战", 10);
         _templateOption.Selected = 0;
+        _templateOption.ItemSelected += OnTemplateChanged;
         _templateOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_templateOption);
 
@@ -205,10 +209,33 @@ public partial class QuickCombatSetup : CanvasLayer
 
     private static readonly string[] TemplateKeys =
     {
-        "", "plain_field", "forest_ambush", "mountain_pass",
-        "swamp_battle", "coastal_ambush", "desert_skirmish",
-        "village_defense", "ruins_exploration",
+        "",                    // 0: 随机
+        "plain_field",         // 1: 平原旷野
+        "forest_ambush",       // 2: 森林伏击
+        "mountain_pass",       // 3: 山间隘口
+        "swamp_battle",        // 4: 沼泽遭遇
+        "coastal_ambush",      // 5: 海岸伏击
+        "desert_skirmish",     // 6: 沙漠冲突
+        "village_defense",     // 7: 村庄防御
+        "ruins_exploration",   // 8: 遗迹探索
+        "castle_siege",        // 9: 攻城战（玩家攻城）
+        "castle_defense",      // 10: 守城战（玩家守城）
     };
+
+    private void OnTemplateChanged(long idx)
+    {
+        // 攻城/守城战强制锁定巨大规模
+        bool isSiege = idx == 9 || idx == 10;
+        if (isSiege)
+        {
+            _sizeOption.Selected = 3; // 巨大
+            _sizeOption.Disabled = true;
+        }
+        else
+        {
+            _sizeOption.Disabled = false;
+        }
+    }
 
     private void OnStartPressed()
     {
@@ -224,9 +251,16 @@ public partial class QuickCombatSetup : CanvasLayer
         int tplIdx = _templateOption.Selected;
         gs.QuickCombat.Template = tplIdx < TemplateKeys.Length ? TemplateKeys[tplIdx] : "";
 
-        // 天气
-        gs.Weather.Type = _weatherOption.Selected - 1;
-        gs.Weather.Intensity = _weatherOption.Selected > 0 ? 0.7f : 0.0f;
+        // 天气 — 通过 Autoload 直接设置
+        var weatherMgr = BladeHex.Data.Globals.WeatherOrNull;
+        if (weatherMgr != null)
+        {
+            int weatherIdx = _weatherOption.Selected - 1;
+            var weatherType = weatherIdx < 0
+                ? BladeHex.View.Environment.WeatherType.Clear
+                : (BladeHex.View.Environment.WeatherType)weatherIdx;
+            weatherMgr.SetWeatherImmediate(weatherType, BladeHex.View.Environment.WeatherIntensity.Moderate);
+        }
 
         HidePanel();
         EmitSignal(SignalName.StartCombat);

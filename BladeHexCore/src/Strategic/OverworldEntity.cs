@@ -72,8 +72,12 @@ public partial class OverworldEntity : Resource
     // 关系
     // ========================================
 
+    /// <summary>所属势力</summary>
     [Export] public string Faction { get; set; } = "neutral"; // 所属势力
     [Export] public bool IsHostileToPlayer { get; set; } = true;
+
+    /// <summary>实体种族 ID（对应 RaceData.Race；-1=未指定，例如怪物巨兽不带种族）</summary>
+    [Export] public int RaceId { get; set; } = -1;
 
     // ========================================
     // 行为参数
@@ -326,6 +330,7 @@ public partial class OverworldEntity : Resource
             { "combat_power", CombatPower },
             { "faction", Faction },
             { "is_hostile_to_player", IsHostileToPlayer },
+            { "race_id", RaceId },
             { "patrol_radius", PatrolRadius },
             { "vision_range", VisionRange },
             { "home_pos_x", HomePosition.X },

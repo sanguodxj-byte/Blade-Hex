@@ -34,12 +34,12 @@ public static class SlotConfigTable
     /// <summary>所有部位的渲染配置表（按 z_order 排序）</summary>
     private static readonly SlotRenderConfig[] SlotConfigs =
     [
-        new() { Slot = ItemData.EquipSlot.Body,    AnchorOffset = new Vector3(0, 0, 0),    ZOrder = 0, DefaultSize = new Vector2(64, 96),  PixelSize = 1.0f, SortOffset = 0.000f },
-        new() { Slot = ItemData.EquipSlot.Costume, AnchorOffset = new Vector3(0, 2, 0),    ZOrder = 1, DefaultSize = new Vector2(72, 100), PixelSize = 1.0f, SortOffset = -0.01f },
-        new() { Slot = ItemData.EquipSlot.Hands,   AnchorOffset = new Vector3(0, -10, 0),  ZOrder = 2, DefaultSize = new Vector2(48, 48),  PixelSize = 1.0f, SortOffset = -0.02f },
-        new() { Slot = ItemData.EquipSlot.Head,    AnchorOffset = new Vector3(0, 48, 0),   ZOrder = 3, DefaultSize = new Vector2(48, 48),  PixelSize = 1.0f, SortOffset = -0.03f },
-        new() { Slot = ItemData.EquipSlot.Helmet,  AnchorOffset = new Vector3(0, 52, 0),   ZOrder = 4, DefaultSize = new Vector2(56, 56),  PixelSize = 1.0f, SortOffset = -0.04f },
-        new() { Slot = ItemData.EquipSlot.Weapon,  AnchorOffset = new Vector3(28, -5, 0),  ZOrder = 5, DefaultSize = new Vector2(32, 80),  PixelSize = 1.0f, SortOffset = -0.05f },
+        new() { Slot = ItemData.EquipSlot.Body,    AnchorOffset = new Vector3(0, 0, 0),    ZOrder = 0, DefaultSize = new Vector2(64, 96),  PixelSize = 2.0f, SortOffset = 0.000f },
+        new() { Slot = ItemData.EquipSlot.Costume, AnchorOffset = new Vector3(0, 4, 0),    ZOrder = 1, DefaultSize = new Vector2(72, 100), PixelSize = 2.0f, SortOffset = -0.10f },
+        new() { Slot = ItemData.EquipSlot.Hands,   AnchorOffset = new Vector3(0, -20, 0),  ZOrder = 2, DefaultSize = new Vector2(48, 48),  PixelSize = 2.0f, SortOffset = -0.20f },
+        new() { Slot = ItemData.EquipSlot.Head,    AnchorOffset = new Vector3(0, 96, 0),   ZOrder = 3, DefaultSize = new Vector2(48, 48),  PixelSize = 2.0f, SortOffset = -0.30f },
+        new() { Slot = ItemData.EquipSlot.Helmet,  AnchorOffset = new Vector3(0, 104, 0),  ZOrder = 4, DefaultSize = new Vector2(56, 56),  PixelSize = 2.0f, SortOffset = -0.40f },
+        new() { Slot = ItemData.EquipSlot.Weapon,  AnchorOffset = new Vector3(56, -10, 0), ZOrder = 5, DefaultSize = new Vector2(32, 80),  PixelSize = 2.0f, SortOffset = -0.50f },
     ];
 
     /// <summary>获取指定部位的渲染配置</summary>

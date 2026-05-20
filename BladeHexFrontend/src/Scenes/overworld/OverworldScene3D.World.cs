@@ -47,9 +47,10 @@ public partial class OverworldScene3D
 
             var worldData = creator.CreateWorld(seed, config);
 
-            // ChunkManager — 用种子和世界尺寸初始化
+            // ChunkManager — 用种子和世界尺寸初始化（含模板网格尺寸）
             _chunkManager = new ChunkManager();
-            _chunkManager.Initialize(seed, config.WorldTileWidth, config.WorldTileHeight);
+            var (gridW, gridH) = WorldCreationConfig.GetTemplateGrid(worldSize);
+            _chunkManager.Initialize(seed, config.WorldTileWidth, config.WorldTileHeight, gridW, gridH);
             // 将生成的 chunk 数据加载到内存缓存
             _chunkManager.LoadIntoMemory(worldData.Chunks);
 
@@ -193,5 +194,20 @@ public partial class OverworldScene3D
         var playerRace = (BladeHex.Data.RaceData.Race)PlayerRaceId;
         var homeNation = RaceNationMapping.FindHomeNation(playerRace, _worldTerritories, _worldNations);
         return homeNation?.Id ?? "";
+    }
+
+    // ========================================
+    // 持久化
+    // ========================================
+
+    /// <summary>保存世界数据：chunk 缓存 + POI 列表落盘。</summary>
+    public void SaveWorldData()
+    {
+        if (_chunkManager == null || string.IsNullOrEmpty(_chunkSaveId)) return;
+
+        int saved = _chunkManager.SaveAllToDisk(_chunkSaveId);
+        ChunkPersistence.SavePois(_chunkSaveId, WorldPois);
+
+        GD.Print($"[OverworldScene3D] 已保存: {saved} chunks, {WorldPois.Count} POIs");
     }
 }

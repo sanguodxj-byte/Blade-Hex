@@ -23,8 +23,8 @@ public static class BiomeRules
     public const float SeaLevel = 0.20f;       // 深水阈值（略降低，让内海更容易形成深水）
     public const float ShallowLevel = 0.26f;   // 浅水带（加宽：0.20-0.26 = 6% 范围）
     public const float BeachLevel = 0.31f;     // 沙滩/海岸带（加宽：0.26-0.31 = 5% 范围）
-    public const float HillLevel = 0.68f;      // 丘陵起始
-    public const float MountainLevel = 0.80f;  // 山地起始
+    public const float HillLevel = 0.55f;      // 丘陵起始（从 0.68 → 0.55，让丘陵更常见）
+    public const float MountainLevel = 0.68f;  // 山地起始（从 0.80 → 0.68，让山脉真的会出现）
 
     // ========================================
     // 温度带阈值（3 带：冷/温/热）
@@ -40,6 +40,7 @@ public static class BiomeRules
 
     public const float DryThreshold = 0.32f;        // < 0.32 = 干旱
     public const float WetThreshold = 0.62f;        // > 0.62 = 湿润
+    public const float VeryDryThreshold = 0.18f;    // < 0.18 = 极度干旱（才出 Wasteland/Sand）
     // 0.32 ~ 0.62 = 中等（占比最大，约 30% 的湿度空间）
 
     // ========================================
@@ -89,8 +90,10 @@ public static class BiomeRules
         // --- 炎热带 (temp > 0.72) ---
         if (temperature > HotThreshold)
         {
+            if (moisture < VeryDryThreshold)
+                return HexOverworldTile.TerrainType.Sand;       // 炎热极干 = 沙漠
             if (moisture < DryThreshold)
-                return HexOverworldTile.TerrainType.Sand;       // 炎热干旱 = 沙漠
+                return HexOverworldTile.TerrainType.Savanna;    // 炎热干旱 = 稀树草原
             if (moisture > WetThreshold)
                 return HexOverworldTile.TerrainType.Jungle;     // 炎热湿润 = 丛林
             return HexOverworldTile.TerrainType.Savanna;        // 炎热中等 = 稀树草原
@@ -98,7 +101,12 @@ public static class BiomeRules
 
         // --- 温带 (0.30 ~ 0.72) — 占比最大 ---
         if (moisture < DryThreshold)
-            return HexOverworldTile.TerrainType.Wasteland;      // 温带干旱 = 荒原
+        {
+            // 极度干旱才是荒原，普通干旱仍是平原（避免 Wasteland 泛滥）
+            if (moisture < VeryDryThreshold)
+                return HexOverworldTile.TerrainType.Wasteland;
+            return HexOverworldTile.TerrainType.Plains;
+        }
 
         if (moisture > WetThreshold)
         {

@@ -248,6 +248,7 @@ public class SpecialCharacterGenerator
             CombatPower = combatPower,
             Faction = "neutral",
             IsHostileToPlayer = false,
+            RaceId = (int)race.raceId,
             VisionRange = 500f,
             PatrolRadius = 800f,
             CurrentAIState = OverworldEntity.AIState.Patrolling,

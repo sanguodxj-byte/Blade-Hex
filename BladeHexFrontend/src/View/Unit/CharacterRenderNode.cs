@@ -132,9 +132,10 @@ public partial class CharacterRenderNode : Node3D
         sprite.PixelSize = cfg.PixelSize;
         sprite.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
         sprite.Position = cfg.AnchorOffset with { Z = cfg.SortOffset };
+        // AlphaCut = OpaquePrepass:让透明像素正确写 z-buffer,避免分层 sprite 互相穿透/被遮挡
+        // 这是 HD-2D / 多 sprite 角色的标准做法
+        sprite.AlphaCut = SpriteBase3D.AlphaCutMode.OpaquePrepass;
         sprite.Visible = false;
-        // 正常深度测试（被高地形遮挡是正确的）
-        // 遮挡时的可见性通过 cell.Occupant 点击路径保证可操作性
         _layers[slotIdx] = sprite;
         _bodyRoot!.AddChild(sprite);
     }
@@ -167,7 +168,7 @@ public partial class CharacterRenderNode : Node3D
 
             if (resolution.BodyIsPlaceholder)
             {
-                sprite.PixelSize = 1.5f;
+                // 程序化人体占位与装备 sprite 在同一像素坐标系下,不需要额外放大。
                 sprite.Modulate = resolution.PlaceholderModulate;
             }
 
@@ -327,6 +328,36 @@ public partial class CharacterRenderNode : Node3D
             .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
     }
 
+    /// <summary>选中微动画 — 向上弹跳一下</summary>
+    public void PlaySelectBounce()
+    {
+        if (_isDead || _bodyRoot == null) return;
+        float bounceHeight = 12.0f * _cachedPixelSize;
+        var up = new Vector3(0, bounceHeight, 0);
+
+        var tween = GetTree().CreateTween();
+        tween.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+        tween.TweenProperty(_bodyRoot, "position", up, 0.1f);
+        tween.TweenProperty(_bodyRoot, "position", Vector3.Zero, 0.15f)
+            .SetTrans(Tween.TransitionType.Bounce).SetEase(Tween.EaseType.Out);
+    }
+
+    /// <summary>闪避微动画 — 向攻击者反方向后退一步再回来</summary>
+    public void PlayDodgeBack(Vector3 attackerDirection)
+    {
+        if (_isDead || _bodyRoot == null) return;
+        float dodgeDistance = 15.0f * _cachedPixelSize;
+        // 反方向后退
+        var offset = -attackerDirection.Normalized() * dodgeDistance;
+        offset.Y = 0;
+
+        var tween = GetTree().CreateTween();
+        tween.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+        tween.TweenProperty(_bodyRoot, "position", offset, 0.1f);
+        tween.TweenProperty(_bodyRoot, "position", Vector3.Zero, 0.25f)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
+    }
+
     public void PlayDeath()
     {
         _isDead = true;
@@ -347,22 +378,7 @@ public partial class CharacterRenderNode : Node3D
     {
         _currentHp = current;
         _maxHp = Mathf.Max(1, maximum);
-        if (_hpLabel != null)
-            _hpLabel.Text = $"{_currentHp}/{_maxHp}";
-        if (_hpBarFg != null)
-        {
-            float ratio = (float)_currentHp / _maxHp;
-            float w = HpBarWidth * ratio;
-            var fgMesh = (QuadMesh)_hpBarFg.Mesh!;
-            fgMesh.Size = new Vector2(Mathf.Max(0.1f, w), HpBarHeight);
-            _hpBarFg.Position = _hpBarFg.Position with { X = -(HpBarWidth - w) / 2.0f };
-            if (_hpBarFg.MaterialOverride is StandardMaterial3D mat)
-            {
-                mat.AlbedoColor = ratio > 0.6f ? new Color(0.2f, 0.8f, 0.2f)
-                    : ratio > 0.3f ? new Color(0.9f, 0.7f, 0.1f)
-                    : new Color(0.9f, 0.2f, 0.1f);
-            }
-        }
+        // 旧 HP HUD 已由 UnitHealthBarComponent 接管,这里只更新内部状态 + 信号,不动视觉
         EmitSignal(SignalName.HpUpdated, _currentHp, _maxHp);
     }
 
@@ -419,6 +435,41 @@ public partial class CharacterRenderNode : Node3D
     }
 
     // ========================================
+    // 朝向 — 6 方向中,2/3/4 = 西(向左),0/1/5 = 东(向右,默认)
+    // ========================================
+
+    private int _facing = 0;
+
+    /// <summary>
+    /// 设置角色朝向(0-5,六边形 6 方向)。
+    /// 内部判定"朝右(默认)"还是"朝左",对所有 sprite 层执行 FlipH 与 X 锚点镜像,
+    /// 让武器/盾自动出现在面向的那一侧。
+    /// </summary>
+    public void SetFacing(int facing)
+    {
+        _facing = ((facing % 6) + 6) % 6;
+        bool facingLeft = _facing >= 2 && _facing <= 4;
+        ApplyFacingToLayers(facingLeft);
+    }
+
+    private void ApplyFacingToLayers(bool facingLeft)
+    {
+        foreach (var kvp in _layers)
+        {
+            int slotIdx = kvp.Key;
+            var sprite = kvp.Value;
+            var cfg = SlotConfigTable.GetSlotConfig((ItemData.EquipSlot)slotIdx);
+
+            // FlipH 实现整张贴图水平翻转(在 Billboard.FixedY 下对 Sprite3D 仍然有效)
+            sprite.FlipH = facingLeft;
+
+            // 锚点的 X 也要镜像 — 让"原本在右手位置的武器"跑到左手位置
+            float ax = facingLeft ? -cfg.AnchorOffset.X : cfg.AnchorOffset.X;
+            sprite.Position = new Vector3(ax, cfg.AnchorOffset.Y, cfg.SortOffset);
+        }
+    }
+
+    // ========================================
     // HUD 构建 — 从 UnitHud.tscn 实例化
     // ========================================
 
@@ -441,10 +492,13 @@ public partial class CharacterRenderNode : Node3D
         _selectionRing = hudInstance.GetNode<MeshInstance3D>("%SelectionRing");
         _turnIndicator = hudInstance.GetNode<MeshInstance3D>("%TurnIndicator");
 
-        // 应用运行时动态参数（tscn 提供默认值，这里根据角色身高调整位置）
-        ApplyHudLayout(topY);
+        // 隐藏旧 HP 条/Label — 血量显示已由 UnitHealthBarComponent 接管(在角色下方)
+        if (_hpLabel != null) _hpLabel.Visible = false;
+        if (_hpBarBg != null) _hpBarBg.Visible = false;
+        if (_hpBarFg != null) _hpBarFg.Visible = false;
 
-        UpdateHp(_currentHp, _maxHp);
+        // 应用运行时动态参数（选中环、状态图标等仍需要位置）
+        ApplyHudLayout(topY);
     }
 
     /// <summary>根据角色身高动态调整 HUD 元素位置和材质</summary>

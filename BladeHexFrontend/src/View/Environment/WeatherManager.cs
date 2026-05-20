@@ -1,6 +1,11 @@
 // WeatherManager.cs
 // 天气管理器 — 控制天气状态、过渡动画、地面特效联动
-// 集成到 OverworldScene3D，根据季节/地形/时间驱动天气变化
+//
+// [Autoload Singleton]
+// 生命周期：应用全局
+// 注册位置：project.godot [autoload] WeatherManager
+// 设计依据：架构优化 spec — 天气状态需在大地图与战斗场景间持续 tick 并完全同步
+// 测试替换：暂未提供 OverrideForTest 钩子；如需可仿照 EventBus 增加
 using Godot;
 using System;
 

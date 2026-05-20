@@ -69,8 +69,8 @@ public sealed class IslandPOIStage : IWorldStage
         poi.HasTavern = true;
         poi.HasShop = true;
         poi.FerryCost = 30 + rng.Next(40);
-        poi.GarrisonMax = 8;
-        poi.GarrisonCurrent = 8;
+        poi.GarrisonMax = 25;
+        poi.GarrisonCurrent = 20 + rng.Next(5);
         poi.Prosperity = 25 + rng.Next(35);
     }
 
@@ -130,8 +130,8 @@ public sealed class IslandPOIStage : IWorldStage
             poi.PoiName = names[rng.Next(names.Length)];
             poi.PoiTypeEnum = OverworldPOI.POIType.Tavern;
             poi.HasTavern = true;
-            poi.GarrisonMax = 5;
-            poi.GarrisonCurrent = 5;
+            poi.GarrisonMax = 12;
+            poi.GarrisonCurrent = 8 + rng.Next(4);
             poi.Prosperity = 15 + rng.Next(20);
         }
         else

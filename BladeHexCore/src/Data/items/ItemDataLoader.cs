@@ -39,6 +39,7 @@ public static class ItemDataLoader
         "weapons_ranged_bow.json",
         "weapons_ranged_crossbow.json",
         "weapons_ranged_thrown.json",
+        "weapons_catalyst.json",
     };
 
     private static bool _loaded = false;
@@ -107,8 +108,70 @@ public static class ItemDataLoader
         if (_weapons.Count == 0 && _armors.Count == 0 && _consumables.Count == 0)
             GD.PushError("[ItemDataLoader] CRITICAL: No items loaded! Check that JSON files exist in " + BasePath);
 
+        // Mod 物品加载：扫描 user://mods/items/ 目录
+        LoadModItems();
+
         // 跨文件一致性校验
         ItemDataValidator.Validate();
+    }
+
+    // ========================================
+    // Mod 物品加载
+    // ========================================
+
+    private const string ModItemsPath = "user://mods/items/";
+
+    private static void LoadModItems()
+    {
+        if (!DirAccess.DirExistsAbsolute(ModItemsPath)) return;
+
+        using var dir = DirAccess.Open(ModItemsPath);
+        if (dir == null) return;
+
+        int modCount = 0;
+        dir.ListDirBegin();
+        string fileName = dir.GetNext();
+        while (!string.IsNullOrEmpty(fileName))
+        {
+            if (!dir.CurrentIsDir() && fileName.EndsWith(".json"))
+            {
+                string fullPath = ModItemsPath + fileName;
+                // 根据文件名前缀判断类型
+                if (fileName.StartsWith("weapons"))
+                {
+                    var (loaded, _) = LoadJsonArray(fullPath, ParseWeaponEntry);
+                    modCount += loaded;
+                }
+                else if (fileName.StartsWith("armors"))
+                {
+                    var (loaded, _) = LoadJsonArray(fullPath, ParseArmorEntry);
+                    modCount += loaded;
+                }
+                else if (fileName.StartsWith("consumables"))
+                {
+                    var (loaded, _) = LoadJsonArray(fullPath, ParseConsumableEntry);
+                    modCount += loaded;
+                }
+                else if (fileName.StartsWith("accessories"))
+                {
+                    var (loaded, _) = LoadJsonArray(fullPath, ParseAccessoryEntry);
+                    modCount += loaded;
+                }
+                else if (fileName.StartsWith("quivers"))
+                {
+                    var (loaded, _) = LoadJsonArray(fullPath, ParseQuiverEntry);
+                    modCount += loaded;
+                }
+            }
+            fileName = dir.GetNext();
+        }
+        dir.ListDirEnd();
+
+        if (modCount > 0)
+        {
+            PostProcessItems(); // 重新处理图标/网格
+            GD.Print($"[ItemDataLoader] Loaded {modCount} mod items from {ModItemsPath}");
+        }
     }
 
     // ========================================
@@ -124,8 +187,20 @@ public static class ItemDataLoader
     {
         foreach (var (id, w) in _weapons)
         {
-            if (string.IsNullOrEmpty(w.EquipTextureId)) w.EquipTextureId = ToPascalCase(id);
+            if (string.IsNullOrEmpty(w.EquipTextureId))
+            {
+                // 优先完整 ID 的 PascalCase，fallback 到子类型名（去掉 _t2/_t3 后缀）
+                w.EquipTextureId = ToPascalCase(id);
+            }
             if (string.IsNullOrEmpty(w.IconId)) w.IconId = w.EquipTextureId;
+            // Tier fallback：如果 IconId 含 T2/T3 后缀但图标不存在，回退到子类型名
+            if (w.Subtype != WeaponData.WeaponSubtype.Unarmed)
+            {
+                string subtypeName = w.Subtype.ToString(); // 已经是 PascalCase
+                // 如果 IconId 不等于子类型名（说明有 tier 后缀），设置 fallback
+                if (w.IconId != subtypeName)
+                    w.IconFallbackId = subtypeName;
+            }
             if (w.InvWidth == 1 && w.InvHeight == 1)
                 (w.InvWidth, w.InvHeight) = GetWeaponGridSize(w);
         }
@@ -345,6 +420,11 @@ public static class ItemDataLoader
             Price = OptInt(dict, "price", 10),
             Traits = traits,
             WeaponDamageType = cfg.DamageType,
+            WeaponPen = 0,                                         // v0.6 已废弃：武器穿透修正字段，强制 0
+            Weight = WeaponRegistry.GetWeight(subtype),            // v0.6 6.9 重量分支
+            Class = WeaponRegistry.IsRangedSubtype(subtype)
+                ? WeaponData.WeaponClass.Ranged
+                : WeaponData.WeaponClass.Melee,
             Description = OptString(dict, "desc", "") ?? "",
         };
     }
@@ -393,6 +473,10 @@ public static class ItemDataLoader
             IsDestroyable = OptBool(dict, "destroyable", false),
             Price = OptInt(dict, "price", 10),
             EquipSlotTarget = equipSlot,
+            // v0.6 6.2 盾牌远程伤害减免乘数（仅盾牌；身体甲忽略）
+            RangedDamageMultiplier = dict.ContainsKey("ranged_mult")
+                ? (float)dict["ranged_mult"].AsDouble()
+                : 1.0f,
             Description = OptString(dict, "desc", "") ?? "",
         };
     }

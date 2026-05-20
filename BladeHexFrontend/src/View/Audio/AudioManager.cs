@@ -145,6 +145,9 @@ public partial class AudioManager : Node
 			_ambientPlayers.Add(p);
 		}
 
+		// 应用持久化的音量设置（无存档时使用 GameSettings 默认值 50%）
+		ApplyPersistedVolumeSettings();
+
 		// 注册所有音频资源
 		InitBgmPlaylists();
 		InitUiSfx();
@@ -179,6 +182,35 @@ public partial class AudioManager : Node
 				AudioServer.SetBusSend(idx, "Master");
 			}
 		}
+	}
+
+	/// <summary>
+	/// 启动时应用一次玩家音量设置；无存档时落到 GameSettings 默认（50%）。
+	/// 这样首次启动也不会以 0dB 全开音量轰击玩家。
+	/// 仅应用音频部分，视频设置由场景/启动流程独立处理。
+	/// </summary>
+	private static void ApplyPersistedVolumeSettings()
+	{
+		var settings = new BladeHex.Data.GameSettings();
+		settings.LoadFromFile(); // 不存在时保留默认值
+		const float minVolume = 0.001f;
+
+		int masterIdx = AudioServer.GetBusIndex("Master");
+		if (masterIdx >= 0)
+		{
+			float vol = Mathf.Clamp(settings.MasterVolume, minVolume, 1.0f);
+			AudioServer.SetBusVolumeDb(masterIdx, Mathf.LinearToDb(vol));
+			AudioServer.SetBusMute(masterIdx, settings.MasterVolume <= 0.001f);
+		}
+		int musicIdx = AudioServer.GetBusIndex("Music");
+		if (musicIdx >= 0)
+			AudioServer.SetBusVolumeDb(musicIdx, Mathf.LinearToDb(Mathf.Clamp(settings.MusicVolume, minVolume, 1.0f)));
+		int sfxIdx = AudioServer.GetBusIndex("SFX");
+		if (sfxIdx >= 0)
+			AudioServer.SetBusVolumeDb(sfxIdx, Mathf.LinearToDb(Mathf.Clamp(settings.SfxVolume, minVolume, 1.0f)));
+		int ambientIdx = AudioServer.GetBusIndex("Ambient");
+		if (ambientIdx >= 0)
+			AudioServer.SetBusVolumeDb(ambientIdx, Mathf.LinearToDb(Mathf.Clamp(settings.AmbientVolume, minVolume, 1.0f)));
 	}
 
 	// ========================================================================
