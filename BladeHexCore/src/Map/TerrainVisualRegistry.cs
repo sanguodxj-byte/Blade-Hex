@@ -83,36 +83,36 @@ public static class TerrainVisualRegistry
 
         // 水域 → 旧资产 pond
         Add(HexOverworldTile.TerrainType.DeepWater, "深水",
-            owKey: "deep_water", owVariants: 1,
+            owKey: "deep_water", owVariants: 16,
             legacyKey: "pond", legacyVariants: 1,
             btKey: "water_deep", btVariants: 1, cliffKey: "cliff_rock",
             dominant: new Color(0.18f, 0.30f, 0.55f));
         Add(HexOverworldTile.TerrainType.ShallowWater, "浅水",
-            owKey: "shallow_water", owVariants: 1,
+            owKey: "shallow_water", owVariants: 16,
             legacyKey: "pond", legacyVariants: 1,
             btKey: "water_shallow", btVariants: 1, cliffKey: "cliff_dirt",
             dominant: new Color(0.30f, 0.45f, 0.70f));
         Add(HexOverworldTile.TerrainType.River, "河流",
-            owKey: "river", owVariants: 1,
+            owKey: "river", owVariants: 16,
             legacyKey: "pond", legacyVariants: 1,
             btKey: "water_shallow", btVariants: 1, cliffKey: "cliff_dirt",
             dominant: new Color(0.25f, 0.42f, 0.68f));
 
         // 平坦 → 旧资产 grassland / barren_land
         Add(HexOverworldTile.TerrainType.Plains, "平原",
-            owKey: "plains", owVariants: 2,
+            owKey: "plains", owVariants: 16,
             legacyKey: "grassland", legacyVariants: 1,
             btKey: "grassland_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.72f, 0.68f, 0.48f),
             propDensity: 0.05f, propPack: new[] { "wildflower", "small_rock" });
         Add(HexOverworldTile.TerrainType.Grassland, "草地",
-            owKey: "grassland", owVariants: 2,
+            owKey: "grassland", owVariants: 16,
             legacyKey: "grassland", legacyVariants: 1,
             btKey: "grassland_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.55f, 0.70f, 0.35f),
             propDensity: 0.10f, propPack: new[] { "wildflower", "bush_small" });
         Add(HexOverworldTile.TerrainType.Savanna, "稀树草原",
-            owKey: "savanna", owVariants: 2,
+            owKey: "savanna", owVariants: 16,
             legacyKey: "barren_land", legacyVariants: 2,
             btKey: "savanna_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.70f, 0.65f, 0.30f),
@@ -120,25 +120,25 @@ public static class TerrainVisualRegistry
 
         // 森林 → 旧资产 forest
         Add(HexOverworldTile.TerrainType.Forest, "森林",
-            owKey: "forest", owVariants: 3,
+            owKey: "forest", owVariants: 16,
             legacyKey: "forest", legacyVariants: 3,
             btKey: "grassland_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.22f, 0.45f, 0.18f),
             propDensity: 0.45f, propPack: new[] { "oak_tree", "pine_tree", "bush_small", "mossy_rock" });
         Add(HexOverworldTile.TerrainType.DenseForest, "密林",
-            owKey: "dense_forest", owVariants: 3,
+            owKey: "dense_forest", owVariants: 16,
             legacyKey: "forest", legacyVariants: 3,
             btKey: "grassland_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.12f, 0.30f, 0.08f),
             propDensity: 0.70f, propPack: new[] { "oak_tree", "pine_tree", "fallen_log", "mossy_rock" });
         Add(HexOverworldTile.TerrainType.Jungle, "丛林",
-            owKey: "jungle", owVariants: 2,
+            owKey: "jungle", owVariants: 16,
             legacyKey: "forest", legacyVariants: 3,
             btKey: "jungle_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.15f, 0.35f, 0.10f),
             propDensity: 0.60f, propPack: new[] { "jungle_tree", "large_fern", "vine_cluster" });
         Add(HexOverworldTile.TerrainType.Taiga, "针叶林",
-            owKey: "taiga", owVariants: 2,
+            owKey: "taiga", owVariants: 16,
             legacyKey: "forest", legacyVariants: 3,
             btKey: "taiga_top", btVariants: 2, cliffKey: "cliff_rock",
             dominant: new Color(0.25f, 0.35f, 0.30f),
@@ -146,13 +146,13 @@ public static class TerrainVisualRegistry
 
         // 沼泽 → 旧资产 swamp
         Add(HexOverworldTile.TerrainType.Swamp, "沼泽",
-            owKey: "swamp", owVariants: 3,
+            owKey: "swamp", owVariants: 16,
             legacyKey: "swamp", legacyVariants: 3,
             btKey: "swamp_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.38f, 0.48f, 0.28f),
             propDensity: 0.30f, propPack: new[] { "swamp_tree", "reed_cluster", "moss_patch" });
         Add(HexOverworldTile.TerrainType.Bog, "冻土沼泽",
-            owKey: "bog", owVariants: 2,
+            owKey: "bog", owVariants: 16,
             legacyKey: "swamp", legacyVariants: 3,
             btKey: "swamp_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.35f, 0.40f, 0.38f),
@@ -160,13 +160,13 @@ public static class TerrainVisualRegistry
 
         // 荒地 → 旧资产 wasteland / rocky_land
         Add(HexOverworldTile.TerrainType.Wasteland, "荒原",
-            owKey: "wasteland", owVariants: 2,
+            owKey: "wasteland", owVariants: 16,
             legacyKey: "wasteland", legacyVariants: 2,
             btKey: "wasteland_top", btVariants: 2, cliffKey: "cliff_dirt",
             dominant: new Color(0.65f, 0.55f, 0.45f),
             propDensity: 0.05f, propPack: new[] { "dry_bush", "cracked_rock" });
         Add(HexOverworldTile.TerrainType.Rocky, "岩石荒地",
-            owKey: "rocky", owVariants: 2,
+            owKey: "rocky", owVariants: 16,
             legacyKey: "rocky_land", legacyVariants: 2,
             btKey: "rocky_top", btVariants: 2, cliffKey: "cliff_rock",
             dominant: new Color(0.45f, 0.45f, 0.50f),
@@ -174,7 +174,7 @@ public static class TerrainVisualRegistry
 
         // 沙漠 → 旧资产 wasteland
         Add(HexOverworldTile.TerrainType.Sand, "沙漠",
-            owKey: "sand", owVariants: 2,
+            owKey: "sand", owVariants: 16,
             legacyKey: "wasteland", legacyVariants: 2,
             btKey: "sand_top", btVariants: 2, cliffKey: "cliff_sand",
             dominant: new Color(0.85f, 0.75f, 0.50f),
@@ -182,19 +182,19 @@ public static class TerrainVisualRegistry
 
         // 山地 → 旧资产 mountain_cave / rocky_land
         Add(HexOverworldTile.TerrainType.Hills, "丘陵",
-            owKey: "hills", owVariants: 2,
+            owKey: "hills", owVariants: 16,
             legacyKey: "rocky_land", legacyVariants: 2,
             btKey: "grassland_top", btVariants: 2, cliffKey: "cliff_rock",
             dominant: new Color(0.58f, 0.52f, 0.38f),
             propDensity: 0.20f, propPack: new[] { "boulder", "pine_tree" });
         Add(HexOverworldTile.TerrainType.Mountain, "山地",
-            owKey: "mountain", owVariants: 2,
+            owKey: "mountain", owVariants: 16,
             legacyKey: "mountain_cave", legacyVariants: 2,
             btKey: "rocky_top", btVariants: 2, cliffKey: "cliff_rock",
             dominant: new Color(0.40f, 0.38f, 0.42f),
             propDensity: 0.30f, propPack: new[] { "boulder", "cliff_chunk" });
         Add(HexOverworldTile.TerrainType.MountainSnow, "雪山",
-            owKey: "mountain_snow", owVariants: 1,
+            owKey: "mountain_snow", owVariants: 16,
             legacyKey: "mountain_cave", legacyVariants: 2,
             btKey: "snow_top", btVariants: 1, cliffKey: "cliff_snow",
             dominant: new Color(0.85f, 0.88f, 0.92f),
@@ -202,13 +202,13 @@ public static class TerrainVisualRegistry
 
         // 寒带 → 旧资产 mountain_cave（现有白/灰色最接近）
         Add(HexOverworldTile.TerrainType.Snow, "雪地",
-            owKey: "snow", owVariants: 2,
+            owKey: "snow", owVariants: 16,
             legacyKey: "mountain_cave", legacyVariants: 2,
             btKey: "snow_top", btVariants: 2, cliffKey: "cliff_snow",
             dominant: new Color(0.92f, 0.95f, 0.98f),
             propDensity: 0.10f, propPack: new[] { "snow_rock", "frozen_pine" });
         Add(HexOverworldTile.TerrainType.Ice, "冰原",
-            owKey: "ice", owVariants: 1,
+            owKey: "ice", owVariants: 16,
             legacyKey: "pond", legacyVariants: 1,
             btKey: "ice_top", btVariants: 1, cliffKey: "cliff_snow",
             dominant: new Color(0.75f, 0.85f, 0.95f),
@@ -216,7 +216,7 @@ public static class TerrainVisualRegistry
 
         // 道路 → 旧资产 crossroads
         Add(HexOverworldTile.TerrainType.Road, "道路",
-            owKey: "road", owVariants: 1,
+            owKey: "road", owVariants: 16,
             legacyKey: "crossroads", legacyVariants: 1,
             btKey: "road_top", btVariants: 1, cliffKey: "cliff_dirt",
             dominant: new Color(0.65f, 0.55f, 0.38f));

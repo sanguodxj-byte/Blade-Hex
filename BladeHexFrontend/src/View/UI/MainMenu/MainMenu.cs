@@ -158,6 +158,29 @@ public partial class MainMenu : CanvasLayer
         _CreateMenuButton("快速战斗", "quick_combat", menuVbox);
         _CreateMenuButton("设置", "settings", menuVbox);
         _CreateMenuButton("退出", "exit", menuVbox);
+
+        // ─── 左下角骨骼编辑器入口（开发工具，白色半透明齿轮图标） ───
+        #if DEBUG
+        var skeletonBtn = new Label();
+        skeletonBtn.Text = "⚙";
+        skeletonBtn.AddThemeFontSizeOverride("font_size", 24);
+        skeletonBtn.Modulate = new Color(1f, 1f, 1f, 0.4f);
+        skeletonBtn.MouseFilter = Control.MouseFilterEnum.Stop;
+        skeletonBtn.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        skeletonBtn.TooltipText = "骨骼动画编辑器";
+        skeletonBtn.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+        skeletonBtn.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+        skeletonBtn.MouseEntered += () => skeletonBtn.Modulate = new Color(1f, 1f, 1f, 0.85f);
+        skeletonBtn.MouseExited += () => skeletonBtn.Modulate = new Color(1f, 1f, 1f, 0.4f);
+        skeletonBtn.GuiInput += (InputEvent e) =>
+        {
+            if (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
+            {
+                GetTree().ChangeSceneToFile("res://src/scenes/skeleton_preview.tscn");
+            }
+        };
+        mainMargin.AddChild(skeletonBtn);
+        #endif
     }
 
     private Button _CreateMenuButton(string text, string action, Control parent)

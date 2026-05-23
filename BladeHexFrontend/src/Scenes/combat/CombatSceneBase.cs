@@ -44,6 +44,7 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 	protected BladeHex.View.Combat.CombatSceneBackdrop? _backdrop;
 	protected BladeHex.View.Combat.CombatSunLight? _combatSunLight;
 	protected BladeHex.Audio.AudioManager? _audioManager;
+	protected CombatAttackAnimator _attackAnimator = null!;
 
 	// ========== 状态 ==========
 	protected ActionMode _currentActionMode = ActionMode.None;
@@ -328,6 +329,17 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
 		// 战斗小地图（嵌入底部面板最右侧）
 		_combatMinimap = new CombatMinimapPanel();
+
+		// 攻击动画编排器（含投射物系统）
+		var scheduler = new SceneTreeScheduler(GetTree());
+		var projectileSystem = new ProjectileSystem(scheduler);
+		var projectilePool = new ProjectilePool { Name = "ProjectilePool" };
+		AddChild(projectilePool);
+		new ProjectileEventBridge().Bind(projectileSystem);
+		_attackAnimator = new CombatAttackAnimator { Name = "AttackAnimator" };
+		AddChild(_attackAnimator);
+		_attackAnimator.Initialize(projectileSystem);
+		_aiController.SetAttackAnimator(_attackAnimator);
 	}
 
 	/// <summary>播放战斗入场 UI 过渡动画（暂时禁用，等布局稳定后再启用）</summary>
@@ -883,34 +895,12 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 
 			await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.3);
 
-			// 多动作循环：持续行动直到 AP 耗尽
-			const int MaxActions = 5;
-			var playerUnits = _combatManager.PlayerUnits.Where(p => IsInstanceValid(p) && p.CurrentHp > 0).ToList();
-
-			for (int i = 0; i < MaxActions; i++)
-			{
-				if (!IsInstanceValid(unit) || unit.CurrentHp <= 0) break;
-				if (unit.CurrentAp < 1) break;
-				if (playerUnits.Count == 0) break;
-
-				var action = _aiController.DecideActionForUnit(unit, playerUnits,
-					_combatManager.EnemyUnits.Where(e => IsInstanceValid(e) && e.CurrentHp > 0).ToList(),
-					_hexGrid);
-
-				if (action.Type == BladeHex.Combat.AI.AIAction.ActionType.Idle ||
-					action.Type == BladeHex.Combat.AI.AIAction.ActionType.Overwatch)
-					break;
-
-				// 使用反射调用 AIController 的 ExecuteAction（它是 private）
-				// 改为直接调用公开的 ExecuteEnemyTurn 但只传一个单位
-				break; // 暂时跳出，下面用批量方法处理单个单位
-			}
 
 			// 使用现有 AI 系统处理单个单位
 			_aiController.AllActionsCompleted += OnAiSingleUnitDone;
 			_ = _aiController.ExecuteEnemyTurn(
 				new List<Unit> { unit },
-				playerUnits,
+				_combatManager.PlayerUnits.Where(p => IsInstanceValid(p) && p.CurrentHp > 0).ToList(),
 				_hexGrid, _combatUi);
 		}
 		catch (Exception ex)
@@ -1515,9 +1505,8 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 		_combatManager.ExecuteCommand(atkCmd);
 
 		_activePlayerUnit.ConsumeAp(apCost);
-		_activePlayerUnit.PlayAnim("attack");
-		_activePlayerUnit.PlayAttackLunge(target.GlobalPosition);
-		await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.6);
+		// 攻击动画编排（远程=投射物飞行，近战=突刺）
+		await _attackAnimator.PlayAttack(_activePlayerUnit, target, attackWeapon);
 
 		// 包围加成需要传入攻击者同阵营单位
 		var allies = _combatManager.PlayerUnits
@@ -2278,4 +2267,29 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter
 	void ICombatSceneAdapter.PlaySfx(string n) => _audioManager?.PlaySfxName(n);
 	void ICombatSceneAdapter.ShowDamageNumber(Unit target, int amount, bool isCritical, string? missLabel)
 		=> BladeHex.View.Combat.DamageNumberPopup.SpawnAtUnit(this, target, amount, isCritical, missLabel);
+
+	void ICombatSceneAdapter.OnUnitKilled(Unit dead, Unit killer)
+	{
+		if (dead == null || !IsInstanceValid(dead)) return;
+
+		var cell = _hexGrid?.GetCell(dead.GridPos.X, dead.GridPos.Y);
+		if (cell != null && cell.Occupant == dead)
+			cell.Occupant = null;
+
+		if (_combatUi != null && IsInstanceValid(_combatUi))
+		{
+			if (!dead.IsPlayerSide)
+			{
+				_combatUi.RemoveEnemy(dead);
+			}
+			else
+			{
+				_combatUi.UpdateUnitInfo(dead);
+			}
+
+			_combatUi.RefreshPowerBar(_combatManager.PlayerUnits, _combatManager.EnemyUnits);
+		}
+
+		_combatManager?.HandleUnitKilled(dead, killer);
+	}
 }

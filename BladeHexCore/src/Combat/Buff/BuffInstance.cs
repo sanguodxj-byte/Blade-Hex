@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Godot;
 
 namespace BladeHex.Combat.Buff;
 
@@ -99,4 +100,27 @@ public class BuffInstance
 
     /// <summary>是否在死亡时保留(如诅咒)</summary>
     public bool PersistOnDeath;
+
+    /// <summary>
+    /// 转为前端/UI 兼容的 Dictionary。
+    /// 这是迁移期适配层: 让新 Buff 能进入旧状态图标/列表管线,不改变旧 StatusEffect 结算语义。
+    /// </summary>
+    public Godot.Collections.Dictionary ToGodotDict()
+    {
+        var mods = new Godot.Collections.Dictionary();
+        foreach (var modifier in Modifiers)
+        {
+            if (string.IsNullOrEmpty(modifier.Stat)) continue;
+            mods[modifier.Stat] = modifier.Value * CurrentStacks;
+        }
+
+        return new Godot.Collections.Dictionary
+        {
+            { "id", Id }, { "name", Name }, { "description", Description },
+            { "duration", Duration }, { "is_negative", IsNegative },
+            { "icon_id", IconId }, { "tags", Tags },
+            { "stacks", CurrentStacks }, { "max_stacks", MaxStacks },
+            { "stat_modifiers", mods },
+        };
+    }
 }

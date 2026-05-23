@@ -40,6 +40,8 @@ public class AITargetEvaluator
         foreach (var pu in playerUnits)
         {
             if (pu == null || pu.CurrentHp <= 0) continue;
+            if (BuffTargetingRules.ShouldAiIgnore(pu)) continue;
+            if (!BuffTargetingRules.IsDirectlyTargetable(pu)) continue;
 
             float threat = CalculateThreatScore(pu);
             float vuln = CalculateVulnerabilityScore(pu, actor, hexGrid);
@@ -156,6 +158,8 @@ public class AITargetEvaluator
 
     public bool CanReachTarget(Unit actor, Unit target, HexGrid hexGrid)
     {
+        if (!BuffTargetingRules.IsDirectlyTargetable(target)) return false;
+
         var weapon = actor.Model.GetMainHand() as WeaponData;
         int atkRange = weapon?.RangeCells ?? 1;
         float currentAp = actor.GetAp();
@@ -178,6 +182,8 @@ public class AITargetEvaluator
     /// <summary>使用预计算的可达集合检查是否能到达目标攻击范围内</summary>
     private bool CanReachTargetCached(Unit actor, Unit target, HexGrid hexGrid, HashSet<Vector2I> reachableSet)
     {
+        if (!BuffTargetingRules.IsDirectlyTargetable(target)) return false;
+
         foreach (var coord in reachableSet)
         {
             int dist = HexUtils.Distance(coord.X, coord.Y, target.GridPos.X, target.GridPos.Y);
@@ -189,6 +195,8 @@ public class AITargetEvaluator
 
     public bool CanAttackFromPosition(Unit actor, Unit target, HexGrid hexGrid, Vector2I fromPos)
     {
+        if (!BuffTargetingRules.IsDirectlyTargetable(target)) return false;
+
         var weapon = actor.Model.GetMainHand() as WeaponData;
         int atkRange;
         if (weapon != null)

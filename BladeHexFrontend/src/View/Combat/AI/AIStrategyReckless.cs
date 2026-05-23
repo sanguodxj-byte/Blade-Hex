@@ -60,12 +60,13 @@ public class AIStrategyReckless : AIStrategyBase
                 int chargeDist = HexUtils.Distance(chargePos.X, chargePos.Y, closestTarget.GridPos.X, closestTarget.GridPos.Y);
                 var curWeapon = actor.Model.GetMainHand() as WeaponData;
                 int curRange = curWeapon?.RangeCells ?? 1;
+                var chargePath = hexGrid.FindPath(actor.GridPos, chargePos);
 
-                if (chargeCell != null && chargeCell.Occupant == null && chargeDist <= curRange)
+                if (chargeCell != null && chargeCell.Occupant == null && chargeDist <= curRange && CanAffordMoveThenAttack(actor, hexGrid, chargePath))
                 {
                     action.TargetPosition = chargePos;
                     action.AttackPosition = chargePos;
-                    action.MovePath = hexGrid.FindPath(actor.GridPos, chargePos);
+                    action.MovePath = chargePath;
                     action.IsCharge = true;
                 }
             }

@@ -3,6 +3,6 @@
 
 function execute(ctx)
     aoe_neighbors(ctx.attacker, "enemies", function(enemy, pos)
-        result:add_effect(enemy, "intimidated", 3, { attack_bonus = -2 })
+        buff:apply_custom(enemy, "intimidated", 3, { attack_bonus = -2 })
     end)
 end

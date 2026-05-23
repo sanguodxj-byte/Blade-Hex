@@ -8,6 +8,6 @@ function execute(ctx)
         return
     end
 
-    caster.mana = caster.max_hp -- restore to max mana
-    result:add_effect(caster, "mana_surge_used", 99)
+    caster.mana = caster.max_mana
+    buff:apply_custom(caster, "mana_surge_used", 99, { used_marker = true })
 end

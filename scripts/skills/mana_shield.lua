@@ -3,5 +3,5 @@
 
 function execute(ctx)
     if not check_mana(ctx.attacker, 5) then return end
-    result:add_effect(ctx.attacker, "shield", 3)
+    buff:apply(ctx.attacker, "shield", 3)
 end

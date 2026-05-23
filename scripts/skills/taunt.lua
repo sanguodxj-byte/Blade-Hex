@@ -3,6 +3,6 @@
 
 function execute(ctx)
     aoe_neighbors(ctx.attacker, "enemies", function(enemy, pos)
-        result:add_effect(enemy, "charmed", 2)
+        buff:apply_custom(enemy, "charmed", 2, { forced_target_id = ctx.attacker.character_id })
     end)
 end

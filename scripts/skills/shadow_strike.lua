@@ -8,6 +8,7 @@ function execute(ctx)
     if ctx.attacker:has_effect("invisibility") then
         local r = result:resolve_attack(ctx.attacker, target, { damage_mult = 2.0 })
         result:add_attack(r)
+        buff:remove(ctx.attacker, "invisibility")
         result:add_remove_effect(ctx.attacker, { "invisibility" })
     else
         local r = result:resolve_attack(ctx.attacker, target)

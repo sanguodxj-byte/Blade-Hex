@@ -38,4 +38,7 @@ public interface ICombatSceneAdapter
     /// <param name="isCritical">是否暴击</param>
     /// <param name="missLabel">非空时显示该字符串(如 "Miss"),amount 被忽略</param>
     void ShowDamageNumber(Unit target, int amount, bool isCritical = false, string? missLabel = null);
+
+    /// <summary>单位被击杀后的统一场景收尾（格子、UI、先攻队列、战力条）。</summary>
+    void OnUnitKilled(Unit dead, Unit killer);
 }

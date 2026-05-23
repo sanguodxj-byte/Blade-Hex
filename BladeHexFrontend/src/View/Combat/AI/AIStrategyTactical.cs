@@ -32,11 +32,13 @@ public class AIStrategyTactical : AIStrategyBase
             var flankPositions = AISpatialAnalyzer.FindFlankingPositions(hexGrid, focusTarget, actor, actor.Model.GetMoveRange());
             if (flankPositions.Count > 0)
             {
+                var weapon = actor.Model.GetMainHand() as WeaponData;
+                int attackApCost = weapon?.ApCost ?? 4;
                 foreach (var entry in flankPositions)
                 {
                     var flankPos = entry.Position;
                     var flankFacing = entry.Facing;
-                    if (IsPositionReachable(actor, flankPos, hexGrid))
+                    if (IsPositionReachable(actor, flankPos, hexGrid, reserveAp: attackApCost))
                     {
                         return BuildFlankAttackAction(actor, focusTarget, flankPos, flankFacing, hexGrid);
                     }
@@ -91,14 +93,14 @@ public class AIStrategyTactical : AIStrategyBase
         return bestTarget;
     }
 
-    private bool IsPositionReachable(Unit actor, Vector2I pos, HexGrid hexGrid)
+    private bool IsPositionReachable(Unit actor, Vector2I pos, HexGrid hexGrid, float reserveAp = 0.0f)
     {
         var cell = hexGrid.GetCell(pos.X, pos.Y);
         if (cell == null || (cell.Occupant != null && cell.Occupant != actor)) return false;
         
-        // 使用 AP 检查可达性
-        float currentAp = actor.GetAp();
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, currentAp);
+        // 使用 AP 检查可达性；包夹后仍需预留攻击 AP
+        float moveBudget = Math.Max(0.0f, actor.GetAp() - reserveAp);
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveBudget);
         return reachable.Contains(pos);
     }
 
@@ -112,6 +114,10 @@ public class AIStrategyTactical : AIStrategyBase
             AttackPosition = flankPos,
             MovePath = hexGrid.FindPath(actor.GridPos, flankPos)
         };
+
+        action.Type = action.MovePath.Count == 0 && actor.GridPos == flankPos
+            ? AIAction.ActionType.Attack
+            : AIAction.ActionType.MoveThenAttack;
 
         if (flankFacing == 2)
         {
@@ -135,8 +141,10 @@ public class AIStrategyTactical : AIStrategyBase
     /// <summary>尝试找更安全的接近路径（避免借机攻击）</summary>
     private AIAction? FindSaferApproach(Unit actor, Unit target, List<Unit> playerUnits, HexGrid hexGrid)
     {
-        float currentAp = actor.GetAp();
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, currentAp);
+        var weapon = actor.Model.GetMainHand() as WeaponData;
+        int attackApCost = weapon?.ApCost ?? 4;
+        float moveBudget = Math.Max(0.0f, actor.GetAp() - attackApCost);
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveBudget);
 
         Vector2I bestPos = new(-1, -1);
         float bestScore = -999.0f;
@@ -151,6 +159,8 @@ public class AIStrategyTactical : AIStrategyBase
             if (distToTarget > effectiveAtkRange) continue;
 
             var path = hexGrid.FindPath(actor.GridPos, pos);
+            if (path.Count == 0 || hexGrid.GetPathCost(actor.GridPos, path) > moveBudget) continue;
+
             int aoos = AISpatialAnalyzer.CountOpportunityAttacks(hexGrid, path, playerUnits);
 
             float score = -aoos * 5.0f;

@@ -9,6 +9,6 @@ function execute(ctx)
     result:add_attack(r)
 
     if r.hit then
-        result:add_effect(target, "blind", 2, { attack_bonus = -4 })
+        buff:apply_custom(target, "blind", 2, { attack_bonus = -4 })
     end
 end

@@ -177,6 +177,74 @@ public partial class WeaponData : ItemData
     }
 
     // ========================================
+    // 投射物类型推断
+    // ========================================
+
+    /// <summary>
+    /// 根据武器子类型和伤害类型推断投射物视觉类型。
+    /// 仅对远程/投掷武器有意义；近战武器返回空字符串。
+    /// </summary>
+    public string GetProjectileType()
+    {
+        if (!IsRanged && !IsThrowing) return "";
+
+        // 投掷武器
+        if (IsThrowing)
+        {
+            return Subtype switch
+            {
+                WeaponSubtype.ThrowingKnife or WeaponSubtype.Dart or WeaponSubtype.Stiletto => "throwing_knife",
+                WeaponSubtype.Francisca or WeaponSubtype.ThrowingHammer => "throwing_axe",
+                _ => "throwing_knife",
+            };
+        }
+
+        // 弩类
+        if (IsCrossbow) return "crossbow_bolt";
+
+        // 法术媒介
+        if (IsCatalyst)
+        {
+            return WeaponDamageType switch
+            {
+                DamageType.Fire => "fireball",
+                DamageType.Frost => "ice_shard",
+                DamageType.Lightning => "lightning",
+                _ => "magic_bolt",
+            };
+        }
+
+        // 弓类 / 默认远程
+        return "arrow";
+    }
+
+    /// <summary>
+    /// 投射物飞行速度（格/秒）。由武器类型决定。
+    /// 弩箭快而平，弓箭中速，投掷较慢，法术中速。
+    /// </summary>
+    public float GetProjectileSpeed()
+    {
+        if (!IsRanged && !IsThrowing) return 0f;
+        if (IsCrossbow) return 14.0f;
+        if (IsThrowing) return 8.0f;
+        if (IsCatalyst) return 9.0f;
+        return 10.0f; // 弓
+    }
+
+    /// <summary>
+    /// 投射物抛物线弧高。由武器类型决定。
+    /// 弩箭低平，弓箭高弧，投掷中弧，法术几乎直线。
+    /// </summary>
+    public float GetProjectileArcHeight()
+    {
+        if (!IsRanged && !IsThrowing) return 0f;
+        if (IsCrossbow) return 0.5f;
+        if (IsThrowing) return 1.2f;
+        if (IsCatalyst) return 0.3f;
+        return 1.5f; // 弓
+    }
+
+    // ========================================
     // 词缀加成（运行时累加）
     // ========================================
 

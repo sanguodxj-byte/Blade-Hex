@@ -13,7 +13,7 @@ function execute(ctx)
     for i = 0, allies.Length - 1 do
         local ally = allies[i]
         if unit:is_valid(ally) then
-            result:add_effect(ally, "heroic", 3, { attack_bonus = 2, ac_bonus = 1 })
+            buff:apply(ally, "heroic_call", 3)
         end
     end
 

@@ -9,5 +9,6 @@ function execute(ctx)
     local heal = combat:roll_dice(2, 8) + wis_mod
     local actual = unit:heal(target, heal)
     result:add_heal(target, actual)
+    buff:remove_many(target, { "bleed", "poison" })
     result:add_remove_effect(target, { "bleed", "poison" })
 end

@@ -175,9 +175,7 @@ public partial class CharacterRenderBus : Node
         {
             if (GodotObject.IsInstanceValid(node) && node.UnitRef?.Data != null)
             {
-                var effects = new Godot.Collections.Array();
-                foreach (var inst in node.UnitRef.Data.Runtime.ActiveStatusEffects)
-                    effects.Add(inst.ToGodotDict());
+                var effects = BuildStatusEffectDisplayList(node.UnitRef);
                 node.UpdateStatusEffects(effects);
             }
         }
@@ -247,12 +245,37 @@ public partial class CharacterRenderBus : Node
     /// <summary>通知状态效果变化</summary>
     public void NotifyStatusEffects(Unit unit, Godot.Collections.Array effects)
     {
+        // 调用方仍可传入旧 StatusEffect 列表；这里合并新 Buff,确保 BuffSystem 施加的状态能被展示。
+        if (unit.Data != null)
+            effects = BuildStatusEffectDisplayList(unit, effects);
+
         var node = GetRenderNode(unit);
         if (node != null)
         {
             node.UpdateStatusEffects(effects);
             EmitSignal(SignalName.UnitStatusEffectsChanged, unit, effects);
         }
+    }
+
+    private static Godot.Collections.Array BuildStatusEffectDisplayList(Unit unit, Godot.Collections.Array? baseEffects = null)
+    {
+        var effects = baseEffects ?? new Godot.Collections.Array();
+        if (unit.Data == null) return effects;
+
+        var seen = new HashSet<string>();
+        foreach (var effectVar in effects)
+        {
+            if (effectVar.VariantType != Variant.Type.Dictionary) continue;
+            var dict = effectVar.AsGodotDictionary();
+            if (dict.TryGetValue("id", out var idVar)) seen.Add(idVar.AsString());
+        }
+
+        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+            if (seen.Add(inst.Id)) effects.Add(inst.ToGodotDict());
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+            if (seen.Add(buff.Id)) effects.Add(buff.ToGodotDict());
+
+        return effects;
     }
 
     // ========================================

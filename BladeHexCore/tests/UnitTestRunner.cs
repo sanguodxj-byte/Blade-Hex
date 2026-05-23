@@ -45,6 +45,7 @@ public partial class UnitTestRunner : Node
         RunSuite("CampaignMedicSystemTests", CampaignMedicSystemTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("EconomySystemIntegrationTests", EconomySystemIntegrationTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("EconomyBalanceTests", EconomyBalanceTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("ProjectileSystemTests", ProjectileSystemTests.RunAll, ref totalPassed, ref totalFailed);
 
         GD.Print();
         GD.Print("========================================");

@@ -139,7 +139,9 @@ public static class AISpatialAnalyzer
         var results = new List<(Vector2I, int)>();
         var weapon = attacker.Model.GetMainHand() as WeaponData;
         int atkRange = weapon?.RangeCells ?? 1;
-        var reachable = hexGrid.GetCellsInRange(attacker.GridPos.X, attacker.GridPos.Y, moveRange);
+        int attackApCost = weapon?.ApCost ?? 4;
+        float moveBudget = Math.Max(0.0f, attacker.CurrentAp - attackApCost);
+        var reachable = hexGrid.GetCellsInRange(attacker.GridPos.X, attacker.GridPos.Y, Math.Min(moveRange, moveBudget));
         int targetFacing = target.Data?.Runtime.Facing ?? -1;
 
         foreach (var pos in reachable)

@@ -3,5 +3,5 @@
 
 function execute(ctx)
     local trap_dmg = combat:roll_dice(2, 6)
-    result:add_effect(ctx.attacker, "trap_placed", 99, { trap_damage = trap_dmg })
+    buff:apply_custom(ctx.attacker, "trap_placed", 99, { trap_damage = trap_dmg })
 end

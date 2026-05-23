@@ -35,6 +35,7 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
     private OverworldCamera3D _camera = null!;
     private HexOverworldRenderer3D _renderer = null!;
     private OverworldPropRenderer? _propRenderer;
+    private OverworldTerrainSpriteRenderer? _terrainSpriteRenderer;
     private OverworldLightSystem? _lightSystem;
     private HexOverworldGrid _grid = null!;
     private HexOverworldGenerator? _gen;
@@ -80,6 +81,11 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
         _propRenderer = new OverworldPropRenderer();
         AddChild(_propRenderer);
         _propRenderer.Initialize(seed);
+
+        // 手绘地形精灵立牌层（羊皮纸地图风格）
+        _terrainSpriteRenderer = new OverworldTerrainSpriteRenderer();
+        AddChild(_terrainSpriteRenderer);
+        _terrainSpriteRenderer.Initialize();
 
         // 光圈系统（昼夜灯火）
         _lightSystem = new OverworldLightSystem();
@@ -228,6 +234,7 @@ public partial class OverworldScene3D : Node3D, IOverworldContext
 
         // 场景物体 LOD
         _propRenderer?.UpdateLOD(_camera.Size);
+        _terrainSpriteRenderer?.UpdateLOD(_camera.Size);
 
         // 小地图
         UpdateMinimap();

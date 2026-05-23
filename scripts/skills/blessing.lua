@@ -5,5 +5,5 @@ function execute(ctx)
     local target = require_ally(ctx.target_q, ctx.target_r)
     if not target then return end
 
-    result:add_effect(target, "bless", 3)
+    buff:apply(target, "bless", 3)
 end

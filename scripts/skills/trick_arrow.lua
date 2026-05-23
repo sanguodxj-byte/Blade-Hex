@@ -12,5 +12,5 @@ function execute(ctx)
     local debuffs = { "blind", "stun", "fear" }
     local roll = combat:roll_dice(1, 3)
     local chosen = debuffs[roll]
-    result:add_effect(target, chosen, 1)
+    buff:apply(target, chosen, 1)
 end

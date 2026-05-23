@@ -54,7 +54,17 @@ public static class CombatResolver
 
         var modifiers = (Godot.Collections.Dictionary)result["modifiers"];
 
+        if (!BuffTargetingRules.IsDirectlyTargetable(defender))
+        {
+            result["blocked_by_buff"] = true;
+            result["reason"] = "目标不可被直接指定";
+            return result;
+        }
+
         // ===== 1. 收集修正（Node 层数据采集）=====
+        if (BuffAttackHooks.TryResolvePhantomInterception(defender, result))
+            return result;
+
         int attackBonus = attacker.Model.GetAttackBonus();
         result["attack_bonus"] = attackBonus;
 

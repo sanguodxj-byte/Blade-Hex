@@ -10,6 +10,5 @@ function execute(ctx)
         return
     end
 
-    target.extra_actions = target.extra_actions + 1
-    result:add_effect(target, "commanded", 1, { extra_action = true })
+    buff:apply_custom(target, "commanded", 1, { extra_action = true })
 end

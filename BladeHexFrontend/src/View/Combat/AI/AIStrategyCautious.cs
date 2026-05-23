@@ -43,20 +43,10 @@ public class AIStrategyCautious : AIStrategyBase
                 var betterPos = FindBetterCoverPosition(actor, target, hexGrid);
                 if (betterPos != actor.GridPos)
                 {
-                    var path = hexGrid.FindPath(actor.GridPos, betterPos);
-                    if (path.Count > 0)
-                    {
-                        return new AIAction
-                        {
-                            Type = AIAction.ActionType.MoveThenAttack,
-                            Actor = actor,
-                            TargetUnit = target,
-                            TargetPosition = betterPos,
-                            AttackPosition = betterPos,
-                            MovePath = path,
-                            Description = $"{actor.Data!.UnitName} 移动到掩体后射击 {target.Data!.UnitName}"
-                        };
-                    }
+                    return BuildMoveThenAttackOrMoveOnly(
+                        actor, target, betterPos, hexGrid,
+                        $"{actor.Data!.UnitName} 移动到掩体后射击 {target.Data!.UnitName}",
+                        $"{actor.Data!.UnitName} 向掩体移动");
                 }
             }
 
@@ -85,16 +75,10 @@ public class AIStrategyCautious : AIStrategyBase
                         int kiteDist = HexUtils.Distance(kitePos.X, kitePos.Y, target.GridPos.X, target.GridPos.Y);
                         if (kiteDist <= atkRange)
                         {
-                            return new AIAction
-                            {
-                                Type = AIAction.ActionType.MoveThenAttack,
-                                Actor = actor,
-                                TargetUnit = target,
-                                TargetPosition = kitePos,
-                                AttackPosition = kitePos,
-                                MovePath = hexGrid.FindPath(actor.GridPos, kitePos),
-                                Description = $"{actor.Data!.UnitName} 风筝移动并射击 {target.Data!.UnitName}"
-                            };
+                            return BuildMoveThenAttackOrMoveOnly(
+                                actor, target, kitePos, hexGrid,
+                                $"{actor.Data!.UnitName} 风筝移动并射击 {target.Data!.UnitName}",
+                                $"{actor.Data!.UnitName} 风筝后撤");
                         }
                         else
                         {
@@ -119,9 +103,14 @@ public class AIStrategyCautious : AIStrategyBase
                 if (coverPositions.Count > 0)
                 {
                     var bestCover = coverPositions[0];
-                    moveAction.TargetPosition = bestCover.Position;
-                    moveAction.AttackPosition = bestCover.Position;
-                    moveAction.MovePath = hexGrid.FindPath(actor.GridPos, bestCover.Position);
+                    var coverPath = hexGrid.FindPath(actor.GridPos, bestCover.Position);
+                    if (coverPath.Count > 0 && CanAffordMoveThenAttack(actor, hexGrid, coverPath))
+                    {
+                        moveAction.Type = AIAction.ActionType.MoveThenAttack;
+                        moveAction.TargetPosition = bestCover.Position;
+                        moveAction.AttackPosition = bestCover.Position;
+                        moveAction.MovePath = coverPath;
+                    }
                 }
             }
             moveAction.Description = $"{actor.Data!.UnitName} 移动并攻击 {target.Data!.UnitName}";
@@ -135,7 +124,7 @@ public class AIStrategyCautious : AIStrategyBase
         int moveRange = actor.Model.GetMoveRange();
         var weapon = actor.Model.GetMainHand() as WeaponData;
         int atkRange = weapon?.RangeCells ?? 1;
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveRange);
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, Math.Min(moveRange, GetMoveBudgetAfterAttack(actor)));
 
         foreach (var pos in reachable)
         {
@@ -173,7 +162,7 @@ public class AIStrategyCautious : AIStrategyBase
         int moveRange = actor.Model.GetMoveRange();
         var weapon = actor.Model.GetMainHand() as WeaponData;
         int atkRange = weapon?.RangeCells ?? 1;
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveRange);
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, Math.Min(moveRange, GetMoveBudgetAfterAttack(actor)));
 
         Vector2I bestPos = new(-1, -1);
         float bestScore = -999.0f;

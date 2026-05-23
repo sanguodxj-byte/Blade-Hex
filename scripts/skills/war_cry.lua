@@ -3,6 +3,6 @@
 
 function execute(ctx)
     aoe_neighbors(ctx.attacker, "allies", function(ally, pos)
-        result:add_effect(ally, "bless", 2, { attack_bonus = 1 })
+        buff:apply_custom(ally, "war_cry", 2, { attack_bonus = 1 })
     end)
 end

@@ -1,13 +1,14 @@
 // CharacterRenderNode.cs
-// 角色渲染节点 — 封装单个角色的完整视觉表示
-// 作为 Unit 的子节点，自动跟随位置
-// 6层分部位渲染（头/头盔/身体/服装/手甲/武器），各有独立锚点
-// 所有层统一使用 AnimatedSprite3D（单帧即静态，多帧即动画，无需销毁重建）
+// 角色渲染节点 — 骨骼动画版本
+// 使用 UpperBodySkeleton 骨骼系统替代旧的平铺 sprite 方案
+// 保留所有公共 API 接口兼容性
 using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.View.Data;
 using BladeHex.View.Unit;
+using BladeHex.View.Unit.Skeleton;
+using BladeHex.View.Unit.Skeleton.Editor;
 using BladeHex.View.Unit.Slots;
 using static BladeHex.View.Unit.Slots.SlotConfigTable;
 
@@ -17,7 +18,7 @@ namespace BladeHex.Combat;
 public partial class CharacterRenderNode : Node3D
 {
     // ========================================
-    // 信号 — 供 Bus 中转或外部直接监听
+    // 信号
     // ========================================
 
     [Signal] public delegate void HpUpdatedEventHandler(int currentHp, int maxHp);
@@ -28,19 +29,18 @@ public partial class CharacterRenderNode : Node3D
     // 常量
     // ========================================
 
-    private const float HpBarWidth = 60.0f;
-    private const float HpBarHeight = 4.0f;
-    private const float HpBarYGap = 15.0f;
-    private const float HpLabelPixelSize = 3.0f;
-    private const float HpLabelYGap = 20.0f;
     private const float SelectionRingRadius = 40.0f;
     private const float SelectionRingHeight = 5.0f;
+    private const float HpLabelYGap = 20.0f;
+    private const float HpLabelPixelSize = 3.0f;
+    private const float HpBarYGap = 15.0f;
+    private const float HpBarWidth = 60.0f;
+    private const float HpBarHeight = 4.0f;
     private const float TurnIndicatorYGap = 10.0f;
     private const float StatusIconSize = 16.0f;
     private const float StatusIconSpacing = 20.0f;
     private const float DeathFadeDuration = 1.0f;
     private const float HitFlashDuration = 0.5f;
-    private const string LayerNodePrefix = "Layer_";
 
     // ========================================
     // 外部引用
@@ -49,11 +49,20 @@ public partial class CharacterRenderNode : Node3D
     public Unit? UnitRef { get; private set; }
 
     // ========================================
-    // 渲染层 — key = slot int, value = AnimatedSprite3D
+    // 骨骼系统
     // ========================================
 
-    private readonly Dictionary<int, AnimatedSprite3D> _layers = new();
+    private UpperBodySkeleton? _skeleton;
     private Node3D? _bodyRoot;
+    private Sprite3D? _basePedestal;
+    private static Texture2D? _basePedestalTexture;
+
+    // 自定义动画播放状态
+    private AnimClip? _currentClip;
+    private float _animTime;
+    private bool _animPlaying;
+    private WeaponAnimCategory _weaponCategory = WeaponAnimCategory.Slash;
+    private string _currentAnimName = "idle";
 
     // HUD 元素
     private Label3D? _hpLabel;
@@ -67,7 +76,7 @@ public partial class CharacterRenderNode : Node3D
     private int _currentHp;
     private int _maxHp = 1;
     private float _cachedBodyHeight = 120.0f;
-    private float _cachedPixelSize = 1.0f;
+    private float _cachedPixelSize = 1.5f;
     private bool _isSelected;
     private bool _isActiveTurn;
     private bool _isDead;
@@ -81,8 +90,46 @@ public partial class CharacterRenderNode : Node3D
         Visible = false;
     }
 
+    public override void _Process(double delta)
+    {
+        // 骨骼动画驱动
+        if (_animPlaying && _currentClip != null)
+        {
+            _animTime += (float)delta;
+            if (_currentClip.Loop)
+            {
+                if (_currentClip.Duration > 0)
+                    _animTime %= _currentClip.Duration;
+            }
+            else if (_animTime >= _currentClip.Duration)
+            {
+                _animTime = _currentClip.Duration;
+                _animPlaying = false;
+                // 非循环动画结束后回到 idle
+                PlayAnimation("idle");
+                return;
+            }
+
+            ApplyAnimFrame(_animTime);
+        }
+
+        // 选中环脉动
+        if (_isSelected && _selectionRing != null)
+        {
+            float t = (float)(Time.GetTicksMsec() / 1000.0) % 2.0f;
+            _selectionRing.Scale = new Vector3(
+                1.0f + 0.1f * Mathf.Sin(t * Mathf.Tau), 1.0f,
+                1.0f + 0.1f * Mathf.Sin(t * Mathf.Tau));
+            if (_turnIndicator != null && _isActiveTurn)
+            {
+                float baseY = _cachedBodyHeight * _cachedPixelSize + HpLabelYGap + HpLabelPixelSize * 15.0f + TurnIndicatorYGap;
+                _turnIndicator.Position = _turnIndicator.Position with { Y = baseY + 3.0f * Mathf.Sin(t * Mathf.Pi * 3.0f) };
+            }
+        }
+    }
+
     // ========================================
-    // 初始化 — 由 Unit 在 _ready 中调用
+    // 初始化
     // ========================================
 
     public void Setup(Unit unit)
@@ -98,208 +145,252 @@ public partial class CharacterRenderNode : Node3D
         _maxHp = unit.GetMaxHp();
         _isDead = _currentHp <= 0;
 
+        // 确定武器动画类别
+        var weapon = unit.Data.PrimaryMainHand as WeaponData;
+        if (weapon != null)
+            _weaponCategory = WeaponAnimCategoryUtil.FromSubtype(weapon.Subtype);
+
         BuildBodyRoot();
-        BuildAllLayers();
+        BuildSkeleton();
         LoadEquipment();
+        ApplyEquipmentOffsets();
         BuildHud();
 
         Visible = true;
-    }
+        SetProcess(false); // 默认不跑 _Process，播放动画或选中时开启
 
-    // ========================================
-    // 部位层构建
-    // ========================================
+        // 自动播放 idle
+        PlayAnimation("idle");
+    }
 
     private void BuildBodyRoot()
     {
-        _bodyRoot = new Node3D();
-        _bodyRoot.Name = "BodyRoot";
+        _bodyRoot = new Node3D { Name = "BodyRoot" };
         AddChild(_bodyRoot);
-    }
 
-    private void BuildAllLayers()
-    {
-        foreach (var cfg in GetAllSlotConfigs())
-            BuildLayer(cfg);
-        SetupBodyContent();
-    }
-
-    private void BuildLayer(SlotRenderConfig cfg)
-    {
-        var sprite = new AnimatedSprite3D();
-        int slotIdx = cfg.SlotIndex;
-        sprite.Name = LayerNodePrefix + GetSlotName(cfg.Slot);
-        sprite.PixelSize = cfg.PixelSize;
-        sprite.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
-        sprite.Position = cfg.AnchorOffset with { Z = cfg.SortOffset };
-        // AlphaCut = OpaquePrepass:让透明像素正确写 z-buffer,避免分层 sprite 互相穿透/被遮挡
-        // 这是 HD-2D / 多 sprite 角色的标准做法
-        sprite.AlphaCut = SpriteBase3D.AlphaCutMode.OpaquePrepass;
-        sprite.Visible = false;
-        _layers[slotIdx] = sprite;
-        _bodyRoot!.AddChild(sprite);
-    }
-
-    /// <summary>为 BODY 层加载基础内容（角色本体）</summary>
-    private void SetupBodyContent()
-    {
-        var data = UnitRef!.Data!;
-        var sprite = _layers[(int)ItemData.EquipSlot.Body];
-
-        // 通过 CharacterPresenter 解析 body 资源（与 2D / UI 共享同一套解析）
-        var resolution = CharacterPresenter.Resolve(data, !UnitRef.UsingPrimaryWeapon);
-        _cachedBodyHeight = resolution.BodyTextureHeight;
-
-        if (resolution.Slots.TryGetValue(ItemData.EquipSlot.Body, out var bodySlot))
+        // 底座
+        var tex = LoadBasePedestalTexture();
+        if (tex != null)
         {
-            // 优先 SpriteFrames
-            if (bodySlot.Frames != null)
+            _basePedestal = new Sprite3D
             {
-                sprite.SpriteFrames = bodySlot.Frames;
-            }
-            else if (bodySlot.Texture != null)
-            {
-                var frames = new SpriteFrames();
-                frames.SetAnimationSpeed("default", 1.0);
-                frames.SetAnimationLoop("default", true);
-                frames.AddFrame("default", bodySlot.Texture);
-                sprite.SpriteFrames = frames;
-            }
-
-            if (resolution.BodyIsPlaceholder)
-            {
-                // 程序化人体占位与装备 sprite 在同一像素坐标系下,不需要额外放大。
-                sprite.Modulate = resolution.PlaceholderModulate;
-            }
-
-            sprite.Offset = new Vector2(0, _cachedBodyHeight / 2.0f);
-            sprite.Play("default");
-            sprite.Visible = true;
-            _cachedPixelSize = sprite.PixelSize;
+                Name = "BasePedestal",
+                Texture = tex,
+                PixelSize = 0.5f,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
+                RotationDegrees = new Vector3(-90, 0, 0),
+                Position = new Vector3(0, 2.0f, 0),
+                AlphaCut = SpriteBase3D.AlphaCutMode.OpaquePrepass,
+                SortingOffset = 1.0f,
+            };
+            _bodyRoot.AddChild(_basePedestal);
         }
     }
 
+    private static Texture2D? LoadBasePedestalTexture()
+    {
+        if (_basePedestalTexture != null) return _basePedestalTexture;
+        _basePedestalTexture = GD.Load<Texture2D>("res://assets/generated_ui_icons/unit_base_steel.png");
+        return _basePedestalTexture;
+    }
+
+    private void BuildSkeleton()
+    {
+        var config = BoneConfig.Standard; // TODO: 根据种族/体型选择
+        _skeleton = new UpperBodySkeleton();
+        _skeleton.Build(_bodyRoot!, config);
+        _cachedPixelSize = config.PixelSize;
+        _cachedBodyHeight = config.TorsoHeight + config.HeadOffsetY;
+    }
+
     // ========================================
-    // 换装 API — 无销毁重建，直接替换 SpriteFrames / Texture
+    // 换装 API
     // ========================================
 
-    /// <summary>设置指定部位的外观纹理（复用已有 SpriteFrames，避免 GC 压力）</summary>
     public void SetSlotTexture(ItemData.EquipSlot slot, Texture2D texture)
     {
-        int slotIdx = (int)slot;
-        if (!_layers.TryGetValue(slotIdx, out var sprite)) return;
+        var sprite = GetSpriteForSlot(slot);
+        if (sprite == null) return;
 
-        var frames = sprite.SpriteFrames;
-        // 如果已有 SpriteFrames 且只有 default 动画，复用之
-        if (frames != null && frames.GetAnimationNames().Length == 1 && frames.HasAnimation("default"))
+        if (texture != null)
         {
-            frames.Clear("default");
-            frames.AddFrame("default", texture);
+            sprite.Texture = texture;
+            sprite.Visible = true;
+            sprite.Scale = Vector2.One; // 1:1 像素，不缩放
         }
         else
         {
-            frames = new SpriteFrames();
-            // SpriteFrames 构造时已含 "default" 动画
-            frames.SetAnimationSpeed("default", 1.0);
-            frames.SetAnimationLoop("default", true);
-            frames.AddFrame("default", texture);
-            sprite.SpriteFrames = frames;
+            sprite.Visible = false;
         }
-
-        var cfg = GetSlotConfig(slot);
-        sprite.Offset = new Vector2(0, texture != null ? texture.GetHeight() / 2.0f : cfg.DefaultSize.Y / 2.0f);
-        sprite.Play("default");
-        sprite.Visible = texture != null;
-        EmitSignal(SignalName.EquipmentSlotChanged, slotIdx);
+        EmitSignal(SignalName.EquipmentSlotChanged, (int)slot);
     }
 
-    /// <summary>设置指定部位的外观序列帧</summary>
     public void SetSlotFrames(ItemData.EquipSlot slot, SpriteFrames frames)
     {
-        int slotIdx = (int)slot;
-        if (!_layers.TryGetValue(slotIdx, out var sprite)) return;
-
-        sprite.SpriteFrames = frames;
-
-        var cfg = GetSlotConfig(slot);
-        float texHeight = cfg.DefaultSize.Y;
-        if (frames != null && frames.GetFrameCount("default") > 0)
-        {
-            var tex = frames.GetFrameTexture("default", 0);
-            if (tex != null)
-                texHeight = tex.GetHeight();
-        }
-        sprite.Offset = new Vector2(0, texHeight / 2.0f);
-        sprite.Play("default");
-        sprite.Visible = true;
-        EmitSignal(SignalName.EquipmentSlotChanged, slotIdx);
+        // 取第一帧作为贴图
+        if (frames == null || frames.GetFrameCount("default") == 0) return;
+        var tex = frames.GetFrameTexture("default", 0);
+        if (tex != null)
+            SetSlotTexture(slot, tex);
     }
 
-    /// <summary>清除指定部位外观（Body 层不可清除）</summary>
     public void ClearSlot(ItemData.EquipSlot slot)
     {
         if (!IsSlotSwappable(slot)) return;
-        int slotIdx = (int)slot;
-        if (_layers.TryGetValue(slotIdx, out var sprite))
-            sprite.Visible = false;
+        var sprite = GetSpriteForSlot(slot);
+        if (sprite != null) sprite.Visible = false;
     }
 
-    /// <summary>获取指定部位的渲染节点</summary>
     public AnimatedSprite3D? GetLayer(ItemData.EquipSlot slot)
     {
-        _layers.TryGetValue((int)slot, out var sprite);
-        return sprite;
+        // 向后兼容：返回 null
+        return null;
     }
 
-    // ========================================
-    // 装备加载 — 单一映射，Bus 通过此接口驱动
-    // ========================================
+    private Sprite2D? GetSpriteForSlot(ItemData.EquipSlot slot)
+    {
+        if (_skeleton == null) return null;
+        return _skeleton.GetSlotSprite(slot);
+    }
 
-    /// <summary>从 UnitData 装备槽位加载所有外观</summary>
     private void LoadEquipment()
     {
         var data = UnitRef!.Data!;
-        // 通过 Presenter 统一解析（与 2D / UI 共享）
         var resolution = CharacterPresenter.Resolve(data, !UnitRef.UsingPrimaryWeapon);
+        _cachedBodyHeight = resolution.BodyTextureHeight;
+
         foreach (var (slot, slotData) in resolution.Slots)
         {
-            if (slot == ItemData.EquipSlot.Body) continue; // body 已由 SetupBodyContent 处理
             if (!slotData.HasContent) continue;
-            if (slotData.Frames != null)
-                SetSlotFrames(slot, slotData.Frames);
-            else if (slotData.Texture != null)
-                SetSlotTexture(slot, slotData.Texture);
+            var tex = slotData.Texture ?? slotData.Frames?.GetFrameTexture("default", 0);
+            if (tex != null)
+                SetSlotTexture(slot, tex);
         }
+
+        // Body 占位符着色
+        if (resolution.BodyIsPlaceholder && _skeleton != null)
+            _skeleton.SpriteBody.Modulate = resolution.PlaceholderModulate;
     }
 
-    /// <summary>全量刷新装备外观（重新从 UnitData 读取）</summary>
     public void RefreshAllEquipment()
     {
-        if (UnitRef?.Data == null) return;
-        // 先清除可换装层
-        foreach (var kvp in _layers)
-        {
-            if (IsSlotSwappable((ItemData.EquipSlot)kvp.Key))
-                kvp.Value.Visible = false;
-        }
+        if (UnitRef?.Data == null || _skeleton == null) return;
+        _skeleton.SpriteBody.Visible = false;
+        _skeleton.SpriteCostume.Visible = false;
+        _skeleton.SpriteHead.Visible = false;
+        _skeleton.SpriteHelmet.Visible = false;
+        _skeleton.SpriteHands.Visible = false;
+        _skeleton.SpriteWeapon.Visible = false;
         LoadEquipment();
+        ApplyEquipmentOffsets();
+    }
+
+    private void ApplyEquipmentOffsets()
+    {
+        if (_skeleton == null) return;
+        foreach (var slot in EquipmentOffsetConfig.EditableSlots)
+        {
+            EquipmentOffsetConfig config;
+            if (slot == ItemData.EquipSlot.Weapon)
+                config = EquipmentOffsetConfig.GetWeapon(_weaponCategory, _currentAnimName);
+            else
+                config = EquipmentOffsetConfig.Get(slot);
+
+            if (config.OffsetX == 0 && config.OffsetY == 0
+                && Mathf.IsEqualApprox(config.Scale, 1.0f)
+                && Mathf.IsEqualApprox(config.Rotation, 0f))
+                continue; // 全默认值，跳过
+
+            var sprite = _skeleton.GetSlotSprite(slot);
+            if (sprite == null || !sprite.Visible) continue;
+
+            sprite.Offset = new Vector2(config.OffsetX, config.OffsetY);
+
+            // 旋转（武器）
+            if (EquipmentOffsetConfig.SupportsRotation(slot))
+            {
+                sprite.RotationDegrees = config.Rotation;
+            }
+
+            // 缩放：用户手动设置的缩放倍率
+            if (!Mathf.IsEqualApprox(config.Scale, 1.0f))
+            {
+                sprite.Scale = new Vector2(config.Scale, config.Scale);
+            }
+
+            // 水平翻转
+            if (config.FlipH)
+            {
+                sprite.Scale = new Vector2(-sprite.Scale.X, sprite.Scale.Y);
+            }
+        }
     }
 
     // ========================================
-    // 动画 — 同步所有 AnimatedSprite3D 层
+    // 动画
     // ========================================
 
     public void PlayAnimation(string animName)
     {
-        if (_isDead) return;
-        foreach (var sprite in _layers.Values)
+        if (_isDead && animName != "die") return;
+
+        // 映射旧动画名
+        string resolved = animName switch
         {
-            if (!sprite.Visible) continue;
-            if (sprite.SpriteFrames != null && sprite.SpriteFrames.HasAnimation(animName))
-                sprite.Play(animName);
-            else if (sprite.SpriteFrames != null && sprite.SpriteFrames.HasAnimation("default"))
-                sprite.Play("default");
+            "default" => "idle",
+            "attack" => _weaponCategory is WeaponAnimCategory.Bow or WeaponAnimCategory.Crossbow or WeaponAnimCategory.Throw
+                ? "attack_ranged" : "attack_melee",
+            _ => animName,
+        };
+
+        _currentAnimName = resolved;
+
+        // 尝试加载自定义动画 JSON
+        var clip = AnimClipSerializer.Load(resolved, _weaponCategory);
+        if (clip != null)
+        {
+            _currentClip = clip;
+            _animTime = 0;
+            _animPlaying = true;
+            SetProcess(true);
+            return;
         }
+
+        // 回退：无自定义动画时不播放（AnimPlayer 已移除）
+        // 新方案完全依赖 AnimClip JSON 系统
+        _currentClip = null;
+        _animPlaying = false;
+        SetProcess(_isSelected);
+    }
+
+    private void ApplyAnimFrame(float time)
+    {
+        if (_currentClip == null || _skeleton == null) return;
+        var pose = AnimClipInterpolator.Sample(_currentClip, time);
+
+        foreach (var (boneName, p) in pose)
+        {
+            Node2D? node = boneName switch
+            {
+                "Torso" => _skeleton.BoneTorso,
+                "Head" => _skeleton.BoneHead,
+                "ArmL" => _skeleton.BoneArmL,
+                "ArmR" => _skeleton.BoneArmR,
+                "ForearmL" => _skeleton.BoneForearmL,
+                "ForearmR" => _skeleton.BoneForearmR,
+                "Weapon" => _skeleton.BoneWeapon,
+                _ => null,
+            };
+            if (node == null) continue;
+
+            node.RotationDegrees = p.RotationZ;
+
+            if (boneName == "Torso")
+                node.Position = new Vector2(0, -p.PositionY); // 2D: Y 向上为负
+        }
+
+        // 叠加部件偏移配置（含武器）
+        ApplyEquipmentOffsets();
     }
 
     public void PlayHit()
@@ -307,17 +398,12 @@ public partial class CharacterRenderNode : Node3D
         if (_isDead) return;
         FlashAll(new Color(1.5f, 1.5f, 1.5f));
         PlayAnimation("hit");
-        Schedule(HitFlashDuration, () => { if (!_isDead) PlayAnimation("default"); });
+        Schedule(HitFlashDuration, () => { if (!_isDead) PlayAnimation("idle"); });
     }
 
-    /// <summary>
-    /// 攻击微动画 — 将 _bodyRoot 朝目标方向突进 20px 后弹回。
-    /// direction 为攻击者指向目标的归一化方向向量（世界 XZ 平面）。
-    /// </summary>
     public void PlayAttackLunge(Vector3 direction)
     {
         if (_isDead || _bodyRoot == null) return;
-        // 20px 偏移量（像素单位 × pixelSize 转世界坐标）
         float lungeDistance = 20.0f * _cachedPixelSize;
         var offset = direction.Normalized() * lungeDistance;
 
@@ -328,7 +414,6 @@ public partial class CharacterRenderNode : Node3D
             .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
     }
 
-    /// <summary>选中微动画 — 向上弹跳一下</summary>
     public void PlaySelectBounce()
     {
         if (_isDead || _bodyRoot == null) return;
@@ -342,12 +427,10 @@ public partial class CharacterRenderNode : Node3D
             .SetTrans(Tween.TransitionType.Bounce).SetEase(Tween.EaseType.Out);
     }
 
-    /// <summary>闪避微动画 — 向攻击者反方向后退一步再回来</summary>
     public void PlayDodgeBack(Vector3 attackerDirection)
     {
         if (_isDead || _bodyRoot == null) return;
         float dodgeDistance = 15.0f * _cachedPixelSize;
-        // 反方向后退
         var offset = -attackerDirection.Normalized() * dodgeDistance;
         offset.Y = 0;
 
@@ -371,46 +454,30 @@ public partial class CharacterRenderNode : Node3D
     }
 
     // ========================================
-    // HP 显示
+    // HP / 状态
     // ========================================
 
     public void UpdateHp(int current, int maximum)
     {
         _currentHp = current;
         _maxHp = Mathf.Max(1, maximum);
-        // 旧 HP HUD 已由 UnitHealthBarComponent 接管,这里只更新内部状态 + 信号,不动视觉
         EmitSignal(SignalName.HpUpdated, _currentHp, _maxHp);
     }
-
-    // ========================================
-    // 状态效果图标
-    // ========================================
 
     public void UpdateStatusEffects(Godot.Collections.Array<Godot.Collections.Dictionary> effects)
     {
         if (_statusContainer == null) return;
-        foreach (var child in _statusContainer.GetChildren())
-            child.QueueFree();
+        foreach (var child in _statusContainer.GetChildren()) child.QueueFree();
         for (int i = 0; i < effects.Count; i++)
-        {
-            var icon = MakeStatusIcon(effects[i], i);
-            if (icon != null)
-                _statusContainer.AddChild(icon);
-        }
+            _statusContainer.AddChild(MakeStatusIcon(effects[i], i));
     }
 
-    // 保留 Variant 签名供 Bus 从 兼容调用
     public void UpdateStatusEffects(Godot.Collections.Array effects)
     {
         if (_statusContainer == null) return;
-        foreach (var child in _statusContainer.GetChildren())
-            child.QueueFree();
+        foreach (var child in _statusContainer.GetChildren()) child.QueueFree();
         for (int i = 0; i < effects.Count; i++)
-        {
-            var icon = MakeStatusIconFromVariant(effects[i], i);
-            if (icon != null)
-                _statusContainer.AddChild(icon);
-        }
+            _statusContainer.AddChild(MakeStatusIconFromVariant(effects[i], i));
     }
 
     // ========================================
@@ -420,57 +487,31 @@ public partial class CharacterRenderNode : Node3D
     public void SetSelected(bool on)
     {
         _isSelected = on;
-        if (_selectionRing != null)
-        {
-            _selectionRing.Visible = on;
-            SetProcess(on);
-        }
+        if (_selectionRing != null) _selectionRing.Visible = on;
+        SetProcess(on || _animPlaying);
     }
 
     public void SetActiveTurn(bool on)
     {
         _isActiveTurn = on;
-        if (_turnIndicator != null)
-            _turnIndicator.Visible = on;
+        if (_turnIndicator != null) _turnIndicator.Visible = on;
     }
 
     // ========================================
-    // 朝向 — 6 方向中,2/3/4 = 西(向左),0/1/5 = 东(向右,默认)
+    // 朝向
     // ========================================
 
     private int _facing = 0;
 
-    /// <summary>
-    /// 设置角色朝向(0-5,六边形 6 方向)。
-    /// 内部判定"朝右(默认)"还是"朝左",对所有 sprite 层执行 FlipH 与 X 锚点镜像,
-    /// 让武器/盾自动出现在面向的那一侧。
-    /// </summary>
     public void SetFacing(int facing)
     {
         _facing = ((facing % 6) + 6) % 6;
         bool facingLeft = _facing >= 2 && _facing <= 4;
-        ApplyFacingToLayers(facingLeft);
-    }
-
-    private void ApplyFacingToLayers(bool facingLeft)
-    {
-        foreach (var kvp in _layers)
-        {
-            int slotIdx = kvp.Key;
-            var sprite = kvp.Value;
-            var cfg = SlotConfigTable.GetSlotConfig((ItemData.EquipSlot)slotIdx);
-
-            // FlipH 实现整张贴图水平翻转(在 Billboard.FixedY 下对 Sprite3D 仍然有效)
-            sprite.FlipH = facingLeft;
-
-            // 锚点的 X 也要镜像 — 让"原本在右手位置的武器"跑到左手位置
-            float ax = facingLeft ? -cfg.AnchorOffset.X : cfg.AnchorOffset.X;
-            sprite.Position = new Vector3(ax, cfg.AnchorOffset.Y, cfg.SortOffset);
-        }
+        _skeleton?.SetFacing(facingLeft);
     }
 
     // ========================================
-    // HUD 构建 — 从 UnitHud.tscn 实例化
+    // HUD
     // ========================================
 
     private static readonly PackedScene _hudScene = GD.Load<PackedScene>("res://BladeHexFrontend/src/View/Unit/UnitHud.tscn");
@@ -479,12 +520,10 @@ public partial class CharacterRenderNode : Node3D
     {
         float topY = _cachedBodyHeight * _cachedPixelSize;
 
-        // 实例化 HUD 场景
         var hudInstance = _hudScene.Instantiate<Node3D>();
         hudInstance.Name = "Hud";
         AddChild(hudInstance);
 
-        // 通过 unique_name_in_owner 绑定节点
         _hpLabel = hudInstance.GetNode<Label3D>("%HpLabel");
         _hpBarBg = hudInstance.GetNode<MeshInstance3D>("%HpBarBg");
         _hpBarFg = hudInstance.GetNode<MeshInstance3D>("%HpBarFg");
@@ -492,23 +531,17 @@ public partial class CharacterRenderNode : Node3D
         _selectionRing = hudInstance.GetNode<MeshInstance3D>("%SelectionRing");
         _turnIndicator = hudInstance.GetNode<MeshInstance3D>("%TurnIndicator");
 
-        // 隐藏旧 HP 条/Label — 血量显示已由 UnitHealthBarComponent 接管(在角色下方)
         if (_hpLabel != null) _hpLabel.Visible = false;
         if (_hpBarBg != null) _hpBarBg.Visible = false;
         if (_hpBarFg != null) _hpBarFg.Visible = false;
 
-        // 应用运行时动态参数（选中环、状态图标等仍需要位置）
         ApplyHudLayout(topY);
     }
 
-    /// <summary>根据角色身高动态调整 HUD 元素位置和材质</summary>
     private void ApplyHudLayout(float topY)
     {
-        // HP Label
-        if (_hpLabel != null)
-            _hpLabel.Position = new Vector3(0, topY + HpLabelYGap, 0);
+        if (_hpLabel != null) _hpLabel.Position = new Vector3(0, topY + HpLabelYGap, 0);
 
-        // HP Bar — 背景 + 前景
         float barY = topY + HpBarYGap;
         if (_hpBarBg != null)
         {
@@ -522,63 +555,89 @@ public partial class CharacterRenderNode : Node3D
             _hpBarFg.Position = new Vector3(0, barY, -0.1f);
             _hpBarFg.MaterialOverride = MakeHudMaterial(new Color(0.2f, 0.8f, 0.2f));
         }
-
-        // Status Container
         if (_statusContainer != null)
             _statusContainer.Position = new Vector3(0, topY + HpBarYGap + HpBarHeight + 5.0f, 0);
-
-        // Selection Ring
         if (_selectionRing != null)
         {
-            _selectionRing.Mesh = new CylinderMesh
-            {
-                TopRadius = SelectionRingRadius,
-                BottomRadius = SelectionRingRadius,
-                Height = SelectionRingHeight,
-            };
+            _selectionRing.Mesh = new CylinderMesh { TopRadius = SelectionRingRadius, BottomRadius = SelectionRingRadius, Height = SelectionRingHeight };
             _selectionRing.Position = new Vector3(0, SelectionRingHeight / 2.0f, 0);
-            var mat = new StandardMaterial3D
+            _selectionRing.MaterialOverride = new StandardMaterial3D
             {
                 Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
                 AlbedoColor = new Color(1.0f, 0.9f, 0.2f, 0.6f),
             };
-            _selectionRing.MaterialOverride = mat;
         }
-
-        // Turn Indicator
         if (_turnIndicator != null)
         {
             _turnIndicator.Mesh = new QuadMesh { Size = new Vector2(12, 12) };
             _turnIndicator.Position = new Vector3(0, topY + HpLabelYGap + HpLabelPixelSize * 15.0f + TurnIndicatorYGap, 0);
-            var mat = new StandardMaterial3D
+            _turnIndicator.MaterialOverride = new StandardMaterial3D
             {
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
                 BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
                 AlbedoColor = new Color(0.2f, 1.0f, 0.4f),
             };
-            _turnIndicator.MaterialOverride = mat;
         }
     }
 
-    private static StandardMaterial3D MakeHudMaterial(Color color)
+    // ========================================
+    // 视觉效果
+    // ========================================
+
+    private void FlashAll(Color color)
     {
-        return new StandardMaterial3D
+        if (_skeleton == null) return;
+        var sprites = new Sprite2D[] { _skeleton.SpriteBody, _skeleton.SpriteCostume, _skeleton.SpriteHead,
+            _skeleton.SpriteHelmet, _skeleton.SpriteHands, _skeleton.SpriteWeapon, _skeleton.SpriteShield };
+        foreach (var sprite in sprites)
         {
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
-            NoDepthTest = true,
-            RenderPriority = 10,
-            AlbedoColor = color,
-        };
+            if (!sprite.Visible) continue;
+            var orig = sprite.Modulate;
+            sprite.Modulate = color;
+            Schedule(0.1f, () => { if (GodotObject.IsInstanceValid(sprite)) sprite.Modulate = orig; });
+        }
     }
+
+    private void FadeAll(float duration)
+    {
+        if (_skeleton == null) return;
+        var sprites = new Sprite2D[] { _skeleton.SpriteBody, _skeleton.SpriteCostume, _skeleton.SpriteHead,
+            _skeleton.SpriteHelmet, _skeleton.SpriteHands, _skeleton.SpriteWeapon, _skeleton.SpriteShield };
+        foreach (var sprite in sprites)
+        {
+            if (!sprite.Visible) continue;
+            var tw = CreateTween();
+            var s = sprite;
+            tw.TweenProperty(s, "modulate:a", 0.0, duration);
+            tw.TweenCallback(Callable.From(() => { if (GodotObject.IsInstanceValid(s)) s.Visible = false; }));
+        }
+    }
+
+    // ========================================
+    // 工具
+    // ========================================
+
+    private void Schedule(float delay, System.Action callback)
+    {
+        var timer = GetTree().CreateTimer(delay);
+        timer.Timeout += callback;
+    }
+
+    private static StandardMaterial3D MakeHudMaterial(Color color) => new()
+    {
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
+        NoDepthTest = true,
+        RenderPriority = 10,
+        AlbedoColor = color,
+    };
 
     private Sprite3D MakeStatusIcon(Godot.Collections.Dictionary effect, int index)
     {
         var icon = new Sprite3D();
-        var tex = new PlaceholderTexture2D();
-        tex.Size = new Vector2(StatusIconSize, StatusIconSize);
+        var tex = new PlaceholderTexture2D { Size = new Vector2(StatusIconSize, StatusIconSize) };
         icon.Texture = tex;
         icon.PixelSize = 0.5f;
         icon.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
@@ -592,8 +651,7 @@ public partial class CharacterRenderNode : Node3D
     private Sprite3D MakeStatusIconFromVariant(Variant effectVar, int index)
     {
         var icon = new Sprite3D();
-        var tex = new PlaceholderTexture2D();
-        tex.Size = new Vector2(StatusIconSize, StatusIconSize);
+        var tex = new PlaceholderTexture2D { Size = new Vector2(StatusIconSize, StatusIconSize) };
         icon.Texture = tex;
         icon.PixelSize = 0.5f;
         icon.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
@@ -606,73 +664,6 @@ public partial class CharacterRenderNode : Node3D
             icon.Modulate = StatusColor(id);
         }
         return icon;
-    }
-
-    // ========================================
-    // 视觉效果 — 统一操作所有层
-    // ========================================
-
-    private void FlashAll(Color color)
-    {
-        foreach (var sprite in _layers.Values)
-        {
-            if (!sprite.Visible) continue;
-            var orig = sprite.Modulate;
-            sprite.Modulate = color;
-            Schedule(0.1f, () =>            {
-                if (GodotObject.IsInstanceValid(sprite))
-                    sprite.Modulate = orig;
-            });
-        }
-    }
-
-    private void FadeAll(float duration)
-    {
-        foreach (var sprite in _layers.Values)
-        {
-            if (!sprite.Visible) continue;
-            var tw = CreateTween();
-            var capturedSprite = sprite;
-            tw.TweenProperty(capturedSprite, "modulate:a", 0.0, duration);
-            tw.TweenCallback(Callable.From(() =>
-            {
-                if (GodotObject.IsInstanceValid(capturedSprite))
-                    capturedSprite.Visible = false;
-            }));
-        }
-    }
-
-    // ========================================
-    // _process — 仅选中时运行
-    // ========================================
-
-    public override void _Process(double delta)
-    {
-        if (!_isSelected || _selectionRing == null)
-        {
-            SetProcess(false);
-            return;
-        }
-        float t = (float)(Time.GetTicksMsec() / 1000.0) % 2.0f;
-        _selectionRing.Scale = new Vector3(
-            1.0f + 0.1f * Mathf.Sin(t * Mathf.Tau),
-            1.0f,
-            1.0f + 0.1f * Mathf.Sin(t * Mathf.Tau));
-        if (_turnIndicator != null && _isActiveTurn)
-        {
-            float baseY = _cachedBodyHeight * _cachedPixelSize + HpLabelYGap + HpLabelPixelSize * 15.0f + TurnIndicatorYGap;
-            _turnIndicator.Position = _turnIndicator.Position with { Y = baseY + 3.0f * Mathf.Sin(t * Mathf.Pi * 3.0f) };
-        }
-    }
-
-    // ========================================
-    // 工具
-    // ========================================
-
-    private void Schedule(float delay, System.Action callback)
-    {
-        var timer = GetTree().CreateTimer(delay);
-        timer.Timeout += callback;
     }
 
     private static Color StatusColor(string id) => id switch

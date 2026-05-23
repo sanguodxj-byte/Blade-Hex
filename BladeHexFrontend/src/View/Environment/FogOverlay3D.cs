@@ -120,6 +120,7 @@ public partial class FogOverlay3D : MeshInstance3D
         _material.SetShaderParameter("unexplored_opacity", UnexploredOpacity);
         _material.SetShaderParameter("revealed_opacity", RevealedOpacity);
         _material.SetShaderParameter("tiling_scale", TextureTilingScale);
+        _material.SetShaderParameter("mask_size", new Vector2(_maskW, _maskH));
 
         // 加载羊皮纸纹理（如果有）
         if (!string.IsNullOrEmpty(ParchmentTexturePath))
@@ -266,6 +267,7 @@ uniform float unexplored_opacity : hint_range(0.0, 1.0) = 0.92;
 uniform float revealed_opacity : hint_range(0.0, 1.0) = 0.0;
 uniform float tiling_scale = 0.005;
 uniform float edge_softness = 0.15;
+uniform vec2 mask_size = vec2(256.0, 256.0);
 
 void fragment() {
     // 采样迷雾 mask（UV 对应世界坐标归一化）
@@ -276,7 +278,7 @@ void fragment() {
     alpha *= unexplored_opacity;
     
     // 羊皮纸纹理（世界坐标平铺）
-    vec2 tiled_uv = UV * vec2(textureSize(fog_mask, 0)) * tiling_scale;
+    vec2 tiled_uv = UV * mask_size * tiling_scale;
     vec3 parchment_color = texture(parchment_texture, tiled_uv).rgb;
     
     // 边缘染色（迷雾边缘略深，模拟古地图边缘烧焦效果）

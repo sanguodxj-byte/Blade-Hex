@@ -110,6 +110,9 @@ public partial class CharacterView2D : Node2D
             }
         }
 
+        // 应用已保存的部件偏移配置
+        ApplyEquipmentOffsets();
+
         // 占位符着色
         if (resolution.BodyIsPlaceholder && _layers.TryGetValue((int)ItemData.EquipSlot.Body, out var bodySprite))
             bodySprite.Modulate = resolution.PlaceholderModulate;
@@ -146,6 +149,31 @@ public partial class CharacterView2D : Node2D
         sprite.ZIndex = cfg.ZOrder;
         // 像素角色锚点底部对齐（脚在 0,0）
         sprite.Centered = true;
+    }
+
+    /// <summary>应用已保存的部件偏移配置到 2D 层</summary>
+    private void ApplyEquipmentOffsets()
+    {
+        foreach (var slot in BladeHex.View.Unit.Skeleton.Editor.EquipmentOffsetConfig.EditableSlots)
+        {
+            var config = BladeHex.View.Unit.Skeleton.Editor.EquipmentOffsetConfig.Get(slot);
+            if (config.OffsetX == 0 && config.OffsetY == 0
+                && Mathf.IsEqualApprox(config.Scale, 1.0f)
+                && Mathf.IsEqualApprox(config.Rotation, 0f))
+                continue;
+
+            int slotIndex = (int)slot;
+            if (!_layers.TryGetValue(slotIndex, out var sprite)) continue;
+            if (!sprite.Visible) continue;
+
+            // 叠加偏移到现有 Offset 上
+            sprite.Offset += new Vector2(config.OffsetX, config.OffsetY);
+
+            if (BladeHex.View.Unit.Skeleton.Editor.EquipmentOffsetConfig.SupportsRotation(slot))
+                sprite.RotationDegrees = config.Rotation;
+            if (!Mathf.IsEqualApprox(config.Scale, 1.0f))
+                sprite.Scale = new Vector2(config.Scale, config.Scale);
+        }
     }
 
     private void ApplySlot(AnimatedSprite2D sprite, SlotRenderConfig cfg, CharacterSlotResolution slotData)

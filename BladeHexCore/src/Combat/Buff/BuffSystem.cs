@@ -96,46 +96,7 @@ public static class BuffSystem
     /// </summary>
     public static int TickAll(UnitData target)
     {
-        int totalDamage = 0;
-        var toRemove = new List<BuffInstance>();
-
-        foreach (var buff in target.Runtime.ActiveBuffs)
-        {
-            // Tick 伤害/治疗
-            if (buff.OnTick != null)
-            {
-                int tickValue = RollTick(buff.OnTick) * buff.CurrentStacks;
-                if (buff.OnTick.IsHeal)
-                    totalDamage -= tickValue; // 负值=治疗
-                else
-                    totalDamage += tickValue;
-            }
-
-            // 豁免尝试
-            if (!string.IsNullOrEmpty(buff.SaveToRemove))
-            {
-                // 简化:掷 d20 >= SaveDc 则解除
-                int roll = RPGRuleEngine.RollDice(1, 20);
-                if (roll >= buff.SaveDc)
-                {
-                    toRemove.Add(buff);
-                    continue;
-                }
-            }
-
-            // 持续时间递减
-            if (buff.Duration > 0)
-            {
-                buff.Duration--;
-                if (buff.Duration <= 0)
-                    toRemove.Add(buff);
-            }
-        }
-
-        foreach (var b in toRemove)
-            target.Runtime.ActiveBuffs.Remove(b);
-
-        return totalDamage;
+        return BuffTurnHooks.TickTurnStart(target).NetHpDelta;
     }
 
     // ============================================================
@@ -232,11 +193,6 @@ public static class BuffSystem
     // ============================================================
     // 内部工具
     // ============================================================
-
-    private static int RollTick(TickEffect tick)
-    {
-        return RPGRuleEngine.RollDice(tick.DiceCount, tick.DiceSides);
-    }
 
     private static BuffInstance Clone(BuffInstance template)
     {

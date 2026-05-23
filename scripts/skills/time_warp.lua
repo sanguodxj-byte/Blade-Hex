@@ -3,5 +3,5 @@
 
 function execute(ctx)
     if not check_mana(ctx.attacker, 10) then return end
-    result:add_effect(ctx.attacker, "haste", 1)
+    buff:apply(ctx.attacker, "haste", 1)
 end

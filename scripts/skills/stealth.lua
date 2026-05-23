@@ -2,5 +2,5 @@
 -- 潜行：进入隐身状态
 
 function execute(ctx)
-    result:add_effect(ctx.attacker, "invisibility", 99)
+    buff:apply_custom(ctx.attacker, "invisibility", 99, { untargetable = true })
 end

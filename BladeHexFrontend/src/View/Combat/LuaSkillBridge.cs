@@ -48,6 +48,7 @@ public static class LuaSkillBridge
         // 注册 Frontend 层 API 对象
         lua["unit"] = new UnitApiObject();
         lua["result"] = new ResultApiObject();
+        lua["buff"] = new BuffApiObject();
     }
 
     // ========================================================================
@@ -128,6 +129,8 @@ public static class LuaSkillBridge
         var proxy = new LuaUnitProxy
         {
             InternalId = _nextProxyId++,
+            instance_id = (long)unit.GetInstanceId(),
+            character_id = unit.Data?.CharacterId ?? -1,
             name = unit.Data?.UnitName ?? "Unknown",
             level = unit.Data?.Level ?? 1,
             is_enemy = unit.Data?.IsEnemy ?? false,
@@ -157,12 +160,18 @@ public static class LuaSkillBridge
 
         // HP 设置（不触发回调）
         proxy.OnHpChanged = null;
+        proxy.OnApChanged = null;
+        proxy.OnExtraActionsChanged = null;
         proxy.hp = unit.CurrentHp;
 
-        // 填充状态效果
+        // 填充状态效果。迁移期同时读取旧 StatusEffect 与新 Buff,让 Lua 的
+        // proxy:has_effect("...") 对两套运行时状态保持一致。
         if (unit.Data?.Runtime.ActiveStatusEffects != null)
             foreach (var eff in unit.Data.Runtime.ActiveStatusEffects)
                 proxy.ActiveEffects.Add(eff.Id);
+        if (unit.Data?.Runtime.ActiveBuffs != null)
+            foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+                proxy.ActiveEffects.Add(buff.Id);
 
         // 注册到映射表
         _unitMap[proxy.InternalId] = unit;
@@ -177,6 +186,15 @@ public static class LuaSkillBridge
         {
             if (_unitMap.TryGetValue(id, out var u) && u.Data != null)
                 u.Data.CurrentMana = newMana;
+        };
+        proxy.OnApChanged = (id, newAp) =>
+        {
+            if (_unitMap.TryGetValue(id, out var u)) u.CurrentAp = newAp;
+        };
+        proxy.OnExtraActionsChanged = (id, value) =>
+        {
+            if (_unitMap.TryGetValue(id, out var u) && u.Data != null)
+                u.Data.Runtime.ExtraActionsThisTurn = value;
         };
 
         return proxy;
@@ -244,6 +262,139 @@ public static class LuaSkillBridge
             if (proxy == null) return false;
             var u = ResolveUnit(proxy);
             return u != null && GodotObject.IsInstanceValid(u) && u.CurrentHp > 0;
+        }
+    }
+
+    // ========================================================================
+    // buff API 对象
+    // ========================================================================
+
+    /// <summary>
+    /// buff 全局对象 — Lua 中通过 buff.apply(target, "burning", 2) 直接调用新 BuffSystem。
+    /// 这是迁移期 API：让新 Lua 技能可以绕开旧 status_effects 协议，但不强制迁移旧脚本。
+    /// </summary>
+    public class BuffApiObject
+    {
+        public bool apply(LuaUnitProxy proxy, string buffId, int duration = -1, string source = "")
+            => ApplyInternal(proxy, buffId, duration, null, source);
+
+        public bool apply_custom(LuaUnitProxy proxy, string buffId, int duration = -1, LuaTable? mods = null, string source = "")
+            => ApplyInternal(proxy, buffId, duration, mods, source);
+
+        private static bool ApplyInternal(LuaUnitProxy proxy, string buffId, int duration, LuaTable? mods, string source)
+        {
+            var u = ResolveUnit(proxy);
+            if (u?.Data == null || string.IsNullOrEmpty(buffId)) return false;
+
+            string actualSource = string.IsNullOrEmpty(source) ? "lua_skill" : source;
+            int sourceUnitId = GodotObject.IsInstanceValid(_currentCtx.Attacker)
+                ? (int)_currentCtx.Attacker.GetInstanceId()
+                : -1;
+
+            Buff.BuffInstance? applied;
+            if (mods == null)
+            {
+                applied = Buff.BuffSystem.Apply(u.Data, buffId, duration, sourceUnitId, actualSource);
+            }
+            else
+            {
+                var template = Buff.BuffRegistry.Get(buffId);
+                var instance = template != null
+                    ? CloneBuffTemplate(template)
+                    : new Buff.BuffInstance { Id = buffId, Name = buffId, Description = buffId };
+
+                instance.Id = buffId;
+                if (string.IsNullOrEmpty(instance.Name)) instance.Name = buffId;
+                instance.Duration = duration > 0 ? duration : instance.Duration;
+                if (instance.Duration == 0) instance.Duration = duration;
+                instance.SourceUnitId = sourceUnitId;
+                instance.Source = actualSource;
+                instance.Modifiers = LuaTableToStatModifiers(mods);
+
+                Buff.BuffSystem.ApplyDirect(u.Data, instance);
+                applied = u.Data.Runtime.ActiveBuffs.Find(b => b.Id == buffId && b.Source == actualSource);
+                ApplyImmediateRuntimeModifiers(u, proxy, instance.Modifiers);
+            }
+
+            if (applied == null) return false;
+
+            proxy.ActiveEffects.Add(applied.Id);
+            NotifyBuffChanged(u);
+            return true;
+        }
+
+        public bool remove(LuaUnitProxy proxy, string buffId)
+        {
+            var u = ResolveUnit(proxy);
+            if (u?.Data == null || string.IsNullOrEmpty(buffId)) return false;
+
+            bool removed = Buff.BuffSystem.Remove(u.Data, buffId);
+            removed |= u.Data.Runtime.ActiveStatusEffects.RemoveAll(e => e.Id == buffId) > 0;
+
+            if (removed)
+            {
+                BladeHex.Events.EventBus.Instance?.Publish(BladeHex.Events.EventBus.Signals.StatusEffectRemoved,
+                    new Godot.Collections.Dictionary { { "unit", u }, { "effect_id", buffId } });
+            }
+
+            if (removed)
+            {
+                proxy.ActiveEffects.Remove(buffId);
+                NotifyBuffChanged(u);
+            }
+            return removed;
+        }
+
+        public bool has(LuaUnitProxy proxy, string buffId)
+        {
+            var u = ResolveUnit(proxy);
+            return u?.Data != null && Buff.BuffSystem.HasBuff(u.Data, buffId);
+        }
+
+        public bool has_tag(LuaUnitProxy proxy, string tag)
+        {
+            var u = ResolveUnit(proxy);
+            return u?.Data != null && Buff.BuffSystem.HasTag(u.Data, tag);
+        }
+
+        public int stacks(LuaUnitProxy proxy, string buffId)
+        {
+            var u = ResolveUnit(proxy);
+            return u?.Data != null ? Buff.BuffSystem.GetStacks(u.Data, buffId) : 0;
+        }
+
+        public void remove_many(LuaUnitProxy proxy, LuaTable idsTable)
+        {
+            foreach (var key in idsTable.Keys)
+                if (idsTable[key] is string id)
+                    remove(proxy, id);
+        }
+
+        private static void NotifyBuffChanged(Unit unit)
+        {
+            CharacterRenderBus.Instance?.NotifyStatusEffects(unit, new Godot.Collections.Array());
+        }
+
+        private static void ApplyImmediateRuntimeModifiers(Unit unit, LuaUnitProxy proxy, List<Buff.StatModifier> modifiers)
+        {
+            if (unit.Data == null) return;
+            foreach (var modifier in modifiers)
+            {
+                switch (modifier.Stat)
+                {
+                    case "extra_ap":
+                        unit.CurrentAp += modifier.Value;
+                        proxy.ap = unit.CurrentAp;
+                        break;
+                    case "extra_action":
+                        if (modifier.Value != 0f)
+                        {
+                            unit.Data.Runtime.ExtraActionsThisTurn += 1;
+                            proxy.extra_actions = unit.Data.Runtime.ExtraActionsThisTurn;
+                        }
+                        break;
+                }
+            }
         }
     }
 
@@ -420,5 +571,60 @@ public static class LuaSkillBridge
             }
         }
         return table;
+    }
+
+    private static Buff.BuffInstance CloneBuffTemplate(Buff.BuffInstance template)
+    {
+        return new Buff.BuffInstance
+        {
+            Id = template.Id,
+            Name = template.Name,
+            Description = template.Description,
+            IconId = template.IconId,
+            IsNegative = template.IsNegative,
+            Tags = (string[])template.Tags.Clone(),
+            Duration = template.Duration,
+            MaxStacks = template.MaxStacks,
+            CurrentStacks = 1,
+            Modifiers = template.Modifiers.Select(m => new Buff.StatModifier
+            {
+                Stat = m.Stat, Layer = m.Layer, Value = m.Value,
+                Condition = m.Condition, Source = m.Source,
+            }).ToList(),
+            Triggers = template.Triggers.Select(t => new Buff.BuffTrigger
+            {
+                Event = t.Event, Effect = t.Effect, Condition = t.Condition,
+                Chance = t.Chance, MaxTriggersPerCombat = t.MaxTriggersPerCombat,
+            }).ToList(),
+            OnTick = template.OnTick,
+            Source = template.Source,
+            CancelTags = (string[])template.CancelTags.Clone(),
+            SaveToRemove = template.SaveToRemove,
+            SaveDc = template.SaveDc,
+            BreaksOnAttack = template.BreaksOnAttack,
+            CanSpread = template.CanSpread,
+            PersistOnDeath = template.PersistOnDeath,
+        };
+    }
+
+    private static List<Buff.StatModifier> LuaTableToStatModifiers(LuaTable mods)
+    {
+        var result = new List<Buff.StatModifier>();
+        foreach (var key in mods.Keys)
+        {
+            string stat = key.ToString()!;
+            object? raw = mods[key];
+            float value = raw switch
+            {
+                bool b => b ? 1f : 0f,
+                long l => l,
+                double d => (float)d,
+                int i => i,
+                float f => f,
+                _ => 0f,
+            };
+            result.Add(new Buff.StatModifier { Stat = stat, Layer = Buff.ModifierLayer.Base, Value = value });
+        }
+        return result;
     }
 }

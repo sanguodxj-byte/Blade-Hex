@@ -9,6 +9,6 @@ function execute(ctx)
     result:add_attack(r)
 
     if r.hit then
-        result:add_effect(target, "poison", 3)
+        buff:apply(target, "poison", 3)
     end
 end

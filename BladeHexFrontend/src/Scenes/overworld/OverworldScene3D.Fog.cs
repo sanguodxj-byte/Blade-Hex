@@ -224,6 +224,7 @@ public partial class OverworldScene3D
         {
             _renderer.LoadTiles(newTiles);
             _propRenderer?.LoadPropsForTiles(newTiles);
+            _terrainSpriteRenderer?.LoadSpritesForTiles(newTiles);
         }
     }
 
@@ -404,6 +405,7 @@ public partial class OverworldScene3D
         {
             _renderer.LoadTiles(tilesToRender);
             _propRenderer?.LoadPropsForTiles(tilesToRender);
+            _terrainSpriteRenderer?.LoadSpritesForTiles(tilesToRender);
         }
 
         var elapsed = Time.GetTicksMsec() - startTime;

@@ -264,6 +264,10 @@ public partial class BattleUnitModel
             if (maxHp > 0 && (float)CurrentHp / maxHp < 0.25f)
                 hpDamage = System.Math.Max(1, (int)(hpDamage * 0.5f));
         }
+
+        if (hpDamage > 0)
+            hpDamage = Buff.BuffDamageHooks.ApplyBeforeHpDamage(Data, hpDamage);
+        hpDamage = Buff.BuffDamageHooks.ApplyBeforeDeath(Data, CurrentHp, hpDamage);
         if (hpDamage > 0)
             CurrentHp = System.Math.Max(0, CurrentHp - hpDamage);
 
@@ -308,4 +312,6 @@ public partial class BattleUnitModel
             ReflectDamageToAttacker = reflectDamage,
         };
     }
+
+
 }

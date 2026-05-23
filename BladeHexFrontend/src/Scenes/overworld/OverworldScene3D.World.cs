@@ -106,6 +106,7 @@ public partial class OverworldScene3D
             {
                 _renderer.LoadTiles(chunk.Tiles.Values);
                 _propRenderer?.LoadPropsForTiles(chunk.Tiles.Values);
+                _terrainSpriteRenderer?.LoadSpritesForTiles(chunk.Tiles.Values);
 
                 // 动态追加道路
                 OnNewChunkRoads(chunk, chunk.ChunkCoord);
@@ -146,6 +147,8 @@ public partial class OverworldScene3D
             _renderer.LoadTiles(chunk.Tiles.Values);
         foreach (var kvp in _chunkManager.ActiveChunks)
             _renderer.LoadTiles(kvp.Value.Tiles.Values);
+        foreach (var kvp in _chunkManager.ActiveChunks)
+            _terrainSpriteRenderer?.LoadSpritesForTiles(kvp.Value.Tiles.Values);
 
         GD.Print($"[OverworldScene3D] 初始 chunk: {_chunkManager.ActiveChunks.Count}");
     }

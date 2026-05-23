@@ -17,5 +17,8 @@
   { "id": "knight_helm", "name": "骑士全盔", "type": "Heavy", "dr": 8, "ap_penalty": 1, "price": 200, "slot": "Helmet" },
   { "id": "leather_boots", "name": "皮靴", "type": "Light", "dr": 1, "ap_penalty": 0, "price": 15, "slot": "Feet" },
   { "id": "iron_boots", "name": "铁靴", "type": "Medium", "dr": 3, "ap_penalty": 0, "price": 60, "slot": "Feet" },
-  { "id": "plate_boots", "name": "板甲战靴", "type": "Heavy", "dr": 5, "ap_penalty": 1, "price": 150, "slot": "Feet" }
+  { "id": "plate_boots", "name": "板甲战靴", "type": "Heavy", "dr": 5, "ap_penalty": 1, "price": 150, "slot": "Feet" },
+  { "id": "leather_gloves", "name": "皮手套", "type": "Light", "dr": 1, "ap_penalty": 0, "price": 10, "slot": "Hands" },
+  { "id": "chain_gauntlets", "name": "链甲护手", "type": "Medium", "dr": 3, "ap_penalty": 0, "price": 50, "slot": "Hands" },
+  { "id": "plate_gauntlets", "name": "板甲臂铠", "type": "Heavy", "dr": 5, "ap_penalty": 1, "price": 120, "slot": "Hands" }
 ]

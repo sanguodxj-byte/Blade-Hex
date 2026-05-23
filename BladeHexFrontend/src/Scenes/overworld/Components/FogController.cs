@@ -29,6 +29,7 @@ public partial class FogController : Node
     private ChunkManager? _chunkManager;
     private HexOverworldRenderer3D? _renderer;
     private OverworldPropRenderer? _propRenderer;
+    private OverworldTerrainSpriteRenderer? _terrainSpriteRenderer;
     private List<OverworldPOI>? _worldPois;
     private Dictionary<string, NationTerritory>? _worldTerritories;
     private List<NationConfig>? _worldNations;
@@ -73,6 +74,7 @@ public partial class FogController : Node
         ChunkManager? chunkManager,
         HexOverworldRenderer3D renderer,
         OverworldPropRenderer? propRenderer,
+        OverworldTerrainSpriteRenderer? terrainSpriteRenderer,
         List<OverworldPOI> worldPois,
         Dictionary<string, NationTerritory>? territories,
         List<NationConfig>? nations,
@@ -84,6 +86,7 @@ public partial class FogController : Node
         _chunkManager = chunkManager;
         _renderer = renderer;
         _propRenderer = propRenderer;
+        _terrainSpriteRenderer = terrainSpriteRenderer;
         _worldPois = worldPois;
         _worldTerritories = territories;
         _worldNations = nations;
@@ -183,6 +186,7 @@ public partial class FogController : Node
         {
             _renderer.LoadTiles(tilesToRender);
             _propRenderer?.LoadPropsForTiles(tilesToRender);
+            _terrainSpriteRenderer?.LoadSpritesForTiles(tilesToRender);
         }
 
         var elapsed = Time.GetTicksMsec() - startTime;
@@ -380,6 +384,7 @@ public partial class FogController : Node
         {
             _renderer.LoadTiles(newTiles);
             _propRenderer?.LoadPropsForTiles(newTiles);
+            _terrainSpriteRenderer?.LoadSpritesForTiles(newTiles);
         }
     }
 

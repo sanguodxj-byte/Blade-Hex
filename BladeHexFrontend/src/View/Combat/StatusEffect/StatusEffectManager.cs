@@ -182,15 +182,24 @@ public partial class StatusEffectManager : Node
     public bool HasEffect(Unit unit, string effectId)
     {
         if (unit.Data == null) return false;
-        return unit.Data.Runtime.ActiveStatusEffects.Any(e => e.Id == effectId);
+        return unit.Data.Runtime.ActiveStatusEffects.Any(e => e.Id == effectId)
+            || unit.Data.Runtime.ActiveBuffs.Any(b => b.Id == effectId);
     }
 
     public Godot.Collections.Array GetActiveEffects(Unit unit)
     {
         if (unit.Data == null) return new Godot.Collections.Array();
         var arr = new Godot.Collections.Array();
+
+        // 迁移期兼容：旧状态仍先输出，保证既有 UI/逻辑顺序尽量不变；
+        // 新 Buff 追加到同一个展示列表，让 ActiveBuffs 不再是“隐形状态”。
         foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
             arr.Add(inst.ToGodotDict());
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        {
+            if (unit.Data.Runtime.ActiveStatusEffects.Any(e => e.Id == buff.Id)) continue;
+            arr.Add(buff.ToGodotDict());
+        }
         return arr;
     }
 
@@ -208,12 +217,29 @@ public partial class StatusEffectManager : Node
                     mods[kv.Key] = kv.Value;
             }
         }
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        {
+            foreach (var modifier in buff.Modifiers)
+            {
+                if (string.IsNullOrEmpty(modifier.Stat)) continue;
+                float value = modifier.Value * buff.CurrentStacks;
+                if (mods.ContainsKey(modifier.Stat))
+                    mods[modifier.Stat] = mods[modifier.Stat].AsSingle() + value;
+                else
+                    mods[modifier.Stat] = value;
+            }
+        }
         return mods;
     }
 
     public bool CanAct(Unit unit)
     {
         if (unit.Data == null) return true;
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        {
+            if (BuffHasModifier(buff, "cannot_act") || BuffHasModifier(buff, "action_restricted")) return false;
+            if (buff.Id == "freeze" || buff.Id == "frozen" || buff.Id == "stun") return false;
+        }
         foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("cannot_act", out float val) && val != 0) return false;
@@ -225,6 +251,11 @@ public partial class StatusEffectManager : Node
     public bool CanMove(Unit unit)
     {
         if (unit.Data == null) return true;
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        {
+            if (BuffHasModifier(buff, "cannot_move") || BuffHasModifier(buff, "immobilized")) return false;
+            if (buff.Id == "root" || buff.Id == "freeze" || buff.Id == "frozen") return false;
+        }
         foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("cannot_move", out float val) && val != 0) return false;
@@ -236,6 +267,11 @@ public partial class StatusEffectManager : Node
     public bool CanCast(Unit unit)
     {
         if (unit.Data == null) return true;
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        {
+            if (BuffHasModifier(buff, "cannot_cast") || BuffHasModifier(buff, "no_cast")) return false;
+            if (buff.Id == "silence") return false;
+        }
         foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("cannot_cast", out float val) && val != 0) return false;
@@ -247,6 +283,8 @@ public partial class StatusEffectManager : Node
     public bool HasMeleeDisadvantage(Unit unit)
     {
         if (unit.Data == null) return false;
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+            if (BuffHasModifier(buff, "melee_disadvantage") || BuffHasModifier(buff, "attack_disadvantage")) return true;
         foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("melee_disadvantage", out float val) && val != 0) return true;
@@ -257,11 +295,30 @@ public partial class StatusEffectManager : Node
     public int GetRangedRangeOverride(Unit unit)
     {
         if (unit.Data == null) return -1;
+        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+            if (TryGetBuffModifierValue(buff, "ranged_range_override", out float buffVal)) return (int)buffVal;
+
         foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("ranged_range_override", out float val)) return (int)val;
         }
         return -1;
+    }
+
+    private static bool BuffHasModifier(BladeHex.Combat.Buff.BuffInstance buff, string stat)
+        => TryGetBuffModifierValue(buff, stat, out float value) && value != 0f;
+
+    private static bool TryGetBuffModifierValue(BladeHex.Combat.Buff.BuffInstance buff, string stat, out float value)
+    {
+        value = 0f;
+        bool found = false;
+        foreach (var modifier in buff.Modifiers)
+        {
+            if (modifier.Stat != stat) continue;
+            value += modifier.Value * buff.CurrentStacks;
+            found = true;
+        }
+        return found;
     }
 
     /// <summary>获取单位的强类型效果列表（直接访问 Runtime）</summary>

@@ -1,0 +1,134 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="SphereMesh" id="SphereMesh_gizmo"]
+radius = 2.0
+height = 4.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_gizmo"]
+shading_mode = 0
+albedo_color = Color(1, 1, 0, 0.7)
+transparency = 1
+
+[node name="SkeletonRig" type="Node3D"]
+
+[node name="BodyRoot" type="Node3D" parent="."]
+
+[node name="BasePedestal" type="Sprite3D" parent="BodyRoot"]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.5, 0)
+pixel_size = 0.6
+billboard = 0
+alpha_cut = 1
+sorting_offset = 2.0
+
+[node name="SkeletonRoot" type="Node3D" parent="BodyRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 60, 0)
+
+[node name="Bone_Torso" type="Node3D" parent="BodyRoot/SkeletonRoot"]
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Sprite_Body" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 36, 0)
+pixel_size = 2.0
+billboard = 2
+alpha_cut = 1
+sorting_offset = 0.0
+
+[node name="Sprite_Costume" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+visible = false
+pixel_size = 1.8
+billboard = 2
+alpha_cut = 1
+sorting_offset = -0.15
+
+[node name="Bone_Head" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 84, 0)
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_Head"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Sprite_Head" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_Head"]
+pixel_size = 2.0
+billboard = 2
+alpha_cut = 1
+sorting_offset = -0.25
+
+[node name="Sprite_Helmet" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, 0)
+visible = false
+pixel_size = 1.8
+billboard = 2
+alpha_cut = 1
+sorting_offset = -0.32
+
+[node name="Bone_ArmL" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -36, 60, 0)
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmL"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Bone_ForearmL" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -30, 0)
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmL/Bone_ForearmL"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Bone_Shield" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmL/Bone_ForearmL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -9, 0)
+
+[node name="Sprite_Shield" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmL/Bone_ForearmL/Bone_Shield"]
+visible = false
+pixel_size = 2.0
+billboard = 2
+alpha_cut = 1
+sorting_offset = -0.4
+
+[node name="Bone_ArmR" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 60, 0)
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Bone_ForearmR" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -30, 0)
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR/Bone_ForearmR"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Sprite_Hands" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR/Bone_ForearmR"]
+pixel_size = 2.0
+billboard = 2
+alpha_cut = 1
+sorting_offset = -0.3
+
+[node name="Bone_Weapon" type="Node3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR/Bone_ForearmR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -12, 0)
+
+[node name="Gizmo" type="MeshInstance3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR/Bone_ForearmR/Bone_Weapon"]
+mesh = SubResource("SphereMesh_gizmo")
+material_override = SubResource("Mat_gizmo")
+
+[node name="Sprite_Weapon" type="Sprite3D" parent="BodyRoot/SkeletonRoot/Bone_Torso/Bone_ArmR/Bone_ForearmR/Bone_Weapon"]
+pixel_size = 2.0
+billboard = 2
+alpha_cut = 1
+sorting_offset = -0.5
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="BodyRoot/SkeletonRoot"]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 150, 200)
+projection = 1
+size = 250.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.25, 0.433, 0, 0.866, 0.5, -0.5, -0.433, 0.75, 0, 200, 0)
+light_energy = 1.2

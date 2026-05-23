@@ -48,6 +48,14 @@ public abstract class AIStrategyBase
 
         // 第3步：评估目标
         var targets = TargetEvaluator.EvaluateTargets(actor, playerUnits, hexGrid, enemyUnits);
+        var forcedTarget = BuffTargetingRules.ResolveForcedTarget(actor, playerUnits);
+        if (forcedTarget != null
+            && BuffTargetingRules.IsDirectlyTargetable(forcedTarget)
+            && !BuffTargetingRules.ShouldAiIgnore(forcedTarget))
+        {
+            targets.RemoveAll(t => t.Unit != forcedTarget);
+            if (targets.Count == 0) targets.Add(new AITargetEvaluator.ScoredTarget { Unit = forcedTarget, Score = 9999f });
+        }
         if (targets.Count == 0) return DecideIdleAction(actor, hexGrid);
 
         // 第4步：策略特定决策（子类实现）
@@ -124,7 +132,9 @@ public abstract class AIStrategyBase
         var action = new AIAction
         {
             Actor = actor,
-            TargetUnit = target
+            TargetUnit = target,
+            TargetPosition = actor.GridPos,
+            AttackPosition = actor.GridPos,
         };
 
         var weapon = actor.Model.GetMainHand() as WeaponData;
@@ -146,20 +156,21 @@ public abstract class AIStrategyBase
         }
         else
         {
-            action.Type = AIAction.ActionType.MoveThenAttack;
             var bestPos = FindBestAttackPosition(actor, target, hexGrid);
-            action.TargetPosition = bestPos;
-            action.AttackPosition = bestPos;
-            var path = hexGrid.FindPath(actor.GridPos, bestPos);
-            action.MovePath = path;
+            action = BuildMoveThenAttackOrMoveOnly(
+                actor,
+                target,
+                bestPos,
+                hexGrid,
+                $"{actor.Data!.UnitName} 攻击 {target.Data!.UnitName}",
+                $"{actor.Data!.UnitName} 接近 {target.Data!.UnitName}");
 
-            if (path.Count >= 3 && DifficultyConfig.UsesCharge)
+            if (action.MovePath.Count >= 3 && DifficultyConfig.UsesCharge)
             {
-                action.IsCharge = AISpatialAnalyzer.CanCharge(hexGrid, path, actor.GridPos);
+                action.IsCharge = AISpatialAnalyzer.CanCharge(hexGrid, action.MovePath, actor.GridPos);
             }
         }
 
-        action.Description = $"{actor.Data!.UnitName} 攻击 {target.Data!.UnitName}";
         return action;
     }
 
@@ -173,9 +184,10 @@ public abstract class AIStrategyBase
         int maxVision = BaseMaxVision;
         int atkRange = Math.Min(weaponRange, maxVision);
 
-        // 使用当前 AP 计算实际可达范围
-        int movePoints = (int)actor.CurrentAp;
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, movePoints);
+        // 预留攻击 AP 后再计算移动可达范围，避免移动后无 AP 攻击
+        int attackApCost = weapon?.ApCost ?? 4;
+        float moveBudget = Math.Max(0.0f, actor.CurrentAp - attackApCost);
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveBudget);
 
         Vector2I bestPos = actor.GridPos;
         float bestScore = -999.0f;
@@ -221,8 +233,9 @@ public abstract class AIStrategyBase
         int maxVision = BaseMaxVision;
         int atkRange = Math.Min(weaponRange, maxVision);
 
-        int movePoints = (int)actor.CurrentAp;
-        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, movePoints);
+        int attackApCost = weapon?.ApCost ?? 4;
+        float moveBudget = Math.Max(0.0f, actor.CurrentAp - attackApCost);
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveBudget);
 
         Vector2I bestPos = actor.GridPos;
         int bestDist = 999;
@@ -245,5 +258,125 @@ public abstract class AIStrategyBase
         }
 
         return bestPos;
+    }
+
+    /// <summary>无法在本次移动后攻击时，选择一个向目标逼近的可行位置。</summary>
+    protected Vector2I FindNearestApproachPosition(Unit actor, Unit target, HexGrid hexGrid, float moveBudget)
+    {
+        if (moveBudget <= 0.0f) return actor.GridPos;
+
+        var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveBudget);
+        Vector2I bestPos = actor.GridPos;
+        int bestDist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, target.GridPos.X, target.GridPos.Y);
+        float bestPathCost = 0.0f;
+
+        foreach (var pos in reachable)
+        {
+            var cell = hexGrid.GetCell(pos.X, pos.Y);
+            if (cell == null || (cell.Occupant != null && cell.Occupant != actor)) continue;
+
+            int dist = HexUtils.Distance(pos.X, pos.Y, target.GridPos.X, target.GridPos.Y);
+            if (dist > bestDist) continue;
+
+            var path = hexGrid.FindPath(actor.GridPos, pos);
+            float pathCost = hexGrid.GetPathCost(actor.GridPos, path);
+            if (path.Count == 0 || pathCost > moveBudget) continue;
+
+            bool strictlyCloser = dist < bestDist;
+            bool sameDistanceMoreCommitment = dist == bestDist && pathCost > bestPathCost;
+            if (strictlyCloser || sameDistanceMoreCommitment)
+            {
+                bestDist = dist;
+                bestPathCost = pathCost;
+                bestPos = pos;
+            }
+        }
+
+        return bestPos;
+    }
+
+    protected int GetAttackApCost(Unit actor)
+    {
+        var weapon = actor.Model.GetMainHand() as WeaponData;
+        return weapon?.ApCost ?? 4;
+    }
+
+    protected float GetMoveBudgetAfterAttack(Unit actor)
+    {
+        return Math.Max(0.0f, actor.CurrentAp - GetAttackApCost(actor));
+    }
+
+    protected bool CanAffordMoveThenAttack(Unit actor, HexGrid hexGrid, List<Vector2I> path)
+    {
+        if (path == null)
+            return false;
+
+        if (path.Count == 0)
+            return actor.CurrentAp >= GetAttackApCost(actor);
+
+        float moveCost = hexGrid.GetPathCost(actor.GridPos, path);
+        return moveCost + GetAttackApCost(actor) <= actor.CurrentAp;
+    }
+
+    protected bool CanAttackFrom(Unit actor, Unit target, HexGrid hexGrid, Vector2I fromPos)
+    {
+        if (!BuffTargetingRules.IsDirectlyTargetable(target)) return false;
+        var weapon = actor.Model.GetMainHand() as WeaponData;
+        int weaponRange = weapon?.RangeCells ?? 1;
+        int maxVision = BaseMaxVision;
+        var fromCell = hexGrid.GetCell(fromPos.X, fromPos.Y);
+        if (fromCell != null && fromCell.Elevation >= 2)
+            maxVision = BaseMaxVision + HighGroundVisionBonus;
+        int atkRange = Math.Min(weaponRange, maxVision);
+        int dist = HexUtils.Distance(fromPos.X, fromPos.Y, target.GridPos.X, target.GridPos.Y);
+        return dist <= atkRange;
+    }
+
+    protected AIAction BuildMoveThenAttackOrMoveOnly(Unit actor, Unit target, Vector2I desiredPos, HexGrid hexGrid, string attackDescription, string moveOnlyDescription)
+    {
+        if (desiredPos == actor.GridPos)
+        {
+            if (CanAttackFrom(actor, target, hexGrid, actor.GridPos) && actor.CurrentAp >= GetAttackApCost(actor))
+            {
+                return new AIAction
+                {
+                    Type = AIAction.ActionType.Attack,
+                    Actor = actor,
+                    TargetUnit = target,
+                    TargetPosition = actor.GridPos,
+                    AttackPosition = actor.GridPos,
+                    Description = attackDescription
+                };
+            }
+        }
+
+        var path = hexGrid.FindPath(actor.GridPos, desiredPos);
+        if (path.Count > 0 && CanAttackFrom(actor, target, hexGrid, desiredPos) && CanAffordMoveThenAttack(actor, hexGrid, path))
+        {
+            return new AIAction
+            {
+                Type = AIAction.ActionType.MoveThenAttack,
+                Actor = actor,
+                TargetUnit = target,
+                TargetPosition = desiredPos,
+                AttackPosition = desiredPos,
+                MovePath = path,
+                Description = attackDescription
+            };
+        }
+
+        float moveOnlyBudget = Math.Max(0, actor.CurrentAp);
+        var approachPos = FindNearestApproachPosition(actor, target, hexGrid, moveOnlyBudget);
+        var approachPath = approachPos == actor.GridPos ? new List<Vector2I>() : hexGrid.FindPath(actor.GridPos, approachPos);
+        return new AIAction
+        {
+            Type = approachPath.Count > 0 ? AIAction.ActionType.MoveOnly : AIAction.ActionType.Idle,
+            Actor = actor,
+            TargetUnit = target,
+            TargetPosition = approachPos,
+            AttackPosition = approachPos,
+            MovePath = approachPath,
+            Description = approachPath.Count > 0 ? moveOnlyDescription : $"{actor.Data!.UnitName} 行动力不足，无法接近 {target.Data!.UnitName}"
+        };
     }
 }

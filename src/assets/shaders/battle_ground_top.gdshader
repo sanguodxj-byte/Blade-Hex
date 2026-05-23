@@ -16,17 +16,20 @@ uniform float texture_tile_scale : hint_range(0.02, 2.0) = 0.12;
 uniform float blend_sharpness : hint_range(1.0, 20.0) = 8.0;
 uniform float color_variance : hint_range(0.0, 0.15) = 0.03;
 uniform bool use_stochastic = true;
+uniform bool use_stochastic_rotation = true;
 
 // --- Flow Map（可选外部提供，否则用程序化噪声生成）---
 uniform sampler2D flow_map : filter_linear, repeat_enable;
 uniform bool use_external_flow = false;
 uniform float flow_scale : hint_range(0.001, 0.05) = 0.008;
 uniform float flow_strength : hint_range(0.0, 1.0) = 0.7;
+uniform bool use_flow_rotation = true;
 
 // --- 六边形裁剪 ---
 uniform float hex_radius = 96.0;
 uniform float hex_edge_softness : hint_range(0.0, 0.1) = 0.025;
 uniform float edge_darken : hint_range(0.0, 0.3) = 0.10;
+uniform bool use_edge_darkening = true;
 
 // --- 假光 ---
 uniform vec3 fake_light_dir = vec3(0.35, 0.9, 0.25);
@@ -118,17 +121,23 @@ vec3 stochastic_sample(vec2 uv) {
     }
 
     // 每个种子的随机旋转+偏移
-    float angle0 = hash1(seed0) * 6.28318;
-    float angle1 = hash1(seed1 + vec2(7.3, 2.1)) * 6.28318;
-    float angle2 = hash1(seed2 + vec2(3.7, 9.2)) * 6.28318;
-
     vec2 uv_offset0 = hash2(seed0 + vec2(13.0, 7.0));
     vec2 uv_offset1 = hash2(seed1 + vec2(13.0, 7.0));
     vec2 uv_offset2 = hash2(seed2 + vec2(13.0, 7.0));
 
-    vec3 col0 = texture(top_texture, rot2d(angle0) * uv + uv_offset0).rgb;
-    vec3 col1 = texture(top_texture, rot2d(angle1) * uv + uv_offset1).rgb;
-    vec3 col2 = texture(top_texture, rot2d(angle2) * uv + uv_offset2).rgb;
+    vec3 col0, col1, col2;
+    if (use_stochastic_rotation) {
+        float angle0 = hash1(seed0) * 6.28318;
+        float angle1 = hash1(seed1 + vec2(7.3, 2.1)) * 6.28318;
+        float angle2 = hash1(seed2 + vec2(3.7, 9.2)) * 6.28318;
+        col0 = texture(top_texture, rot2d(angle0) * uv + uv_offset0).rgb;
+        col1 = texture(top_texture, rot2d(angle1) * uv + uv_offset1).rgb;
+        col2 = texture(top_texture, rot2d(angle2) * uv + uv_offset2).rgb;
+    } else {
+        col0 = texture(top_texture, uv + uv_offset0).rgb;
+        col1 = texture(top_texture, uv + uv_offset1).rgb;
+        col2 = texture(top_texture, uv + uv_offset2).rgb;
+    }
 
     // 微小色调偏移
     if (color_variance > 0.001) {
@@ -174,10 +183,15 @@ void fragment() {
     vec2 base_uv = v_world_pos.xz * texture_tile_scale;
 
     // 以瓦片中心为锚点旋转 UV
-    vec2 pivot = floor(v_world_pos.xz / (hex_radius * 2.0)) * (hex_radius * 2.0) + hex_radius;
-    vec2 offset = v_world_pos.xz - pivot;
-    vec2 rotated_offset = rot2d(flow_angle) * offset;
-    vec2 final_uv = (pivot + rotated_offset) * texture_tile_scale;
+    vec2 final_uv;
+    if (use_flow_rotation && flow_strength > 0.001) {
+        vec2 pivot = floor(v_world_pos.xz / (hex_radius * 2.0)) * (hex_radius * 2.0) + hex_radius;
+        vec2 offset = v_world_pos.xz - pivot;
+        vec2 rotated_offset = rot2d(flow_angle) * offset;
+        final_uv = (pivot + rotated_offset) * texture_tile_scale;
+    } else {
+        final_uv = base_uv;
+    }
 
     // --- 侧面 vs 顶面判定(法线 Y 分量) ---
     bool is_side = v_normal_world.y < 0.5;
@@ -212,7 +226,9 @@ void fragment() {
         } else {
             col = texture(top_texture, final_uv).rgb;
         }
-        col *= edge_factor;
+        if (use_edge_darkening) {
+            col *= edge_factor;
+        }
         vec3 top_normal = vec3(0.0, 1.0, 0.0);
         float ndl = clamp(dot(top_normal, normalize(fake_light_dir)), 0.0, 1.0);
         col *= mix(fake_light_min, fake_light_max, ndl);

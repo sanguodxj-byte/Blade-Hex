@@ -28,6 +28,9 @@ public partial class AIController : Node
     // 所有单位缓存（用于士气系统跨阵营结算）
     private List<Unit> _allUnitsCache = new();
 
+    // 攻击动画编排器（由 CombatSceneBase 注入）
+    private CombatAttackAnimator _attackAnimator = null!;
+
     // 攻城结构检测缓存（每场战斗初始化一次）
     private bool _hasSiegeStructures = false;
 
@@ -48,15 +51,30 @@ public partial class AIController : Node
 
     private void InitStrategies()
     {
-        _strategies[UnitData.AIStrategy.Reckless] = new AIStrategyReckless(_difficultyConfig);
-        _strategies[UnitData.AIStrategy.Cautious] = new AIStrategyCautious(_difficultyConfig);
-        _strategies[UnitData.AIStrategy.Tactical] = new AIStrategyTactical(_difficultyConfig);
-        _strategies[UnitData.AIStrategy.Instinct] = new AIStrategyInstinct(_difficultyConfig);
+        var reckless = new AIStrategyReckless(_difficultyConfig);
+        var cautious = new AIStrategyCautious(_difficultyConfig);
+        var tactical = new AIStrategyTactical(_difficultyConfig);
+        var instinct = new AIStrategyInstinct(_difficultyConfig);
+
+        _strategies[UnitData.AIStrategy.Reckless] = reckless;
+        _strategies[UnitData.AIStrategy.Berserk] = reckless;
+        _strategies[UnitData.AIStrategy.Intimidate] = reckless;
+        _strategies[UnitData.AIStrategy.Cautious] = cautious;
+        _strategies[UnitData.AIStrategy.Tactical] = tactical;
+        _strategies[UnitData.AIStrategy.Cunning] = tactical;
+        _strategies[UnitData.AIStrategy.Territorial] = tactical;
+        _strategies[UnitData.AIStrategy.Instinct] = instinct;
     }
 
     public void SetCombatScene(ICombatSceneAdapter adapter)
     {
         _adapter = adapter;
+    }
+
+    /// <summary>注入攻击动画编排器</summary>
+    public void SetAttackAnimator(CombatAttackAnimator animator)
+    {
+        _attackAnimator = animator;
     }
 
     /// <summary>主入口：执行所有敌方单位的回合行动</summary>
@@ -157,6 +175,12 @@ public partial class AIController : Node
         switch (action.Type)
         {
             case AIAction.ActionType.MoveThenAttack:
+                if (!PrepareMoveThenAttack(action, hexGrid))
+                {
+                    await ExecuteReservedMoveOnly(action, hexGrid, combatUi);
+                    actor.HasMoved = true;
+                    break;
+                }
                 await ExecuteMove(action, hexGrid, combatUi);
                 if (GodotObject.IsInstanceValid(actor) && actor.CurrentHp > 0)
                 {
@@ -196,6 +220,106 @@ public partial class AIController : Node
                 _adapter?.LogMessage($"[color=gray]{action.Description}[/color]");
                 break;
         }
+    }
+
+    private bool PrepareMoveThenAttack(AIAction action, HexGrid hexGrid)
+    {
+        if (!GodotObject.IsInstanceValid(action.Actor) || !GodotObject.IsInstanceValid(action.TargetUnit))
+            return false;
+
+        var actor = action.Actor!;
+        var target = action.TargetUnit!;
+        var weapon = actor.Model.GetMainHand() as WeaponData;
+        int apCost = weapon?.ApCost ?? 4;
+        int weaponRange = weapon?.RangeCells ?? 1;
+
+        if (actor.CurrentAp < apCost)
+            return false;
+
+        if (action.MovePath.Count == 0 && action.TargetPosition != new Vector2I(-1, -1))
+            action.MovePath = hexGrid.FindPath(actor.GridPos, action.TargetPosition);
+
+        if (action.MovePath.Count == 0)
+        {
+            int currentDist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, target.GridPos.X, target.GridPos.Y);
+            return currentDist <= weaponRange;
+        }
+
+        float fullCost = hexGrid.GetPathCost(actor.GridPos, action.MovePath);
+        if (fullCost + apCost <= actor.CurrentAp)
+            return true;
+
+        var trimmed = GetLongestAffordableAttackPath(actor, target, action.MovePath, hexGrid, apCost, weaponRange);
+        if (trimmed.Count == 0)
+            return false;
+
+        action.MovePath = trimmed;
+        action.TargetPosition = trimmed[^1];
+        action.AttackPosition = trimmed[^1];
+        return true;
+    }
+
+    private List<Vector2I> GetLongestAffordableAttackPath(
+        Unit actor,
+        Unit target,
+        List<Vector2I> path,
+        HexGrid hexGrid,
+        int attackApCost,
+        int weaponRange)
+    {
+        var best = new List<Vector2I>();
+        var current = actor.GridPos;
+        float spent = 0.0f;
+        for (int i = 0; i < path.Count; i++)
+        {
+            var next = path[i];
+            var stepCost = hexGrid.GetPathCost(current, new List<Vector2I> { next });
+            if (spent + stepCost + attackApCost > actor.CurrentAp) break;
+
+            spent += stepCost;
+            current = next;
+            int dist = HexUtils.Distance(next.X, next.Y, target.GridPos.X, target.GridPos.Y);
+            if (dist <= weaponRange)
+                best = path.Take(i + 1).ToList();
+        }
+
+        return best;
+    }
+
+    private async Task ExecuteReservedMoveOnly(AIAction action, HexGrid hexGrid, Node combatUi)
+    {
+        if (!GodotObject.IsInstanceValid(action.Actor)) return;
+
+        var actor = action.Actor!;
+        var weapon = actor.Model.GetMainHand() as WeaponData;
+        int attackApCost = weapon?.ApCost ?? 4;
+        float moveBudget = Math.Max(0.0f, actor.CurrentAp - attackApCost);
+        if (moveBudget < 1.0f || action.MovePath.Count == 0)
+        {
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 行动力不足，无法完成移动后攻击[/color]");
+            return;
+        }
+
+        action.MovePath = TrimPathToBudget(actor.GridPos, action.MovePath, hexGrid, moveBudget);
+        if (action.MovePath.Count == 0) return;
+        action.Type = AIAction.ActionType.MoveOnly;
+        await ExecuteMove(action, hexGrid, combatUi);
+    }
+
+    private static List<Vector2I> TrimPathToBudget(Vector2I start, List<Vector2I> path, HexGrid hexGrid, float budget)
+    {
+        var result = new List<Vector2I>();
+        var current = start;
+        float spent = 0.0f;
+        foreach (var next in path)
+        {
+            float stepCost = hexGrid.GetPathCost(current, new List<Vector2I> { next });
+            if (spent + stepCost > budget) break;
+            result.Add(next);
+            spent += stepCost;
+            current = next;
+        }
+        return result;
     }
 
     private async Task ExecuteMove(AIAction action, HexGrid hexGrid, Node combatUi)
@@ -261,6 +385,12 @@ public partial class AIController : Node
         var actor = action.Actor!;
         var target = action.TargetUnit!;
 
+        if (!BuffTargetingRules.IsDirectlyTargetable(target) || BuffTargetingRules.ShouldAiIgnore(target))
+        {
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 失去对 {target.Data!.UnitName} 的有效目标。[/color]");
+            return;
+        }
+
         // 射程验证 — 移动后仍不在射程内则跳过攻击
         var weapon = actor.Model.GetMainHand() as WeaponData;
         int weaponRange = weapon?.RangeCells ?? 1;
@@ -279,9 +409,6 @@ public partial class AIController : Node
             return;
         }
 
-        // 消耗攻击 AP
-        actor.ConsumeAp(apCost);
-
         // 远程全掩体检查
         if (weapon != null && weapon.IsRanged)
         {
@@ -293,10 +420,11 @@ public partial class AIController : Node
             }
         }
 
-        // 攻击前动画
-        _adapter?.PlayUnitAnim(actor, "attack");
-        actor.PlayAttackLunge(target.GlobalPosition);
-        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.6);
+        // 消耗攻击 AP（所有硬性可攻击性检查通过后再扣除）
+        actor.ConsumeAp(apCost);
+
+        // 攻击动画编排（远程=投射物飞行，近战=突刺）
+        await _attackAnimator.PlayAttack(actor, target, weapon);
 
         // 使用 CombatResolver 统一结算（包围加成需要传入攻击者同阵营单位）
         var allies = (_allUnitsCache ?? new List<Unit>())
@@ -340,11 +468,9 @@ public partial class AIController : Node
                 _adapter?.LogMessage($"[color=yellow]{target.Data!.UnitName} 被 {actor.Data!.UnitName} 击败！[/color]");
 
                 // 士气变动
-                MoraleSystem.OnUnitKilled(target, actor, _allUnitsCache);
+                MoraleSystem.OnUnitKilled(target, actor, _allUnitsCache ?? new List<Unit>());
 
-                // 清除格子占用
-                var targetCell = hexGrid.GetCell(target.GridPos.X, target.GridPos.Y);
-                if (targetCell != null) targetCell.Occupant = null;
+                _adapter?.OnUnitKilled(target, actor);
             }
         }
         else
@@ -414,14 +540,18 @@ public partial class AIController : Node
 
     private List<Unit> SortByPriority(List<Unit> enemies)
     {
-        var priorityOrder = new Dictionary<UnitData.AIStrategy, int>
-        {
-            { UnitData.AIStrategy.Tactical, 0 },
-            { UnitData.AIStrategy.Cautious, 1 },
-            { UnitData.AIStrategy.Reckless, 2 },
-            { UnitData.AIStrategy.Instinct, 3 }
-        };
+        return enemies.OrderBy(e => GetStrategyPriority(e.Data!.aiStrategy)).ToList();
+    }
 
-        return enemies.OrderBy(e => priorityOrder.GetValueOrDefault(e.Data!.aiStrategy, 99)).ToList();
+    public static int GetStrategyPriority(UnitData.AIStrategy strategy)
+    {
+        return strategy switch
+        {
+            UnitData.AIStrategy.Tactical or UnitData.AIStrategy.Cunning or UnitData.AIStrategy.Territorial => 0,
+            UnitData.AIStrategy.Cautious => 1,
+            UnitData.AIStrategy.Reckless or UnitData.AIStrategy.Berserk or UnitData.AIStrategy.Intimidate => 2,
+            UnitData.AIStrategy.Instinct => 3,
+            _ => 99,
+        };
     }
 }

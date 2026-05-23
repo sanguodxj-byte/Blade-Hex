@@ -49,7 +49,6 @@ public partial class ProjectileView : Node3D, IProjectileView
     {
         // 创建子节点
         _sprite = new Sprite3D();
-        _sprite.PixelSize = 0.03f;
         _sprite.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
         _sprite.TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest;
         AddChild(_sprite);
@@ -127,7 +126,12 @@ public partial class ProjectileView : Node3D, IProjectileView
 
         var tex = GD.Load<Texture2D>(path);
         if (tex != null)
+        {
             _sprite.Texture = tex;
+            // 根据贴图实际尺寸和目标世界尺寸计算 PixelSize
+            _sprite.PixelSize = BladeHex.View.Combat.TextureScaleConfig.GetProjectilePixelSize(
+                data.ProjectileType, tex);
+        }
     }
 
     /// <summary>飞行完成 — 回收到对象池</summary>

@@ -7,6 +7,7 @@ function execute(ctx)
         local enemy = enemies[i]
         if unit:is_valid(enemy) then
             if enemy:has_effect("invisibility") or enemy:has_effect("stealth") then
+                buff:remove_many(enemy, { "invisibility", "stealth" })
                 result:add_remove_effect(enemy, { "invisibility", "stealth" })
             end
         end

@@ -15,7 +15,7 @@ function execute(ctx)
     local save_roll = combat:roll_dice(1, 20) + wis_mod + target_prof
 
     if save_roll < dc then
-        result:add_effect(target, "bribed", 99)
+        buff:apply_custom(target, "bribed", 99, { ai_ignore = true })
     else
         result:fail("目标抵抗了贿赂")
     end

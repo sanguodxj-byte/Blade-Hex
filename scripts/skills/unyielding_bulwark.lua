@@ -5,6 +5,6 @@ function execute(ctx)
     local caster = ctx.attacker
     local temp_hp = combat:roll_dice(2, 6)
 
-    result:add_effect(caster, "shield", 2, { damage_reduction_percent = 0.5 })
-    result:add_effect(caster, "temp_hp", 2, { temp_hp_amount = temp_hp })
+    buff:apply_custom(caster, "shield", 2, { damage_reduction_percent = 0.5 })
+    buff:apply_custom(caster, "temp_hp", 2, { temp_hp_amount = temp_hp })
 end

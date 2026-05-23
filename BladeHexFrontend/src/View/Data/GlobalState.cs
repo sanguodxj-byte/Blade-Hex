@@ -24,6 +24,16 @@ namespace BladeHex.Data;
 public partial class GlobalState : Node
 {
     // ========================================
+    // 生命周期
+    // ========================================
+
+    public override void _Ready()
+    {
+        // 初始化资源注册表（扫描 res://assets 建立 id→路径映射）
+        BladeHex.View.Data.ResourceRegistry.Initialize();
+    }
+
+    // ========================================
     // 子上下文（推荐访问方式）
     // ========================================
 

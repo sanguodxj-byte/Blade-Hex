@@ -171,26 +171,6 @@ public partial class CombatManager : Node
         // 每回合开始重置职业技能回合计数
         BladeHex.Data.Globals.SkillTreesOrNull?.OnTurnStart();
 
-        // Buff 系统:回合开始 tick(持续时间递减、tick 伤害/治疗、豁免)
-        foreach (var unit in units)
-        {
-            if (unit?.Data == null || unit.CurrentHp <= 0) continue;
-            int tickDmg = BladeHex.Combat.Buff.BuffSystem.TickAll(unit.Data);
-            if (tickDmg > 0)
-            {
-                unit.CurrentHp = System.Math.Max(0, unit.CurrentHp - tickDmg);
-                unit.UpdateHpBar();
-            }
-            else if (tickDmg < 0)
-            {
-                // 治疗(tickDmg 为负值)
-                int heal = -tickDmg;
-                unit.CurrentHp = System.Math.Min(unit.GetMaxHp(), unit.CurrentHp + heal);
-                unit.UpdateHpBar();
-            }
-            // 触发 OnTurnStart 触发器
-            BladeHex.Combat.Buff.BuffSystem.FireTriggers(unit.Data, BladeHex.Combat.Buff.TriggerEvent.OnTurnStart);
-        }
     }
 
     public void EndCurrentTurn()
@@ -274,6 +254,20 @@ public partial class CombatManager : Node
             if (caster.Data != null && caster.Data.Runtime.NonSpellSkillUsedThisTurn)
                 return new Godot.Collections.Dictionary { { "success", false }, { "reason", "本回合已使用过非法术主动技能" } };
         }
+
+        if (grid != null && SkillRegistry.GetTargetType(skillEffect) != "Self")
+        {
+            var targetCellData = grid.GetCell(targetCell.X, targetCell.Y);
+            var targetUnit = targetCellData?.Occupant;
+            if (GodotObject.IsInstanceValid(targetUnit)
+                && targetUnit != caster
+                && targetUnit!.Data?.IsEnemy != caster.Data?.IsEnemy
+                && !BuffTargetingRules.IsDirectlyTargetable(targetUnit))
+            {
+                return new Godot.Collections.Dictionary { { "success", false }, { "reason", "目标不可被直接指定" } };
+            }
+        }
+
 
         var result = SkillEffectExecutor.ExecuteActiveSkill(
             caster, skillEffect, targetCell, grid,
@@ -434,6 +428,25 @@ public partial class CombatManager : Node
         // 通知先攻队列移除该单位
         Turns.OnUnitDied((long)unit.GetInstanceId());
 
+        ResolveCombatEndAfterDeath(isPlayer);
+    }
+
+    /// <summary>
+    /// 显式死亡收口：用于战斗结算已确认死亡，但 Node 退出树事件尚未触发的场景。
+    /// 保持与 UnitRegistry.TreeExited 路径幂等，避免死亡单位继续留在先攻队列。
+    /// </summary>
+    public void HandleUnitKilled(Unit dead, Unit? killer = null)
+    {
+        if (dead == null || !GodotObject.IsInstanceValid(dead)) return;
+
+        bool isPlayer = dead.IsPlayerSide;
+        Turns.OnUnitDied((long)dead.GetInstanceId());
+        ResolveCombatEndAfterDeath(isPlayer);
+    }
+
+    private void ResolveCombatEndAfterDeath(bool isPlayer)
+    {
+
         if (isPlayer)
         {
             if (PlayerUnits.Count == 0) EndCombat(false);
@@ -465,22 +478,7 @@ public partial class CombatManager : Node
             BladeHex.Data.Globals.SkillTreesOrNull?.OnTurnStart();
 
             // Buff tick
-            if (unit.Data != null && unit.CurrentHp > 0)
-            {
-                int tickDmg = BladeHex.Combat.Buff.BuffSystem.TickAll(unit.Data);
-                if (tickDmg > 0)
-                {
-                    unit.CurrentHp = System.Math.Max(0, unit.CurrentHp - tickDmg);
-                    unit.UpdateHpBar();
-                }
-                else if (tickDmg < 0)
-                {
-                    int heal = -tickDmg;
-                    unit.CurrentHp = System.Math.Min(unit.GetMaxHp(), unit.CurrentHp + heal);
-                    unit.UpdateHpBar();
-                }
-                BladeHex.Combat.Buff.BuffSystem.FireTriggers(unit.Data, BladeHex.Combat.Buff.TriggerEvent.OnTurnStart);
-            }
+            BuffTurnApplier.ApplyTurnStart(unit);
 
             EmitSignal(SignalName.UnitTurnBegan, unit, isPlayerSide);
         }

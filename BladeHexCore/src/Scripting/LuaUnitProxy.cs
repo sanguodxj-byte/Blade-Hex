@@ -19,8 +19,12 @@ public class LuaUnitProxy
     // ========================================================================
 
     public int InternalId { get; set; }
+    public long instance_id { get; set; }
+    public int character_id { get; set; }
     public Action<int, int>? OnHpChanged { get; set; }
     public Action<int, int>? OnManaChanged { get; set; }
+    public Action<int, float>? OnApChanged { get; set; }
+    public Action<int, int>? OnExtraActionsChanged { get; set; }
 
     // ========================================================================
     // 基础属性
@@ -75,14 +79,36 @@ public class LuaUnitProxy
     public int facing { get; set; }
 
     // 战斗状态
-    public float ap { get; set; }
+    private float _ap;
+    public float ap
+    {
+        get => _ap;
+        set
+        {
+            float old = _ap;
+            _ap = value;
+            if (Math.Abs(old - value) > 0.001f) OnApChanged?.Invoke(InternalId, value);
+        }
+    }
+
     public int max_ap { get; set; }
     public int ac { get; set; }
     public int attack_bonus { get; set; }
     public int move_range { get; set; }
 
     // 运行时状态
-    public int extra_actions { get; set; }
+    private int _extraActions;
+    public int extra_actions
+    {
+        get => _extraActions;
+        set
+        {
+            int old = _extraActions;
+            _extraActions = value;
+            if (old != value) OnExtraActionsChanged?.Invoke(InternalId, value);
+        }
+    }
+
     public int life_circle_used { get; set; }
     public int life_shield_used { get; set; }
     public int heroic_call_used { get; set; }

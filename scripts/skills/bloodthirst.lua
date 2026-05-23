@@ -9,8 +9,6 @@ function execute(ctx)
     result:add_attack(r)
 
     if target.hp <= 0 and ctx.attacker.extra_actions == 0 then
-        ctx.attacker.ap = ctx.attacker.ap + 4
-        ctx.attacker.extra_actions = ctx.attacker.extra_actions + 1
-        result:add_effect(ctx.attacker, "bloodthirst_extra_action", 1)
+        buff:apply_custom(ctx.attacker, "bloodthirst_extra_action", 1, { extra_ap = 4 })
     end
 end

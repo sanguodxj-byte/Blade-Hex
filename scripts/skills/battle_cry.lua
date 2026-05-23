@@ -4,7 +4,7 @@
 function execute(ctx)
     -- 震慑周围敌人
     aoe_neighbors(ctx.attacker, "enemies", function(enemy, pos)
-        result:add_effect(enemy, "fear", 2, { attack_bonus = -2 })
+        buff:apply_custom(enemy, "battle_cry", 2, { attack_bonus = -2 })
     end)
 
     -- 鼓舞友军士气

@@ -10,6 +10,6 @@ function execute(ctx)
     end
 
     local temp_hp = math.floor(caster.max_hp * 0.3)
-    result:add_effect(caster, "temp_hp", 3, { temp_hp_amount = temp_hp })
+    buff:apply_custom(caster, "temp_hp", 3, { temp_hp_amount = temp_hp })
     caster.life_shield_used = true
 end
