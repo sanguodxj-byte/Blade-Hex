@@ -845,12 +845,12 @@ public partial class SkillTreeUI : PanelContainer
             if (spell == null) return effect;
 
             int apCost = spell.castingTime == SpellData.CastingTime.MainAction ? 4 : 0;
-            var sb = new System.Text.StringBuilder();
-            sb.Append(spell.SpellName);
+            var spellTooltip = new System.Text.StringBuilder();
+            spellTooltip.Append(spell.SpellName);
             if (!string.IsNullOrEmpty(spell.Description))
-                sb.Append($"\n{spell.Description}");
-            sb.Append($"\nAP {apCost} / 法力 {spell.ManaCost} / 射程 {spell.RangeCells}");
-            return sb.ToString();
+                spellTooltip.Append($"\n{spell.Description}");
+            spellTooltip.Append($"\nAP {apCost} / 法力 {spell.ManaCost} / 射程 {spell.RangeCells}");
+            return spellTooltip.ToString();
         }
 
         var cfg = SkillRegistry.GetSkillConfig(effect);

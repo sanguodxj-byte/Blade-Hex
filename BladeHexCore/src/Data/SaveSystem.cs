@@ -273,6 +273,7 @@ public class SkillTreeSaveData
     public int TotalJumps { get; set; }
     public int UsedJumps { get; set; }
     public int CharacterLevel { get; set; } = 1;
+    public int RandomAttributeSeed { get; set; }
     public Dictionary<string, int> CareerSkillUses { get; set; } = new();
 }
 
@@ -393,6 +394,9 @@ public static class SaveDataConverter
             skillSave.TotalJumps = st.ContainsKey("total_jumps") ? st["total_jumps"].AsInt32() : 0;
             skillSave.UsedJumps = st.ContainsKey("used_jumps") ? st["used_jumps"].AsInt32() : 0;
             skillSave.CharacterLevel = st.ContainsKey("character_level") ? st["character_level"].AsInt32() : 1;
+            skillSave.RandomAttributeSeed = st.ContainsKey("random_attribute_seed")
+                ? st["random_attribute_seed"].AsInt32()
+                : 0;
 
             if (st.ContainsKey("career_skill_uses"))
             {
@@ -435,6 +439,7 @@ public static class SaveDataConverter
         st["total_jumps"] = data.SkillTree.TotalJumps;
         st["used_jumps"] = data.SkillTree.UsedJumps;
         st["character_level"] = data.SkillTree.CharacterLevel;
+        st["random_attribute_seed"] = data.SkillTree.RandomAttributeSeed;
 
         var careerUses = new Godot.Collections.Dictionary();
         if (data.SkillTree.CareerSkillUses != null)

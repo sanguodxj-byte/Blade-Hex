@@ -267,15 +267,20 @@ public static class SkillTreeLayoutTests
             "range_bonus", "spell_hit", "spell_damage", "heal_amount", "ally_bonus",
         };
 
+        var characterTree = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
         foreach (var (id, node) in tree.Nodes)
         {
             if (node.CurrentContentMode != SkillNodeData.ContentMode.RandomAttribute)
                 continue;
 
-            if (node.StatBonuses.Count == 0)
-                return (false, $"{id} 随机属性节点未生成属性");
+            if (node.StatBonuses.Count != 0)
+                return (false, $"{id} 随机属性节点不应在共享节点数据上预掷属性");
 
-            foreach (var key in node.StatBonuses.Keys)
+            var bonuses = characterTree.GetNodeStatBonusesForCharacter(node);
+            if (bonuses.Count == 0)
+                return (false, $"{id} 未按角色 seed 生成随机属性");
+
+            foreach (var key in bonuses.Keys)
             {
                 string stat = key.ToString()!;
                 if (!legal.Contains(stat))
@@ -292,18 +297,19 @@ public static class SkillTreeLayoutTests
         if (pools.Count == 0)
             return (false, "randomPools not loaded");
 
+        var characterTree = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
         foreach (var (id, node) in tree.Nodes)
         {
             if (node.CurrentContentMode != SkillNodeData.ContentMode.RandomAttribute)
                 continue;
 
+            var bonuses = characterTree.GetNodeStatBonusesForCharacter(node);
+
             if (node.CurrentRegion == SkillNodeData.Region.Transition)
             {
-                if (node.StatBonuses.Count != 1
-                    || !node.StatBonuses.ContainsKey("all_save")
-                    || !VariantNumberEquals(node.StatBonuses["all_save"], 1))
+                if (bonuses.Count != 0)
                 {
-                    return (false, $"{id} transition bridge random payload must stay fixed to all_save +1");
+                    return (false, $"{id} transition random node should not roll cross-region attributes");
                 }
                 continue;
             }
@@ -313,30 +319,30 @@ public static class SkillTreeLayoutTests
 
             if (node.CurrentNodeType == SkillNodeData.NodeType.Pip)
             {
-                if (node.StatBonuses.Count != 1)
-                    return (false, $"{id} pip must have exactly one stat, actual {node.StatBonuses.Count}");
+                if (bonuses.Count != 1)
+                    return (false, $"{id} pip must have exactly one stat, actual {bonuses.Count}");
 
-                foreach (var key in node.StatBonuses.Keys)
+                foreach (var key in bonuses.Keys)
                 {
                     string stat = key.ToString()!;
                     if (!pool.TryGetValue(stat, out var range))
                         return (false, $"{id} pip stat {stat} is not in its region pool");
-                    if (!VariantNumberEquals(node.StatBonuses[key], range.min))
+                    if (!VariantNumberEquals(bonuses[key], range.min))
                         return (false, $"{id} pip stat {stat} must use pool minimum {range.min}");
                 }
             }
             else if (node.CurrentNodeType == SkillNodeData.NodeType.Small)
             {
-                if (node.StatBonuses.Count < 1 || node.StatBonuses.Count > 2)
-                    return (false, $"{id} small node must have one stat plus optional secondary, actual {node.StatBonuses.Count}");
+                if (bonuses.Count < 1 || bonuses.Count > 2)
+                    return (false, $"{id} small node must have one stat plus optional secondary, actual {bonuses.Count}");
 
-                foreach (var key in node.StatBonuses.Keys)
+                foreach (var key in bonuses.Keys)
                 {
                     string stat = key.ToString()!;
                     if (!pool.TryGetValue(stat, out var range))
                         return (false, $"{id} small stat {stat} is not in its region pool");
 
-                    double value = VariantToDouble(node.StatBonuses[key]);
+                    double value = VariantToDouble(bonuses[key]);
                     if (value < range.min - 0.0001d || value > range.max + 0.0001d)
                         return (false, $"{id} small stat {stat} value {value} outside [{range.min}, {range.max}]");
                 }
@@ -536,7 +542,7 @@ public static class SkillTreeLayoutTests
             { "berserk_stance.lua", new[] { "damage = 0.15", "damage_taken = 0.10" } },
             { "guard_stance.lua", new[] { "damage_taken = -0.15", "damage = -0.15" } },
             { "hunter_stance.lua", new[] { "ranged_damage = 0.15", "melee_damage = -0.20" } },
-            { "guardian_link.lua", new[] { "damage_reduction_percent = 0.5", "damage_redirect_percent = 0.5" } },
+            { "guardian_link.lua", new[] { "damage_redirect_percent = 0.5" } },
             { "weakpoint_pierce.lua", new[] { "crit_taken = 0.15" } },
             { "deadly_mark.lua", new[] { "critical_rate_taken = 0.20", "marker_id = ctx.attacker.instance_id" } },
             { "shadow_hide.lua", new[] { "ranged_hit_taken = -0.50", "ignore_zoc = 1", "no_aoo_on_move = 1" } },

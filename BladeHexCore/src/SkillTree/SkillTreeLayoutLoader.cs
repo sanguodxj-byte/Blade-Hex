@@ -39,7 +39,6 @@ public static class SkillTreeLayoutLoader
             using var contentDoc = JsonDocument.Parse(File.ReadAllText(contentPath));
 
             var contentById = ReadContent(contentDoc.RootElement);
-            var pools = ReadPools(contentDoc.RootElement);
 
             nodes.Clear();
             foreach (var nodeElement in layoutDoc.RootElement.GetProperty("nodes").EnumerateArray())
@@ -62,9 +61,6 @@ public static class SkillTreeLayoutLoader
                     ApplyContent(node, content);
                 else
                     ApplyDefaultContent(node);
-
-                if (node.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute && node.StatBonuses.Count == 0)
-                    node.StatBonuses = RollRandomAttribute(node, pools);
 
                 nodes[id] = node;
             }
@@ -162,30 +158,6 @@ public static class SkillTreeLayoutLoader
         return result;
     }
 
-    private static Dictionary<SkillNodeData.Region, List<RandomPoolEntry>> ReadPools(JsonElement root)
-    {
-        var result = new Dictionary<SkillNodeData.Region, List<RandomPoolEntry>>();
-        if (!root.TryGetProperty("randomPools", out var poolsElement))
-            return result;
-
-        foreach (var poolProp in poolsElement.EnumerateObject())
-        {
-            var region = ParseRegion(poolProp.Name);
-            var entries = new List<RandomPoolEntry>();
-            foreach (var entry in poolProp.Value.EnumerateArray())
-            {
-                entries.Add(new RandomPoolEntry(
-                    ReadRequiredString(entry, "stat"),
-                    ReadNumber(entry, "min", 0),
-                    ReadNumber(entry, "max", 0),
-                    ReadInt(entry, "weight", 1)));
-            }
-            result[region] = entries;
-        }
-
-        return result;
-    }
-
     private static void ApplyContent(SkillNodeData node, JsonElement content)
     {
         node.NodeName = ReadString(content, "name", node.NodeId);
@@ -211,52 +183,6 @@ public static class SkillTreeLayoutLoader
         node.RandomSeed = StableSeed(node.NodeId);
         if (node.CurrentNodeType == SkillNodeData.NodeType.Small || node.CurrentNodeType == SkillNodeData.NodeType.Pip)
             node.CurrentContentMode = SkillNodeData.ContentMode.RandomAttribute;
-    }
-
-    private static Godot.Collections.Dictionary RollRandomAttribute(
-        SkillNodeData node,
-        Dictionary<SkillNodeData.Region, List<RandomPoolEntry>> pools)
-    {
-        var dict = new Godot.Collections.Dictionary();
-        if (!pools.TryGetValue(node.CurrentRegion, out var entries) || entries.Count == 0)
-            return dict;
-
-        var rng = new Random(node.RandomSeed);
-        var main = Pick(entries, rng);
-        dict[main.Stat] = ToVariantValue(main.Roll(rng, useMinimum: node.CurrentNodeType == SkillNodeData.NodeType.Pip));
-
-        if (node.CurrentNodeType == SkillNodeData.NodeType.Small && rng.NextDouble() < 0.10d)
-        {
-            var secondary = Pick(entries, rng);
-            if (!dict.ContainsKey(secondary.Stat))
-                dict[secondary.Stat] = ToVariantValue(secondary.Roll(rng, useMinimum: true));
-        }
-
-        return dict;
-    }
-
-    private static RandomPoolEntry Pick(List<RandomPoolEntry> entries, Random rng)
-    {
-        int total = 0;
-        foreach (var entry in entries)
-            total += Math.Max(0, entry.Weight);
-
-        int roll = rng.Next(Math.Max(1, total));
-        foreach (var entry in entries)
-        {
-            roll -= Math.Max(0, entry.Weight);
-            if (roll < 0)
-                return entry;
-        }
-
-        return entries[0];
-    }
-
-    private static Variant ToVariantValue(double value)
-    {
-        if (Math.Abs(value - Math.Round(value)) < 0.0001d)
-            return (int)Math.Round(value);
-        return (float)value;
     }
 
     private static string? ResolveDataPath(string relativePath)
@@ -379,13 +305,6 @@ public static class SkillTreeLayoutLoader
             : fallback;
     }
 
-    private static double ReadNumber(JsonElement element, string propertyName, double fallback)
-    {
-        return element.TryGetProperty(propertyName, out var value)
-            ? value.GetDouble()
-            : fallback;
-    }
-
     private static int StableSeed(string text)
     {
         unchecked
@@ -397,17 +316,4 @@ public static class SkillTreeLayoutLoader
         }
     }
 
-    private sealed record RandomPoolEntry(string Stat, double Min, double Max, int Weight)
-    {
-        public double Roll(Random rng, bool useMinimum)
-        {
-            if (useMinimum || Math.Abs(Max - Min) < 0.0001d)
-                return Min;
-
-            if (Math.Abs(Min - Math.Round(Min)) < 0.0001d && Math.Abs(Max - Math.Round(Max)) < 0.0001d)
-                return rng.Next((int)Math.Round(Min), (int)Math.Round(Max) + 1);
-
-            return Min + rng.NextDouble() * (Max - Min);
-        }
-    }
 }

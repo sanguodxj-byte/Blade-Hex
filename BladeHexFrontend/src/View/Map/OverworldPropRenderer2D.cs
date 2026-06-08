@@ -954,9 +954,7 @@ public partial class OverworldPropRenderer2D : Node2D
         finalPos.Y += yAnchorBias * jitterY;
 
         bool flipH = (h4 & 1u) != 0;
-        float rotation = ((h5 / (float)uint.MaxValue) - 0.5f) * 0.20f;
-
-        AddToPropsListDirect(spriteKey, texture, tile.Coord, null, finalPos, scale, flipH, rotation);
+        AddToPropsListDirect(spriteKey, texture, tile.Coord, null, finalPos, scale, flipH, rotation: 0f);
     }
 
     /// <summary>
@@ -1079,9 +1077,7 @@ public partial class OverworldPropRenderer2D : Node2D
         finalPos.Y += yAnchorBias * jitterY;
 
         bool flipH = (h4 & 1u) != 0;
-        float rotation = ((h5 / (float)uint.MaxValue) - 0.5f) * 0.28f;
-
-        AddToPropsListDirect(spriteKey, texture, tileA.Coord, tileB?.Coord, finalPos, scale, flipH, rotation);
+        AddToPropsListDirect(spriteKey, texture, tileA.Coord, tileB?.Coord, finalPos, scale, flipH, rotation: 0f);
     }
 
     private void AddForestTreeProp(HexOverworldTile tileA, Vector2 pos, float baseScale, HexOverworldTile? tileB)
