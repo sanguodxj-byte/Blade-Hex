@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import heapq
 import json
 import math
 from collections import deque
@@ -85,22 +84,27 @@ ALL_TILES = [
 REGION_ANGLES = {
     "str": math.radians(30),
     "dex": math.radians(90),
-    "con": math.radians(150),
-    "int": math.radians(-150),
-    "wis": math.radians(-90),
-    "cha": math.radians(-30),
+    "con": math.radians(-30),
+    "int": math.radians(-90),
+    "wis": math.radians(-150),
+    "cha": math.radians(150),
 }
 
-REGION_ORDER = ["int", "wis", "cha", "str", "dex", "con"]
-REGION_SEQUENCE = ["str", "dex", "con", "int", "wis", "cha"]
+# Visual order after SkillTreeCoord's -90 degree rotation:
+# upper-left, top, upper-right, lower-right, bottom, lower-left.
+REGION_ORDER = ["wis", "int", "con", "str", "dex", "cha"]
+
+# Adjacent cycle from docs/技能星盘骨架设计方案.md:
+# INT -> CON -> STR -> DEX -> CHA -> WIS -> INT.
+REGION_SEQUENCE = ["int", "con", "str", "dex", "cha", "wis"]
 
 GIANTS = {
-    "str": ("ᚦᚢᚱᛋ", "Thurs·蛮神：当回合内每击杀 1 个敌人立即恢复全部 AP。"),
-    "dex": ("ᚱᚨᛁᚦ", "Raið·疾驰：远程攻击命中即返还本次行动，最多连续 5 次。"),
-    "con": ("ᛁᛋᚨ", "Isa·凝滞：3 回合内 HP 最低锁定为 1，每场战斗 1 次。"),
-    "int": ("ᚨᚾᛋ", "Ans·启示：点亮即获得 1 个 4 环法术。"),
-    "wis": ("ᛇᚹᚨᛉ", "Eihwaz·绝杀：当回合内所有攻击必定命中且必定暴击。"),
-    "cha": ("ᛋᛁᚷᚱ", "Sigr·凯旋：解除全场友军减益，并令窗口内友军总攻。"),
+    "str": ("ᚦᚢᚱᛋ", "Thurs·蛮神", "免费行动，每场 1 次。窗口内每击杀 1 个敌人立即恢复全部 AP，可继续行动。"),
+    "dex": ("ᚱᚨᛁᚦ", "Raið·疾驰", "免费行动，每场 1 次。窗口内远程攻击命中即返还本次行动，最多连续 5 次；每次击杀刷新移动力。"),
+    "con": ("ᛁᛋᚨ", "Isa·凝滞", "免费行动，每场 1 次。3 回合内 HP 最低锁定为 1，伤害仍正常结算。"),
+    "int": ("ᚨᚾᛋ", "Ans·启示", "点亮即获得 1 个 4 环法术；受绝对专注等法术研习锁系规则约束。"),
+    "wis": ("ᛇᚹᚨᛉ", "Eihwaz·绝杀", "免费行动，每场 1 次。窗口内所有攻击必定命中且必定暴击。"),
+    "cha": ("ᛋᛁᚷᚱ", "Sigr·凯旋", "免费行动，每场 1 次。启动瞬间解除全场友军减益；窗口内友军伤害 +50%、暴击率 +25%、攻击 +3，并免疫恐慌与心灵效果。"),
 }
 
 KEYSTONES = {
@@ -145,6 +149,57 @@ ACTIVES = {
     "cha": [("战术调度", "tactical_reposition"), ("集结号令", "gathering_order"), ("威压", "command_intimidate"), ("英雄号召", "battle_banner"), ("鼓舞士气", "morale_boost"), ("战阵激励", "warband_inspiration")],
 }
 
+ACTIVE_DETAILS = {
+    "str": [
+        ("武器+1", "2", "近战", "攻击 2 次，第 2 次命中 -15%。"),
+        ("武器+1", "3", "近战", "半径 1，相邻敌人各受武器 ×1.0。"),
+        ("2", "无", "近战", "姿态：近战伤害 +15%；受到伤害 +10%；全场持续，可免费关闭，开启新姿态会关闭旧姿态。"),
+        ("4", "3", "无", "半径 3 敌人命中 -20%，持续 1 回合。"),
+        ("移动+2", "3", "近战", "直线冲撞，途经敌人受武器 ×50%；命中附 STUN 1 回合。"),
+        ("武器+2", "3", "近战", "半径 2 横扫，范围内敌人各受武器 ×1.0；外圈每命中 1 敌回复 5% 最大 HP。"),
+    ],
+    "dex": [
+        ("武器+1", "3", "远程", "蓄力，下次远程攻击优势，并造成武器 ×200%。"),
+        ("武器+1", "2", "远程", "连射 3 箭，每箭命中 -10%。"),
+        ("武器+1", "3", "远程", "命中附 BLIND 2 回合。"),
+        ("2", "2", "无", "位移 4 格，不触发借机攻击。"),
+        ("2", "无", "无", "姿态：远程伤害 +15%；近战伤害 -20%；全场持续，可免费关闭，开启新姿态会关闭旧姿态。"),
+        ("武器+2", "4", "远程", "半径 2，范围内敌人各受武器 ×60%。"),
+    ],
+    "con": [
+        ("武器+1", "2", "近战+盾", "武器 ×100% + 推开 1 格；若推向高度差、障碍或有单位格而推不动，改为造成目标最大 HP 8% 血量伤害。"),
+        ("武器+1", "3", "近战+盾", "武器 ×120% + 击退 2 格 + 目标命中 -20%，持续 2 回合。"),
+        ("4", "3", "无", "指定 1 友军，其受到伤害的 50% 转移到自己，持续 3 回合。"),
+        ("2", "无", "无", "姿态：受到伤害 -15%；自身伤害 -15%；全场持续，可免费关闭，开启新姿态会关闭旧姿态。"),
+        ("4", "3", "无", "立即回复 25% 最大 HP；本回合受到伤害 -30%。"),
+        ("武器+2", "3", "无", "相邻敌人各受武器 ×80% + STUN 1 回合，强韧豁免。"),
+    ],
+    "int": [
+        ("点亮", "无", "法术研习", "点亮选 1 系，获得 1 环法术。"),
+        ("点亮", "无", "法术研习", "点亮选 1 系，获得 1 环法术。"),
+        ("点亮", "无", "法术研习", "点亮选 1 系，获得 2 环法术；低环研习作为前置。"),
+        ("点亮", "无", "法术研习", "点亮选 1 系，获得 2 环法术；低环研习作为前置。"),
+        ("点亮", "无", "法术研习", "点亮选 1 系，获得 3 环法术；低环研习作为前置。"),
+        ("点亮", "无", "法术研习", "点亮选 1 系，获得 3 环法术；低环研习作为前置。"),
+    ],
+    "wis": [
+        ("主行动", "3", "无", "单体攻击，本次暴击率 +30% 且无视目标 50% AC；命中后目标暴击率承伤 +15%，持续 2 回合。"),
+        ("次行动", "2", "无", "下次攻击附 POISON：每回合 1d4，持续 3 回合；DoT 不参与暴击结算。"),
+        ("主行动", "3", "轻武器", "单体攻击：造成武器 ×120% 伤害，并施加定身 2 回合，感知豁免减半时长。"),
+        ("次行动", "3", "无", "向视野内 1 敌突进至其邻接格，不触发途经借机攻击；到位后下次攻击对该目标暴击率 +20%。"),
+        ("次行动", "4", "无", "进入潜行：敌人对你的远程命中 -50%；潜行时不受敌人控制区影响，但离开敌人邻接格仍触发借机攻击。"),
+        ("次行动", "3", "无", "标记 1 敌：对其暴击率 +20%，持续至战斗结束或目标死亡。"),
+    ],
+    "cha": [
+        ("主行动", "3", "无", "指定 1 名友军：其下次行动获得额外 4 AP，可超出 AP 上限。"),
+        ("主行动", "3", "无", "所有友军下回合命中 +10%、伤害 +10%，持续 1 回合。"),
+        ("主行动", "3", "无", "半径 3 敌人命中 -10%，持续 3 回合，意志豁免减半时长。"),
+        ("主行动", "4", "无", "插战旗：半径 2 内友军命中 +10%、AC +1，持续 3 回合；战旗为地面实体，可被摧毁。"),
+        ("主行动", "3", "无", "半径 2 内友军命中 +10%，持续 2 回合。"),
+        ("主行动", "4", "无", "半径 2 内所有友军各获得最大 HP 10% 的临时 HP，持续 2 回合；不叠加，由新效果覆盖。"),
+    ],
+}
+
 PASSIVES = {
     "str": ["裂帛", "碎骨", "巨握", "持刃者", "坚骨", "乘胜", "背水", "怒锋"],
     "dex": ["长弓手", "弩炮手", "掷矛手", "影袭者", "鹰瞵", "疾影", "致命专注", "锐眼"],
@@ -152,6 +207,69 @@ PASSIVES = {
     "int": ["法杖客", "法球师", "魔杖手", "蓄能", "通流", "锐识", "灌注", "凝神"],
     "wis": ["短匕客", "剜心", "洞隙", "凝杀", "灵蕴", "锋寒", "缢绳", "嗜血"],
     "cha": ["号令", "旌旗", "威仪", "慑势", "财路", "鼓噪", "临阵", "锋芒"],
+}
+
+PASSIVE_DETAILS = {
+    "str": [
+        "武器类型：砍击类武器伤害 +5%。",
+        "武器类型：钝击类武器伤害 +5%。",
+        "武器类型：重型武器伤害 +5%。",
+        "武器类型：剑类武器伤害 +5%。",
+        "常驻：最大 HP +5%。",
+        "触发：暴击后，下一次近战伤害 +5%。",
+        "触发：自身 HP <50% 时近战伤害 +5%。",
+        "常驻：近战伤害 +5%。",
+    ],
+    "dex": [
+        "武器类型：弓类武器伤害 +5%。",
+        "武器类型：弩类武器伤害 +5%。",
+        "武器类型：投掷类武器伤害 +5%。",
+        "武器类型：轻型武器伤害 +5%。",
+        "常驻：远程暴击率 +5%。",
+        "常驻：移动速度 +1。",
+        "触发：本回合未移动则下次远程伤害 +5%。",
+        "常驻：远程伤害 +5%。",
+    ],
+    "con": [
+        "装备盾牌时 AC +1。",
+        "重甲时最大 HP +5%。",
+        "常驻：最大 HP +5%。",
+        "常驻：受到物理伤害 -5%。",
+        "常驻：全豁免 +1。",
+        "常驻：免疫 BLEED；受治疗时治疗量 +5%。",
+        "触发：自身 HP <50% 时受到伤害 -5%。",
+        "触发：本回合未移动则受到伤害 -5%。",
+    ],
+    "int": [
+        "武器类型：法杖法术伤害 +5%。",
+        "武器类型：法球法术伤害 +5%。",
+        "武器类型：魔杖法术伤害 +5%。",
+        "常驻：法力上限 +5%。",
+        "常驻：法力回复 +1。",
+        "常驻：法术命中 +1。",
+        "常驻：法术伤害 +5%。",
+        "触发：本回合未移动则下次法术伤害 +5%。",
+    ],
+    "wis": [
+        "武器类型：轻型武器暴击率 +5%。",
+        "常驻：暴击率 +5%。",
+        "常驻：暴击率 +5%。",
+        "触发：本回合未移动则暴击率 +5%。",
+        "常驻：法力上限 +5%。",
+        "常驻：暴击伤害不受目标 DR 减免。",
+        "武器类型：砍击/刺击轻型武器暴击率 +5%。",
+        "触发：击杀后下次攻击暴击率 +5%，持续 1 回合。",
+    ],
+    "cha": [
+        "常驻：友军加成 +1，强化自身指挥光环。",
+        "常驻：友军加成 +1。",
+        "常驻：友军加成 +1。",
+        "常驻：友军加成 +1。",
+        "修正：商店价格 -5%。",
+        "常驻：自身先攻 +2。",
+        "常驻：最大 HP +5%。",
+        "常驻：友军加成 +1。",
+    ],
 }
 
 RANDOM_POOLS = {
@@ -182,6 +300,117 @@ def tile_distance(tile: tuple[int, int]) -> float:
 def tile_angle(tile: tuple[int, int]) -> float:
     x, y = centroid(tile)
     return math.atan2(y, x)
+
+
+def centroid_distance_sq(a: tuple[int, int], b: tuple[int, int]) -> float:
+    ax, ay = centroid(a)
+    bx, by = centroid(b)
+    dx = ax - bx
+    dy = ay - by
+    return dx * dx + dy * dy
+
+
+def group_shape_score(group: list[tuple[int, int]]) -> float:
+    if len(group) <= 1:
+        return 0.0
+
+    points = [centroid(tile) for tile in group]
+    cx = sum(x for x, _ in points) / len(points)
+    cy = sum(y for _, y in points) / len(points)
+    spread = sum((x - cx) * (x - cx) + (y - cy) * (y - cy) for x, y in points)
+
+    group_set = set(group)
+    exposed_edges = 0
+    for tile in group:
+        for neighbor in neighbors(tile):
+            if neighbor not in group_set:
+                exposed_edges += 1
+
+    score = spread * 10.0 + exposed_edges
+
+    if len(group) >= 4:
+        width, height = group_bbox_size(group)
+        ratio = max(width, height) / max(0.001, min(width, height))
+        score += max(0.0, ratio - 1.85) * 250.0
+
+    # Spread is the dominant term; the bbox penalty rejects long bars when a
+    # compact jewel shape is available in the same local frontier.
+    return score
+
+
+def group_bbox_size(group: list[tuple[int, int]]) -> tuple[float, float]:
+    points = [centroid(tile) for tile in group]
+    xs = [x for x, _ in points]
+    ys = [y for _, y in points]
+    return max(xs) - min(xs), max(ys) - min(ys)
+
+
+def group_assignment_score(
+    group: list[tuple[int, int]],
+    seed: tuple[int, int],
+    prefer_outer: bool,
+) -> tuple[float, float, float, float, int, int]:
+    center_distance = sum(centroid_distance_sq(seed, tile) for tile in group) / len(group)
+    radial = sum(tile_distance(tile) for tile in group) / len(group)
+    radial_term = -radial if prefer_outer else radial
+    ordered = sorted(group)
+    return (
+        group_shape_score(group),
+        center_distance,
+        radial_term,
+        sum(tile_angle(tile) for tile in group) / len(group),
+        ordered[0][0],
+        ordered[0][1],
+    )
+
+
+def compact_connected_group(
+    seed: tuple[int, int],
+    remaining: set[tuple[int, int]],
+    size: int,
+    prefer_outer: bool,
+    beam_width: int = 160,
+) -> list[tuple[int, int]] | None:
+    beam: list[list[tuple[int, int]]] = [[seed]]
+
+    while beam and len(beam[0]) < size:
+        candidates: dict[tuple[tuple[int, int], ...], list[tuple[int, int]]] = {}
+        for group in beam:
+            group_set = set(group)
+            frontier = {
+                neighbor
+                for tile in group
+                for neighbor in neighbors(tile)
+                if neighbor in remaining and neighbor not in group_set
+            }
+            for tile in frontier:
+                new_group = group + [tile]
+                key = tuple(sorted(new_group))
+                candidates[key] = new_group
+
+        if not candidates:
+            return None
+
+        beam = sorted(
+            candidates.values(),
+            key=lambda group: group_assignment_score(group, seed, prefer_outer),
+        )[:beam_width]
+
+    if not beam:
+        return None
+
+    group = min(beam, key=lambda candidate: group_assignment_score(candidate, seed, prefer_outer))
+    return group if len(group) == size and is_connected(group) else None
+
+
+def is_acceptably_compact(group: list[tuple[int, int]], size: int) -> bool:
+    if size < 4:
+        return True
+
+    width, height = group_bbox_size(group)
+    ratio = max(width, height) / max(0.001, min(width, height))
+    limit = 2.4 if size == 4 else 2.0 if size == 6 else 2.6
+    return ratio <= limit
 
 
 def fixed_region_slots(region: str) -> list[tuple[str, str, int]]:
@@ -229,33 +458,26 @@ def allocate_connected_group(
 ) -> list[tuple[int, int]]:
     seed_key = (lambda tile: (-tile_distance(tile), tile_angle(tile), tile[0], tile[1])) if prefer_outer else (
         lambda tile: (tile_distance(tile), tile_angle(tile), tile[0], tile[1]))
-    frontier_key = (lambda tile: (-tile_distance(tile), tile_angle(tile), tile)) if prefer_outer else (
-        lambda tile: (tile_distance(tile), tile_angle(tile), tile))
 
     seeds = [tile for tile in remaining if any(neighbor in placed for neighbor in neighbors(tile))]
     seeds.sort(key=seed_key)
+    best_group: list[tuple[int, int]] | None = None
+    best_score: tuple[float, float, float, float, int, int] | None = None
     for seed in seeds:
-        group = [seed]
-        group_set = {seed}
-        frontier: list[tuple[float, float, tuple[int, int]]] = []
-        for neighbor in neighbors(seed):
-            if neighbor in remaining and neighbor not in group_set:
-                heapq.heappush(frontier, frontier_key(neighbor))
+        group = compact_connected_group(seed, remaining, size, prefer_outer)
+        if group is None:
+            continue
 
-        while len(group) < size and frontier:
-            _, _, tile = heapq.heappop(frontier)
-            if tile not in remaining or tile in group_set:
-                continue
-            if not any(neighbor in group_set for neighbor in neighbors(tile)):
-                continue
-            group.append(tile)
-            group_set.add(tile)
-            for neighbor in neighbors(tile):
-                if neighbor in remaining and neighbor not in group_set:
-                    heapq.heappush(frontier, frontier_key(neighbor))
-
-        if len(group) == size and is_connected(group):
+        if is_acceptably_compact(group, size):
             return group
+
+        score_tuple = group_assignment_score(group, seed, prefer_outer)
+        if best_score is None or score_tuple < best_score:
+            best_group = group
+            best_score = score_tuple
+
+    if best_group is not None:
+        return best_group
 
     raise RuntimeError(f"failed to allocate connected group size={size}, remaining={len(remaining)}")
 
@@ -357,12 +579,12 @@ def pick_bridge_nodes(
     region_nodes: dict[str, list[tuple[str, str, list[tuple[int, int]]]]],
 ) -> dict[str, tuple[str, str]]:
     bridge_specs = [
-        ("trans_sd01", "str", "dex"),
-        ("trans_dc01", "dex", "con"),
-        ("trans_ci01", "con", "int"),
-        ("trans_iw01", "int", "wis"),
-        ("trans_wc01", "wis", "cha"),
-        ("trans_cs01", "cha", "str"),
+        ("trans_int_con01", "int", "con"),
+        ("trans_con_str01", "con", "str"),
+        ("trans_str_dex01", "str", "dex"),
+        ("trans_dex_cha01", "dex", "cha"),
+        ("trans_cha_wis01", "cha", "wis"),
+        ("trans_wis_int01", "wis", "int"),
     ]
     selected: dict[str, tuple[str, str]] = {}
     used_node_ids: set[str] = set()
@@ -432,6 +654,7 @@ def build() -> tuple[dict, dict]:
                         "name": "过渡星纹",
                         "description": f"{region.upper()} 与 {right.upper()} 之间的横跨桥点。",
                         "contentMode": "random_attribute",
+                        "figureTemplate": "attribute_pair_2",
                         "statBonuses": {"all_save": 1},
                     }
                 )
@@ -478,18 +701,21 @@ def make_content(region: str, node_id: str, node_type: str) -> dict:
             "name": "属性星纹" if node_type == "small" else "微光星点",
             "description": "按角色种子从本扇区风格池生成纯属性。",
             "contentMode": "random_attribute",
+            "figureTemplate": "attribute_pair_2" if node_type == "small" else "pip_1",
             "seed": stable_seed(node_id),
         }
 
     if node_type == "giant":
-        name, desc = GIANTS[region]
+        name, subtitle, desc = GIANTS[region]
         return {
             "id": node_id,
             "name": name,
+            "subtitle": subtitle,
             "description": desc,
             "effect": "spell_slot_4" if region == "int" else f"{region}_giant_apex",
             "isActiveSkill": region != "int",
             "figureName": f"{name}巨型命座",
+            "figureTemplate": "apex_rune_12",
         }
 
     if node_type == "keystone":
@@ -502,39 +728,44 @@ def make_content(region: str, node_id: str, node_type: str) -> dict:
             "effect": effect,
             "keystoneCost": cost,
             "costBonuses": keystone_cost_bonus(region, idx),
+            "figureTemplate": "keystone_crown_6",
         }
 
     suffix = node_id.split("_")[-1]
     idx = int(suffix[1:]) - 1
     if suffix.startswith("a"):
         name, effect = ACTIVES[region][idx]
+        ap, cooldown, equipment, detail = ACTIVE_DETAILS[region][idx]
         return {
             "id": node_id,
             "name": name,
-            "description": f"主动：{name}。具体规则见技能星盘节点内容设计。",
+            "subtitle": f"AP {ap} / CD {cooldown} / 装备 {equipment}",
+            "description": detail,
             "effect": effect,
             "isActiveSkill": True,
+            "figureTemplate": "active_kite_4",
         }
 
     name = PASSIVES[region][idx]
     return {
         "id": node_id,
         "name": name,
-        "description": f"被动：{name}。具体规则见技能星盘节点内容设计。",
+        "description": PASSIVE_DETAILS[region][idx],
         "effect": f"{node_id}_passive",
         "isActiveSkill": False,
+        "figureTemplate": "passive_triangle_4",
         "statBonuses": passive_bonus(region, idx),
     }
 
 
 def passive_bonus(region: str, idx: int) -> dict:
     table = {
-        "str": [{"melee_damage": 1}, {"melee_damage": 1}, {"melee_damage": 1}, {"melee_damage": 1}, {"max_hp": 5}, {"melee_damage": 1}, {"melee_damage": 1}, {"melee_damage": 1}],
-        "dex": [{"ranged_damage": 1}, {"ranged_damage": 1}, {"ranged_damage": 1}, {"ranged_damage": 1}, {"critical_rate": 0.05}, {"speed": 1}, {"ranged_damage": 1}, {"ranged_damage": 1}],
-        "con": [{"ac": 1}, {"max_hp": 5}, {"max_hp": 5}, {"ac": 1}, {"all_save": 1}, {"heal_amount": 1}, {"ac": 1}, {"ac": 1}],
-        "int": [{"spell_damage": 1}, {"spell_damage": 1}, {"spell_damage": 1}, {"mana_max": 5}, {"mana_regen": 1}, {"spell_hit": 1}, {"spell_damage": 1}, {"spell_damage": 1}],
-        "wis": [{"critical_rate": 0.05}, {"critical_rate": 0.05}, {"critical_rate": 0.05}, {"critical_rate": 0.05}, {"mana_max": 5}, {"critical_rate": 0.03}, {"critical_rate": 0.05}, {"critical_rate": 0.05}],
-        "cha": [{"ally_bonus": 1}, {"ally_bonus": 1}, {"ally_bonus": 1}, {"ally_bonus": 1}, {"initiative": 1}, {"initiative": 2}, {"max_hp": 5}, {"ally_bonus": 1}],
+        "str": [{}, {}, {}, {}, {"max_hp": 5}, {}, {}, {}],
+        "dex": [{}, {}, {}, {}, {"critical_rate": 0.05}, {"speed": 1}, {}, {}],
+        "con": [{}, {}, {"max_hp": 5}, {}, {"all_save": 1}, {}, {}, {}],
+        "int": [{}, {}, {}, {"mana_max": 5}, {"mana_regen": 1}, {"spell_hit": 1}, {}, {}],
+        "wis": [{}, {"critical_rate": 0.05}, {"critical_rate": 0.05}, {}, {"mana_max": 5}, {}, {}, {}],
+        "cha": [{"ally_bonus": 1}, {"ally_bonus": 1}, {"ally_bonus": 1}, {"ally_bonus": 1}, {}, {"initiative": 2}, {"max_hp": 5}, {"ally_bonus": 1}],
     }
     return table[region][idx]
 

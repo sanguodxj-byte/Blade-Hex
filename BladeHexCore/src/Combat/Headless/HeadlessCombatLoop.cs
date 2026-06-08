@@ -1071,7 +1071,8 @@ public static class HeadlessCombatLoop
         int defenderAc = defender.GetEffectiveAc(false, defenderAcBonus);
 
         // 暴击率加成：节点 critical_rate + lethal_focus 低血敌人 +10% + deathblow_focus 击杀后 +10%
-        float bonusCritChance = SkillTreeKeystoneResolver.GetBonusCritChance(attacker.Data);
+        float bonusCritChance = SkillTreeKeystoneResolver.GetBonusCritChance(
+            attacker.Data, weapon, isRanged, attacker.Runtime.HasMoved);
         if (atkTree != null && atkTree.HasSkillEffect("lethal_focus") && defenderLowHp)
             bonusCritChance += 0.10f;
         if (attacker.Runtime.DeathblowFocusPendingTurns > 0)
@@ -1153,7 +1154,8 @@ public static class HeadlessCombatLoop
             DamageReduction = 0,
             FinalMultiplier = (isAoO ? 0.5f : 1.0f) * damageMultiplier  // 包含 AoO 半伤 + 主动技能伤害倍率
                 * Buff.BuffSystem.ResolveMultiplier(attacker.Data, "damage")  // buff +%伤害(与实战路径一致)
-                * SkillTreeKeystoneResolver.GetDamageFinalMultiplier(attacker.Data, isMelee, isRanged, distance, roll.IsCritical),
+                * SkillTreeKeystoneResolver.GetDamageFinalMultiplier(
+                    attacker.Data, weapon, isMelee, isRanged, distance, roll.IsCritical, attacker.Runtime.HasMoved),
         };
         // Apply ranged damage bonus directly to base (CombatRuleEngine has no ranged-passive field)
         if (!isMelee && passiveDamageBonus != 0)
@@ -1168,6 +1170,7 @@ public static class HeadlessCombatLoop
         }
 
         var calc = CombatRuleEngine.CalculateDamage(in dmgInput);
+        SkillTreeKeystoneResolver.ConsumeAttackDamageTriggers(attacker.Data, isMelee);
 
         int finalDamage = calc.FinalDamage;
 
@@ -1213,6 +1216,8 @@ public static class HeadlessCombatLoop
         {
             attacker.Runtime.DeathblowFocusPendingTurns = 2;
         }
+        if (defender.Runtime.CurrentHp <= 0)
+            SkillTreeKeystoneResolver.OnEnemyKilled(attacker.Data);
 
         if (dmgResult.HpDamage > 0)
         {

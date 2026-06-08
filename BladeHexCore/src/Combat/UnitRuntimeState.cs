@@ -54,6 +54,8 @@ public class UnitRuntimeState
     public int OldTimerTriggeredThisCombat; // 老兵-临危不乱：HP<50% 首次触发标记 (2026-05-27)
     public int HeadShotPendingTurns;        // wis_b02 爆头突袭：下次攻击必定暴击的剩余回合
     public int DeathblowFocusPendingTurns;  // wis_b09 死灵之锋：击杀后下次攻击 +20% 伤害的剩余回合
+    public int SkillTreeCritMeleeDamagePendingTurns; // str_p06: 暴击后下次近战伤害 +5%
+    public int SkillTreeKillCritPendingTurns;        // wis_p08: 击杀后下次攻击暴击率 +5%
     public bool WeaponSwitchedThisTurn;     // sim AI：每回合最多切换 1 次武器（防 AP 抖动）
 
     // ====================
@@ -201,6 +203,8 @@ public class UnitRuntimeState
         CareerShadowShroudActive = false;
         KeystoneUndyingBodyUsed = false;
         KeystoneRecentCritTurns = 0;
+        SkillTreeCritMeleeDamagePendingTurns = 0;
+        SkillTreeKillCritPendingTurns = 0;
 
         ResetForTurnStart();
     }

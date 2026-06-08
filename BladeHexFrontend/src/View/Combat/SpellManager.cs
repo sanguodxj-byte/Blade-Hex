@@ -133,6 +133,9 @@ public partial class SpellManager : Node
                     damage = (int)(damage * PassiveSkillResolver.GetCritMultiplier(caster));
                     result["critical"] = true;
                 }
+                if (caster.Data != null)
+                    damage = Math.Max(1, (int)(damage * SkillTreeKeystoneResolver.GetSpellDamageFinalMultiplier(
+                        caster.Data, GetEquippedCatalyst(caster), caster.HasMoved)));
                 // v1 职业被动: 法术伤害加成 (施法者 + 唤星者高度差)
                 damage = CareerPassiveHooks.ModifySpellDamageAgainstTarget(caster, target, grid, damage);
                 // v1 职业被动: 敌法师等法术减伤 (防御者)
@@ -180,6 +183,9 @@ public partial class SpellManager : Node
                     result["critical"] = true;
                 }
                 if (saved) damage = Math.Max(1, damage / 2);
+                if (caster.Data != null)
+                    damage = Math.Max(1, (int)(damage * SkillTreeKeystoneResolver.GetSpellDamageFinalMultiplier(
+                        caster.Data, GetEquippedCatalyst(caster), caster.HasMoved)));
                 // v1 职业被动: 法术伤害加成 (施法者 + 唤星者高度差)
                 damage = CareerPassiveHooks.ModifySpellDamageAgainstTarget(caster, target, grid, damage);
                 // v1 职业被动: 敌法师等法术减伤 (防御者)
@@ -221,6 +227,9 @@ public partial class SpellManager : Node
                 {
                     damage = (int)(damage * PassiveSkillResolver.GetCritMultiplier(caster));
                 }
+                if (caster.Data != null)
+                    damage = Math.Max(1, (int)(damage * SkillTreeKeystoneResolver.GetSpellDamageFinalMultiplier(
+                        caster.Data, GetEquippedCatalyst(caster), caster.HasMoved)));
                 // v1 职业被动: 法术伤害加成 (施法者 + 唤星者高度差)
                 damage = CareerPassiveHooks.ModifySpellDamageAgainstTarget(caster, target, grid, damage);
                 // v1 职业被动: 敌法师等法术减伤 (防御者)
@@ -257,6 +266,15 @@ public partial class SpellManager : Node
         && target != null
         && target.CurrentHp > 0
         && SpellTargetRules.IsValidTarget(caster.Data, target.Data, spell);
+
+    private static WeaponData? GetEquippedCatalyst(Unit caster)
+    {
+        if (caster.Model.GetMainHand() is WeaponData main && main.IsCatalyst)
+            return main;
+        if (caster.Model.GetOffHand() is WeaponData off && off.IsCatalyst)
+            return off;
+        return null;
+    }
 
     private static bool HasAnyValidTarget(Unit caster, SpellData spell, Godot.Collections.Array<Vector2I> targetCells, HexGrid grid)
     {

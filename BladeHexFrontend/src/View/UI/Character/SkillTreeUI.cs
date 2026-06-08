@@ -37,6 +37,7 @@ public partial class SkillTreeUI : PanelContainer
     private readonly Vector2[] _triVertsScratch = new Vector2[3];
     private readonly Vector2[] _shrunkVertsScratch = new Vector2[3];
     private readonly Vector2[] _outlineScratch = new Vector2[4];
+    private readonly Vector2[] _sectorVertsScratch = new Vector2[4];
     private readonly Vector2[] _hexOutlineScratch = new Vector2[7];
     private readonly Vector2[] _startHexVertexScratch = new Vector2[6];
     private readonly Vector2[] _startHexHighlightScratch = new Vector2[3];
@@ -132,12 +133,16 @@ public partial class SkillTreeUI : PanelContainer
 
                 for (int i = 0; i < 6; i++)
                 {
-                    var a = _startHexVertexScratch[i];
-                    var b = _startHexVertexScratch[(i + 1) % 6];
+                    var vertex = _startHexVertexScratch[i];
+                    var prev = _startHexVertexScratch[(i + 5) % 6];
+                    var next = _startHexVertexScratch[(i + 1) % 6];
+                    var prevMid = (prev + vertex) / 2.0f;
+                    var nextMid = (vertex + next) / 2.0f;
                     var col = Theme.GetRegionColor(StartHexRegions[i]);
                     var state = activated ? TileVisualState.Activated : TileVisualState.Locked;
 
-                    AddCrystalTileToMeshArrays(new[] { pos, a, b }, col, state, fillVerts, fillColors, lineVerts, lineColors);
+                    AddCrystalTileToMeshArrays(new[] { pos, prevMid, vertex }, col, state, fillVerts, fillColors, lineVerts, lineColors);
+                    AddCrystalTileToMeshArrays(new[] { pos, vertex, nextMid }, col, state, fillVerts, fillColors, lineVerts, lineColors);
                 }
 
                 for (int i = 0; i < 6; i++)
@@ -958,32 +963,32 @@ public partial class SkillTreeUI : PanelContainer
 
     private static readonly SkillNodeData.Region[] HexOutlineRegions =
     [
+        SkillNodeData.Region.Int,
+        SkillNodeData.Region.Con,
         SkillNodeData.Region.Str,
         SkillNodeData.Region.Dex,
-        SkillNodeData.Region.Con,
-        SkillNodeData.Region.Int,
-        SkillNodeData.Region.Wis,
-        SkillNodeData.Region.Cha
+        SkillNodeData.Region.Cha,
+        SkillNodeData.Region.Wis
     ];
 
     private static readonly SkillNodeData.Region[] StartHexRegions =
     [
-        SkillNodeData.Region.Dex,
-        SkillNodeData.Region.Con,
         SkillNodeData.Region.Int,
-        SkillNodeData.Region.Wis,
+        SkillNodeData.Region.Con,
+        SkillNodeData.Region.Str,
+        SkillNodeData.Region.Dex,
         SkillNodeData.Region.Cha,
-        SkillNodeData.Region.Str
+        SkillNodeData.Region.Wis
     ];
 
     private static readonly SkillNodeData.Region[] HexSectorRegions =
     [
-        SkillNodeData.Region.Dex,
-        SkillNodeData.Region.Con,
         SkillNodeData.Region.Int,
-        SkillNodeData.Region.Wis,
+        SkillNodeData.Region.Con,
+        SkillNodeData.Region.Str,
+        SkillNodeData.Region.Dex,
         SkillNodeData.Region.Cha,
-        SkillNodeData.Region.Str
+        SkillNodeData.Region.Wis
     ];
 
     private void RebuildPositions()
@@ -1468,28 +1473,33 @@ public partial class SkillTreeUI : PanelContainer
 
     private void DrawAttributeSectorFillsWorld()
     {
-    	var center = Vector2.Zero;
-    	for (int i = 0; i < HexSectorRegions.Length; i++)
-    	{
-    		var a = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
-    		var b = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].X,
-    			HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].Y);
-    		var color = Theme.GetRegionColor(HexSectorRegions[i]);
+        var center = Vector2.Zero;
+        for (int i = 0; i < HexSectorRegions.Length; i++)
+        {
+            var vertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
+            var prevVertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + HexOutlineVertices.Length - 1) % HexOutlineVertices.Length].X,
+                HexOutlineVertices[(i + HexOutlineVertices.Length - 1) % HexOutlineVertices.Length].Y);
+            var nextVertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].X,
+                HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].Y);
+            var prevBoundary = (prevVertex + vertex) / 2.0f;
+            var nextBoundary = (vertex + nextVertex) / 2.0f;
+            var color = Theme.GetRegionColor(HexSectorRegions[i]);
    
-    		// 职业速查高亮：如果该扇区属于选中的职业 flags，增加亮度
-    		float alpha = 0.115f;
-    		if (_highlightCareerFlags != 0)
-    		{
-    			int sectorFlag = ClassTitleResolver.GetNodeRegionFlag(new SkillNodeData { CurrentRegion = HexSectorRegions[i] });
-    			if ((sectorFlag & _highlightCareerFlags) != 0)
-    				alpha = 0.35f;
-    		}
+            // 职业速查高亮：如果该扇区属于选中的职业 flags，增加亮度
+            float alpha = 0.115f;
+            if (_highlightCareerFlags != 0)
+            {
+                int sectorFlag = ClassTitleResolver.GetNodeRegionFlag(new SkillNodeData { CurrentRegion = HexSectorRegions[i] });
+                if ((sectorFlag & _highlightCareerFlags) != 0)
+                    alpha = 0.35f;
+            }
    
-    		_triVertsScratch[0] = center;
-    		_triVertsScratch[1] = a;
-    		_triVertsScratch[2] = b;
-    		_drawContainer.DrawColoredPolygon(_triVertsScratch, new Color(color.R, color.G, color.B, alpha));
-    	}
+            _sectorVertsScratch[0] = center;
+            _sectorVertsScratch[1] = prevBoundary;
+            _sectorVertsScratch[2] = vertex;
+            _sectorVertsScratch[3] = nextBoundary;
+            _drawContainer.DrawColoredPolygon(_sectorVertsScratch, new Color(color.R, color.G, color.B, alpha));
+        }
     }
 
     private void DrawAttributeSectorSeparatorsWorld()
@@ -1497,9 +1507,12 @@ public partial class SkillTreeUI : PanelContainer
         var center = Vector2.Zero;
         for (int i = 0; i < HexOutlineVertices.Length; i++)
         {
-            var vertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
-            var leftRegion = HexSectorRegions[(i + HexSectorRegions.Length - 1) % HexSectorRegions.Length];
-            var rightRegion = HexSectorRegions[i % HexSectorRegions.Length];
+            var a = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
+            var b = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].X,
+                HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].Y);
+            var boundary = (a + b) / 2.0f;
+            var leftRegion = HexSectorRegions[i % HexSectorRegions.Length];
+            var rightRegion = HexSectorRegions[(i + 1) % HexSectorRegions.Length];
             var leftColor = Theme.GetRegionColor(leftRegion);
             var rightColor = Theme.GetRegionColor(rightRegion);
             var splitColor = new Color(
@@ -1508,8 +1521,8 @@ public partial class SkillTreeUI : PanelContainer
                 (leftColor.B + rightColor.B) * 0.5f,
                 0.68f);
 
-            _drawContainer.DrawLine(center, vertex, new Color(0.0f, 0.0f, 0.0f, 0.72f), 5.5f);
-            _drawContainer.DrawLine(center, vertex, splitColor, 1.65f);
+            _drawContainer.DrawLine(center, boundary, new Color(0.0f, 0.0f, 0.0f, 0.72f), 5.5f);
+            _drawContainer.DrawLine(center, boundary, splitColor, 1.65f);
         }
     }
 
@@ -1932,25 +1945,22 @@ public partial class SkillTreeUI : PanelContainer
             new Vector2I(HexagonRadius, -HexagonRadius),
         };
 
-        var edgeLabels = new (int A, int B, SkillNodeData.Region Region, string Name)[]
+        var sectorLabels = new (int Vertex, SkillNodeData.Region Region, string Name)[]
         {
-            (5, 0, SkillNodeData.Region.Str, "✦ STR 力量 ✦"),
-            (0, 1, SkillNodeData.Region.Dex, "✦ DEX 灵巧 ✦"),
-            (1, 2, SkillNodeData.Region.Con, "✦ CON 体魄 ✦"),
-            (2, 3, SkillNodeData.Region.Int, "✦ INT 智力 ✦"),
-            (3, 4, SkillNodeData.Region.Wis, "✦ WIS 感知 ✦"),
-            (4, 5, SkillNodeData.Region.Cha, "✦ CHA 魅力 ✦"),
+            (0, SkillNodeData.Region.Int, "✦ INT 智力 ✦"),
+            (1, SkillNodeData.Region.Con, "✦ CON 体魄 ✦"),
+            (2, SkillNodeData.Region.Str, "✦ STR 力量 ✦"),
+            (3, SkillNodeData.Region.Dex, "✦ DEX 灵巧 ✦"),
+            (4, SkillNodeData.Region.Cha, "✦ CHA 魅力 ✦"),
+            (5, SkillNodeData.Region.Wis, "✦ WIS 感知 ✦"),
         };
 
-        foreach (var (idxA, idxB, region, name) in edgeLabels)
+        foreach (var (idx, region, name) in sectorLabels)
         {
-            var pxA = VertexToScreen(verts[idxA].X, verts[idxA].Y);
-            var pxB = VertexToScreen(verts[idxB].X, verts[idxB].Y);
-            var midPx = (pxA + pxB) / 2.0f;
-
+            var sectorPx = VertexToScreen(verts[idx].X, verts[idx].Y);
             var centerPx = VertexToScreen(0, 0);
-            var outDir = (midPx - centerPx).Normalized();
-            var lp = midPx + outDir * 38.0f * _viewport.Zoom;
+            var outDir = (sectorPx - centerPx).Normalized();
+            var lp = sectorPx + outDir * 38.0f * _viewport.Zoom;
 
             var col = Theme.GetRegionColor(region);
             var font = ThemeDB.FallbackFont;

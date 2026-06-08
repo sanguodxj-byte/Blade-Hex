@@ -442,6 +442,8 @@ public partial class Unit : Node3D, IFightable
         if (amount <= 0) return 0;
         if (source != null && source != this && Data != null && SkillTreeKeystoneResolver.Has(Data, "blood_oath"))
             return 0;
+        if (Data != null)
+            amount = SkillTreeKeystoneResolver.ApplyReceivedHealing(Data, amount);
         int maxHp = Model.GetMaxHp();
         int before = CurrentHp;
         CurrentHp = Math.Min(CurrentHp + amount, maxHp);

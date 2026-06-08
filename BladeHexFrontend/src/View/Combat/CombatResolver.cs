@@ -253,7 +253,8 @@ public static class CombatResolver
         // 节点暴击率：技能盘 critical_rate 节点等独立暴击概率（v0.6 11.5）
         float bonusCritChance = 0f;
         if (attacker.Data != null)
-            bonusCritChance += SkillTreeKeystoneResolver.GetBonusCritChance(attacker.Data);
+            bonusCritChance += SkillTreeKeystoneResolver.GetBonusCritChance(
+                attacker.Data, weapon, isRangedAttack, attacker.HasMoved);
         if (attacker.Data != null)
             bonusCritChance += GetAttackerCriticalRateBuffBonus(attacker, defender);
         if (attacker.Data != null && defender.Data != null)
@@ -474,10 +475,15 @@ public static class CombatResolver
                 * (!isMelee ? CareerPassiveHooks.GetShadowShroudOffenseBonus(attacker).damageMult : 1.0f) // 影匿者: 远程伤害+15%
                 * nextAttackMult // 战斗牧师+10% 等下一击倍率
                 * buffDamageMultiplier // buff +%伤害(haste/battle_fury 等 Increased/More 乘区)
-                * (attacker.Data != null ? SkillTreeKeystoneResolver.GetDamageFinalMultiplier(attacker.Data, isMelee, !isMelee, attackDistance, finalCritical) : 1.0f),
+                * (attacker.Data != null
+                    ? SkillTreeKeystoneResolver.GetDamageFinalMultiplier(
+                        attacker.Data, weapon, isMelee, !isMelee, attackDistance, finalCritical, attacker.HasMoved)
+                    : 1.0f),
         };
 
         var dmgCalc = CombatRuleEngine.CalculateDamage(in damageInput);
+        if (attacker.Data != null)
+            SkillTreeKeystoneResolver.ConsumeAttackDamageTriggers(attacker.Data, isMelee);
         int damage = dmgCalc.FinalDamage;
         if (dmgCalc.DamageReductionApplied > 0) result["damage_reduction"] = dmgCalc.DamageReductionApplied;
 
@@ -646,6 +652,8 @@ public static class CombatResolver
         }
         bool wasKillAfterHit = defender.CurrentHp <= 0;
         TryApplyKillFullApRefund(attacker, wasKillAfterHit, result);
+        if (wasKillAfterHit && attacker.Data != null)
+            SkillTreeKeystoneResolver.OnEnemyKilled(attacker.Data);
 
         if (attacker.Data != null)
         {

@@ -9,13 +9,13 @@ public static class TextureAssetResolver
 {
     private static readonly string[] EquipmentTextureDirs =
     [
-        "res://assets/generated_armor",
-        "res://assets/generated_helmets",
-        "res://assets/generated_weapons",
-        "res://assets/generated_weapons_backup",
-        "res://assets/generated_shields",
-        "res://assets/generated_staves",
-        "res://assets/generated_spellbooks",
+        "res://assets/armor",
+        "res://assets/helmets",
+        "res://assets/weapons",
+        "res://assets/weapons_backup",
+        "res://assets/shields",
+        "res://assets/staves",
+        "res://assets/spellbooks",
     ];
 
     private static readonly Dictionary<string, Texture2D?> TextureCache = new();
@@ -30,13 +30,17 @@ public static class TextureAssetResolver
         if (TextureCache.TryGetValue(key, out var cached))
             return cached;
 
-        var texture = LoadUncached(kind, idOrPath);
+        bool hasFallback = !string.IsNullOrWhiteSpace(fallbackId);
+        var texture = LoadUncached(kind, idOrPath, allowRegistryFallback: !hasFallback);
         if (texture == null)
             texture = LoadFallback(kind, fallbackId);
+        if (texture == null && hasFallback)
+            texture = LoadUncached(kind, idOrPath, allowRegistryFallback: true);
 
         if (texture == null)
             LogMissingOnce(kind, idOrPath, fallbackId);
 
+        texture = NormalizeCharacterScopedTexture(kind, texture);
         TextureCache[key] = texture;
         return texture;
     }
@@ -46,7 +50,8 @@ public static class TextureAssetResolver
         if (item == null)
             return null;
 
-        return Load(AssetKind.EquipmentTexture, item.EquipTextureId, item.IconFallbackId);
+        return CharacterTextureNormalizer.Normalize(
+            Load(AssetKind.EquipmentTexture, item.EquipTextureId, item.IconFallbackId));
     }
 
     public static Texture2D? LoadIcon(string? idOrPath, string fallbackId = "")
@@ -56,7 +61,8 @@ public static class TextureAssetResolver
 
     public static Texture2D? LoadPortrait(string? idOrPath, string fallbackId = "")
     {
-        return Load(AssetKind.Portrait, idOrPath, fallbackId);
+        return CharacterTextureNormalizer.Normalize(
+            Load(AssetKind.Portrait, idOrPath, fallbackId));
     }
 
     public static Texture2D? LoadUnitSprite(string? idOrPath, string fallbackId = "")
@@ -69,7 +75,8 @@ public static class TextureAssetResolver
         if (item == null)
             return null;
 
-        return LoadIcon(item.IconId, item.IconFallbackId);
+        return CharacterTextureNormalizer.Normalize(
+            LoadIcon(item.IconId, item.IconFallbackId));
     }
 
     public static Texture2D? LoadCampaignIllustration(string? idOrPath, string fallbackId = "")
@@ -125,14 +132,24 @@ public static class TextureAssetResolver
     {
         TextureCache.Clear();
         MissingKeysLogged.Clear();
+        CharacterTextureNormalizer.ClearCache();
     }
 
     private static Texture2D? LoadUncached(AssetKind kind, string idOrPath)
     {
-        return LoadUncached(kind, idOrPath, []);
+        return LoadUncached(kind, idOrPath, [], allowRegistryFallback: true);
     }
 
-    private static Texture2D? LoadUncached(AssetKind kind, string idOrPath, HashSet<string> fallbackChain)
+    private static Texture2D? LoadUncached(AssetKind kind, string idOrPath, bool allowRegistryFallback)
+    {
+        return LoadUncached(kind, idOrPath, [], allowRegistryFallback);
+    }
+
+    private static Texture2D? LoadUncached(
+        AssetKind kind,
+        string idOrPath,
+        HashSet<string> fallbackChain,
+        bool allowRegistryFallback)
     {
         string fallbackKey = $"{kind}|{idOrPath}";
         if (!fallbackChain.Add(fallbackKey))
@@ -145,16 +162,19 @@ public static class TextureAssetResolver
                 return catalogTexture;
 
             if (!string.IsNullOrWhiteSpace(catalogEntry.FallbackId))
-                return LoadUncached(kind, catalogEntry.FallbackId, fallbackChain);
+                return LoadUncached(kind, catalogEntry.FallbackId, fallbackChain, allowRegistryFallback);
         }
 
         var directTexture = TryLoadPath(idOrPath);
         if (directTexture != null)
             return directTexture;
 
-        var registeredTexture = ResourceRegistry.GetIcon(idOrPath);
-        if (registeredTexture != null)
-            return registeredTexture;
+        if (allowRegistryFallback && AllowsResourceRegistryFallback(kind))
+        {
+            var registeredTexture = ResourceRegistry.GetIcon(idOrPath);
+            if (registeredTexture != null)
+                return registeredTexture;
+        }
 
         if (kind == AssetKind.EquipmentTexture)
             return LoadFromCompatibilityDirs(idOrPath, EquipmentTextureDirs);
@@ -167,7 +187,23 @@ public static class TextureAssetResolver
         if (string.IsNullOrWhiteSpace(fallbackId))
             return null;
 
-        return LoadUncached(kind, fallbackId);
+        return LoadUncached(kind, fallbackId, [], allowRegistryFallback: true);
+    }
+
+    private static bool AllowsResourceRegistryFallback(AssetKind kind)
+    {
+        return kind is AssetKind.Icon
+            or AssetKind.UiTexture
+            or AssetKind.Portrait
+            or AssetKind.EquipmentTexture
+            or AssetKind.MapTexture;
+    }
+
+    private static Texture2D? NormalizeCharacterScopedTexture(AssetKind kind, Texture2D? texture)
+    {
+        return kind is AssetKind.EquipmentTexture or AssetKind.Portrait
+            ? CharacterTextureNormalizer.Normalize(texture)
+            : texture;
     }
 
     private static Texture2D? LoadFromCompatibilityDirs(string id, IReadOnlyList<string> dirs)

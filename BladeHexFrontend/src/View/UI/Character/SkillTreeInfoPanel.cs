@@ -75,19 +75,19 @@ public partial class SkillTreeInfoPanel : PanelContainer
     		detail += $"[color=white]{node.NodeSubtitle}[/color]\n";
     	detail += $"[color=gray]图形：[/color]{figure.FigureName}（{figureKind}）\n";
     	detail += $"[color=gray]区域：[/color]{node.GetRegionName()}\n";
-    	if (requiredTiles > 0)
-    		detail += $"[color=gray]瓦片：[/color]{filledTiles}/{requiredTiles}\n";
-    	if (node.RequiredLevel > 0)
-    		detail += $"[color=gray]需要等级：[/color]{node.RequiredLevel}\n";
+        if (requiredTiles > 0)
+            detail += $"[color=gray]瓦片：[/color]{filledTiles}/{requiredTiles}\n";
+        if (node.RequiredLevel > 0)
+            detail += $"[color=gray]需要等级：[/color]{node.RequiredLevel}\n";
    
-    	string tileRewardText = GetTileRewardText(node);
-    	if (!string.IsNullOrWhiteSpace(tileRewardText))
-    		detail += $"\n[color=white]逐片属性：[/color]{tileRewardText}\n";
-    	detail += $"[color=white]节点效果：[/color]{effectText}\n";
+        string tileRewardText = GetTileRewardText(node);
+        if (!string.IsNullOrWhiteSpace(tileRewardText))
+            detail += $"\n[color=white]属性词条：[/color]{tileRewardText}\n";
+        detail += $"[color=white]节点效果：[/color]{effectText}\n";
    
-    	if (!string.IsNullOrWhiteSpace(node.KeystoneCost))
-    		detail += $"\n[color=red]代价：[/color]{node.KeystoneCost}\n";
-    	if (activated)
+        if (!string.IsNullOrWhiteSpace(node.KeystoneCost))
+            detail += $"\n[color=red]代价：[/color]{node.KeystoneCost}\n";
+        if (activated)
     		detail += "\n[color=green]✓ 已点亮[/color]";
    
     	_description.Text = detail;
@@ -212,13 +212,12 @@ public partial class SkillTreeInfoPanel : PanelContainer
 
     private static string GetTileRewardText(SkillNodeData node)
     {
-    	if (node.CurrentNodeType == SkillNodeData.NodeType.Start)
-    		return "";
-    	if (node.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute)
-    		return "完成后获得该角色专属随机词条";
+        if (node.CurrentNodeType == SkillNodeData.NodeType.Start)
+            return "";
+        if (node.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute)
+            return "完成后按角色种子从所属扇区风格池生成";
 
-    	string region = node.GetRegionName();
-    	return string.IsNullOrWhiteSpace(region) ? "" : $"每片 +1 {region}";
+        return "";
     }
    
     /// <summary>显示职业速查信息（从职业速查表选择后调用）</summary>

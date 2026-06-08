@@ -245,34 +245,14 @@ public partial class CharacterSkillTree : RefCounted
 
     private void ApplyTileAttribute(SkillNodeData node)
     {
-        if (node.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute)
-            return;
-
-        string key = GetRegionAttributeKey(node.CurrentRegion);
-        if (string.IsNullOrEmpty(key)) return;
-        AddIntBonus(AccumulatedAttributes, key, 1);
+        // The fixed star-chart design treats triangular tiles as activation cost.
+        // Attribute payloads come from completed random small/pip nodes only.
     }
 
     private void ApplyTileAttributes(SkillNodeData node, int count)
     {
         for (int i = 0; i < count; i++)
             ApplyTileAttribute(node);
-    }
-
-    private static string GetRegionAttributeKey(SkillNodeData.Region region) => region switch
-    {
-        SkillNodeData.Region.Str => "str",
-        SkillNodeData.Region.Dex => "dex",
-        SkillNodeData.Region.Con => "con",
-        SkillNodeData.Region.Int => "int",
-        SkillNodeData.Region.Wis => "wis",
-        SkillNodeData.Region.Cha => "cha",
-        _ => "",
-    };
-
-    private static void AddIntBonus(Godot.Collections.Dictionary dict, string key, int amount)
-    {
-        dict[key] = dict.ContainsKey(key) ? dict[key].AsInt32() + amount : amount;
     }
 
     private void ApplyNodeStats(SkillNodeData node)

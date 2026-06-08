@@ -371,6 +371,9 @@ public partial class StatusEffectManager : Node
         if (effectData.IsNegative && SkillTreeKeystoneResolver.IsImmuneToNegative(unit.Data))
             return false;
 
+        if (effectId == "bleed" && SkillTreeKeystoneResolver.IsImmuneToBleed(unit.Data))
+            return false;
+
         if (IsMindEffect(effectId) && SkillTreeKeystoneResolver.IsImmuneToMind(unit.Data))
             return false;
 

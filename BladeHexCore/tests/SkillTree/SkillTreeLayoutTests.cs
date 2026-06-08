@@ -45,12 +45,17 @@ public static class SkillTreeLayoutTests
         yield return Run("Tiles_InsideHex", () => TilesInsideHex(nodeTiles));
         yield return Run("Connectivity_AllReachableFromStart", () => AllReachableFromStart(tree, nodeTiles));
         yield return Run("DataDrivenLayout_UsesExplicitTiles", () => DataDrivenLayoutUsesExplicitTiles(tree));
+        yield return Run("RegionCentroids_MatchDocumentSectors", () => RegionCentroidsMatchDocumentSectors(tree, nodeTiles));
         yield return Run("RegionQuota_MatchesStarChartSpec", () => RegionQuotaMatchesStarChartSpec(tree));
         yield return Run("TileCost_MatchesExplicitTileCount", () => TileCostMatchesExplicitTileCount(tree));
+        yield return Run("FigureTemplates_MatchNodeRoles", () => FigureTemplatesMatchNodeRoles(tree));
+        yield return Run("LargeFigures_AreCompactNotStrips", () => LargeFiguresAreCompactNotStrips(tree));
+        yield return Run("PassiveNodeBonuses_DoNotFlattenConditionalEffects", () => PassiveNodeBonusesDoNotFlattenConditionalEffects(tree));
         yield return Run("RandomAttributes_UseLegalKeysOnly", () => RandomAttributesUseLegalKeysOnly(tree));
         yield return Run("RandomAttributes_FollowSmallAndPipRules", () => RandomAttributesFollowSmallAndPipRules(tree));
         yield return Run("RandomAttributes_AreCharacterSeeded", () => RandomAttributesAreCharacterSeeded(tree));
         yield return Run("RandomAttributes_EffectTextUsesCharacterSeed", () => RandomAttributesEffectTextUsesCharacterSeed(tree));
+        yield return Run("FixedLargeNodes_DoNotGrantTileAttributes", () => FixedLargeNodesDoNotGrantTileAttributes(tree));
         yield return Run("IntGiant_OpensTierFourSpellStudy", () => IntGiantOpensTierFourSpellStudy(tree));
         yield return Run("ActiveEffects_AreRegisteredAndScripted", () => ActiveEffectsAreRegisteredAndScripted(tree));
         yield return Run("ActiveScripts_KeyModifiersMatchSkillDescriptions", () => ActiveScriptsKeyModifiersMatchSkillDescriptions());
@@ -198,6 +203,40 @@ public static class SkillTreeLayoutTests
         return (true, "");
     }
 
+    private static (bool, string) RegionCentroidsMatchDocumentSectors(SkillTreeData tree, Dictionary<string, Vector2I[]> nodeTiles)
+    {
+        var coord = new SkillTreeCoord { HexSize = 1.0f };
+        var expected = new Dictionary<SkillNodeData.Region, System.Func<Vector2, bool>>
+        {
+            { SkillNodeData.Region.Int, p => p.Y < -5.0f && System.Math.Abs(p.X) < 5.0f },
+            { SkillNodeData.Region.Con, p => p.X > 5.0f && p.Y < 0.0f },
+            { SkillNodeData.Region.Str, p => p.X > 5.0f && p.Y > 0.0f },
+            { SkillNodeData.Region.Dex, p => p.Y > 5.0f && System.Math.Abs(p.X) < 5.0f },
+            { SkillNodeData.Region.Cha, p => p.X < -5.0f && p.Y > 0.0f },
+            { SkillNodeData.Region.Wis, p => p.X < -5.0f && p.Y < 0.0f },
+        };
+
+        foreach (var (region, predicate) in expected)
+        {
+            var tiles = tree.Nodes.Values
+                .Where(n => n.CurrentRegion == region)
+                .SelectMany(n => nodeTiles[n.NodeId])
+                .ToList();
+            if (tiles.Count == 0)
+                return (false, $"{region} 没有布局瓦片");
+
+            var center = Vector2.Zero;
+            foreach (var tile in tiles)
+                center += coord.TileCentroid(tile);
+            center /= tiles.Count;
+
+            if (!predicate(center))
+                return (false, $"{region} 扇区质心不符合文档方位: {center}");
+        }
+
+        return (true, "");
+    }
+
     private static (bool, string) RegionQuotaMatchesStarChartSpec(SkillTreeData tree)
     {
         var regions = new[]
@@ -220,7 +259,7 @@ public static class SkillTreeLayoutTests
             int small = nodes.Count(n => n.CurrentNodeType == SkillNodeData.NodeType.Small);
             int pips = nodes.Count(n => n.CurrentNodeType == SkillNodeData.NodeType.Pip);
 
-            if (giants != 1 || keystones != 3 || actives != 6 || passives != 8 || small < 153 || small > 155 || pips < 3 || pips > 9)
+            if (giants != 1 || keystones != 3 || actives != 6 || passives != 8 || small < 151 || small > 155 || pips < 3 || pips > 9)
             {
                 return (false,
                     $"{region} 配额错误: giant={giants}, ks={keystones}, active={actives}, passive={passives}, small={small}, pip={pips}");
@@ -258,6 +297,54 @@ public static class SkillTreeLayoutTests
         return (true, "");
     }
 
+    private static (bool, string) FigureTemplatesMatchNodeRoles(SkillTreeData tree)
+    {
+        foreach (var (id, node) in tree.Nodes)
+        {
+            string expected = node.CurrentNodeType switch
+            {
+                SkillNodeData.NodeType.Start => "start_core_6",
+                SkillNodeData.NodeType.Pip => "pip_1",
+                SkillNodeData.NodeType.Small => "attribute_pair_2",
+                SkillNodeData.NodeType.Big when node.IsActiveSkill => "active_kite_4",
+                SkillNodeData.NodeType.Big => "passive_triangle_4",
+                SkillNodeData.NodeType.Keystone => "keystone_crown_6",
+                SkillNodeData.NodeType.Giant => "apex_rune_12",
+                _ => "",
+            };
+
+            string actual = node.GetFigureTemplate();
+            if (actual != expected)
+                return (false, $"{id} 模板错误: expected={expected}, actual={actual}");
+        }
+
+        return (true, "");
+    }
+
+    private static (bool, string) LargeFiguresAreCompactNotStrips(SkillTreeData tree)
+    {
+        var coord = new SkillTreeCoord { HexSize = 1.0f };
+        foreach (var (id, node) in tree.Nodes)
+        {
+            if (node.CurrentNodeType != SkillNodeData.NodeType.Big &&
+                node.CurrentNodeType != SkillNodeData.NodeType.Keystone &&
+                node.CurrentNodeType != SkillNodeData.NodeType.Giant)
+                continue;
+
+            var tiles = SkillNodeShape.GetTiles(node);
+            var points = tiles.Select(coord.TileCentroid).ToList();
+            float width = points.Max(p => p.X) - points.Min(p => p.X);
+            float height = points.Max(p => p.Y) - points.Min(p => p.Y);
+            float ratio = System.MathF.Max(width, height) / System.MathF.Max(0.001f, System.MathF.Min(width, height));
+            float limit = node.CurrentNodeType == SkillNodeData.NodeType.Big ? 2.4f : 2.7f;
+
+            if (ratio > limit)
+                return (false, $"{id} 形状过长: ratio={ratio:0.00}, limit={limit:0.00}, width={width:0.00}, height={height:0.00}");
+        }
+
+        return (true, "");
+    }
+
     private static (bool, string) RandomAttributesUseLegalKeysOnly(SkillTreeData tree)
     {
         var legal = new HashSet<string>
@@ -286,6 +373,51 @@ public static class SkillTreeLayoutTests
                 if (!legal.Contains(stat))
                     return (false, $"{id} 使用非法属性键 {stat}");
             }
+        }
+
+        return (true, "");
+    }
+
+    private static (bool, string) PassiveNodeBonusesDoNotFlattenConditionalEffects(SkillTreeData tree)
+    {
+        var expectedFlatBonuses = new Dictionary<string, string[]>
+        {
+            ["str_p05"] = ["max_hp"],
+            ["dex_p05"] = ["critical_rate"],
+            ["dex_p06"] = ["speed"],
+            ["con_p03"] = ["max_hp"],
+            ["con_p05"] = ["all_save"],
+            ["int_p04"] = ["mana_max"],
+            ["int_p05"] = ["mana_regen"],
+            ["int_p06"] = ["spell_hit"],
+            ["wis_p02"] = ["critical_rate"],
+            ["wis_p03"] = ["critical_rate"],
+            ["wis_p05"] = ["mana_max"],
+            ["cha_p01"] = ["ally_bonus"],
+            ["cha_p02"] = ["ally_bonus"],
+            ["cha_p03"] = ["ally_bonus"],
+            ["cha_p04"] = ["ally_bonus"],
+            ["cha_p06"] = ["initiative"],
+            ["cha_p07"] = ["max_hp"],
+            ["cha_p08"] = ["ally_bonus"],
+        };
+
+        foreach (var (id, node) in tree.Nodes)
+        {
+            if (!id.Contains("_p") || node.CurrentNodeType != SkillNodeData.NodeType.Big || node.IsActiveSkill)
+                continue;
+
+            var actualKeys = node.StatBonuses.Keys.Select(k => k.ToString()!).OrderBy(k => k).ToArray();
+            if (!expectedFlatBonuses.TryGetValue(id, out var expected))
+            {
+                if (actualKeys.Length != 0)
+                    return (false, $"{id} 是条件/触发被动，不应写入平面 statBonuses: {string.Join(",", actualKeys)}");
+                continue;
+            }
+
+            expected = expected.OrderBy(k => k).ToArray();
+            if (!actualKeys.SequenceEqual(expected))
+                return (false, $"{id} 平面 statBonuses 错误: expected={string.Join(",", expected)}, actual={string.Join(",", actualKeys)}");
         }
 
         return (true, "");
@@ -459,6 +591,31 @@ public static class SkillTreeLayoutTests
                 return false;
         }
         return true;
+    }
+
+    private static (bool, string) FixedLargeNodesDoNotGrantTileAttributes(SkillTreeData tree)
+    {
+        var node = tree.Nodes.Values.FirstOrDefault(n =>
+            n.CurrentNodeType == SkillNodeData.NodeType.Big &&
+            n.IsActiveSkill &&
+            n.CurrentRegion == SkillNodeData.Region.Str);
+        if (node == null)
+            return (false, "找不到 STR 主动大件节点");
+
+        var save = new Godot.Collections.Dictionary
+        {
+            { "activated_nodes", new Godot.Collections.Array { SkillTreeData.StartNodeId, node.NodeId } },
+            { "available_attribute_points", 0 },
+            { "random_attribute_seed", 101 },
+        };
+
+        var characterTree = new CharacterSkillTree();
+        characterTree.Deserialize(save, tree);
+        var attributes = characterTree.GetAllAccumulatedAttributes();
+        if (attributes.Count != 0)
+            return (false, $"{node.NodeId} 是固定大件，不应逐片提供六维属性: {attributes}");
+
+        return (true, "");
     }
 
     private static (bool, string) IntGiantOpensTierFourSpellStudy(SkillTreeData tree)

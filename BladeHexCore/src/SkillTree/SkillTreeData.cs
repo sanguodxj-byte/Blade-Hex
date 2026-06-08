@@ -75,16 +75,16 @@ public partial class SkillTreeData : RefCounted
             startNode.GridPosition = Vector2I.Zero;
 
         // 2. 6 个区域按 sectorIdx 0-5 分布到六个 60° 三角扇区。
-        // sector 0..5 对应顶点边: top->upper-right, upper-right->lower-right, ...
+        // sector 0..5 对应文档布局: CON, STR, DEX, CHA, WIS, INT.
         // 与 SkillTreeUI 的六维区域底色保持一致，避免节点压在分割轴线上。
         var regionToSector = new Dictionary<SkillNodeData.Region, int>
         {
-            { SkillNodeData.Region.Dex, 0 },
-            { SkillNodeData.Region.Con, 1 },
-            { SkillNodeData.Region.Int, 2 },
-            { SkillNodeData.Region.Wis, 3 },
-            { SkillNodeData.Region.Cha, 4 },
-            { SkillNodeData.Region.Str, 5 },
+            { SkillNodeData.Region.Con, 0 },
+            { SkillNodeData.Region.Str, 1 },
+            { SkillNodeData.Region.Dex, 2 },
+            { SkillNodeData.Region.Cha, 3 },
+            { SkillNodeData.Region.Wis, 4 },
+            { SkillNodeData.Region.Int, 5 },
         };
 
         // Occupancy is tracked by full triangular figures, not node anchors.

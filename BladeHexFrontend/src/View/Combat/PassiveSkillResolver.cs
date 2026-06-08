@@ -689,9 +689,10 @@ public static class PassiveSkillResolver
     /// <summary>商店折扣（合并diplomacy和diplomat）</summary>
     public static float GetShopDiscount(Unit unit)
     {
-        if (unit.HasSkillEffect("diplomacy")) return 0.8f;
-        if (unit.HasSkillEffect("diplomat")) return 0.85f;
-        return 1.0f;
+        float multiplier = unit.Data != null ? SkillTreeKeystoneResolver.GetShopPriceMultiplier(unit.Data) : 1.0f;
+        if (unit.HasSkillEffect("diplomacy")) multiplier = Math.Min(multiplier, 0.8f);
+        if (unit.HasSkillEffect("diplomat")) multiplier = Math.Min(multiplier, 0.85f);
+        return multiplier;
     }
 
     /// <summary>招募折扣（合并diplomacy和diplomat）</summary>
