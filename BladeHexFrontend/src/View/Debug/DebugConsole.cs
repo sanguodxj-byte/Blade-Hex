@@ -13,6 +13,8 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BladeHex.Strategic;
+using BladeHex.Strategic.WorldEvents;
 
 namespace BladeHex.Debug;
 
@@ -383,6 +385,7 @@ public partial class DebugConsole : Node
             SelectionEnabled = true,
             ContextMenuEnabled = true,
             ScrollActive = false,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
         };
         _contentLabel.AddThemeFontSizeOverride("normal_font_size", 12);
@@ -408,43 +411,150 @@ public partial class DebugConsole : Node
         _cmdInput.TextSubmitted += OnCmdSubmitted;
         cmdRow.AddChild(_cmdInput);
 
-        // 快捷按钮面板（点击执行常用命令）
+        // 快捷折叠控制按钮
+        var toggleBtn = new Button
+        {
+            Text = "[-] 快捷秘籍面板 (点击折叠)",
+            Flat = true,
+            Alignment = HorizontalAlignment.Left
+        };
+        toggleBtn.AddThemeFontSizeOverride("font_size", 11);
+        toggleBtn.AddThemeColorOverride("font_color", new Color(1.0f, 0.85f, 0.2f));
+        root.AddChild(toggleBtn);
+
+        // 快捷按钮面板（分页分类）
         var quickPanel = new ScrollContainer();
-        quickPanel.CustomMinimumSize = new Vector2(0, 70);
-        quickPanel.HorizontalScrollMode = ScrollContainer.ScrollMode.Auto;
-        quickPanel.VerticalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        quickPanel.CustomMinimumSize = new Vector2(0, 132);
+        quickPanel.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        quickPanel.VerticalScrollMode = ScrollContainer.ScrollMode.Auto;
         root.AddChild(quickPanel);
 
-        var quickGrid = new GridContainer();
-        quickGrid.Columns = 5;
-        quickGrid.AddThemeConstantOverride("h_separation", 3);
-        quickGrid.AddThemeConstantOverride("v_separation", 3);
-        quickPanel.AddChild(quickGrid);
+        toggleBtn.Pressed += () =>
+        {
+            quickPanel.Visible = !quickPanel.Visible;
+            toggleBtn.Text = quickPanel.Visible ? "[-] 快捷秘籍面板 (点击折叠)" : "[+] 快捷秘籍面板 (点击展开)";
+        };
 
-        // 天气
-        AddQuickBtn(quickGrid, "晴天", "weather clear");
-        AddQuickBtn(quickGrid, "下雨", "weather rain");
-        AddQuickBtn(quickGrid, "下雪", "weather snow");
-        AddQuickBtn(quickGrid, "沙暴", "weather sand");
-        // 时间
-        AddQuickBtn(quickGrid, "+1天", "day 1");
-        AddQuickBtn(quickGrid, "+7天", "day 7");
-        AddQuickBtn(quickGrid, "6时", "time 6");
-        AddQuickBtn(quickGrid, "18时", "time 18");
-        AddQuickBtn(quickGrid, "x10速", "speed 10");
-        AddQuickBtn(quickGrid, "x1速", "speed 1");
-        // 资源
-        AddQuickBtn(quickGrid, "金币满", "gold 9999");
-        AddQuickBtn(quickGrid, "食物满", "food 40");
-        AddQuickBtn(quickGrid, "全治愈", "heal");
-        AddQuickBtn(quickGrid, "升级10", "levelup 10");
-        // 地图
-        AddQuickBtn(quickGrid, "揭示全图", "reveal_all");
-        AddQuickBtn(quickGrid, "切换迷雾", "toggle_fog");
-        AddQuickBtn(quickGrid, "清除敌人", "kill_all");
-        AddQuickBtn(quickGrid, "生成山贼", "spawn bandit");
-        AddQuickBtn(quickGrid, "生成龙", "spawn dragon");
-        AddQuickBtn(quickGrid, "天气信息", "weather_info");
+        var quickInner = new VBoxContainer();
+        quickInner.AddThemeConstantOverride("separation", 2);
+        quickPanel.AddChild(quickInner);
+
+        // ---- 标签栏 ----
+        var tabBar = new HBoxContainer();
+        tabBar.AddThemeConstantOverride("separation", 2);
+        quickInner.AddChild(tabBar);
+
+        // ---- 分类数据 ----
+        var categories = new (string TabName, (string Label, string Cmd)[] Items)[]
+        {
+            ("🌤 天气", new[]
+            {
+                ("晴天", "weather clear"),
+                ("轻雨", "weather rain light"),
+                ("暴雨", "weather rain heavy"),
+                ("轻雪", "weather snow light"),
+                ("暴雪", "weather snow heavy"),
+                ("轻度沙暴", "weather sand light"),
+                ("强沙尘暴", "weather sand heavy"),
+            }),
+            ("⏰ 时间", new[]
+            {
+                ("+1天", "day 1"),
+                ("+7天", "day 7"),
+                ("+30天", "day 30"),
+                ("6时(晨)", "time 6"),
+                ("12时(午)", "time 12"),
+                ("18时(昏)", "time 18"),
+                ("x10速", "speed 10"),
+                ("x1速", "speed 1"),
+            }),
+            ("💰 资源", new[]
+            {
+                ("金币满", "gold 99999"),
+                ("食物满", "food 100"),
+                ("全队治愈", "heal"),
+                ("升级Lv10", "levelup 10"),
+                ("升级Lv30", "levelup 30"),
+            }),
+            ("🗺 地图", new[]
+            {
+                ("开全图", "reveal_all"),
+                ("开/关迷雾", "toggle_fog"),
+                ("清空敌人", "kill_all"),
+            }),
+            ("👾 生成", new[]
+            {
+                ("生成冒险者", "spawn adventurer"),
+                ("生成商队", "spawn caravan"),
+                ("生成山贼", "spawn bandit"),
+                ("生成劫匪", "spawn robber"),
+                ("生成海寇", "spawn pirate"),
+                ("生成掠夺者", "spawn raiding"),
+                ("生成领主军", "spawn lord"),
+                ("生成巨龙", "spawn dragon"),
+                ("生成魔像", "spawn golem"),
+            }),
+            ("⚔ 外交", new[]
+            {
+                ("外交-宣战A", "war_declare nation_0 nation_1"),
+                ("外交-议和A", "war_end nation_0 nation_1"),
+                ("帝国宣战", "war_declare kingdom empire"),
+                ("帝国停战", "war_end kingdom empire"),
+                ("主势力影+50", "influence kingdom 50"),
+                ("势力0影+100", "influence nation_0 100"),
+                ("势力1影+100", "influence nation_1 100"),
+                ("领主状态", "lord_status"),
+            }),
+        };
+
+        var grids = new List<GridContainer>();
+        var tabBtns = new List<Button>();
+
+        for (int ci = 0; ci < categories.Length; ci++)
+        {
+            int capturedIdx = ci; // capture for closure
+            var (tabName, items) = categories[ci];
+
+            // 标签按钮
+            var tabBtn = new Button
+            {
+                Text = tabName,
+                Flat = true,
+                SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+            };
+            tabBtn.AddThemeFontSizeOverride("font_size", 10);
+            tabBtn.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 0.8f));
+            tabBar.AddChild(tabBtn);
+            tabBtns.Add(tabBtn);
+
+            // 分类 Grid
+            var grid = new GridContainer();
+            grid.Columns = 5;
+            grid.AddThemeConstantOverride("h_separation", 3);
+            grid.AddThemeConstantOverride("v_separation", 3);
+            grid.Visible = ci == 0; // 默认显示第一个
+            quickInner.AddChild(grid);
+            grids.Add(grid);
+
+            foreach (var (label, cmd) in items)
+                AddQuickBtn(grid, label, cmd);
+
+            // 标签点击 → 切换
+            tabBtn.Pressed += () =>
+            {
+                for (int i = 0; i < grids.Count; i++)
+                {
+                    bool active = i == capturedIdx;
+                    grids[i].Visible = active;
+                    tabBtns[i].AddThemeColorOverride("font_color",
+                        active ? new Color(1.0f, 0.9f, 0.3f) : new Color(0.8f, 0.8f, 0.8f));
+                }
+            };
+        }
+
+        // 激活默认标签（第一个）高亮
+        if (tabBtns.Count > 0)
+            tabBtns[0].AddThemeColorOverride("font_color", new Color(1.0f, 0.9f, 0.3f));
     }
 
     private void AddQuickBtn(Control parent, string label, string command)
@@ -617,6 +727,92 @@ public partial class DebugConsole : Node
         RegisterCommand("refresh", (_) => { Refresh(); return null; }, "立即刷新");
         RegisterCommand("auto", CmdAuto, "auto on|off 切换自动刷新");
         RegisterCommand("interval", CmdInterval, "interval <秒> 设置刷新间隔");
+        RegisterCommand("war_declare", CmdWarDeclare, "war_declare <A> <B> 强制两势力宣战");
+        RegisterCommand("war_end", CmdWarEnd, "war_end <A> <B> 强制两势力媾和");
+        RegisterCommand("influence", CmdInfluence, "influence <阵营> <数值> 变更势力影响力");
+        RegisterCommand("capture", CmdCapture, "capture <聚落名> <新势力> 强制聚落易手");
+        RegisterCommand("lord_status", CmdLordStatus, "获取所有NPC领主行动与围城状态");
+    }
+
+    private BladeHex.Scenes.Overworld2d.OverworldScene2D? GetOverworldScene()
+    {
+        return GetTree().CurrentScene as BladeHex.Scenes.Overworld2d.OverworldScene2D;
+    }
+
+    private string? CmdWarDeclare(string[] args)
+    {
+        if (args.Length < 2) return "用法: war_declare <阵营A> <阵营B>";
+        var scene = GetOverworldScene();
+        if (scene?.EntityMgr?.WorldEngine == null) return "大地图场景未就绪";
+        
+        string a = args[0];
+        string b = args[1];
+        scene.EntityMgr.WorldEngine.SetRelation(a, b, -80);
+        var result = KingdomDecisionService.TryDeclareWar(a, b, scene.EntityMgr.WorldEngine);
+        return $"宣战结果: {result}";
+    }
+
+    private string? CmdWarEnd(string[] args)
+    {
+        if (args.Length < 2) return "用法: war_end <阵营A> <阵营B>";
+        var scene = GetOverworldScene();
+        if (scene?.EntityMgr?.WorldEngine == null) return "大地图场景未就绪";
+        
+        string a = args[0];
+        string b = args[1];
+        var result = KingdomDecisionService.TryMakePeace(a, b, scene.EntityMgr.WorldEngine);
+        return $"停战结果: {result}";
+    }
+
+    private string? CmdInfluence(string[] args)
+    {
+        if (args.Length < 2) return "用法: influence <阵营Id> <数值>";
+        var scene = GetOverworldScene();
+        if (scene?.EntityMgr?.WorldEngine == null) return "大地图场景未就绪";
+        
+        string nation = args[0];
+        if (int.TryParse(args[1], out int amt))
+        {
+            scene.EntityMgr.WorldEngine.Influence.Add(nation, amt, "调试秘籍加减影响力");
+            return $"已将 {nation} 的影响力变更 {amt}，当前: {scene.EntityMgr.WorldEngine.Influence.Get(nation)}";
+        }
+        return "数值解析失败";
+    }
+
+    private string? CmdCapture(string[] args)
+    {
+        if (args.Length < 2) return "用法: capture <聚落名称> <新归属势力>";
+        var scene = GetOverworldScene();
+        if (scene?.EntityMgr?.WorldEngine == null) return "大地图场景未就绪";
+        
+        string poiName = args[0];
+        string newFaction = args[1];
+        
+        var poi = scene.EntityMgr.Pois.FirstOrDefault(p => p.PoiName == poiName);
+        if (poi == null) return $"未找到聚落: {poiName}";
+        
+        int currentDay = scene.CurrentDay;
+        bool playerNearby = scene.PlayerParty != null
+            && scene.PlayerParty.Position.DistanceTo(poi.Position) <= 600.0f;
+        PoiTransferService.Apply(poi, newFaction, null, currentDay, scene.EntityMgr.WorldEngine, playerNearby);
+        return $"已成功强制将聚落 {poiName} 易手归属为 {newFaction}！";
+    }
+
+    private string? CmdLordStatus(string[] args)
+    {
+        var scene = GetOverworldScene();
+        if (scene?.EntityMgr == null) return "大地图场景未就绪";
+        
+        var lines = new List<string> { "=== 领主军团当前状态 ===" };
+        foreach (var ent in scene.EntityMgr.Entities)
+        {
+            if (ent.EntityTypeEnum == OverworldEntity.EntityType.LordArmy)
+            {
+                string target = ent.SiegeTarget != null ? ent.SiegeTarget.PoiName : (string.IsNullOrEmpty(ent.AssignedWarTargetPoiName) ? "无" : ent.AssignedWarTargetPoiName);
+                lines.Add($"· {ent.EntityName} ({ent.Faction}): AIState={ent.CurrentAIState} | 目标={target} | 兵力={ent.GarrisonSize} | 是否存活={ent.IsAlive}");
+            }
+        }
+        return string.Join("\n", lines);
     }
 
     private void OnCmdSubmitted(string text)

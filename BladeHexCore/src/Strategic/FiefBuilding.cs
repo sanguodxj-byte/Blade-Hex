@@ -32,6 +32,10 @@ public partial class FiefBuilding : Resource
         Barracks,       // 兵营：驻军上限+8
         Smithy,         // 铁匠坊：驻军装备+1
         LordManor,      // 领主宅邸：中心格，自动放置
+        BlacksmithWorkshop,    // 武器坊:产 武器装备
+        BrewWorkshop,          // 酒坊:产 啤酒
+        TextileWorkshop,       // 织布坊:产 布料
+        TanneryWorkshop,       // 制革坊:产 皮料
     }
 
     // ============================================================================

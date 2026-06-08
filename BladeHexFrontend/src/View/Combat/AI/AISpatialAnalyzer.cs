@@ -200,6 +200,12 @@ public static class AISpatialAnalyzer
         var toCell = hexGrid.GetCell(targetPos.X, targetPos.Y);
         if (fromCell == null || toCell == null) return baseRange;
 
+        if (CombatAttackRules.IsMeleeWeaponAttack(attacker)
+            && Math.Abs(fromCell.Elevation - toCell.Elevation) >= CombatAttackRules.MeleeElevationBlockThreshold)
+        {
+            return 0;
+        }
+
         int diff = fromCell.Elevation - toCell.Elevation;
         if (diff >= 2) baseRange += 2;
         else if (diff == 1) baseRange += 1;

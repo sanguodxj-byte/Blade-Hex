@@ -8,8 +8,13 @@
     <AssemblyName>BladeHexCore</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <DefineConstants>CORE_BUILD</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NLua" Version="1.7.6" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="src\SkillTree\skill_tree_layout.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="src\SkillTree\skill_tree_content.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

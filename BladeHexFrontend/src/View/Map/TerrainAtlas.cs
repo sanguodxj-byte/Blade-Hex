@@ -5,6 +5,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.Map;
 
@@ -114,20 +115,14 @@ public static class TerrainAtlas
     private static Texture2D? LoadAtlas()
     {
         // 1. 尝试加载预烘焙图集 (美术资源)
-        if (ResourceLoader.Exists(BakedAtlasResPath))
-        {
-            var tex = ResourceLoader.Load<Texture2D>(BakedAtlasResPath);
-            if (tex != null)
-                return tex;
-        }
+        var bakedAtlas = TextureAssetResolver.LoadMapTexture("terrain_atlas", BakedAtlasResPath);
+        if (bakedAtlas != null)
+            return bakedAtlas;
 
         // 2. 尝试加载之前运行时缓存
-        if (ResourceLoader.Exists(BakedAtlasUserPath))
-        {
-            var tex = ResourceLoader.Load<Texture2D>(BakedAtlasUserPath);
-            if (tex != null)
-                return tex;
-        }
+        var cachedAtlas = TextureAssetResolver.LoadPath(BakedAtlasUserPath);
+        if (cachedAtlas != null)
+            return cachedAtlas;
 
         // 3. 运行时从单个纹理烘焙
         return BakeAtlas();
@@ -191,10 +186,8 @@ public static class TerrainAtlas
             int idx = (int)type;
             string texPath = HexOverworldTile.GetTerrainTexturePath(type, 0);
 
-            if (!ResourceLoader.Exists(texPath))
-                continue;
-
-            var tex = ResourceLoader.Load<Texture2D>(texPath);
+            string textureId = System.IO.Path.GetFileNameWithoutExtension(texPath);
+            var tex = TextureAssetResolver.LoadMapTexture(textureId, texPath);
             if (tex == null)
                 continue;
 
@@ -223,6 +216,6 @@ public static class TerrainAtlas
             return null;
 
         // 重新加载保存的图集
-        return ResourceLoader.Load<Texture2D>(BakedAtlasUserPath);
+        return TextureAssetResolver.LoadPath(BakedAtlasUserPath);
     }
 }

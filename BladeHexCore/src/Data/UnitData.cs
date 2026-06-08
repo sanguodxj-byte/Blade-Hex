@@ -2,6 +2,9 @@
 // 单位基础数据资源 (RPG 核心版本)
 // 对应策划案 05/06 — 完整装备槽位、敌方模板、词缀加成
 using Godot;
+using System.Collections.Generic;
+using System.Linq;
+using BladeHex.Strategic;
 
 namespace BladeHex.Data;
 
@@ -46,15 +49,6 @@ public partial class UnitData : Resource
         Berserk,     // 狂暴
     }
 
-    public enum MoraleLevel
-    {
-        High,    // 高昂 (+20~+40)
-        Normal,  // 正常 (-19~+19)
-        Low,     // 低落 (-39~-20)
-        Broken,  // 崩溃 (-59~-40)
-        Routing, // 溃逃 (-60)
-    }
-
     // ========================================
     // 基础信息
     // ========================================
@@ -80,6 +74,67 @@ public partial class UnitData : Resource
 
     [Export] public Godot.Collections.Dictionary SkillTreeData = new();
     [Export] public int CharacterId { get; set; } = -1;
+
+    // ========================================
+    // 已装备技能（v0.7 战斗中可用的 10 个主动技能槽位）
+    // 每个元素是技能盘节点的 SkillEffect ID（"double_attack" / "blood_vortex" 等）；
+    // 空字符串/null 表示空槽。SkillTreeUI 是手动修改的唯一入口，战斗 HUD 只读。
+    // ========================================
+
+    public const int MaxEquippedSkills = 10;
+
+    [Export] public Godot.Collections.Array<string> EquippedSkills = new();
+
+    /// <summary>已装备技能数（非空槽）。</summary>
+    public int GetEquippedSkillCount()
+    {
+        int n = 0;
+        for (int i = 0; i < EquippedSkills.Count; i++)
+            if (!string.IsNullOrEmpty(EquippedSkills[i])) n++;
+        return n;
+    }
+
+    /// <summary>检查某个 SkillEffect 是否已装备。</summary>
+    public bool IsSkillEquipped(string skillEffect)
+    {
+        if (string.IsNullOrEmpty(skillEffect)) return false;
+        for (int i = 0; i < EquippedSkills.Count; i++)
+            if (EquippedSkills[i] == skillEffect) return true;
+        return false;
+    }
+
+    /// <summary>装备技能到指定槽位（0..9）。空字符串 = 卸下；不允许重复装备。</summary>
+    public bool SetEquippedSkill(int slot, string skillEffect)
+    {
+        if (slot < 0 || slot >= MaxEquippedSkills) return false;
+        // 防重复：若已在其他槽，先清空原槽
+        if (!string.IsNullOrEmpty(skillEffect))
+        {
+            for (int i = 0; i < EquippedSkills.Count; i++)
+                if (i != slot && EquippedSkills[i] == skillEffect)
+                    EquippedSkills[i] = "";
+        }
+        // 扩容到 MaxEquippedSkills
+        while (EquippedSkills.Count < MaxEquippedSkills) EquippedSkills.Add("");
+        EquippedSkills[slot] = skillEffect ?? "";
+        return true;
+    }
+
+    /// <summary>读取指定槽位（越界或空 → ""）。</summary>
+    public string GetEquippedSkill(int slot)
+    {
+        if (slot < 0 || slot >= EquippedSkills.Count) return "";
+        return EquippedSkills[slot] ?? "";
+    }
+
+    /// <summary>找到第一个空槽（-1 = 全满）。</summary>
+    public int FindFirstEmptyEquippedSlot()
+    {
+        while (EquippedSkills.Count < MaxEquippedSkills) EquippedSkills.Add("");
+        for (int i = 0; i < EquippedSkills.Count; i++)
+            if (string.IsNullOrEmpty(EquippedSkills[i])) return i;
+        return -1;
+    }
 
     // ========================================
     // 基础战斗属性
@@ -177,6 +232,14 @@ public partial class UnitData : Resource
 
     [Export] public Godot.Collections.Array<SkillData> Skills = new();
 
+    /// <summary>纸娃娃捏脸头像数据（优先于此处的旧式分散字段）</summary>
+    [Export] public AvatarData? Avatar { get; set; }
+
+    // ────── 旧式分散字段（保留兼容，新代码应使用 Avatar） ──────
+    [Export] public string GenderCustom { get; set; } = "";
+    [Export] public int FaceIndex { get; set; } = 0;
+    [Export] public int HairIndex { get; set; } = 0;
+
     [Export] public string PortraitId { get; set; } = "";
     [Export] public string BattleSpriteId { get; set; } = "";
     [Export] public string OverworldSpriteId { get; set; } = "";
@@ -190,19 +253,46 @@ public partial class UnitData : Resource
     [Export] public bool IsEnemy;
     [Export] public EnemyType enemyType = EnemyType.Humanoid;
     [Export] public CreatureSize creatureSize = CreatureSize.Medium;
+    /// <summary>
+    /// 多格占用宽度（沿 q 轴方向）。0 或负数表示使用 CreatureSize 默认值。
+    /// 模板可通过 "footprint_w" / "footprint_h" 字段覆盖。
+    /// 示例：1×1=普通, 1×2=蛇形, 2×2=大型, 2×3=巨型, 3×4=超巨型
+    /// </summary>
+    [Export] public int FootprintW = 0;
+    /// <summary>多格占用高度（沿 r 轴方向）。0 或负数表示使用 CreatureSize 默认值。</summary>
+    [Export] public int FootprintH = 0;
     [Export] public float ThreatLevel;
     [Export] public AIStrategy aiStrategy = AIStrategy.Instinct;
-    [Export] public int Morale;
     [Export] public string[] Immunities = [];
     [Export] public string[] Resistances = [];
     [Export] public string[] Weaknesses = [];
+    /// <summary>
+    /// 模板风味描述特质（"嗅觉追踪", "龙族恐惧" 等中文短语）。
+    /// 当前仅供 UI 显示用（敌人详情面板等）；战斗逻辑不读。
+    /// 与 UnitData.CharacterTraits（玩家角色生成的 TraitData[] 实例）无关。
+    /// 如需"龙族恐惧"等机械效果，应转为 SpecialAbilities + EquipmentAbilityRegistry 走规则化分发。
+    /// </summary>
     [Export] public string[] Traits = [];
 
     // 传奇专属
     [Export] public int LegendaryResistanceUses;
     [Export] public int LegendaryActionPoints;
+    /// <summary>
+    /// 传奇生物每回合可执行的额外动作（如龙的"翼击"/"尾扫"）。
+    /// 模板里已有数据，但当前 AI / TurnManager 未消费。
+    /// 计划：实装 LegendaryActionScheduler，每个非传奇单位回合结束让传奇生物
+    /// 选 1 个 action 触发，消耗 LegendaryActionPoints。
+    /// </summary>
     [Export] public Godot.Collections.Array<Godot.Collections.Dictionary> LegendaryActions = new();
+    /// <summary>
+    /// 巢穴动作（巢穴战斗专属，每回合 init 20 触发的环境/陷阱效果）。
+    /// 当前未实装，模板数据保留以便未来对接 LairBattleManager。
+    /// </summary>
     [Export] public Godot.Collections.Array<Godot.Collections.Dictionary> LairActions = new();
+    /// <summary>
+    /// 多阶段战斗（如龙在 50% HP 切换到飞行阶段）。
+    /// 当前未实装，模板数据保留。
+    /// </summary>
     [Export] public Godot.Collections.Array<Godot.Collections.Dictionary> Phases = new();
     [Export] public string UniqueDropId { get; set; } = "";
 
@@ -240,58 +330,72 @@ public partial class UnitData : Resource
     // 枚举显示名方法
     // ========================================
 
-    public MoraleLevel GetMoraleLevel() => Morale switch
-    {
-        >= 20 => MoraleLevel.High,
-        >= -19 => MoraleLevel.Normal,
-        >= -39 => MoraleLevel.Low,
-        >= -59 => MoraleLevel.Broken,
-        _ => MoraleLevel.Routing,
-    };
+   /// <summary>获取敌方类型的中文显示名</summary>
+   public string GetEnemyTypeName()
+   {
+       return enemyType switch
+       {
+           EnemyType.Humanoid => "类人",
+           EnemyType.Beast => "野兽",
+           EnemyType.Undead => "亡灵",
+           EnemyType.Demon => "魔物",
+           EnemyType.Giant => "巨型",
+           EnemyType.Construct => "构造体",
+           EnemyType.Dragon => "龙族",
+           EnemyType.Legendary => "传奇",
+           _ => "未知",
+       };
+   }
 
-    public string GetEnemyTypeName() => enemyType switch
-    {
-        EnemyType.Humanoid => "类人",
-        EnemyType.Beast => "野兽",
-        EnemyType.Undead => "亡灵",
-        EnemyType.Demon => "魔物",
-        EnemyType.Giant => "巨型",
-        EnemyType.Construct => "构造体",
-        EnemyType.Dragon => "龙族",
-        EnemyType.Legendary => "传奇",
-        _ => "未知",
-    };
+   /// <summary>获取 AI 策略的中文显示名</summary>
+   public string GetAiStrategyName()
+   {
+       return aiStrategy switch
+       {
+           AIStrategy.Reckless => "鲁莽",
+           AIStrategy.Cautious => "谨慎",
+           AIStrategy.Tactical => "战术",
+           AIStrategy.Instinct => "本能",
+           AIStrategy.Territorial => "领地",
+           AIStrategy.Cunning => "狡诈",
+           AIStrategy.Intimidate => "恐吓",
+           AIStrategy.Berserk => "狂暴",
+           _ => "未知",
+       };
+   }
 
-    public string GetAiStrategyName() => aiStrategy switch
-    {
-        AIStrategy.Reckless => "鲁莽",
-        AIStrategy.Cautious => "谨慎",
-        AIStrategy.Tactical => "战术",
-        AIStrategy.Instinct => "本能",
-        AIStrategy.Territorial => "领地",
-        AIStrategy.Cunning => "狡诈",
-        AIStrategy.Intimidate => "恐吓",
-        AIStrategy.Berserk => "狂暴",
-        _ => "未知",
-    };
+   /// <summary>获取 CR（Challenge Rating）显示文本</summary>
+   public string GetCrText()
+   {
+       return $"CR {ThreatLevel}";
+   }
 
-    public string GetSizeName() => creatureSize switch
-    {
-        CreatureSize.Tiny => "微型",
-        CreatureSize.Small => "小型",
-        CreatureSize.Medium => "中型",
-        CreatureSize.Large => "大型",
-        CreatureSize.Huge => "巨型",
-        CreatureSize.Gargantuan => "超巨型",
-        _ => "未知",
-    };
+   /// <summary>从所有特质中聚合个性分数（用于 AI 策略选择）</summary>
+   public System.Collections.Generic.Dictionary<string, float> GetAllPersonalityScores()
+   {
+       var scores = new System.Collections.Generic.Dictionary<string, float>
+       {
+           { "calculating", 0f },
+           { "valor", 0f },
+           { "mercy", 0f },
+           { "honor", 0f },
+       };
 
-    public string GetCrText()
-    {
-        if (ThreatLevel == 0) return "CR 0";
-        if (ThreatLevel < 1) return $"CR 1/{Mathf.RoundToInt(1.0f / ThreatLevel)}";
-        return $"CR {Mathf.RoundToInt(ThreatLevel)}";
-    }
+       if (CharacterTraits == null) return scores;
+
+       foreach (var trait in CharacterTraits)
+       {
+           if (trait == null || trait.AiDirectionBonus == null) continue;
+           foreach (var key in trait.AiDirectionBonus.Keys)
+           {
+               string keyStr = key.AsString();
+               if (scores.ContainsKey(keyStr))
+                   scores[keyStr] += (float)trait.AiDirectionBonus[key];
+           }
+       }
+
+       return scores;
+   }
 
     // ========================================
     // 装备逻辑
@@ -300,13 +404,17 @@ public partial class UnitData : Resource
     /// <summary>装备一个物品到对应槽位（纯数据操作，不涉及经济管理）</summary>
     public void EquipItem(ItemData item)
     {
+        if (!CanEquipItemBySkillTree(item)) return;
+
         if (item is ArmorData armorItem)
         {
             switch (armorItem.armorType)
             {
                 case ArmorData.ArmorType.Shield:
-                    if (Shield != null) UnequipItem("shield");
+                    if (Shield != null || PrimaryOffHand is ArmorData { armorType: ArmorData.ArmorType.Shield })
+                        UnequipItem("shield");
                     Shield = armorItem;
+                    PrimaryOffHand = armorItem;
                     break;
                 default:
                     // 根据 EquipSlotTarget 区分头盔/护手/身体
@@ -356,6 +464,8 @@ public partial class UnitData : Resource
     /// <summary>装备到指定槽位（显式指定槽位名）</summary>
     public void EquipToSlot(ItemData item, string slotName)
     {
+        if (!CanEquipItemBySkillTree(item, slotName)) return;
+
         UnequipItem(slotName);
         switch (slotName)
         {
@@ -363,15 +473,67 @@ public partial class UnitData : Resource
             case "armor": case "body": Armor = item as ArmorData; break;
             case "gauntlets": Gauntlets = item as ArmorData; break;
             case "boots": Boots = item as ArmorData; break;
-            case "shield": Shield = item as ArmorData; break;
+            case "shield": Shield = item as ArmorData; PrimaryOffHand = item; break;
             case "primary_main": case "main_hand": PrimaryMainHand = item as WeaponData; break;
-            case "primary_off": case "off_hand": PrimaryOffHand = item; break;
+            case "primary_off": case "off_hand":
+                    PrimaryOffHand = item;
+                    if (item is ArmorData armor2 && armor2.armorType == ArmorData.ArmorType.Shield)
+                        Shield = armor2;
+                    break;
             case "secondary_main": SecondaryMainHand = item as WeaponData; break;
             case "secondary_off": SecondaryOffHand = item; break;
             case "accessory_1": Accessory1 = item as AccessoryData; break;
             case "accessory_2": Accessory2 = item as AccessoryData; break;
         }
         RefreshAccessoryBonuses();
+    }
+
+    public bool CanEquipItemBySkillTree(ItemData item, string slotName = "")
+    {
+        if (item is ArmorData armor)
+        {
+            if (armor.armorType == ArmorData.ArmorType.Shield && !SkillTreeKeystoneResolver.CanEquipShield(this))
+                return false;
+            if ((armor.armorType == ArmorData.ArmorType.Medium || armor.armorType == ArmorData.ArmorType.Heavy)
+                && !SkillTreeKeystoneResolver.CanEquipMediumOrHeavyArmor(this))
+                return false;
+        }
+
+        if (item is WeaponData weapon)
+        {
+            bool goesMainHand = string.IsNullOrEmpty(slotName)
+                || slotName is "primary_main" or "main_hand" or "secondary_main";
+            if (goesMainHand && weapon.IsTwoHanded && !SkillTreeKeystoneResolver.CanEquipTwoHandedWeapon(this))
+                return false;
+        }
+
+        return true;
+    }
+
+    public void SanitizeEquipmentBySkillTree()
+    {
+        if (Shield != null && !SkillTreeKeystoneResolver.CanEquipShield(this))
+            UnequipItem("shield");
+
+        if (PrimaryOffHand is ArmorData offArmor
+            && offArmor.armorType == ArmorData.ArmorType.Shield
+            && !SkillTreeKeystoneResolver.CanEquipShield(this))
+            UnequipItem("primary_off");
+
+        if (Armor != null
+            && (Armor.armorType == ArmorData.ArmorType.Medium || Armor.armorType == ArmorData.ArmorType.Heavy)
+            && !SkillTreeKeystoneResolver.CanEquipMediumOrHeavyArmor(this))
+            UnequipItem("armor");
+
+        if (PrimaryMainHand != null
+            && PrimaryMainHand.IsTwoHanded
+            && !SkillTreeKeystoneResolver.CanEquipTwoHandedWeapon(this))
+            UnequipItem("primary_main");
+
+        if (SecondaryMainHand != null
+            && SecondaryMainHand.IsTwoHanded
+            && !SkillTreeKeystoneResolver.CanEquipTwoHandedWeapon(this))
+            UnequipItem("secondary_main");
     }
 
     /// <summary>卸下指定槽位的装备，返回被卸下的物品（纯数据操作）</summary>
@@ -385,6 +547,7 @@ public partial class UnitData : Resource
                 break;
             case "shield":
                 if (Shield != null) { removed = Shield; Shield = null; }
+                if (PrimaryOffHand == removed) PrimaryOffHand = null;
                 break;
             case "helmet":
                 if (Helmet != null) { removed = Helmet; Helmet = null; }
@@ -406,6 +569,7 @@ public partial class UnitData : Resource
                 break;
             case "primary_off":
                 if (PrimaryOffHand != null) { removed = PrimaryOffHand; PrimaryOffHand = null; }
+                if (Shield == removed) Shield = null;
                 break;
             case "secondary_main":
                 if (SecondaryMainHand != null) { removed = SecondaryMainHand; SecondaryMainHand = null; }
@@ -503,10 +667,10 @@ public partial class UnitData : Resource
     {
         var items = new System.Collections.Generic.List<ItemData>();
         if (Armor != null) items.Add(Armor);
-        if (Shield != null) items.Add(Shield);
         if (Helmet != null) items.Add(Helmet);
         if (PrimaryMainHand != null) items.Add(PrimaryMainHand);
-        if (PrimaryOffHand != null) items.Add(PrimaryOffHand);
+        if (PrimaryOffHand != null && PrimaryOffHand != Shield) items.Add(PrimaryOffHand);
+        if (Shield != null) items.Add(Shield);
         if (SecondaryMainHand != null) items.Add(SecondaryMainHand);
         if (SecondaryOffHand != null) items.Add(SecondaryOffHand);
         if (Accessory1 != null) items.Add(Accessory1);
@@ -528,4 +692,31 @@ public partial class UnitData : Resource
 
     /// <summary>清除运行时状态（战斗结束时调用）</summary>
     public void ClearRuntimeState() => _runtimeState = null;
+
+    // ========================================
+    // 头像数据统一访问
+    // ========================================
+
+    /// <summary>
+    /// 获取头像数据。优先返回 Avatar 属性的结构化数据，
+    /// 如果 Avatar 为 null 则从旧式分散字段构造兼容数据。
+    /// 保证返回值不为 null。
+    /// </summary>
+    public AvatarData GetAvatar()
+    {
+        if (Avatar != null)
+            return Avatar;
+
+        // 从旧式字段构造兼容数据
+        int seed = System.Math.Abs((UnitName ?? "").GetHashCode() + CharacterId * 31);
+        string gender = (!string.IsNullOrEmpty(GenderCustom)
+            ? GenderCustom
+            : ((seed % 2 == 0) ? "male" : "female"));
+
+        return AvatarData.FromLegacy(
+            Race?.raceId ?? RaceData.Race.Human,
+            gender,
+            FaceIndex > 0 ? FaceIndex : (seed % 9) + 1,
+            HairIndex);
+    }
 }

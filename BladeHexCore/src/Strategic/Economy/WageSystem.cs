@@ -1,11 +1,11 @@
 // WageSystem.cs
-// 工资系统 — 每日结算队伍工资，欠饷导致士气下降和离队
+// 工资系统 — 每日结算队伍工资，欠饷阻断自然恢复
 using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
 
-namespace BladeHex.Strategic;
+namespace BladeHex.Strategic.Economy;
 
 /// <summary>
 /// 工资系统 — 骑砍核心经济压力来源
@@ -89,50 +89,11 @@ public class WageSystem
 
     private void ApplyUnpaidPenalty(PartyRoster roster, WageResult result)
     {
-        // 每天欠饷：全员士气 -10
-        foreach (var m in roster.Members)
-        {
-            if (roster.IsLeader(m)) continue;
-            m.Morale = Math.Max(-100, m.Morale - 10);
-        }
-
-        // 连续 3 天：最低士气的队员离队
-        if (ConsecutiveUnpaidDays >= 3 && ConsecutiveUnpaidDays % 3 == 0)
-        {
-            UnitData? worstMorale = null;
-            int worstVal = int.MaxValue;
-            foreach (var m in roster.Members)
-            {
-                if (roster.IsLeader(m)) continue;
-                if (m.Morale < worstVal) { worstVal = m.Morale; worstMorale = m; }
-            }
-            if (worstMorale != null)
-            {
-                roster.Remove(worstMorale);
-                result.DesertedUnits.Add(worstMorale.UnitName);
-                GD.Print($"[WageSystem] {worstMorale.UnitName} 因欠饷离队！(士气 {worstVal})");
-            }
-        }
-
-        // 连续 7 天：50% 队员集体离队
-        if (ConsecutiveUnpaidDays == 7)
-        {
-            var toDesert = new List<UnitData>();
-            var rng = new Random();
-            foreach (var m in roster.Members)
-            {
-                if (roster.IsLeader(m)) continue;
-                if (rng.NextDouble() < 0.5) toDesert.Add(m);
-            }
-            foreach (var m in toDesert)
-            {
-                roster.Remove(m);
-                result.DesertedUnits.Add(m.UnitName);
-            }
-            if (toDesert.Count > 0)
-                GD.Print($"[WageSystem] 集体离队！{toDesert.Count} 人因长期欠饷离开");
-        }
+        // 欠饷惩罚：不恢复血量法力值（由 CanRestore 控制），不离队
     }
+
+    /// <summary>欠饷时禁止自然恢复 HP/法力</summary>
+    public bool CanRestore => ConsecutiveUnpaidDays == 0;
 
     /// <summary>读档还原欺饷天数（允许 SaveManager 直接写入 private 字段）</summary>
     public void SetConsecutiveUnpaidDays(int days)

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.Buff;
 
@@ -26,42 +27,12 @@ public static class BuffSystem
         instance.SourceUnitId = sourceUnitId;
         if (!string.IsNullOrEmpty(source)) instance.Source = source;
 
-        // 互斥:移除目标身上含 CancelTags 的 buff
-        if (instance.CancelTags.Length > 0)
-        {
-            target.Runtime.ActiveBuffs.RemoveAll(b =>
-                b.Tags.Any(t => instance.CancelTags.Contains(t)));
-        }
-
-        // 同源同 ID 不叠加:刷新持续时间 / 增加层数
-        var existing = target.Runtime.ActiveBuffs.Find(b => b.Id == buffId && b.Source == instance.Source);
-        if (existing != null)
-        {
-            if (existing.CurrentStacks < existing.MaxStacks)
-                existing.CurrentStacks++;
-            existing.Duration = Math.Max(existing.Duration, instance.Duration);
-            return existing;
-        }
-
-        target.Runtime.ActiveBuffs.Add(instance);
-        return instance;
+        return ApplyInstance(target, instance);
     }
 
     /// <summary>直接施加一个已构造好的 BuffInstance(不走 Registry)</summary>
-    public static void ApplyDirect(UnitData target, BuffInstance instance)
-    {
-        if (instance.CancelTags.Length > 0)
-            target.Runtime.ActiveBuffs.RemoveAll(b => b.Tags.Any(t => instance.CancelTags.Contains(t)));
-
-        var existing = target.Runtime.ActiveBuffs.Find(b => b.Id == instance.Id && b.Source == instance.Source);
-        if (existing != null)
-        {
-            if (existing.CurrentStacks < existing.MaxStacks) existing.CurrentStacks++;
-            existing.Duration = Math.Max(existing.Duration, instance.Duration);
-            return;
-        }
-        target.Runtime.ActiveBuffs.Add(instance);
-    }
+    public static BuffInstance? ApplyDirect(UnitData target, BuffInstance instance)
+        => ApplyInstance(target, instance);
 
     // ============================================================
     // 移除
@@ -70,6 +41,12 @@ public static class BuffSystem
     public static bool Remove(UnitData target, string buffId)
     {
         return target.Runtime.ActiveBuffs.RemoveAll(b => b.Id == buffId) > 0;
+    }
+
+    public static bool RemoveBySource(UnitData target, string source)
+    {
+        if (string.IsNullOrEmpty(source)) return false;
+        return target.Runtime.ActiveBuffs.RemoveAll(b => b.Source == source) > 0;
     }
 
     public static void RemoveByTag(UnitData target, string tag)
@@ -155,6 +132,17 @@ public static class BuffSystem
         return result;
     }
 
+    /// <summary>
+    /// 获取目标某 stat 的 buff 百分比乘区合并倍率(Increased 累加% × More 独乘 × FinalMult 独乘)。
+    /// 不含 Base/FlatBonus(那是平加值,由 GetBuffStatBonus 单独取)。无任何百分比修正时返回 1.0。
+    /// 用于 "damage" 等需要把 +X% buff 折进伤害末端倍率的场景。
+    /// </summary>
+    public static float ResolveMultiplier(UnitData target, string stat, string condition = "")
+    {
+        var r = ResolveStatModifiers(target, stat, condition);
+        return (1f + r.IncreasedPercent) * r.MoreMultiplier * r.FinalMultiplier;
+    }
+
     /// <summary>快捷:检查目标是否有指定 buff</summary>
     public static bool HasBuff(UnitData target, string buffId)
         => target.Runtime.ActiveBuffs.Any(b => b.Id == buffId);
@@ -191,8 +179,113 @@ public static class BuffSystem
     }
 
     // ============================================================
+    // 叠加层数操作
+    // ============================================================
+
+    /// <summary>增加指定 buff 的层数(不超过 MaxStacks)。若无该 buff 则无操作。</summary>
+    public static void IncrementStacks(UnitData target, string buffId)
+    {
+        var buff = target.Runtime.ActiveBuffs.Find(b => b.Id == buffId);
+        if (buff != null && buff.CurrentStacks < buff.MaxStacks)
+            buff.CurrentStacks++;
+    }
+
+    /// <summary>设置指定 buff 的层数(钳制在 1~MaxStacks 之间)。若无该 buff 则无操作。</summary>
+    public static void SetStacks(UnitData target, string buffId, int count)
+    {
+        var buff = target.Runtime.ActiveBuffs.Find(b => b.Id == buffId);
+        if (buff != null)
+            buff.CurrentStacks = Math.Clamp(count, 1, buff.MaxStacks);
+    }
+
+    // ============================================================
+    // 修饰器操作
+    // ============================================================
+
+    /// <summary>安全递减目标 buff 上指定 stat 的首个 modifier 值。
+    /// 当 modifier 值 ≤ 0 时自动移除该 buff。
+    /// 返回 true 表示 buff 已被移除。</summary>
+    public static bool ConsumeModifierStack(UnitData target, BuffInstance buff, string stat)
+    {
+        var mod = buff.Modifiers.Find(m => m.Stat == stat);
+        if (mod != null)
+        {
+            mod.Value -= 1;
+            if (mod.Value <= 0)
+            {
+                target.Runtime.ActiveBuffs.Remove(buff);
+                return true;
+            }
+            return false;
+        }
+        // 无指定 modifier 则直接移除
+        target.Runtime.ActiveBuffs.Remove(buff);
+        return true;
+    }
+
+    /// <summary>按引用移除 buff。</summary>
+    public static bool RemoveBuffInstance(UnitData target, BuffInstance buff)
+        => target.Runtime.ActiveBuffs.Remove(buff);
+
+    // ============================================================
     // 内部工具
     // ============================================================
+
+    private static BuffInstance? ApplyInstance(UnitData target, BuffInstance instance)
+    {
+        if (!CanApply(target, instance))
+            return null;
+
+        if (instance.CancelTags.Length > 0)
+            target.Runtime.ActiveBuffs.RemoveAll(b => b.Tags.Any(t => instance.CancelTags.Contains(t)));
+
+        var existing = target.Runtime.ActiveBuffs.Find(b =>
+            b.Id == instance.Id
+            && b.Source == instance.Source
+            && b.SourceUnitId == instance.SourceUnitId);
+        if (existing != null)
+        {
+            if (existing.CurrentStacks < existing.MaxStacks)
+                existing.CurrentStacks++;
+            existing.Duration = Math.Max(existing.Duration, instance.Duration);
+            return existing;
+        }
+
+        target.Runtime.ActiveBuffs.Add(instance);
+        return instance;
+    }
+
+    private static bool CanApply(UnitData target, BuffInstance instance)
+    {
+        if (!instance.IsNegative && !SkillTreeKeystoneResolver.CanReceivePositiveBuff(target))
+            return false;
+
+        if (instance.Tags.Any(t => t == "fear") || instance.Id == "fear")
+        {
+            if (SkillTreeKeystoneResolver.IsImmuneToFear(target))
+                return false;
+            var immuneMod = ResolveStatModifiers(target, "immune_fear");
+            if (immuneMod.OverrideValue.HasValue && immuneMod.OverrideValue.Value >= 1f)
+                return false;
+        }
+
+        if (instance.Tags.Any(t => t == "mind") || instance.Id.Contains("mind", StringComparison.Ordinal))
+        {
+            if (SkillTreeKeystoneResolver.IsImmuneToMind(target))
+                return false;
+        }
+
+        if (instance.IsNegative)
+        {
+            if (SkillTreeKeystoneResolver.IsImmuneToNegative(target))
+                return false;
+            var immuneNeg = ResolveStatModifiers(target, "immune_negative");
+            if (immuneNeg.OverrideValue.HasValue && immuneNeg.OverrideValue.Value >= 1f)
+                return false;
+        }
+
+        return true;
+    }
 
     private static BuffInstance Clone(BuffInstance template)
     {

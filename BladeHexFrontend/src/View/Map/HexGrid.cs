@@ -102,73 +102,73 @@ public partial class HexGrid : Node3D
     /// <summary>获取所有单元格</summary>
     public IEnumerable<HexCell> GetCells() => Cells.Values;
 
-    /// <summary>获取移动力范围内的所有坐标 (Dijkstra 算法)</summary>
-    public List<Vector2I> GetCellsInRange(int startQ, int startR, float movePoints)
+/// <summary>获取移动力范围内的所有坐标 (Dijkstra 算法)</summary>
+public List<Vector2I> GetCellsInRange(int startQ, int startR, float movePoints)
+{
+    var startPos = new Vector2I(startQ, startR);
+    
+    bool isPlayerSide = false;
+    bool hasActor = false;
+    if (Cells.TryGetValue(startPos, out var startCell) && startCell.Occupant != null)
     {
-        var startPos = new Vector2I(startQ, startR);
-        
-        bool isPlayerSide = false;
-        bool hasActor = false;
-        if (Cells.TryGetValue(startPos, out var startCell) && startCell.Occupant != null)
+        isPlayerSide = startCell.Occupant.IsPlayerSide;
+        hasActor = true;
+    }
+
+    var costSoFar = new Dictionary<Vector2I, float>();
+    costSoFar[startPos] = 0.0f;
+    
+    var frontier = new PriorityQueue<Vector2I, float>();
+    frontier.Enqueue(startPos, 0.0f);
+
+    while (frontier.Count > 0)
+    {
+        var current = frontier.Dequeue();
+
+        if (!Cells.ContainsKey(current)) continue;
+        var currentCell = Cells[current];
+
+        for (int dir = 0; dir < 6; dir++)
         {
-            isPlayerSide = startCell.Occupant.IsPlayerSide;
-            hasActor = true;
-        }
+            var nextPos = HexUtils.GetNeighbor(current.X, current.Y, dir);
+            if (!Cells.ContainsKey(nextPos)) continue;
 
-        var costSoFar = new Dictionary<Vector2I, float>();
-        costSoFar[startPos] = 0.0f;
-        
-        var frontier = new PriorityQueue<Vector2I, float>();
-        frontier.Enqueue(startPos, 0.0f);
+            var nextCell = Cells[nextPos];
 
-        while (frontier.Count > 0)
-        {
-            var current = frontier.Dequeue();
+            // 不可通行的格子不可进入
+            if (nextCell.Data != null && !nextCell.Data.isPassable) continue;
 
-            if (!Cells.ContainsKey(current)) continue;
-            var currentCell = Cells[current];
-
-            for (int dir = 0; dir < 6; dir++)
+            // 单位阻挡：不能穿过敌方单位，如果没有 actor 则不能穿过任何单位
+            if (nextCell.Occupant != null)
             {
-                var nextPos = HexUtils.GetNeighbor(current.X, current.Y, dir);
-                if (!Cells.ContainsKey(nextPos)) continue;
+                if (!hasActor || nextCell.Occupant.IsPlayerSide != isPlayerSide)
+                    continue;
+            }
 
-                var nextCell = Cells[nextPos];
+            int elevDiff = nextCell.Elevation - currentCell.Elevation;
 
-                // 不可通行的格子不可进入
-                if (nextCell.Data != null && !nextCell.Data.isPassable) continue;
+            // 规则：高度差 >= 2 视为不可通行，上移最多一层
+            if (Math.Abs(elevDiff) >= 2 || elevDiff > 1) continue;
 
-                // 单位阻挡：不能穿过敌方单位，如果没有 actor 则不能穿过任何单位
-                if (nextCell.Occupant != null)
+            float moveCost = nextCell.Data != null ? (float)nextCell.Data.moveCost : 1.0f;
+            if (elevDiff > 0) moveCost += 3.0f; // 低向高位移额外花费 3 点 AP
+
+            float newCost = costSoFar[current] + moveCost;
+            if (newCost <= movePoints)
+            {
+                if (!costSoFar.ContainsKey(nextPos) || newCost < costSoFar[nextPos])
                 {
-                    if (!hasActor || nextCell.Occupant.IsPlayerSide != isPlayerSide)
-                        continue;
-                }
-
-                int elevDiff = nextCell.Elevation - currentCell.Elevation;
-
-                // 规则：高度差 >= 2 视为不可通行，上移最多一层
-                if (Math.Abs(elevDiff) >= 2 || elevDiff > 1) continue;
-
-                float moveCost = nextCell.Data != null ? (float)nextCell.Data.moveCost : 1.0f;
-                if (elevDiff > 0) moveCost += 3.0f; // 低向高位移额外花费 3 点 AP
-
-                float newCost = costSoFar[current] + moveCost;
-                if (newCost <= movePoints)
-                {
-                    if (!costSoFar.ContainsKey(nextPos) || newCost < costSoFar[nextPos])
-                    {
-                        costSoFar[nextPos] = newCost;
-                        frontier.Enqueue(nextPos, newCost);
-                    }
+                    costSoFar[nextPos] = newCost;
+                    frontier.Enqueue(nextPos, newCost);
                 }
             }
         }
-        
-        var result = costSoFar.Keys.ToList();
-        result.Remove(startPos); // 不包含起点
-        return result;
     }
+    
+    var result = costSoFar.Keys.ToList();
+    result.Remove(startPos); // 不包含起点
+    return result;
+}
 
     /// <summary>A* 寻路算法，计算两个六边形之间的最短可通行路径</summary>
     public List<Vector2I> FindPath(Vector2I startPos, Vector2I targetPos)

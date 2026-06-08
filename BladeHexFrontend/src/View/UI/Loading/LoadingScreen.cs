@@ -108,6 +108,10 @@ public partial class LoadingScreen : CanvasLayer
             _phaseTitleLabel = new Label { Text = "加载中..." };
             _contentContainer.AddChild(_phaseTitleLabel);
             _phaseDescLabel = new RichTextLabel();
+            _phaseDescLabel.BbcodeEnabled = true;
+            _phaseDescLabel.ScrollActive = false;
+            _phaseDescLabel.FitContent = true;
+            _phaseDescLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _contentContainer.AddChild(_phaseDescLabel);
             _progressBar = new ProgressBar { CustomMinimumSize = new Vector2(400, 16) };
             _contentContainer.AddChild(_progressBar);
@@ -143,6 +147,7 @@ public partial class LoadingScreen : CanvasLayer
         _phaseDescLabel.BbcodeEnabled = true;
         _phaseDescLabel.ScrollActive = false;
         _phaseDescLabel.FitContent = true;
+        _phaseDescLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _phaseDescLabel.HorizontalAlignment = HorizontalAlignment.Center;
         _phaseDescLabel.AddThemeFontSizeOverride("normal_font_size", theme.FontSizeMd);
         _phaseDescLabel.AddThemeColorOverride("default_color", theme.TextSecondary);

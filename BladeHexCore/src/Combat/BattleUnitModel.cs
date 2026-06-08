@@ -3,6 +3,7 @@
 // 所有战斗数值计算均委托至 CombatStats（单一真相源）
 using Godot;
 using BladeHex.Data;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat;
 
@@ -18,7 +19,7 @@ public partial class BattleUnitModel
     public BattleUnitModel(UnitData data)
     {
         Data = data;
-        Runtime = new UnitRuntimeState();
+        Runtime = data.Runtime;
     }
 
     // ====================
@@ -69,11 +70,11 @@ public partial class BattleUnitModel
     public int GetAc() => CombatStats.GetAc(Data, UsingPrimaryWeapon);
 
     /// <summary>
-    /// 有效 AC = 基础 AC + 被动技能加成 + 防御姿态加值 + 士气 AC 修正
-    /// passiveAcBonus 和 moraleAcModifier 由调用方从 Frontend 提取传入
+    /// 有效 AC = 基础 AC + 被动技能加成 + 防御姿态加值
+    /// passiveAcBonus 由调用方从 Frontend 提取传入
     /// </summary>
-    public int GetEffectiveAc(bool isDefending, int passiveAcBonus, int moraleAcModifier) =>
-        CombatStats.GetEffectiveAc(Data, UsingPrimaryWeapon, isDefending, passiveAcBonus, moraleAcModifier);
+    public int GetEffectiveAc(bool isDefending, int passiveAcBonus) =>
+        CombatStats.GetEffectiveAc(Data, UsingPrimaryWeapon, isDefending, passiveAcBonus);
 
     /// <summary>当前 DR 值（不低于 0）</summary>
     public int GetDr() => CombatStats.GetDr(Data);
@@ -128,6 +129,194 @@ public partial class BattleUnitModel
     public static int GetStatModifier(int score) => CombatStats.GetStatModifier(score);
 }
 
+// ============================================================================
+// Runtime State API — 统一封装 UnitRuntimeState + UnitData 运行时字段
+// 所有 Frontend→Core 的运行时数据写入必须通过此处，禁止直接写 Data.Runtime.*
+// ============================================================================
+
+public partial class BattleUnitModel
+{
+    // ====================
+    // Turn Flags (每回合重置)
+    // ====================
+
+    public bool HasMoved { get => Runtime.HasMoved; set => Runtime.HasMoved = value; }
+    public bool HasActed { get => Runtime.HasActed; set => Runtime.HasActed = value; }
+    public bool NonSpellSkillUsedThisTurn { get => Runtime.NonSpellSkillUsedThisTurn; set => Runtime.NonSpellSkillUsedThisTurn = value; }
+    public bool TimeWarpUsedThisTurn { get => Runtime.TimeWarpUsedThisTurn; set => Runtime.TimeWarpUsedThisTurn = value; }
+    public bool AooUsedThisTurn { get => Runtime.AooUsedThisTurn; set => Runtime.AooUsedThisTurn = value; }
+    public bool IsRangedWeaponLoaded { get => Runtime.IsRangedWeaponLoaded; set => Runtime.IsRangedWeaponLoaded = value; }
+    public int ExtraActionsThisTurn { get => Runtime.ExtraActionsThisTurn; set => Runtime.ExtraActionsThisTurn = value; }
+    public bool WeaponSwitchedThisTurn { get => Runtime.WeaponSwitchedThisTurn; set => Runtime.WeaponSwitchedThisTurn = value; }
+
+    // ====================
+    // Combat Flags (本场战斗一次性标记)
+    // ====================
+
+    public int LifeShieldUsedThisCombat { get => Runtime.LifeShieldUsedThisCombat; set => Runtime.LifeShieldUsedThisCombat = value; }
+    public int LifeCircleUsedThisCombat { get => Runtime.LifeCircleUsedThisCombat; set => Runtime.LifeCircleUsedThisCombat = value; }
+    public int LastStandUsedThisCombat { get => Runtime.LastStandUsedThisCombat; set => Runtime.LastStandUsedThisCombat = value; }
+    public int HeroicCallUsedThisCombat { get => Runtime.HeroicCallUsedThisCombat; set => Runtime.HeroicCallUsedThisCombat = value; }
+    public int ResurrectUsedThisCombat { get => Runtime.ResurrectUsedThisCombat; set => Runtime.ResurrectUsedThisCombat = value; }
+    public int ManaSurgeUsedThisCombat { get => Runtime.ManaSurgeUsedThisCombat; set => Runtime.ManaSurgeUsedThisCombat = value; }
+    public int AssassinateUsedThisCombat { get => Runtime.AssassinateUsedThisCombat; set => Runtime.AssassinateUsedThisCombat = value; }
+    public int OldTimerTriggeredThisCombat { get => Runtime.OldTimerTriggeredThisCombat; set => Runtime.OldTimerTriggeredThisCombat = value; }
+
+    // ====================
+    // 法力 (Mana)
+    // ====================
+
+    public int CurrentMana
+    {
+        get => Data.CurrentMana;
+        set
+        {
+            int clamped = System.Math.Max(0, value);
+            Data.CurrentMana = clamped;
+            Runtime.CurrentMana = clamped;
+        }
+    }
+
+    /// <summary>增加法力（不低于 0）</summary>
+    public void AddMana(int amount)
+    {
+        CurrentMana += amount;
+    }
+
+    /// <summary>消耗法力，不足时返回 false 并拒绝消耗</summary>
+    public bool SpendMana(int amount)
+    {
+        if (CurrentMana < amount) return false;
+        CurrentMana -= amount;
+        return true;
+    }
+
+    // ====================
+    // 朝向 (Facing) / 防御姿态
+    // ====================
+
+    public int Facing { get => Runtime.Facing; set => Runtime.Facing = value; }
+
+    /// <summary>当前行动点（float）</summary>
+    public float CurrentAp { get => Runtime.CurrentAp; set => Runtime.CurrentAp = value; }
+    public void SetFacing(int direction) => Runtime.Facing = direction;
+
+    public bool IsDefending { get => Runtime.IsDefending; set => Runtime.IsDefending = value; }
+
+    // ====================
+    // 技能树引用
+    // ====================
+
+    public BladeHex.Strategic.CharacterSkillTree? SkillTree
+    {
+        get => Runtime.SkillTree;
+        set => Runtime.SkillTree = value;
+    }
+
+    // ====================
+    // Buff 操作
+    // ====================
+
+    /// <summary>活跃 Buff 列表（只读，Frontend 禁止直接修改）</summary>
+    public System.Collections.Generic.IReadOnlyList<BladeHex.Combat.Buff.BuffInstance> ActiveBuffs
+        => Runtime.ActiveBuffs;
+
+    public void AddBuff(BladeHex.Combat.Buff.BuffInstance buff) => Runtime.ActiveBuffs.Add(buff);
+
+    public bool RemoveBuff(System.Predicate<BladeHex.Combat.Buff.BuffInstance> predicate)
+        => Runtime.ActiveBuffs.RemoveAll(predicate) > 0;
+
+    /// <summary>按 ID 移除 Buff</summary>
+    public bool RemoveBuffById(string buffId)
+        => Runtime.ActiveBuffs.RemoveAll(b => b.Id == buffId) > 0;
+
+    /// <summary>批量移除 Buff</summary>
+    public int RemoveAllBuffs(System.Predicate<BladeHex.Combat.Buff.BuffInstance> predicate)
+        => Runtime.ActiveBuffs.RemoveAll(predicate);
+
+    /// <summary>清除全部 Buff</summary>
+    public void ClearBuffs() => Runtime.ActiveBuffs.Clear();
+
+    /// <summary>活跃 Buff 数量</summary>
+    public int BuffCount => Runtime.ActiveBuffs.Count;
+
+    /// <summary>是否存在指定 ID 的 Buff</summary>
+    public bool HasBuff(string buffId)
+        => System.Linq.Enumerable.Any(Runtime.ActiveBuffs, b => b.Id == buffId);
+
+    /// <summary>查找指定 ID 的 Buff</summary>
+    public BladeHex.Combat.Buff.BuffInstance? FindBuff(string buffId)
+        => System.Linq.Enumerable.FirstOrDefault(Runtime.ActiveBuffs, b => b.Id == buffId);
+
+    /// <summary>查找符合条件的 Buff 列表</summary>
+    public System.Collections.Generic.List<BladeHex.Combat.Buff.BuffInstance> FindAllBuffs(
+        System.Predicate<BladeHex.Combat.Buff.BuffInstance> predicate)
+        => Runtime.ActiveBuffs.FindAll(predicate);
+
+    public void IncrementBuffStacks(string buffId)
+        => Buff.BuffSystem.IncrementStacks(Data, buffId);
+
+    public void SetBuffStacks(string buffId, int count)
+        => Buff.BuffSystem.SetStacks(Data, buffId, count);
+
+    // ====================
+    // StatusEffect 操作
+    // ====================
+
+    /// <summary>活跃状态效果列表（只读，Frontend 禁止直接修改）</summary>
+    public System.Collections.Generic.IReadOnlyList<StatusEffectInstance> ActiveStatusEffects
+        => Runtime.ActiveStatusEffects;
+
+    public void AddStatusEffect(StatusEffectInstance effect) => Runtime.ActiveStatusEffects.Add(effect);
+
+    public bool RemoveStatusEffect(string id)
+        => Runtime.ActiveStatusEffects.RemoveAll(e => e.Id == id) > 0;
+
+    /// <summary>批量移除状态效果</summary>
+    public int RemoveAllStatusEffects(System.Predicate<StatusEffectInstance> predicate)
+        => Runtime.ActiveStatusEffects.RemoveAll(predicate);
+
+    /// <summary>清除全部状态效果</summary>
+    public void ClearStatusEffects() => Runtime.ActiveStatusEffects.Clear();
+
+    /// <summary>活跃状态效果数量</summary>
+    public int StatusEffectCount => Runtime.ActiveStatusEffects.Count;
+
+    /// <summary>是否存在指定 ID 的状态效果</summary>
+    public bool HasStatusEffect(string id)
+        => System.Linq.Enumerable.Any(Runtime.ActiveStatusEffects, e => e.Id == id);
+
+    /// <summary>查找指定 ID 的状态效果</summary>
+    public StatusEffectInstance? FindStatusEffect(string id)
+        => System.Linq.Enumerable.FirstOrDefault(Runtime.ActiveStatusEffects, e => e.Id == id);
+
+    /// <summary>查找符合条件的状态效果列表</summary>
+    public System.Collections.Generic.List<StatusEffectInstance> FindAllStatusEffects(
+        System.Predicate<StatusEffectInstance> predicate)
+        => Runtime.ActiveStatusEffects.FindAll(predicate);
+
+    // ====================
+    // 运行时状态生命周期
+    // ====================
+
+    // ====================
+    // Data.Set() 迁移属性 — 原通过 Variant 属性系统写入的运行时标记
+    // ====================
+
+    public int ArcaneResonanceStacks { get => Runtime.ArcaneResonanceStacks; set => Runtime.ArcaneResonanceStacks = value; }
+    public long VengeanceTargetId { get => Runtime.VengeanceTargetId; set => Runtime.VengeanceTargetId = value; }
+    public bool SoulGuardianUsed { get => Runtime.SoulGuardianUsed; set => Runtime.SoulGuardianUsed = value; }
+    public bool FortifyActive { get => Runtime.FortifyActive; set => Runtime.FortifyActive = value; }
+    public bool ImmortalBodyUsed { get => Runtime.ImmortalBodyUsed; set => Runtime.ImmortalBodyUsed = value; }
+    public bool SpellReflectUsedThisTurn { get => Runtime.SpellReflectUsedThisTurn; set => Runtime.SpellReflectUsedThisTurn = value; }
+    public bool FateEyeUsedThisTurn { get => Runtime.FateEyeUsedThisTurn; set => Runtime.FateEyeUsedThisTurn = value; }
+    public bool LightningReflexFirstAttackUsed { get => Runtime.LightningReflexFirstAttackUsed; set => Runtime.LightningReflexFirstAttackUsed = value; }
+    public bool IsWounded { get => Runtime.IsWounded; set => Runtime.IsWounded = value; }
+
+    /// <summary>清理运行时状态（战斗结束时调用）</summary>
+    public void ClearRuntimeState() => Data.ClearRuntimeState();
+}
+
 
 // ============================================================================
 // ApplyDamage —— Core 层伤害解算（T-104）
@@ -153,10 +342,6 @@ public partial class BattleUnitModel
     /// <param name="weaponWeight">武器重量类别（影响穿透系数分桶：Light/Medium → 高杀伤，Heavy → 高破甲）</param>
     /// <param name="attackerMastery">攻击者武器精通（为 null 则不归因 XP）</param>
     /// <param name="weaponSubtype">打击所用的武器子类型（归因精通 XP）</param>
-    /// <param name="weaponPen">
-    /// 武器穿透修正 (v0.6 6.3)。穿透公式: d20_Pen + WeaponPen + STRPenBonus ≥ ArmorDR。
-    /// 默认 0 表示赤手 / 法术 / 未配置武器。
-    /// </param>
     /// <param name="strPenBonus">
     /// 攻击者力量穿透加成 = floor(sqrt(STR/4))。由调用方计算后传入避免循环依赖。
     /// </param>
@@ -171,18 +356,41 @@ public partial class BattleUnitModel
         WeaponData.WeightCategory weaponWeight = WeaponData.WeightCategory.Medium,
         WeaponMastery? attackerMastery = null,
         WeaponData.WeaponSubtype weaponSubtype = WeaponData.WeaponSubtype.Unarmed,
-        int weaponPen = 0,
         int strPenBonus = 0,
-        bool mediumLv5Mastery = false)
+        bool mediumLv5Mastery = false,
+        bool isRanged = false,
+        bool allowDamageRedirect = true)
     {
         if (amount <= 0)
             return new DamageResult { RemainingHp = CurrentHp };
+
+        int shieldAbsorbed = 0;
+        bool shieldBroken = false;
+
+        // v0.6 6.2 盾牌对远程攻击的有效伤害减免与扣耐久销毁逻辑
+        if (isRanged && Data?.Shield != null
+            && Data.Shield.RangedDamageMultiplier < 1.0f
+            && Data.Shield.CurrentArmorPoints > 0)
+        {
+            int reduced = (int)(amount * Data.Shield.RangedDamageMultiplier);
+            int absorbed = amount - reduced;
+            int actualAbsorb = System.Math.Min(absorbed, Data.Shield.CurrentArmorPoints);
+            Data.Shield.CurrentArmorPoints -= actualAbsorb;
+            shieldAbsorbed = actualAbsorb;
+            if (Data.Shield.CurrentArmorPoints <= 0)
+            {
+                shieldBroken = true;
+                Data.Shield = null;
+            }
+            amount = reduced + (absorbed - actualAbsorb);
+        }
 
         // v0.6 11.8 con_b05 铁壁：每次受到物理伤害 -3，单个伤害包最低保留 1 点
         bool isPhysical = damageType == WeaponData.DamageType.Slash
             || damageType == WeaponData.DamageType.Pierce
             || damageType == WeaponData.DamageType.Crush;
-        if (isPhysical && Data.Runtime.SkillTree?.HasSkillEffect("iron_wall") == true)
+        var skillTree = Data!.Runtime.SkillTree;
+        if (isPhysical && skillTree != null && skillTree.HasSkillEffect("iron_wall"))
         {
             amount = System.Math.Max(1, amount - 3);
         }
@@ -191,8 +399,8 @@ public partial class BattleUnitModel
         // 与命中检定的 d20 完全独立，避免"自然 1 必败但穿透判定仍可成立"的逻辑漏洞。
         // 公式: d20_Pen + STRPenBonus ≥ ArmorDR
         // 自然 20 强制穿透；无护甲自动穿透。
-        bool noArmor = Data.Armor == null;
-        int armorDrThreshold = Data.Armor?.DrThreshold ?? 0;
+        bool noArmor = Data!.Armor == null && Data.NaturalDr <= 0;
+        int armorDrThreshold = CombatStats.GetDrThreshold(Data!);
         int penRoll = noArmor ? 20 : CombatRandom.RollD20();
         bool isPenetrated = noArmor
             || penRoll == 20
@@ -254,9 +462,21 @@ public partial class BattleUnitModel
                     Data.Armor = null;
                 }
             }
+            else if (Data.NaturalDr > 0)
+            {
+                Data.NaturalDr = System.Math.Max(0, Data.NaturalDr - drDamage);
+            }
         }
 
         // --- 应用 HP 伤害 ---
+        // 核心层 Runtime.BuffTempHp 扣减（主要服务于 Headless 模拟和本地临时 HP）
+        if (hpDamage > 0 && Data.Runtime.BuffTempHp > 0)
+        {
+            int absorbedByTemp = System.Math.Min(Data.Runtime.BuffTempHp, hpDamage);
+            Data.Runtime.BuffTempHp -= absorbedByTemp;
+            hpDamage -= absorbedByTemp;
+        }
+
         // v0.6 11.8 con_b03 不屈：HP 低于 25% 时，进入 HP 的伤害 ×0.5；不影响盾牌与身体护甲耐久
         if (hpDamage > 0 && Data.Runtime.SkillTree?.HasSkillEffect("unyielding") == true)
         {
@@ -266,10 +486,28 @@ public partial class BattleUnitModel
         }
 
         if (hpDamage > 0)
-            hpDamage = Buff.BuffDamageHooks.ApplyBeforeHpDamage(Data, hpDamage);
+            hpDamage = SkillTreeKeystoneResolver.ApplyIncomingHpDamage(Data, hpDamage, !isRanged, isRanged, isPhysical);
+
+        int redirectedHpDamage = 0;
+        long redirectedToUnitId = 0;
+        if (hpDamage > 0)
+        {
+            var hpHook = Buff.BuffDamageHooks.ApplyBeforeHpDamage(Data, hpDamage, allowDamageRedirect);
+            hpDamage = hpHook.HpDamage;
+            redirectedHpDamage = hpHook.RedirectedHpDamage;
+            redirectedToUnitId = hpHook.RedirectedToUnitId;
+        }
+        hpDamage = SkillTreeKeystoneResolver.ApplyBeforeDeath(Data, CurrentHp, hpDamage);
         hpDamage = Buff.BuffDamageHooks.ApplyBeforeDeath(Data, CurrentHp, hpDamage);
         if (hpDamage > 0)
-            CurrentHp = System.Math.Max(0, CurrentHp - hpDamage);
+        {
+            // con_giant_apex / death_immunity: damage still lands, but HP cannot drop below 1.
+            bool hasDeathImmunity = Buff.BuffModifierReader.FirstBuffWithTruthy(Data, "death_immunity") != null;
+            if (hasDeathImmunity)
+                CurrentHp = System.Math.Max(1, CurrentHp - hpDamage);
+            else
+                CurrentHp = System.Math.Max(0, CurrentHp - hpDamage);
+        }
 
         // --- 武器精通 XP 归因 ---
         bool leveledUp = false;
@@ -310,6 +548,10 @@ public partial class BattleUnitModel
             MasteryLeveledUp = leveledUp,
             MasteryNewLevel = newLevel,
             ReflectDamageToAttacker = reflectDamage,
+            ShieldAbsorbed = shieldAbsorbed,
+            ShieldBroken = shieldBroken,
+            RedirectedHpDamage = redirectedHpDamage,
+            RedirectedToUnitId = redirectedToUnitId,
         };
     }
 

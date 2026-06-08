@@ -1,0 +1,109 @@
+{
+  "dialogue_id": "wandering_knight",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= 25 && relation >= 10",
+          "text": "“（流浪骑士勒住战马，铁甲叶片在阳光下发出清脆碰撞，他收起佩剑微微躬身行礼）\n‘向您致敬，大人。我早已听闻您在战场上的卓越领导力和赫赫威名。像您这样拥有如此实力的领主，理应受到所有骑士的尊重。您找我有何贵干？’”"
+        },
+        {
+          "condition": "player_race == npc_race && relation >= 0",
+          "text": "“（骑士端坐在马背上，面甲后的双眼流露出一丝对同胞的亲切）\n‘同胞，在这战火连天的荒原里，生存是一场永无止境的试炼。但我始终信奉并恪守着古老的荣誉教条。您找我有何贵干？’”"
+        },
+        {
+          "condition": "relation <= -30",
+          "text": "“（骑士手握剑柄，神色戒备而高傲，战马焦躁地刨着蹄子）\n‘哼，我只追求纯粹的荣誉，而不屑于与臭名昭著之辈为伍。如果你们是来阻挡我流浪之路的，那我的铁蹄和长枪随时准备给你们上一课！’”"
+        },
+        {
+          "text": "“（一名装备精良的重装骑士在路旁驻足，神情傲然，身上的战袍上隐约有着古老家族的徽记）\n‘我是四处流浪、寻求自我磨炼的骑士。在我的长枪面前，只有真正的强者或者名满天下的名主才配得到我的垂青。旅人，你为何而来？’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "我想和你切磋一番，证明我的实力！(进行切磋决斗)",
+          "next": "duel_confirm"
+        },
+        {
+          "text": "你愿意加入我的麾下，共同开创霸业吗？(尝试招募)",
+          "next": "knight_recruit_check"
+        },
+        {
+          "text": "打扰了，告辞。",
+          "next": "end"
+        }
+      ]
+    },
+    "duel_confirm": {
+      "node_id": "duel_confirm",
+      "texts": [
+        {
+          "text": "“（骑士在马背上发出一声赞赏的轻笑，抽出了亮银色的重剑）\n‘切磋？好胆量！我接受你的挑战。不过，骑士的剑从不轻易出鞘。决斗需有赌注。若你赢了，我自会钦佩你的武艺；若你输了，需留下 50 金币作为对战败的赔礼！你可敢发誓接受？’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "来吧！手底下见真章！(开始决斗)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "text": "（退缩）我还是算了，多谢骑士大人的指教。",
+          "next": "start",
+          "action": "add_relation",
+          "action_param": "-2"
+        }
+      ]
+    },
+    "knight_recruit_check": {
+      "node_id": "knight_recruit_check",
+      "texts": [
+        {
+          "text": "“（骑士居高临下地审视着你，长剑搭在马鞍上，在心中默默评估你的声望与个人实力）\n‘你想招募我效力？这并非不可，但你是否做好了承载起一名誓约骑士重托的准备？’”"
+        }
+      ],
+      "options": [
+        {
+          "condition": "relation >= 15",
+          "text": "(询问评估结果)",
+          "next": "knight_recruit_ok"
+        },
+        {
+          "condition": "relation < 15",
+          "text": "(询问评估结果)",
+          "next": "knight_recruit_reject"
+        }
+      ]
+    },
+    "knight_recruit_ok": {
+      "node_id": "knight_recruit_ok",
+      "texts": [
+        {
+          "text": "“（骑士沉默良久，随后翻身下马，单膝跪地，将重剑双手呈上）\n‘您的人格证明了您的荣耀，您的力量赢得了我的尊敬。我，宣誓向您效忠，成为您的佩剑！愿我的长枪永远为您扫清前方的顽敌！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "很好！欢迎加入我的麾下。(招募)",
+          "next": "end",
+          "action": "recruit"
+        }
+      ]
+    },
+    "knight_recruit_reject": {
+      "node_id": "knight_recruit_reject",
+      "texts": [
+        {
+          "text": "“（骑士傲慢地拉紧缰绳，策马转过身去）\n‘哼，很遗憾，你目前的声望与你我之间的交情，还不足以让我为你效力。等你的剑磨得更利、或者立下更伟大的功业时再提此事吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "好吧，我会证明给你看的。",
+          "next": "start"
+        }
+      ]
+    }
+  }
+}

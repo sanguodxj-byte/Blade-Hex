@@ -1,18 +1,12 @@
 -- battle_cry.lua
--- 战斗怒吼：震慑周围敌人（攻击-2，2回合），友军士气+3
-
 function execute(ctx)
-    -- 震慑周围敌人
-    aoe_neighbors(ctx.attacker, "enemies", function(enemy, pos)
-        buff:apply_custom(enemy, "battle_cry", 2, { attack_bonus = -2 })
-    end)
-
-    -- 鼓舞友军士气
-    local allies = ctx.allies
-    for i = 0, allies.Length - 1 do
-        local ally = allies[i]
-        if unit:is_valid(ally) then
-            unit:change_morale(ally, 3)
+    local caster = ctx.attacker
+    local enemies = ctx.enemies
+    for i = 0, enemies.Length - 1 do
+        local e = enemies[i]
+        if unit:is_valid(e) and hex:distance(caster.q, caster.r, e.q, e.r) <= 3 then
+            buff:apply_custom(e, "battle_cry_shaken", 1, { attack_bonus = -4 })
+            result:add_effect(e, "battle_cry_shaken", 1)
         end
     end
 end

@@ -34,7 +34,7 @@ public class QuestGenerator
     {
         if (!_pools.TryGetValue(poiId, out var entry))
         {
-            entry = new QuestPoolEntry { PoiId = poiId, LastRefreshDay = 0 };
+            entry = new QuestPoolEntry { PoiId = poiId, LastRefreshDay = currentDay - RefreshIntervalDays };
             _pools[poiId] = entry;
         }
 

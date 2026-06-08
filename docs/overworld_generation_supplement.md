@@ -299,13 +299,16 @@ func generate(width, height, world_seed) -> HexOverworldGrid:
         - 必须可通行
         - 邻近道路
 
-    精灵城镇:
-        - 世界树庭: 银叶森林深处, FOREST / DENSE_FOREST
-        - 月影哨站: 银叶森林东缘
+    精灵城镇 (区域类型 = 茂密森林):
+        - 长老议会所在地: 森林面积最大块的几何中心 hex, FOREST / DENSE_FOREST
+        - 边境哨站: 森林边缘 hex (邻接非森林地形), 1~2 座
+        命名由 GeographicNameGenerator 产生 (例如"世界树庭" / "月影哨站" 仅为示例)
 
-    矮人城镇:
-        - 铁炉堡: 霜冠山脉, HILLS / MOUNTAIN边缘
-        - 霜塔堡: 霜冠山脉南麓
+    矮人城镇 (区域类型 = 高山带):
+        - 主城邦: HILLS / MOUNTAIN 边缘, 1 座
+        - 副城邦 (深矿): MOUNTAIN_SNOW 边缘, 0~1 座
+        - 地表贸易站: 山脉南麓 (高程梯度最大的 hex), 1 座
+        命名由 GeographicNameGenerator 产生 (例如"铁炉堡" / "霜塔堡" 仅为示例)
 ```
 
 #### 4.3 道路生成修正 `_build_roads()`

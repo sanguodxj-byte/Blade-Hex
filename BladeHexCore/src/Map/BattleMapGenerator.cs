@@ -216,15 +216,14 @@ public partial class BattleMapGenerator : RefCounted
         var W = BattleCellData.TerrainType.Wall;
         var Sw = BattleCellData.TerrainType.Swamp;
         var PM = BattleCellData.TerrainType.PoisonMushroom;
-        var LG = BattleCellData.TerrainType.LuckyGrass;
 
         AddTpl("plain_field", G, 0.50f, new() { {P,.20f},{Sv,.15f},{H,.10f},{R,.05f} },
             road: true, tcc:new(2,4), tcr:new(2,3), dtcc:.15f, rsc:new(0,1), wsc:new(0,1), wsl:new(2,3),
-            sf: new() { (LG, .03f) });
+            sf: new());
 
         AddTpl("forest_ambush", F, 0.45f, new() { {DF,.20f},{G,.15f},{H,.10f},{P,.10f} },
             bias:.1f, env:"fog", tcc:new(4,8), tcr:new(3,5), dtcc:.50f, rsc:new(0,1),
-            sf: new() { (LG, .02f), (PM, .02f) });
+            sf: new() { (PM, .02f) });
 
         AddTpl("mountain_pass", H, 0.40f, new() { {M,.20f},{P,.15f},{Sn,.10f},{Ru,.05f},{G,.10f} },
             bias:.4f, env:"earthquake", road:true, tcc:new(1,3), tcr:new(1,3), dtcc:.10f,
@@ -236,7 +235,7 @@ public partial class BattleMapGenerator : RefCounted
 
         AddTpl("coastal_ambush", S, 0.35f, new() { {SW,.15f},{G,.20f},{P,.15f},{DW,.05f},{Sv,.10f} },
             bias:-.2f, env:"storm", tcc:new(1,3), tcr:new(2,3), dtcc:.10f, rsc:new(0,2), sp:2,
-            sf: new() { (LG, .02f) });
+            sf: new());
 
         AddTpl("desert_skirmish", S, 0.50f, new() { {P,.20f},{H,.15f},{Sv,.10f},{Ru,.05f} },
             bias:.1f, tcc:new(0,1), tcr:new(1,2), dtcc:0, rsc:new(1,3), wsc:new(1,2), wsl:new(2,4), sp:1,
@@ -273,11 +272,11 @@ public partial class BattleMapGenerator : RefCounted
 
         AddTpl("village_defense", G, 0.35f, new() { {P,.20f},{R,.15f},{Ru,.10f},{Sv,.10f},{H,.05f},{F,.05f} },
             road:true, tcc:new(2,4), tcr:new(2,3), dtcc:.10f, rsc:new(1,3), wsc:new(1,2), wsl:new(2,4), sp:2,
-            sf: new() { (LG, .03f) });
+            sf: new());
 
-        AddTpl("ruins_exploration", Ru, 0.35f, new() { {W,.20f},{P,.15f},{H,.10f},{F,.10f},{SW,.05f},{LG,.05f} },
+        AddTpl("ruins_exploration", Ru, 0.35f, new() { {W,.20f},{P,.15f},{H,.10f},{F,.10f},{SW,.05f} },
             tcc:new(0,2), tcr:new(1,2), dtcc:.10f, rsc:new(2,5), wsc:new(2,5), wsl:new(3,7), sp:1,
-            sf: new() { (LG, .04f), (W, .06f) });
+            sf: new() { (W, .06f) });
 
         AddTpl("golem_forge", Ru, 0.30f, new() { {W,.20f},{P,.15f},{M,.10f},{SW,.10f},{H,.10f},{S,.05f} },
             bias:.2f, env:"lava_surge", tcc:new(0,0), tcr:new(1,2), dtcc:0,
@@ -292,7 +291,7 @@ public partial class BattleMapGenerator : RefCounted
         AddTpl("town_defense", G, 0.30f, new() { {P,.15f},{R,.20f},{Ru,.15f},{W,.10f},{F,.05f},{Sv,.05f} },
             road:true, tcc:new(2,4), tcr:new(2,3), dtcc:.10f,
             rsc:new(3,6), wsc:new(3,5), wsl:new(3,6), sp:2,
-            sf: new() { (LG, .02f) });
+            sf: new());
 
         // 城堡攻防战（Castle）
         AddTpl("castle_siege", H, 0.25f, new() { {W,.25f},{Ru,.20f},{P,.15f},{R,.10f},{S,.05f} },
@@ -310,7 +309,7 @@ public partial class BattleMapGenerator : RefCounted
         AddTpl("pirate_cove", S, 0.35f, new() { {SW,.10f},{G,.15f},{P,.15f},{Ru,.10f},{W,.10f},{Sv,.05f} },
             bias:-.1f, env:"storm", tcc:new(1,3), tcr:new(2,3), dtcc:.10f,
             rsc:new(2,4), wsc:new(1,3), wsl:new(2,5), sp:2,
-            sf: new() { (LG, .02f) });
+            sf: new());
 
         // 哥布林大营（Goblin Settlement）
         AddTpl("goblin_stronghold", G, 0.25f, new() { {F,.20f},{P,.15f},{Ru,.15f},{Sw,.10f},{H,.05f},{PM,.05f},{DF,.05f} },
@@ -965,8 +964,7 @@ public partial class BattleMapGenerator : RefCounted
         return b switch
         {
             BattleCellData.TerrainType.Grassland => moisture > 0.6f && intensity > 0.4f
-                ? BattleCellData.TerrainType.Forest
-                : intensity > 0.7f ? BattleCellData.TerrainType.LuckyGrass : b,
+                ? BattleCellData.TerrainType.Forest : b,
             BattleCellData.TerrainType.Plains => moisture < 0.35f && intensity > 0.3f
                 ? BattleCellData.TerrainType.Savanna
                 : moisture > 0.55f && intensity > 0.5f ? BattleCellData.TerrainType.Grassland : b,
@@ -1206,7 +1204,7 @@ public partial class BattleMapGenerator : RefCounted
     void ScatterSpecialFeatures(Dictionary<Vector2I, BattleCellData.TerrainType> tm)
     {
         var chances = new List<(BattleCellData.TerrainType, float)>
-            { (BattleCellData.TerrainType.LuckyGrass, 0.02f), (BattleCellData.TerrainType.PoisonMushroom, 0.01f) };
+            { (BattleCellData.TerrainType.PoisonMushroom, 0.01f) };
         foreach (var kvp in tm)
         {
             if (kvp.Value != BattleCellData.TerrainType.Grassland
@@ -1909,7 +1907,7 @@ public partial class BattleMapGenerator : RefCounted
         {
             BattleCellData.TerrainType.Wall, BattleCellData.TerrainType.Ruins,
             BattleCellData.TerrainType.DeepWater, BattleCellData.TerrainType.ShallowWater,
-            BattleCellData.TerrainType.PoisonMushroom, BattleCellData.TerrainType.LuckyGrass,
+            BattleCellData.TerrainType.PoisonMushroom,
             BattleCellData.TerrainType.Rampart, BattleCellData.TerrainType.Tower,
             BattleCellData.TerrainType.Gate, BattleCellData.TerrainType.Staircase,
         };

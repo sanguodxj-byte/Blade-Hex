@@ -329,6 +329,10 @@ public static class ChunkPersistence
             poi.PoiName = name.AsString();
         if (data.TryGetValue("poi_type", out var type))
             poi.PoiTypeEnum = (BladeHex.Strategic.OverworldPOI.POIType)type.AsInt32();
+        if (data.TryGetValue("is_port_city", out var isPort))
+            poi.IsPortCity = isPort.AsBool();
+        if (data.TryGetValue("parent_poi_name", out var parentName))
+            poi.ParentPoiName = parentName.AsString();
         if (data.TryGetValue("position_x", out var px) && data.TryGetValue("position_y", out var py))
             poi.Position = new Vector2((float)px.AsDouble(), (float)py.AsDouble());
         if (data.TryGetValue("owning_faction", out var faction))

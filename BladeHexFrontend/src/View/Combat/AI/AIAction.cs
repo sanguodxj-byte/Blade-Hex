@@ -18,6 +18,7 @@ public class AIAction
         Retreat,         // 向撤退点逃跑
         Overwatch,       // 进入防御姿态
         UseSkill,        // 使用技能/能力
+        UseCareerSkill,  // v0.8: 使用职业技能大招
         Idle             // 待机
     }
 
@@ -39,4 +40,7 @@ public class AIAction
 
     // 技能/物品 ID (用于 UseSkill 类型)
     public string SkillId { get; set; } = "";
+
+    // v0.8: 职业技能目标格（用于 UseCareerSkill 类型）
+    public Vector2I SkillTargetCell { get; set; } = new(-1, -1);
 }

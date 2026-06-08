@@ -1,0 +1,361 @@
+keys,en,zh_CN
+# === 技能树 UI (SkillTreeUI) ===
+SKILL_TIER_I,Tier I,一阶
+SKILL_TIER_II,Tier II,二阶
+SKILL_TIER_III,Tier III,三阶
+SKILL_UNLOCK_LEVEL,Unlock Level: {0},解锁等级：{0}
+SKILL_SP_COST,SP Cost: {0},技能点消耗：{0}
+SKILL_LOCKED,Locked,未解锁
+SKILL_UNLOCKED,Unlocked,已解锁
+SKILL_MAXED,Max Level,已满级
+
+# === 大地图 UI (Overworld) ===
+OVERWORLD_DAY,Day {0},第 {0} 天
+OVERWORLD_GOLD,Gold,金币
+OVERWORLD_AP,Action Points,行动力
+OVERWORLD_AP_SHORT,AP,行动力
+
+# === 实体 Tooltip (EntityTooltip) ===
+ENTITY_LEVEL,Level,等级
+ENTITY_HP,HP,生命值
+ENTITY_HEALTH,Health,生命值
+ENTITY_MORALE,Morale,士气
+ENTITY_ATTACK,Attack,攻击力
+ENTITY_DEFENSE,Defense,防御力
+
+# === 战斗结算 (Combat Result) ===
+COMBAT_VICTORY,Victory,胜利
+COMBAT_DEFEAT,Defeat,战败
+COMBAT_EXP_GAINED,Exp Gained,获得经验
+COMBAT_LOOT,Loot,战利品
+
+# === 加载界面 (Loading) ===
+LOADING_GENERIC,Loading...,加载中...
+LOADING_SAVING,Saving...,保存中...
+
+# === 系统消息 (System) ===
+SYSTEM_GAME_SAVED,Game Saved,游戏已保存
+SYSTEM_GAME_LOADED,Game Loaded,游戏已读取
+SYSTEM_ERROR,Error,错误
+
+# === 外交/事件 (Diplomacy & Events) ===
+DIPLOMACY_RELATION_UP,Relation +{0},关系 +{0}
+DIPLOMACY_RELATION_DOWN,Relation -{0},关系 -{0}
+EVENT_CONFIRM,Confirm,确认
+EVENT_CANCEL,Cancel,取消
+
+# === 通用状态 ===
+STATUS_NORMAL,Normal,正常
+STATUS_CAMPING,Camping,扎营
+STATUS_WAITING_IN_CAMP,Waiting in camp...,扎营等待中...
+STATUS_SLOWED,Slowed (×{0}),减速中 (×{0})
+STATUS_NORMAL_FACTOR,Normal (×1.00),正常 (×1.00)
+FACTION_NEUTRAL,Neutral,中立
+FACTION_PLAYER,Player,己方
+
+# === 大地图 HUD ===
+HUD_TERRAIN,Terrain: {0},地形: {0}
+HUD_TERRAIN_UNKNOWN,Terrain: ---,地形: ---
+HUD_SPEED_STATUS,Speed: {0},速度: {0}
+HUD_SPEED_VALUE,Speed: {0},速度: {0}
+HUD_GOLD_AMOUNT,{0} Gold,{0} 金币
+HUD_FOOD,Food: {0}/{1},口粮: {0}/{1}
+HUD_REPUTATION,Reputation: {0},声望: {0}
+TOOLTIP_PARTY,Party,队伍
+TOOLTIP_KINGDOM,Kingdom,王国
+TOOLTIP_TERRITORY,Territory,领地
+TOOLTIP_QUESTS,Quests,任务
+TOOLTIP_ENCYCLOPEDIA,Encyclopedia,百科
+TOOLTIP_CAMP,Camp,露营
+TOOLTIP_SKILL_TREE,Skill Tree,技能树
+
+# === 系统菜单 ===
+MENU_SYSTEM_TITLE,- System Menu -,- 系统菜单 -
+MENU_SAVE_GAME,Save Game,保存游戏
+MENU_LOAD_GAME,Load Game,加载游戏
+MENU_SETTINGS,Settings,设置
+MENU_RESUME_GAME,Resume Game,返回游戏
+MENU_MAIN_MENU,Main Menu,回到主菜单
+MENU_QUIT_GAME,Quit Game,退出游戏
+MENU_BACK,Back,返 回
+
+# === 设置菜单 ===
+SETTINGS_TITLE,Settings,设 置
+SETTINGS_LANGUAGE,Language,语言
+SETTINGS_TAB_GAME,Game,游戏
+SETTINGS_TAB_AUDIO,Audio,音频
+SETTINGS_TAB_DISPLAY,Display,画面
+SETTINGS_TAB_CONTROLS,Controls,控制
+SETTINGS_GAME_SPEED,Game Speed,游戏速度
+SETTINGS_AUTOSAVE_INTERVAL,Autosave Interval (minutes),自动存档间隔 (分钟)
+SETTINGS_COMBAT_ANIM_SPEED,Combat Animation Speed,战斗动画速度
+SETTINGS_SHOW_DAMAGE_NUMBERS,Show Damage Numbers,显示伤害数字
+SETTINGS_SHOW_TUTORIALS,Show Tutorial Prompts,显示教程提示
+SETTINGS_AUTO_END_TURN,Auto End Turn When No AP,无行动力时自动结束回合
+SETTINGS_CONFIRM_RETREAT,Confirm Before Retreat,撤退前确认
+SETTINGS_MASTER_VOLUME,Master Volume,主音量
+SETTINGS_MUSIC_VOLUME,Music Volume,音乐音量
+SETTINGS_SFX_VOLUME,SFX Volume,音效音量
+SETTINGS_AMBIENT_VOLUME,Ambient Volume,环境音量
+SETTINGS_MUTE_ON_FOCUS_LOSS,Mute When Focus Is Lost,失去焦点时静音
+SETTINGS_FULLSCREEN,Fullscreen,全屏模式
+SETTINGS_VSYNC,VSync,垂直同步
+SETTINGS_CAMERA_SHAKE,Combat Camera Shake,战斗镜头震动
+SETTINGS_WEATHER_PARTICLES,Weather Particles,天气粒子效果
+SETTINGS_RESOLUTION,Window Resolution,窗口分辨率
+SETTINGS_CONTROL_CAMERA_PAN,Camera Pan: WASD / Middle Mouse Drag,相机平移：WASD / 鼠标中键拖拽
+SETTINGS_CONTROL_ZOOM,Zoom: Mouse Wheel,缩放：鼠标滚轮
+SETTINGS_CONTROL_END_TURN,End Turn: Space,结束回合：Space
+SETTINGS_CONTROL_SWITCH_UNIT,Switch Unit: Tab,切换单位：Tab
+SETTINGS_CONTROL_CANCEL,Cancel Action: Esc / Right Click,取消操作：Esc / 右键
+SETTINGS_CONTROL_SYSTEM_MENU,System Menu: Esc (when no action is active),系统菜单：Esc（无操作时）
+SETTINGS_EDGE_PAN,Mouse Edge Scrolling,鼠标边缘滚动
+SETTINGS_CAMERA_PAN_SPEED,Camera Pan Speed,相机平移速度
+
+# === 主菜单 ===
+MAIN_TITLE,Blade & Hex,剑与六芒星
+MAIN_TITLE_SPACED,B L A D E  &  H E X,剑 与 六 芒 星
+MAIN_COPYRIGHT,© 2026 Blade & Hex. All rights reserved.,© 2026 剑与六芒星 Sword & Hex. 保留所有权利。
+MAIN_NEW_GAME,New Journey,新的起点
+MAIN_CONTINUE,Continue Journey,继续旅程
+MAIN_CAMPAIGN,Start Campaign,开始战役
+MAIN_CONTINUE_CAMPAIGN,Continue Campaign,继续战役
+MAIN_QUICK_COMBAT,Quick Combat,快速战斗
+MAIN_EXIT,Exit,退出
+MAIN_SKELETON_EDITOR,Skeleton Animation Editor,骨骼动画编辑器
+SAVE_MANAGEMENT_TITLE,Save Management,存 档 管 理
+SAVE_EMPTY,No saves found,暂无存档
+SAVE_ENTER,Enter,进入
+SAVE_DELETE,Delete,删除
+SAVE_WORLD_SEED,World (Seed: {0}),世界 (种子: {0})
+SAVE_DETAIL_POI,{0} POIs | {1},{0} 个据点 | {1}
+SAVE_DATA,Save Data,存档数据
+SAVE_UNKNOWN,Unknown Save,未知存档
+
+# === 快速战斗 ===
+QC_TITLE,Quick Combat Setup,快速战斗配置
+QC_BATTLE_SIZE,Battle Size,战斗规模
+QC_SIZE_SMALL,Small (169 cells),小型 (169格)
+QC_SIZE_MEDIUM,Medium (397 cells),中型 (397格)
+QC_SIZE_LARGE,Large (631 cells),大型 (631格)
+QC_SIZE_HUGE,Huge (973 cells),巨大 (973格)
+QC_PLAYER_UNITS,Player Units,玩家单位数
+QC_ENEMY_UNITS,Enemy Units,敌方单位数
+QC_ENEMY_DIFFICULTY,Enemy Difficulty,敌方难度
+QC_CHARACTER_LEVEL,Character Level,角色等级
+QC_ENEMY_TYPE,Enemy Type,敌方种类
+QC_LEGENDARY_TYPE,Legendary Creature Type,传奇生物类型
+QC_BATTLE_TERRAIN,Battle Terrain,战斗地形
+QC_WEATHER,Weather,天气
+QC_START_COMBAT,Start Combat,开始战斗
+DIFFICULTY_EASY,Easy,简单
+DIFFICULTY_NORMAL,Normal,普通
+DIFFICULTY_HARD,Hard,困难
+ENEMY_HUMANOID,Humanoid,人形
+ENEMY_UNDEAD,Undead,亡灵
+ENEMY_BEAST,Beast,野兽
+ENEMY_MIXED,Mixed,混合
+ENEMY_LEGENDARY,Legendary Creature,传奇生物
+OPTION_RANDOM,Random,随机
+TEMPLATE_PLAIN_FIELD,Open Plain,平原旷野
+TEMPLATE_FOREST_AMBUSH,Forest Ambush,森林伏击
+TEMPLATE_MOUNTAIN_PASS,Mountain Pass,山间隘口
+TEMPLATE_SWAMP_BATTLE,Swamp Encounter,沼泽遭遇
+TEMPLATE_COASTAL_AMBUSH,Coastal Ambush,海岸伏击
+TEMPLATE_DESERT_SKIRMISH,Desert Skirmish,沙漠冲突
+TEMPLATE_VILLAGE_DEFENSE,Village Defense,村庄防御
+TEMPLATE_RUINS_EXPLORATION,Ruins Exploration,遗迹探索
+TEMPLATE_CASTLE_SIEGE,Castle Siege,攻城战
+TEMPLATE_CASTLE_DEFENSE,Castle Defense,守城战
+WEATHER_CLEAR,Clear,晴天
+WEATHER_RAIN,Rain,雨天
+WEATHER_SNOW,Snow,雪天
+WEATHER_SANDSTORM,Sandstorm,沙尘暴
+
+# === 出身选择 ===
+ORIGIN_WHO_ARE_YOU,Who are you?,你是谁？
+ORIGIN_SELECT_BLOODLINE,Choose Bloodline,选择血脉
+ORIGIN_BLOODLINE_TRAITS,Bloodline Traits,血脉特性
+ORIGIN_YOUR_NAME,Your Name,你的名字
+ORIGIN_NAME_PLACEHOLDER,Enter name...,输入名字...
+ORIGIN_GENDER,Gender,性别
+GENDER_MALE,Male,男
+GENDER_FEMALE,Female,女
+ORIGIN_WORLD_SIZE,World Size,世界规模
+ORIGIN_BACK,← Back,← 返回
+ORIGIN_CONTINUE,Continue →,继续 →
+ORIGIN_AVATAR_TITLE,Avatar,捏脸
+ORIGIN_FACE,Face,脸型
+ORIGIN_HAIR,Hair,发型
+ORIGIN_DECORATION,Decoration,装饰
+ORIGIN_WRITE_PAST,Write Your Past,书写你的过往
+ORIGIN_ATTRIBUTES,Attributes,属性
+ORIGIN_BAG,Bag,行囊
+ORIGIN_EMPTY,(Empty),（空）
+ORIGIN_RESELECT,← Reselect,← 重新选择
+ORIGIN_BEGIN_JOURNEY,Begin Journey →,踏上旅途 →
+ORIGIN_COMPLETE_PROMPT,"Your past has been written.
+Are you ready to begin your journey?","你的过往已经书写完毕。
+准备好踏上旅途了吗？"
+ORIGIN_ATTR_SUMMARY,STR {0}  DEX {1}  CON {2}  INT {3}  WIS {4}  CHA {5},力{0} 敏{1} 体{2} 智{3} 感{4} 魅{5}
+ORIGIN_UNNAMED_TRAVELER,Unnamed Traveler,无名旅人
+
+# === 大地图设施通用 ===
+COMMON_UNKNOWN,Unknown,未知
+COMMON_GOLD_VALUE,Gold: {0},金币: {0}
+COMMON_GOLD_DASH,Gold: —,金币: —
+COMMON_PARTY_CAPACITY,Party: {0}/{1},队伍: {0}/{1}
+COMMON_PARTY_MEMBERS,Party: {0} members,队伍: {0}人
+REASON_NOT_ENOUGH_GOLD,Not enough gold,金币不足
+REASON_NO_PARTY,No party,无队伍
+REASON_PARTY_FULL,Party is full,队伍已满
+FACILITY_TAVERN_BRACKET,[ Tavern ],[ 酒馆 ]
+FACILITY_SMITHY_BRACKET,[ Smithy ],[ 铁匠铺 ]
+FACILITY_TEMPLE_BRACKET,[ Apothecary ],[ 药师所 ]
+FACILITY_REST_BRACKET,[ Rest ],[ 休息 ]
+
+# === 酒馆招募 ===
+RECRUIT_INFO,Tavern Recruitment | {0} | {1},酒馆招募 | {0} | {1}
+RECRUIT_DESC,A gathering place for adventurers. Mercenaries of all kinds wait here for employers; pay the recruitment fee to add them to your party.,冒险者的聚集地。形形色色的佣兵在此等待雇主，支付招募费即可加入队伍。
+RECRUIT_LEAVE,Leave Tavern,离开酒馆
+RECRUIT_NONE,No mercenaries are available. Check again in a few days.,暂无可招募的佣兵。过几天再来看看。
+RECRUIT_STATS,Level {0} {1} | STR {2} DEX {3} CON {4},等级{0} {1} | 力{2} 敏{3} 体{4}
+RECRUIT_COST,Recruit Fee: {0} gold | Weekly Wage: {1} gold,招募费: {0}金 | 周薪: {1}金
+RECRUIT_BUTTON,Recruit,招募
+RECRUIT_SUCCESS,{0} joined your party!,{0} 已加入队伍!
+RECRUIT_FAILED,Recruitment failed (not enough gold or party is full),招募失败（金币不足或队伍已满）
+
+# === 铁匠铺 ===
+SMITHY_INFO,Smithy | {0} | {1},铁匠铺 | {0} | {1}
+SMITHY_DESC,An experienced smith can repair and strengthen your equipment. The forge burns bright and hammer blows ring through the room.,经验丰富的铁匠可以帮你修理和强化装备。炉火通明，铁锤声不绝于耳。
+SMITHY_LEAVE,Leave Smithy,离开铁匠铺
+SMITHY_REASON_NO_DAMAGED,All equipment durability is intact,所有装备耐久完好
+SMITHY_REASON_NO_MAIN_WEAPON,Leader has no main-hand weapon,队长未装备主手武器
+SMITHY_REASON_NO_ARMOR,Leader has no body armor,队长未装备身甲
+SMITHY_REPAIR_ALL,Full Repair ({0} gold) -- restore all equipment durability,全副修理 ({0}金) -- 恢复所有装备耐久
+SMITHY_SHARPEN,Sharpen Weapon ({0} gold) -- leader main-hand weapon damage +1 permanently,磨砺武器 ({0}金) -- 队长主手武器伤害永久+1
+SMITHY_REINFORCE,Reinforce Armor ({0} gold) -- leader body armor DR threshold +1 permanently,加固防具 ({0}金) -- 队长身甲装甲阈值永久+1
+
+# === 药师所 ===
+TEMPLE_INFO,Apothecary | {0} | {1},药师所 | {0} | {1}
+TEMPLE_INJURED,Injured: {0},伤员: {0}
+TEMPLE_DESC,The apothecary's craft can heal wounds and cleanse evil. The fragrance of herbs fills the room.,药师的力量可以治愈伤痛，净化邪恶。炉中草药的清香弥漫整个房间。
+TEMPLE_LEAVE,Leave Apothecary,离开药师所
+TEMPLE_MINOR_HEAL,Minor Healing ({0} gold) -- restore party HP to at least 50%,轻度治疗 ({0}金) -- 全队生命至少恢复至50%
+TEMPLE_MAJOR_HEAL,Major Healing ({0} gold) -- restore party HP to 100%,深度治疗 ({0}金) -- 恢复全队100%生命值
+TEMPLE_REASON_NO_NEGATIVE,No negative effects,没有负面状态
+TEMPLE_PURIFY,Purify Curse ({0} gold) -- remove all negative effects,净化诅咒 ({0}金) -- 移除所有负面状态
+TEMPLE_BUY_HOLY_WATER,Buy Purification Potion ({0} gold) -- add to inventory,购买净化药水 ({0}金) -- 加入背包
+TEMPLE_BUY_FAILED,Not enough gold to buy a purification potion.,金币不足，无法购买净化药水。
+TEMPLE_BUY_SUCCESS,Obtained Purification Potion x1. Added to inventory.,获得净化药水 x1，已放入背包。
+
+# === 休息 ===
+REST_INFO,Rest | {0},休息 | {0}
+REST_NEED_RECOVERY,Members needing recovery: {0},需恢复成员: {0}
+REST_BLOCK_UNPAID,Unpaid wages: the party cannot recover!,欠饷中，队伍无法恢复！
+REST_BLOCK_STARVING,Starving: the party cannot recover!,断粮中，队伍无法恢复！
+REST_DESC,Wait {0} hours in town. Recovery multiplier x{1} (town bonus).,在城内等待 {0} 小时，恢复倍率 x{1}（城内加成）。
+REST_REASON_HEALTHY,Party is in good condition,队伍状态良好
+REST_REASON_BLOCKED,Unpaid wages / starving,欠饷/断粮中
+REST_WAIT_ACTION,Wait {0} hours (town recovery x{1}),等待 {0} 小时（城内恢复 x{1}）
+REST_WAIT_DONE,Waited {0} hours. Town recovery x{1} applied.,等待 {0} 小时结束，城内恢复 x{1}。
+
+# === 大地图实体 Tooltip ===
+ENTITY_FACTION,Faction: {0},势力: {0}
+ENTITY_POWER_LEVEL,Power: {0} (Lv.{1}),战力: {0} (Lv.{1})
+ENTITY_ENEMY_SIZE,Enemy Size: {0},敌军人数: {0}人
+ENTITY_PARTY_SIZE,Party Size: {0},队伍人数: {0}人
+ENTITY_STATE,State: {0},状态: {0}
+ENTITY_SPEED_PX,Speed: {0}px/s,移速: {0}px/s
+ENTITY_SPEED,Speed: {0},移速: {0}
+ENTITY_CHASE_TARGET,Chasing: {0},追击目标: {0}
+ENTITY_FLEE_THREAT,Fleeing from: {0},逃离威胁: {0}
+ENTITY_INTENT_NORMAL,Intent: Routine,意图: 常规行动
+ENTITY_INTENT,Intent: {0},意图: {0}
+ENTITY_HOSTILE,⚔ Hostile,⚔ 敌对
+ENTITY_FRIENDLY,◆ Friendly,◆ 友好
+POWER_EXTREME,Overwhelming,极强
+POWER_STRONG,Strong,强大
+POWER_MEDIUM,Average,中等
+POWER_WEAK,Weak,较弱
+POWER_TINY,Faint,微弱
+TOOLTIP_BASE_SPEED,Base Speed: {0},基础移速: {0}
+TOOLTIP_TERRAIN_FACTOR,Terrain: {0} ({1}),地形: {0} ({1})
+TOOLTIP_ZOC_FACTOR,Zone of Control: {0},控制区: {0}
+TOOLTIP_STATE,State: {0},状态: {0}
+TOOLTIP_CHASE_SPEED,Chase Speed: ×{0},追击加速: ×{0}
+
+# === POI Tooltip ===
+POI_FACTION,Faction: {0},势力: {0}
+POI_PROSPERITY,Prosperity: {0},繁荣: {0}
+POI_GARRISON,Garrison: {0}/{1},驻军: {0}/{1}
+POI_FACILITIES,Facilities: {0},设施: {0}
+POI_THREAT_LEVEL,Threat: Lv.{0},威胁: Lv.{0}
+POI_STATUS_UNDER_SIEGE,Under siege!,被围攻!
+POI_STATUS_NEEDS_REINFORCEMENT,Needs reinforcement,需要援助
+FACILITY_TAVERN,Tavern,酒馆
+FACILITY_SHOP,Shop,商店
+FACILITY_BLACKSMITH,Blacksmith,铁匠
+FACILITY_BARRACKS,Barracks,兵营
+
+# === 参战提示 ===
+JOIN_BATTLE_TITLE,Battle nearby,发现可加入的战事
+JOIN_BATTLE_DESC_SIEGE,{0} ({1}) is besieging {2} ({3})!,{0} ({1}) 正在围攻 {2} ({3})！
+JOIN_BATTLE_DESC_FIELD,{0} ({1}) and {2} ({3}) are locked in battle!,{0} ({1}) 与 {2} ({3}) 正在激烈交战！
+JOIN_BATTLE_ATTACKER,Assist Attack,协助进攻
+JOIN_BATTLE_DEFENDER,Assist Defense,协助防守
+JOIN_BATTLE_LEAVE,Leave,离开
+JOIN_ARMY_TITLE,Allied army assembling,发现本国集结军团
+JOIN_ARMY_DESC,Marshal {0} is leading an army toward {1}. Join the march?,{0} 元帅正率领军团，目标: {1}。是否加入随军前行？
+JOIN_ARMY_BUTTON,Join Army,加入军团
+
+# === 教程提示 ===
+TUTORIAL_PROMPT_TITLE,📖 Tutorial Prompt,📖 教程提示
+TUTORIAL_PROMPT_DESC,"Enable tutorial prompts?
+
+Tutorials appear as floating panels at key moments,
+helping you learn controls, systems, and world lore.
+You can disable them later in Settings.","是否开启教程提示？
+
+教程会在游戏关键节点以悬浮面板形式出现，
+帮助你了解操作、设定和世界观。
+你可以随时在设置中关闭。"
+TUTORIAL_PROMPT_ENABLE,Enable Tutorials,开启教程
+TUTORIAL_PROMPT_SKIP,Skip,跳过
+TUTORIAL_PREV_PAGE,◀ Previous,◀ 上一页
+TUTORIAL_NEXT_PAGE,Next ▶,下一页 ▶
+TUTORIAL_FINISH,Finish ✓,完成 ✓
+
+# === 任务 UI ===
+QUEST_LOG_TITLE,📜 Quest Log,📜 任务日志
+QUEST_TAB_ACTIVE,Active,进行中
+QUEST_TAB_COMPLETED,Completed,已完成
+QUEST_LOG_SELECT_PROMPT,[center][color=gray]Select a quest to view details[/color][/center],[center][color=gray]请选择一个任务查看详情[/color][/center]
+QUEST_BOARD_SELECT_PROMPT,[center][color=gray]Select a notice to view details[/color][/center],[center][color=gray]选择一个布告以查看详情[/color][/center]
+QUEST_ABANDON,Abandon Quest,放弃任务
+QUEST_CLOSE,Close,关闭
+QUEST_DETAIL_META,Type: {0} | Recommended Level: {1},类型: {0} | 推荐等级: {1}
+QUEST_RECOMMENDED_LEVEL,Recommended Level: {0},推荐等级: {0}
+QUEST_OBJECTIVES_HEADER,[b]Objectives:[/b],[b]任务目标:[/b]
+QUEST_REWARD_HEADER,[b]Rewards:[/b],[b]奖励:[/b]
+QUEST_PAY_HEADER,[b]Payment:[/b],[b]报酬:[/b]
+QUEST_REWARD_GOLD_EXP,💰 Gold: {0} | ✨ Exp: {1},💰 金币: {0} | ✨ 经验: {1}
+QUEST_REWARD_REPUTATION,🤝 Reputation: {0},🤝 声望: {0}
+QUEST_REASON_LOG_FULL,Quest log is full (10/10),任务列表已满 (10/10)
+QUEST_REASON_LEVEL_TOO_LOW,Level is far too low,等级严重不足
+QUEST_CANNOT_ACCEPT,Cannot accept: {0},无法接取: {0}
+QUEST_BOARD_BRACKET,[ Notice Board ],[ 布告栏 ]
+QUEST_BOARD_INFO,Notice Board | {0},布告栏 | {0}
+QUEST_BOARD_DESC,Lords post bounties and commissions here. Complete quests to earn gold and reputation.,领主发布的悬赏委托。完成任务可获得金币和声望奖励。
+QUEST_REWARD_READY_TITLE,Rewards Ready,可领取奖励
+QUEST_AVAILABLE_TITLE,Available Commissions,可接取委托
+QUEST_NONE_AVAILABLE,No commissions are available. Check again in a few days.,暂无可接取的委托。过几天再来看看。
+QUEST_TIME_LIMIT,Time Limit: {0} days,期限: {0}天
+QUEST_NO_TIME_LIMIT,No time limit,无期限
+QUEST_BOARD_REWARD_LINE,Reward: {0} gold | Reputation +{1} | {2},奖励: {0}金 | 声望+{1} | {2}
+QUEST_ACCEPT,Accept,接取
+QUEST_COMPLETED_BRACKET,[Completed],[已完成]
+QUEST_CLAIMABLE_REWARD_LINE,Claimable: {0} gold | Reputation +{1},待领取: {0}金 | 声望+{1}
+QUEST_CLAIM,Claim,领取
+QUEST_REWARD_CLAIMED,Reward claimed.,奖励已领取。
+QUEST_REWARD_CLAIM_FAILED,Claim failed: reward does not exist or has already been claimed.,领取失败：奖励不存在或已领取。

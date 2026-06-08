@@ -36,11 +36,6 @@ public partial class EnemyInfoPanel : PanelContainer
     private static readonly Color HP_HIGH = new(0.2f, 0.75f, 0.2f);
     private static readonly Color HP_MID = new(0.85f, 0.75f, 0.1f);
     private static readonly Color HP_LOW = new(0.9f, 0.15f, 0.1f);
-    private static readonly Color MORALE_HIGH = new(0.2f, 0.8f, 0.9f);
-    private static readonly Color MORALE_NORMAL = new(0.6f, 0.6f, 0.6f);
-    private static readonly Color MORALE_LOW = new(0.9f, 0.7f, 0.1f);
-    private static readonly Color MORALE_BROKEN = new(0.9f, 0.2f, 0.1f);
-
     private static readonly Dictionary<UnitData.EnemyType, Color> ENEMY_TYPE_COLORS = new()
     {
         { UnitData.EnemyType.Humanoid, new Color(0.7f, 0.65f, 0.55f) },
@@ -182,26 +177,6 @@ public partial class EnemyInfoPanel : PanelContainer
             hpLabel.Text = $"HP {unit.CurrentHp}/{maxHp}";
         }
 
-        // 更新士气条
-        var moraleBar = entry.GetNodeOrNull<ProgressBar>("MoraleBar");
-        if (moraleBar != null && data.IsEnemy)
-        {
-            // 士气范围 -60 ~ +40，映射为进度条 0~100
-            float moraleNormalized = (float)(data.Morale + 60) / 100.0f;
-            moraleBar.Value = moraleNormalized * 100;
-
-            if (moraleBar.GetThemeStylebox("fill") is StyleBoxFlat moraleFill)
-            {
-                moraleFill.BgColor = _GetMoraleColor(data.GetMoraleLevel());
-            }
-        }
-
-        // 更新士气标签
-        var moraleLabel = entry.GetNodeOrNull<Label>("MoraleLabel");
-        if (moraleLabel != null && data.IsEnemy)
-        {
-            moraleLabel.Text = _GetMoraleText(data.GetMoraleLevel());
-        }
     }
 
     /// <summary>高亮指定敌方（被悬停/选中时）</summary>
@@ -335,47 +310,6 @@ public partial class EnemyInfoPanel : PanelContainer
         hpLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 0.8f));
         hpHbox.AddChild(hpLabel);
 
-        // 第四行：士气条（仅敌方显示）
-        if (data.IsEnemy)
-        {
-            var moraleHbox = new HBoxContainer();
-            vbox.AddChild(moraleHbox);
-
-            var moraleIcon = new Label();
-            moraleIcon.Text = "士气";
-            moraleIcon.AddThemeFontSizeOverride("font_size", 9);
-            moraleIcon.AddThemeColorOverride("font_color", new Color(0.6f, 0.6f, 0.6f));
-            moraleHbox.AddChild(moraleIcon);
-
-            var moraleBar = new ProgressBar();
-            moraleBar.Name = "MoraleBar";
-            moraleBar.MinValue = 0;
-            moraleBar.MaxValue = 100;
-            float moraleNormalized = (float)(data.Morale + 60) / 100.0f;
-            moraleBar.Value = moraleNormalized * 100;
-            moraleBar.CustomMinimumSize = new Vector2(80, 8);
-            moraleBar.ShowPercentage = false;
-
-            var moraleBg = new StyleBoxFlat();
-            moraleBg.BgColor = new Color(0.15f, 0.15f, 0.15f, 0.5f);
-            moraleBg.SetCornerRadiusAll(1);
-            moraleBar.AddThemeStyleboxOverride("background", moraleBg);
-
-            var moraleFill2 = new StyleBoxFlat();
-            moraleFill2.BgColor = _GetMoraleColor(data.GetMoraleLevel());
-            moraleFill2.SetCornerRadiusAll(1);
-            moraleBar.AddThemeStyleboxOverride("fill", moraleFill2);
-
-            moraleHbox.AddChild(moraleBar);
-
-            var moraleLabel = new Label();
-            moraleLabel.Name = "MoraleLabel";
-            moraleLabel.Text = _GetMoraleText(data.GetMoraleLevel());
-            moraleLabel.AddThemeFontSizeOverride("font_size", 9);
-            moraleLabel.AddThemeColorOverride("font_color", _GetMoraleColor(data.GetMoraleLevel()));
-            moraleHbox.AddChild(moraleLabel);
-        }
-
         // 第五行：AC/速度信息
         var rowBottom = new HBoxContainer();
         rowBottom.AddThemeConstantOverride("separation", 10);
@@ -451,29 +385,4 @@ public partial class EnemyInfoPanel : PanelContainer
         return HP_LOW;
     }
 
-    private static Color _GetMoraleColor(UnitData.MoraleLevel level)
-    {
-        return level switch
-        {
-            UnitData.MoraleLevel.High => MORALE_HIGH,
-            UnitData.MoraleLevel.Normal => MORALE_NORMAL,
-            UnitData.MoraleLevel.Low => MORALE_LOW,
-            UnitData.MoraleLevel.Broken => MORALE_BROKEN,
-            UnitData.MoraleLevel.Routing => MORALE_BROKEN,
-            _ => MORALE_NORMAL,
-        };
-    }
-
-    private static string _GetMoraleText(UnitData.MoraleLevel level)
-    {
-        return level switch
-        {
-            UnitData.MoraleLevel.High => "高昂",
-            UnitData.MoraleLevel.Normal => "正常",
-            UnitData.MoraleLevel.Low => "低落",
-            UnitData.MoraleLevel.Broken => "崩溃!",
-            UnitData.MoraleLevel.Routing => "溃逃!!",
-            _ => "正常",
-        };
-    }
 }

@@ -1,37 +1,30 @@
-// ProjectileView.cs
-// 投射物表现层 — 飞行动画 + 贴图
-// 只关心"怎么飞得好看"，不关心伤害
-// 由 ProjectilePool 路由调用 Play()，不自行订阅 EventBus
-using Godot;
 using BladeHex.Map;
+using BladeHex.View.AssetSystem;
+using BladeHex.View.Combat;
+using Godot;
 
 namespace BladeHex.Combat;
 
 /// <summary>
-/// 投射物视图 — Node3D 场景节点
-/// 由 ProjectilePool 路由调用 Play()，按轨迹飞行，到达后回收
+/// Visual node for a pooled combat projectile.
 /// </summary>
 [GlobalClass]
 public partial class ProjectileView : Node3D, IProjectileView
 {
-    // ========================================
-    // 状态
-    // ========================================
     private Sprite3D? _sprite;
-    private bool _playing = false;
+    private bool _playing;
     private Vector3 _from;
     private Vector3 _to;
     private float _duration;
     private float _elapsed;
     private float _arcHeight;
 
-    /// <summary>投射物类型 — 由 Pool 创建时设置</summary>
-    public string ProjectileType { get; set; } = "arrow";
+    private const float ProjectileLayerOffset = 22.0f;
+    private const float ArcHeightWorldScale = HexUtils.Size * 0.45f;
+    private const float MinVisualArcHeight = 12.0f;
+    private const string DefaultTexture = "res://assets/sprites/projectiles/arrow.png";
 
-    // ========================================
-    // 贴图配置
-    // ========================================
-    private static readonly string DefaultTexture = "res://assets/sprites/projectiles/arrow.png";
+    public string ProjectileType { get; set; } = "arrow";
 
     private static readonly System.Collections.Generic.Dictionary<string, string> TypeTextures = new()
     {
@@ -47,63 +40,67 @@ public partial class ProjectileView : Node3D, IProjectileView
 
     public override void _Ready()
     {
-        // 创建子节点
-        _sprite = new Sprite3D();
-        _sprite.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
-        _sprite.TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest;
+        _sprite = new Sprite3D
+        {
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest,
+            NoDepthTest = true,
+            RenderPriority = 40,
+        };
         AddChild(_sprite);
-
-        // 不订阅 EventBus — 由 ProjectilePool 统一路由
     }
 
     public override void _Process(double delta)
     {
-        if (!_playing) return;
+        if (!_playing)
+            return;
 
         _elapsed += (float)delta;
         float t = Mathf.Clamp(_elapsed / _duration, 0.0f, 1.0f);
-
-        // 计算轨迹位置
         GlobalPosition = ProjectileTrajectory.Evaluate(ProjectileType, _from, _to, t, _arcHeight);
 
-        // 飞刀自旋
-        if (ProjectileType == "throwing_knife" || ProjectileType == "throwing_axe")
-        {
-            if (_sprite != null)
-                _sprite.RotationDegrees = new Vector3(0, 0, ProjectileTrajectory.KnifeSpin(t));
-        }
+        if (ProjectilePool.DebugLogging && (int)(_elapsed * 60) % 10 == 0)
+            GD.Print($"[ProjectileView] _Process: t={t:F3}, pos={GlobalPosition}, Visible={Visible}");
 
-        // 飞行完成
+        if ((ProjectileType == "throwing_knife" || ProjectileType == "throwing_axe") && _sprite != null)
+            _sprite.RotationDegrees = new Vector3(0, 0, ProjectileTrajectory.KnifeSpin(t));
+
         if (t >= 1.0f)
         {
+            if (ProjectilePool.DebugLogging)
+                GD.Print("[ProjectileView] Flight complete");
+
             _playing = false;
             OnFlightComplete();
         }
     }
 
-    // ========================================
-    // IProjectileView 实现
-    // ========================================
-
     public void Play(ProjectileData data, float duration)
     {
-        if (data == null) return;
+        if (data == null)
+        {
+            GD.PrintErr("[ProjectileView] Play called with NULL data.");
+            return;
+        }
 
-        // 允许动态切换类型（同一实例复用不同投射物）
+        if (ProjectilePool.DebugLogging)
+            GD.Print($"[ProjectileView] Play: type={data.ProjectileType}, origin={data.Origin}, target={data.Target}, duration={duration}");
+
         ProjectileType = data.ProjectileType;
-        _from = HexUtils.AxialToWorld3D(data.Origin.X, data.Origin.Y);
-        _to = HexUtils.AxialToWorld3D(data.Target.X, data.Target.Y);
+        _from = GetVisualWorldPosition(data.Origin);
+        _to = GetVisualWorldPosition(data.Target);
         _duration = duration;
         _elapsed = 0.0f;
-        _arcHeight = data.ArcHeight;
+        _arcHeight = GetVisualArcHeight(data.ArcHeight);
         _playing = true;
 
-        // 加载贴图
         LoadTexture(data);
 
-        // 初始位置
         GlobalPosition = _from;
         Visible = true;
+
+        if (ProjectilePool.DebugLogging)
+            GD.Print($"[ProjectileView] Play complete: _playing={_playing}, Visible={Visible}, GlobalPosition={GlobalPosition}");
     }
 
     public void Stop()
@@ -112,38 +109,54 @@ public partial class ProjectileView : Node3D, IProjectileView
         Visible = false;
     }
 
-    // ========================================
-    // 内部方法
-    // ========================================
-
     private void LoadTexture(ProjectileData data)
     {
-        if (_sprite == null) return;
+        if (_sprite == null)
+        {
+            GD.PrintErr("[ProjectileView] LoadTexture called before _Ready.");
+            return;
+        }
 
-        string path = !string.IsNullOrEmpty(data.TexturePath)
+        string fallbackPath = !string.IsNullOrEmpty(data.TexturePath)
             ? data.TexturePath
             : (TypeTextures.TryGetValue(data.ProjectileType, out var texPath) ? texPath : DefaultTexture);
 
-        var tex = GD.Load<Texture2D>(path);
-        if (tex != null)
+        if (ProjectilePool.DebugLogging)
+            GD.Print($"[ProjectileView] LoadTexture: type={data.ProjectileType}, fallback={fallbackPath}");
+
+        var tex = TextureAssetResolver.LoadProjectileTexture(data.ProjectileType, fallbackPath);
+        if (tex == null)
         {
-            _sprite.Texture = tex;
-            // 根据贴图实际尺寸和目标世界尺寸计算 PixelSize
-            _sprite.PixelSize = BladeHex.View.Combat.TextureScaleConfig.GetProjectilePixelSize(
-                data.ProjectileType, tex);
+            GD.PrintErr($"[ProjectileView] Failed to load projectile texture {data.ProjectileType} ({fallbackPath}).");
+            return;
         }
+
+        _sprite.Texture = tex;
+        _sprite.PixelSize = TextureScaleConfig.GetProjectilePixelSize(data.ProjectileType, tex);
+        _sprite.Scale = Vector3.One;
+
+        if (ProjectilePool.DebugLogging)
+            GD.Print($"[ProjectileView] LoadTexture: texture loaded, PixelSize={_sprite.PixelSize}");
     }
 
-    /// <summary>飞行完成 — 回收到对象池</summary>
     private void OnFlightComplete()
     {
         Visible = false;
-
-        // 通知对象池回收
         var pool = GetParentOrNull<ProjectilePool>();
         if (pool != null)
             pool.Return(this);
         else
             Stop();
+    }
+
+    public static Vector3 GetVisualWorldPosition(Vector2I gridPos)
+    {
+        return HexUtils.AxialToWorld3D(gridPos.X, gridPos.Y)
+            + new Vector3(0, CombatLayerHeight.HexTopOffset + CombatLayerHeight.CharacterLayer + ProjectileLayerOffset, 0);
+    }
+
+    public static float GetVisualArcHeight(float arcHeight)
+    {
+        return Mathf.Max(MinVisualArcHeight, arcHeight * ArcHeightWorldScale);
     }
 }

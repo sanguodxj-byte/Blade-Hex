@@ -65,7 +65,8 @@ public sealed class IslandPOIStage : IWorldStage
     {
         string[] portNames = ["走私者港湾", "自由港", "海风码头", "潮汐锚地", "漂流者避风港"];
         poi.PoiName = portNames[rng.Next(portNames.Length)];
-        poi.PoiTypeEnum = OverworldPOI.POIType.Port;
+        poi.PoiTypeEnum = OverworldPOI.POIType.Town;
+        poi.IsPortCity = true;
         poi.HasTavern = true;
         poi.HasShop = true;
         poi.FerryCost = 30 + rng.Next(40);
@@ -101,7 +102,10 @@ public sealed class IslandPOIStage : IWorldStage
         {
             string[] names = ["海神祭坛", "隐士灯塔", "潮汐圣所", "珊瑚神殿"];
             poi.PoiName = names[rng.Next(names.Length)];
-            poi.PoiTypeEnum = OverworldPOI.POIType.Shrine;
+            poi.PoiTypeEnum = OverworldPOI.POIType.Lair;
+            poi.LairTypeValue = OverworldPOI.LairType.Ruins;
+            poi.LairLevel = 1 + rng.Next(2);
+            poi.ThreatLevel = 0.2f;
             poi.Prosperity = 20;
             poi.GarrisonMax = 0;
             poi.GarrisonCurrent = 0;
@@ -128,7 +132,7 @@ public sealed class IslandPOIStage : IWorldStage
         {
             string[] names = ["流放者营地", "海难幸存者", "逃亡者避难所", "无法之地"];
             poi.PoiName = names[rng.Next(names.Length)];
-            poi.PoiTypeEnum = OverworldPOI.POIType.Tavern;
+            poi.PoiTypeEnum = OverworldPOI.POIType.Village;
             poi.HasTavern = true;
             poi.GarrisonMax = 12;
             poi.GarrisonCurrent = 8 + rng.Next(4);

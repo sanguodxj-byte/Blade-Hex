@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Combat;
 using BladeHex.UI;
+using BladeHex.Map;
 
 namespace BladeHex.UI.Combat;
 
@@ -31,6 +32,7 @@ public partial class CombatUI : CanvasLayer
     private TurnOrderBar _turnOrderBar = null!;
     private EnemyInfoPanel _enemyInfoPanel = null!;
     private HitPreviewTooltip _hitPreviewTooltip = null!;
+    private SkillPreviewTooltip _skillPreviewTooltip = null!;
     private TerrainTooltip _terrainTooltip = null!;
     private BattleLogPanel _battleLog = null!;
     private Node _spellSelect = null!;
@@ -58,6 +60,8 @@ public partial class CombatUI : CanvasLayer
     // 底部面板条件条
     private ProgressBar? _drBar;
     private ProgressBar? _apBar;
+    private ProgressBar? _apBgBar;      // 稳定的暗褐色背景条
+    private ProgressBar? _apPreviewBar; // 顶层稳定黄褐色剩余AP条
 
     // 顶部回合提示
     private Label? _turnPhaseLabel;
@@ -68,6 +72,11 @@ public partial class CombatUI : CanvasLayer
     private string?[]? _quickSlotSkills;
     private string?[]? _quickSlotDescriptions;
     private PanelContainer? _skillTooltip;
+
+    // 职业技能UI
+    private PanelContainer? _careerSkillPanel;
+    private Label? _careerSkillNameLabel;
+    private Label? _careerSkillApLabel;
 
     // ============================================================================
     // 过渡动画用引用
@@ -86,6 +95,11 @@ public partial class CombatUI : CanvasLayer
     // 主题
     // ============================================================================
     private UITheme Theme => UITheme.Instance!;
+    private static readonly Color CombatHudBg = new(0.075f, 0.065f, 0.055f, 0.94f);
+    private static readonly Color CombatHudBgSoft = new(0.10f, 0.085f, 0.070f, 0.90f);
+    private static readonly Color CombatHudBorder = new(0.43f, 0.35f, 0.24f, 0.82f);
+    private static readonly Color CombatHudBorderDim = new(0.25f, 0.22f, 0.18f, 0.72f);
+    private static readonly Color CombatHudGold = new(0.78f, 0.62f, 0.34f, 0.95f);
 
     // ============================================================================
     // 生命周期
@@ -161,8 +175,7 @@ public partial class CombatUI : CanvasLayer
             BladeHex.View.Combat.CombatSpeed.CycleNext();
         };
         _speedBtn.MouseEntered += () => BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_hover", -6.0f);
-        var speedStyle = Theme.MakePanelStyle(Theme.BgSecondary, Theme.BorderDefault, 1, Theme.RadiusMd);
-        _speedBtn.AddThemeStyleboxOverride("normal", speedStyle);
+        _ApplyCombatButtonTheme(_speedBtn, false);
         turnBarRow.AddChild(_speedBtn);
 
         BladeHex.View.Combat.CombatSpeed.MultiplierChanged += _OnSpeedChanged;
@@ -176,20 +189,22 @@ public partial class CombatUI : CanvasLayer
             EmitSignal(SignalName.ActionSelected, "end_turn");
         };
         endTurnBtn.MouseEntered += () => BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_hover", -6.0f);
-        var btnStyle = Theme.MakePanelStyle(Theme.BgSecondary, Theme.BorderFriendly, 1, Theme.RadiusMd);
-        endTurnBtn.AddThemeStyleboxOverride("normal", btnStyle);
+        _ApplyCombatButtonTheme(endTurnBtn, true);
         turnBarRow.AddChild(endTurnBtn);
 
         // --- 4. 底部信息面板 (居中，紧贴回合顺序栏下方) ---
-        _bottomPanel = _CreatePanel(Vector2.Zero, Theme.BgPrimary, Theme.BorderDefault);
+        _bottomPanel = _CreatePanel(Vector2.Zero, CombatHudBg, CombatHudBorder);
         _bottomPanel.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        _bottomPanel.MouseFilter = Control.MouseFilterEnum.Pass;
         mainVBox.AddChild(_bottomPanel);
 
-        var bottomMargin = _CreateMargin(12, 12, 10, 10);
+        var bottomMargin = _CreateMargin(12, 12, 6, 6);
+        bottomMargin.MouseFilter = Control.MouseFilterEnum.Pass;
         _bottomPanel.AddChild(bottomMargin);
 
         var bottomHBox = new HBoxContainer();
         bottomHBox.AddThemeConstantOverride("separation", Theme.SpacingLg);
+        bottomHBox.MouseFilter = Control.MouseFilterEnum.Pass;
         bottomMargin.AddChild(bottomHBox);
         _bottomHBox = bottomHBox;
 
@@ -204,12 +219,23 @@ public partial class CombatUI : CanvasLayer
         _avatarControl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         avatarBg.AddChild(_avatarControl);
 
+        if (Theme.CombatPortraitFrameTexture != null)
+        {
+            var frameOverlay = new TextureRect();
+            frameOverlay.Texture = Theme.CombatPortraitFrameTexture;
+            frameOverlay.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+            frameOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            frameOverlay.MouseFilter = Control.MouseFilterEnum.Ignore;
+            avatarBg.AddChild(frameOverlay);
+        }
+
         bottomHBox.AddChild(_CreateSeparatorV());
 
         // 5b. 角色信息列 — 名称居中 + 条件资源条(HP/DR/MP/AP)
         var infoCol = new VBoxContainer();
         infoCol.AddThemeConstantOverride("separation", 3);
         infoCol.CustomMinimumSize = new Vector2(150, 0);
+        infoCol.MouseFilter = Control.MouseFilterEnum.Pass;
         bottomHBox.AddChild(infoCol);
 
         var charName = _CreateBodyLabel("未选择", Theme.TextAccent);
@@ -241,13 +267,101 @@ public partial class CombatUI : CanvasLayer
         infoCol.AddChild(mpBar);
         _statLabels["mp_bar"] = mpBar;
 
-        // AP(行动力)条
+        // AP(行动力)条（三层重叠：背景层、中间呼吸闪烁消耗层、顶层稳定剩余AP层）
+        var apContainer = new MarginContainer();
+        apContainer.CustomMinimumSize = new Vector2(150, 7);
+
+        // 1. 背景层：提供稳定的背景，防止呼吸淡入淡出时背景闪烁
+        _apBgBar = new ProgressBar();
+        _apBgBar.CustomMinimumSize = new Vector2(150, 7);
+        _apBgBar.ShowPercentage = false;
+        Theme.ApplyBarTheme(_apBgBar, new Color(0, 0, 0, 0f), new Color(0.15f, 0.12f, 0.05f, 0.6f));
+        _apBgBar.Value = 0; // 只显示背景
+        apContainer.AddChild(_apBgBar);
+
+        // 2. 中间层：在有预览时充当 CurrentAp 的橙红色呼吸条，平常为正常黄褐色 AP 条
         _apBar = new ProgressBar();
         _apBar.CustomMinimumSize = new Vector2(150, 7);
         _apBar.ShowPercentage = false;
-        Theme.ApplyBarTheme(_apBar, new Color(0.85f, 0.75f, 0.3f), new Color(0.15f, 0.12f, 0.05f, 0.6f));
-        infoCol.AddChild(_apBar);
+        Theme.ApplyBarTheme(_apBar, new Color(0.85f, 0.75f, 0.3f), new Color(0, 0, 0, 0f)); // 背景透明
+        apContainer.AddChild(_apBar);
+
+        // 3. 顶层：在有预览时作为稳定黄褐色剩余 AP 段（CurrentAp - Cost），背景透明
+        _apPreviewBar = new ProgressBar();
+        _apPreviewBar.CustomMinimumSize = new Vector2(150, 7);
+        _apPreviewBar.ShowPercentage = false;
+        Theme.ApplyBarTheme(_apPreviewBar, new Color(0.85f, 0.75f, 0.3f), new Color(0, 0, 0, 0f)); // 背景透明
+        _apPreviewBar.Value = 0; // 默认不覆盖
+        apContainer.AddChild(_apPreviewBar);
+
+        infoCol.AddChild(apContainer);
         _statLabels["ap_bar"] = _apBar;
+
+        // 5e. 职业技能栏 — 角色信息列最底部，紧贴AP条下方
+        _careerSkillPanel = new PanelContainer();
+        _careerSkillPanel.Visible = false;
+        _careerSkillPanel.CustomMinimumSize = new Vector2(200, 36);
+        _careerSkillPanel.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        var careerStyle = new StyleBoxFlat();
+        careerStyle.BgColor = new Color(0.18f, 0.14f, 0.08f, 0.92f);
+        careerStyle.SetBorderWidthAll(2);
+        careerStyle.BorderColor = new Color(0.8f, 0.6f, 0.2f, 0.9f);
+        careerStyle.SetCornerRadiusAll(4);
+        careerStyle.SetContentMarginAll(6);
+        _careerSkillPanel.AddThemeStyleboxOverride("panel", careerStyle);
+
+        var careerHBox = new HBoxContainer();
+        careerHBox.AddThemeConstantOverride("separation", 8);
+        careerHBox.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        _careerSkillPanel.AddChild(careerHBox);
+
+        // 前缀标签 "职业"
+        var prefixLabel = new Label();
+        prefixLabel.Text = "[职业]";
+        prefixLabel.AddThemeFontSizeOverride("font_size", 12);
+        prefixLabel.AddThemeColorOverride("font_color", new Color(0.8f, 0.6f, 0.2f));
+        careerHBox.AddChild(prefixLabel);
+
+        // 技能名
+        _careerSkillNameLabel = new Label();
+        _careerSkillNameLabel.AddThemeFontSizeOverride("font_size", 13);
+        _careerSkillNameLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.85f, 0.5f));
+        careerHBox.AddChild(_careerSkillNameLabel);
+
+        // AP消耗
+        _careerSkillApLabel = new Label();
+        _careerSkillApLabel.AddThemeFontSizeOverride("font_size", 11);
+        _careerSkillApLabel.AddThemeColorOverride("font_color", new Color(0.6f, 0.85f, 1.0f));
+        careerHBox.AddChild(_careerSkillApLabel);
+
+        // 点击事件 — 左键激活，右键显示描述
+        _careerSkillPanel.GuiInput += (ev) =>
+        {
+            if (ev is InputEventMouseButton mb && mb.Pressed)
+            {
+                if (mb.ButtonIndex == MouseButton.Left)
+                {
+                    GD.Print("[SkillTarget] CombatUI: career_skill panel clicked!");
+                    BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_click");
+                    EmitSignal(SignalName.ActionSelected, "career_skill");
+                }
+                else if (mb.ButtonIndex == MouseButton.Right)
+                {
+                    _ShowCareerSkillPopup(_currentDisplayedUnit?.GetCareerSkill(), mb.GlobalPosition);
+                }
+            }
+        };
+        _careerSkillPanel.MouseEntered += () =>
+        {
+            BladeHex.Data.Globals.AudioOrNull?.PlaySfxName("ui_hover", -6.0f);
+            EmitSignal(SignalName.ActionHovered, "career_skill");
+        };
+        _careerSkillPanel.MouseExited += () =>
+        {
+            EmitSignal(SignalName.ActionHovered, "none");
+        };
+
+        infoCol.AddChild(_careerSkillPanel);
 
         bottomHBox.AddChild(_CreateSeparatorV());
 
@@ -257,7 +371,8 @@ public partial class CombatUI : CanvasLayer
         weaponVBox.AddThemeConstantOverride("separation", 4);
         bottomHBox.AddChild(weaponVBox);
 
-        var mainHand = _CreateCard(new Vector2(50, 80), true);
+        var mainHand = _CreateCard(new Vector2(64, 64), true);
+        mainHand.AddThemeStyleboxOverride("panel", _CreateSlotStyle(false));
         mainHand.GuiInput += (ev) =>
         {
             if (ev is InputEventMouseButton mb && mb.Pressed)
@@ -268,13 +383,21 @@ public partial class CombatUI : CanvasLayer
                     _ShowWeaponInfoPopup(_currentDisplayedUnit?.Data?.PrimaryMainHand, mb.GlobalPosition);
             }
         };
-        mainHand.MouseExited += () => _itemPopup?.Hide();
+        mainHand.MouseEntered += () => EmitSignal(SignalName.ActionHovered, "switch_to_primary");
+        mainHand.MouseExited += () => {
+            _itemPopup?.Hide();
+            EmitSignal(SignalName.ActionHovered, "none");
+        };
         weaponVBox.AddChild(mainHand);
         _weaponPrimaryLabel = _CreateMutedLabel("主手");
         _weaponPrimaryLabel.AddThemeFontSizeOverride("font_size", Theme.FontSizeXs);
+        _weaponPrimaryLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _weaponPrimaryLabel.VerticalAlignment = VerticalAlignment.Center;
+        _weaponPrimaryLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         mainHand.AddChild(_weaponPrimaryLabel);
 
-        var offHand = _CreateCard(new Vector2(50, 80), true);
+        var offHand = _CreateCard(new Vector2(64, 64), true);
+        offHand.AddThemeStyleboxOverride("panel", _CreateSlotStyle(false));
         offHand.GuiInput += (ev) =>
         {
             if (ev is InputEventMouseButton mb && mb.Pressed)
@@ -285,15 +408,22 @@ public partial class CombatUI : CanvasLayer
                     _ShowWeaponInfoPopup(_currentDisplayedUnit?.Data?.SecondaryMainHand, mb.GlobalPosition);
             }
         };
-        offHand.MouseExited += () => _itemPopup?.Hide();
+        offHand.MouseEntered += () => EmitSignal(SignalName.ActionHovered, "switch_to_secondary");
+        offHand.MouseExited += () => {
+            _itemPopup?.Hide();
+            EmitSignal(SignalName.ActionHovered, "none");
+        };
         weaponVBox.AddChild(offHand);
         _weaponSecondaryLabel = _CreateMutedLabel("副手");
         _weaponSecondaryLabel.AddThemeFontSizeOverride("font_size", Theme.FontSizeXs);
+        _weaponSecondaryLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _weaponSecondaryLabel.VerticalAlignment = VerticalAlignment.Center;
+        _weaponSecondaryLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         offHand.AddChild(_weaponSecondaryLabel);
 
         bottomHBox.AddChild(_CreateSeparatorV());
 
-        // 5d. 快捷技能槽(1-0 快捷键,共 10 个) — 5 列 2 行网格，每槽 68×68 填满空间
+        // 5d. 快捷技能槽(1-0 快捷键,共 10 个) — 5 列 2 行网格
         _quickSlotContainer = new GridContainer();
         _quickSlotContainer.Name = "QuickActions";
         _quickSlotContainer.Columns = 5;
@@ -313,8 +443,14 @@ public partial class CombatUI : CanvasLayer
             slot.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
             slot.Text = i < 9 ? $"{i + 1}" : "0";
             slot.TooltipText = "空槽位";
-            var slotStyle = Theme.MakePanelStyle(Theme.BgCard, Theme.BorderDefault, 1, Theme.RadiusMd);
-            slot.AddThemeStyleboxOverride("normal", slotStyle);
+            
+            slot.AddThemeStyleboxOverride("normal", _CreateSlotStyle(false));
+            slot.AddThemeStyleboxOverride("hover", _CreateSlotStyle(true));
+            slot.AddThemeStyleboxOverride("pressed", _CreateSlotStyle(false, true));
+            slot.AddThemeStyleboxOverride("disabled", _CreateSlotStyle(false));
+            slot.AddThemeColorOverride("font_color", Theme.TextSecondary);
+            slot.AddThemeColorOverride("font_hover_color", Theme.TextAccent);
+            slot.AddThemeColorOverride("font_pressed_color", Theme.TextPrimary);
             slot.AddThemeFontSizeOverride("font_size", Theme.FontSizeSm);
             var mod = slot.Modulate;
             mod.A = 0.4f;
@@ -327,18 +463,35 @@ public partial class CombatUI : CanvasLayer
                 if (ev is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Right)
                     _ShowSkillTooltip(slotIdx, mb.GlobalPosition);
             };
-            slot.MouseExited += () => _skillTooltip?.Hide();
+            slot.MouseEntered += () => {
+                if (_quickSlotSkills != null && slotIdx < _quickSlotSkills.Length && !string.IsNullOrEmpty(_quickSlotSkills[slotIdx]))
+                {
+                    EmitSignal(SignalName.ActionHovered, _quickSlotSkills[slotIdx]!);
+                }
+            };
+            slot.MouseExited += () => {
+                _skillTooltip?.Hide();
+                EmitSignal(SignalName.ActionHovered, "none");
+            };
             _quickSlotContainer.AddChild(slot);
             _quickSlots[i] = slot;
         }
 
-        // --- 5. 隐藏的功能组件(保留 API 兼容，不在主布局中显示) ---
+        // --- 5. 战斗日志面板 (左上角，绝对定位) ---
 
-        // 战斗日志 — 隐藏但保留功能(LogMessage 仍可调用)
+        // 战斗日志 — 使用绝对定位，不影响主布局
         _battleLog = new BattleLogPanel();
-        _battleLog.CustomMinimumSize = new Vector2(300, 140);
-        _battleLog.Visible = false;
-        AddChild(_battleLog);
+        _battleLog.CustomMinimumSize = new Vector2(350, 160);
+        _battleLog.AnchorLeft = 0;
+        _battleLog.AnchorTop = 0;
+        _battleLog.AnchorRight = 0;
+        _battleLog.AnchorBottom = 0;
+        _battleLog.OffsetLeft = Theme.SpacingMd;
+        _battleLog.OffsetTop = Theme.SpacingMd;
+        _battleLog.OffsetRight = Theme.SpacingMd + 350;
+        _battleLog.OffsetBottom = Theme.SpacingMd + 160;
+        _battleLog.Visible = true;
+        AddChild(_battleLog);  // 添加到根节点，而不是 mainVBox
 
         // 敌方信息面板 — 隐藏但保留注册/更新功能
         _enemyInfoPanel = new EnemyInfoPanel();
@@ -350,6 +503,10 @@ public partial class CombatUI : CanvasLayer
         _hitPreviewTooltip = new HitPreviewTooltip();
         _hitPreviewTooltip.Visible = false;
         AddChild(_hitPreviewTooltip);
+
+        _skillPreviewTooltip = new SkillPreviewTooltip();
+        _skillPreviewTooltip.Visible = false;
+        AddChild(_skillPreviewTooltip);
 
         _terrainTooltip = new TerrainTooltip();
         _terrainTooltip.Visible = false;
@@ -376,6 +533,30 @@ public partial class CombatUI : CanvasLayer
     {
         if (item == null || _itemPopup == null) return;
         _itemPopup.ShowFor(item, globalMousePos);
+    }
+
+    /// <summary>右键职业技能弹出技能描述</summary>
+    private void _ShowCareerSkillPopup(BladeHex.Strategic.CareerSkillData? career, Vector2 globalMousePos)
+    {
+        if (career == null) return;
+
+        // 构建描述文本
+        string desc = $"[b][color=#FFD700]{career.DisplayName}[/color][/b]\n";
+        desc += $"[color=#AAAAAA]职业技能[/color]\n\n";
+
+        if (!string.IsNullOrEmpty(career.Description))
+        {
+            desc += $"{career.Description}\n\n";
+        }
+
+        desc += $"[color=#87CEEB]AP消耗: {career.ApCost}[/color]\n";
+        desc += $"[color=#87CEEB]使用限制: 每场战斗1次[/color]\n";
+
+        // 使用 HitPreviewTooltip 显示（复用现有组件）
+        if (_hitPreviewTooltip != null)
+        {
+            _hitPreviewTooltip.ShowCareerSkillPreview(desc, globalMousePos);
+        }
     }
 
     /// <summary>ESC 菜单 — 全屏遮罩 + 返回按钮</summary>
@@ -409,8 +590,17 @@ public partial class CombatUI : CanvasLayer
         var panel = new PanelContainer();
         if (minSize != Vector2.Zero)
             panel.CustomMinimumSize = minSize;
-        panel.AddThemeStyleboxOverride("panel",
-            Theme.MakePanelStyle(bg, border, 1, Theme.RadiusMd, Theme.SpacingMd));
+
+        var style = new StyleBoxFlat();
+        style.BgColor = bg;
+        style.SetBorderWidthAll(1);
+        style.BorderColor = border;
+        style.SetCornerRadiusAll(6);
+        style.SetContentMarginAll(Theme.SpacingMd);
+        style.ShadowColor = new Color(0, 0, 0, 0.38f);
+        style.ShadowSize = 8;
+        style.ShadowOffset = new Vector2(0, 2);
+        panel.AddThemeStyleboxOverride("panel", style);
         return panel;
     }
 
@@ -419,11 +609,62 @@ public partial class CombatUI : CanvasLayer
         var card = new PanelContainer();
         if (minSize != Vector2.Zero)
             card.CustomMinimumSize = minSize;
-        card.AddThemeStyleboxOverride("panel",
-            Theme.MakePanelStyle(Theme.BgCard, Theme.BorderDefault, 1, Theme.RadiusMd, Theme.SpacingSm));
+        card.AddThemeStyleboxOverride("panel", _CreateSlotStyle(false));
         if (hoverable)
             card.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
         return card;
+    }
+
+    private StyleBoxFlat _CreateSlotStyle(bool hover, bool pressed = false)
+    {
+        var style = new StyleBoxFlat();
+        style.BgColor = pressed
+            ? new Color(0.045f, 0.040f, 0.036f, 0.96f)
+            : hover
+                ? new Color(0.135f, 0.110f, 0.082f, 0.96f)
+                : new Color(0.075f, 0.066f, 0.058f, 0.92f);
+        style.SetBorderWidthAll(1);
+        style.BorderColor = hover ? CombatHudGold : CombatHudBorderDim;
+        style.SetCornerRadiusAll(4);
+        style.SetContentMarginAll(5);
+        return style;
+    }
+
+    private void _ApplyCombatButtonTheme(Button button, bool primary)
+    {
+        var normal = new StyleBoxFlat
+        {
+            BgColor = primary ? new Color(0.13f, 0.105f, 0.072f, 0.94f) : CombatHudBgSoft,
+            BorderColor = primary ? CombatHudGold : CombatHudBorder,
+        };
+        normal.SetBorderWidthAll(1);
+        normal.SetCornerRadiusAll(5);
+        normal.SetContentMarginAll(8);
+
+        var hover = new StyleBoxFlat
+        {
+            BgColor = primary ? new Color(0.19f, 0.145f, 0.085f, 0.98f) : new Color(0.14f, 0.12f, 0.095f, 0.96f),
+            BorderColor = CombatHudGold,
+        };
+        hover.SetBorderWidthAll(1);
+        hover.SetCornerRadiusAll(5);
+        hover.SetContentMarginAll(8);
+
+        var pressed = new StyleBoxFlat
+        {
+            BgColor = new Color(0.055f, 0.048f, 0.042f, 0.98f),
+            BorderColor = new Color(0.54f, 0.43f, 0.24f, 0.95f),
+        };
+        pressed.SetBorderWidthAll(1);
+        pressed.SetCornerRadiusAll(5);
+        pressed.SetContentMarginAll(8);
+
+        button.AddThemeStyleboxOverride("normal", normal);
+        button.AddThemeStyleboxOverride("hover", hover);
+        button.AddThemeStyleboxOverride("pressed", pressed);
+        button.AddThemeColorOverride("font_color", Theme.TextPrimary);
+        button.AddThemeColorOverride("font_hover_color", Theme.TextAccent);
+        button.AddThemeColorOverride("font_pressed_color", Theme.TextSecondary);
     }
 
     private MarginContainer _CreateMargin(int left, int right, int top, int bottom)
@@ -478,7 +719,7 @@ public partial class CombatUI : CanvasLayer
     {
         var sep = new VSeparator();
         var style = new StyleBoxFlat();
-        style.BgColor = Theme.BorderDefault;
+        style.BgColor = CombatHudBorderDim;
         style.SetContentMarginAll(1);
         sep.AddThemeStyleboxOverride("separator", style);
         return sep;
@@ -535,12 +776,125 @@ public partial class CombatUI : CanvasLayer
     }
 
     // ============================================================================
-    // 公共 API — 由 CombatManager (C#) 及 战斗场景调用
+    // AP 渐变淡入淡出消耗预览逻辑
     // ============================================================================
+    private float _apPreviewCost = 0f;
+
+    /// <summary>设置 AP 消耗预览。设置大于0的值开始渐变淡入淡出，设置0清除</summary>
+    public void SetApPreview(float apCost)
+    {
+        if (_currentDisplayedUnit == null || _apBar == null || _apPreviewBar == null)
+            return;
+
+        float currentAp = _currentDisplayedUnit.CurrentAp;
+        float maxAp = _apBar.MaxValue > 0 ? (float)_apBar.MaxValue : _currentDisplayedUnit.Model.GetMaxAp();
+
+        // 确保 MaxValue 保持一致
+        _apBar.MaxValue = maxAp;
+        _apPreviewBar.MaxValue = maxAp;
+        if (_apBgBar != null) _apBgBar.MaxValue = maxAp;
+
+        if (apCost > 0f)
+        {
+            if (_apPreviewCost <= 0f || _apPreviewCost != apCost)
+            {
+                _apPreviewCost = apCost;
+                
+                // 将中间层 _apBar 的前景色设为橙红色，展示真实 AP 长度，用于呼吸渐变消耗段
+                Theme.ApplyBarTheme(_apBar, new Color(0.9f, 0.3f, 0.2f, 0.9f), new Color(0, 0, 0, 0f));
+                _apBar.Value = currentAp;
+
+                // 将顶层 _apPreviewBar 的前景色设为稳定黄褐色，展示扣减后的剩余 AP
+                Theme.ApplyBarTheme(_apPreviewBar, new Color(0.85f, 0.75f, 0.3f), new Color(0, 0, 0, 0f));
+                _apPreviewBar.Value = Mathf.Max(0f, currentAp - apCost);
+            }
+        }
+        else
+        {
+            _apPreviewCost = 0f;
+            _apBar.Modulate = new Color(1f, 1f, 1f, 1f); // 恢复完全不透明
+            
+            // 恢复 _apBar 为正常的黄褐色，且值为真实 AP
+            Theme.ApplyBarTheme(_apBar, new Color(0.85f, 0.75f, 0.3f), new Color(0, 0, 0, 0f));
+            _apBar.Value = currentAp;
+
+            // 隐藏顶层条
+            _apPreviewBar.Value = 0f;
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_apPreviewCost > 0f && _currentDisplayedUnit != null && _apBar != null)
+        {
+            double t = Time.GetTicksMsec() / 1000.0;
+            // 平滑正弦呼吸：透明度在 0.25 到 0.85 之间循环
+            float pulseAlpha = 0.25f + 0.6f * (float)(Mathf.Sin(t * 6.0) + 1.0) * 0.5f;
+            _apBar.Modulate = new Color(1f, 1f, 1f, pulseAlpha);
+        }
+
+        UpdateHudOcclusion(delta);
+    }
+
+    // ============================================================================
+    // 底部 HUD 遮挡半透明
+    // ============================================================================
+    private Camera3D? _occlusionCamera;
+    private System.Collections.Generic.List<Unit>? _occlusionUnits;
+    private float _hudTargetAlpha = 1f;
+    private float _hudCurrentAlpha = 1f;
+    private const float HudOpaqueAlpha = 1f;
+    private const float HudTransparentAlpha = 0.35f;
+    private const float HudFadeSpeed = 6f; // 每秒变化速率
+
+    /// <summary>
+    /// 注入遮挡检测所需的相机和单位列表。
+    /// 由 CombatSceneBase 在初始化时调用。
+    /// </summary>
+    public void SetOcclusionSources(Camera3D camera, System.Collections.Generic.List<Unit> units)
+    {
+        _occlusionCamera = camera;
+        _occlusionUnits = units;
+    }
+
+    /// <summary>检测是否有单位被底部 HUD 遮挡，并平滑调整透明度</summary>
+    private void UpdateHudOcclusion(double delta)
+    {
+        if (_bottomPanel == null || _occlusionCamera == null || _occlusionUnits == null) return;
+
+        // 获取底部面板在屏幕上的矩形区域
+        var panelRect = _bottomPanel.GetGlobalRect();
+        // 向上扩展一点检测区域（提前触发半透明，避免突兀）
+        panelRect = panelRect.Grow(20f);
+
+        bool hasOcclusion = false;
+        foreach (var unit in _occlusionUnits)
+        {
+            if (unit == null || !GodotObject.IsInstanceValid(unit) || unit.CurrentHp <= 0) continue;
+
+            // 将单位世界坐标投影到屏幕坐标
+            if (!_occlusionCamera.IsPositionInFrustum(unit.GlobalPosition)) continue;
+            var screenPos = _occlusionCamera.UnprojectPosition(unit.GlobalPosition);
+
+            if (panelRect.HasPoint(screenPos))
+            {
+                hasOcclusion = true;
+                break;
+            }
+        }
+
+        _hudTargetAlpha = hasOcclusion ? HudTransparentAlpha : HudOpaqueAlpha;
+
+        // 平滑过渡
+        _hudCurrentAlpha = Mathf.MoveToward(_hudCurrentAlpha, _hudTargetAlpha, (float)delta * HudFadeSpeed);
+        _bottomPanel.Modulate = new Color(1f, 1f, 1f, _hudCurrentAlpha);
+    }
 
     /// <summary>用当前选中单位刷新底部信息面板</summary>
     public void UpdateUnitInfo(Unit? unit)
     {
+        SetApPreview(0f); // 切换单位时重置闪烁
+
         if (unit == null || !GodotObject.IsInstanceValid(unit) || unit.Data == null)
             return;
 
@@ -600,8 +954,15 @@ public partial class CombatUI : CanvasLayer
         // AP(行动力)条
         if (_apBar != null)
         {
-            _apBar.MaxValue = unit.Model.GetMaxAp();
+            float maxAp = unit.Model.GetMaxAp();
+            _apBar.MaxValue = maxAp;
             _apBar.Value = unit.CurrentAp;
+            if (_apBgBar != null) _apBgBar.MaxValue = maxAp;
+            if (_apPreviewBar != null)
+            {
+                _apPreviewBar.MaxValue = maxAp;
+                _apPreviewBar.Value = 0f; // 切换单位时确保顶层不覆盖
+            }
         }
 
         if (_weaponPrimaryLabel != null)
@@ -612,6 +973,8 @@ public partial class CombatUI : CanvasLayer
 
         // 刷新快捷技能槽
         RefreshQuickSlots(unit);
+        // 刷新职业技能UI
+        RefreshCareerSkill(unit);
     }
 
     /// <summary>写入战斗日志</summary>
@@ -646,10 +1009,10 @@ public partial class CombatUI : CanvasLayer
     }
 
     /// <summary>显示命中预览提示</summary>
-    public void ShowHitPreview(Vector2 mousePos, Unit attacker, Unit target)
+    public void ShowHitPreview(Vector2 mousePos, Unit attacker, Unit target, HexGrid? grid = null, int coverType = 0, int elevationDiff = 0, bool hasFlanking = false, bool hasSneak = false)
     {
         if (_hitPreviewTooltip != null && attacker != null && target != null)
-            _hitPreviewTooltip.ShowPreview(attacker, target);
+            _hitPreviewTooltip.ShowPreview(attacker, target, grid, coverType, elevationDiff, hasFlanking, hasSneak);
     }
 
     /// <summary>显示超出射程预览（命中率 0%）</summary>
@@ -659,11 +1022,38 @@ public partial class CombatUI : CanvasLayer
             _hitPreviewTooltip.ShowOutOfRange(target, distance, maxRange);
     }
 
+    /// <summary>显示行动力不足预览</summary>
+    public void ShowApDeficientPreview(Vector2 mousePos, Unit target, float requiredAp, float currentAp)
+    {
+        if (_hitPreviewTooltip != null && target != null)
+            _hitPreviewTooltip.ShowApDeficient(target, 0, requiredAp, currentAp);
+    }
+
+    public void ShowAttackBlockedPreview(Vector2 mousePos, Unit target, string reason)
+    {
+        if (_hitPreviewTooltip != null && target != null)
+            _hitPreviewTooltip.ShowBlocked(target, reason);
+    }
+
     /// <summary>隐藏命中预览</summary>
     public void HideHitPreview()
     {
         if (_hitPreviewTooltip != null && _hitPreviewTooltip.Visible)
             _hitPreviewTooltip.Visible = false;
+    }
+
+    /// <summary>显示技能效果预览提示</summary>
+    public void ShowSkillPreview(Vector2 mousePos, Unit caster, SkillTargetingInfo info, List<Unit> affectedUnits)
+    {
+        if (_skillPreviewTooltip != null && caster != null)
+            _skillPreviewTooltip.ShowPreview(caster, info, affectedUnits);
+    }
+
+    /// <summary>隐藏技能效果预览</summary>
+    public void HideSkillPreview()
+    {
+        if (_skillPreviewTooltip != null && _skillPreviewTooltip.Visible)
+            _skillPreviewTooltip.Visible = false;
     }
 
     /// <summary>打开法术选择面板</summary>
@@ -780,7 +1170,10 @@ public partial class CombatUI : CanvasLayer
         var existingParent = minimap.GetParent();
         existingParent?.RemoveChild(minimap);
 
-        minimap.SizeFlagsVertical = Control.SizeFlags.Fill;
+        float side = Mathf.Max(minimap.CustomMinimumSize.X, minimap.CustomMinimumSize.Y);
+        if (side < 150f) side = 150f;
+        minimap.CustomMinimumSize = new Vector2(side, side);
+        minimap.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         minimap.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
         minimap.MouseFilter = Control.MouseFilterEnum.Pass;
 
@@ -851,7 +1244,11 @@ public partial class CombatUI : CanvasLayer
     // 快捷技能槽
     // ============================================================================
 
-    /// <summary>当选中单位变化时,把该单位的主动技能绑到快捷槽</summary>
+    /// <summary>
+    /// 当选中单位变化时，按 UnitData.EquippedSkills 顺序填充 10 个快捷槽。
+    /// v0.7：装备制 — 玩家在技能盘 UI 底部手动选 10 个上场，战斗 HUD 只读。
+    /// 槽位 9（最后 1 格）保留给职业技能（如有）。
+    /// </summary>
     public void RefreshQuickSlots(Unit? unit)
     {
         if (_quickSlots == null || _quickSlotSkills == null || _quickSlotDescriptions == null) return;
@@ -868,41 +1265,112 @@ public partial class CombatUI : CanvasLayer
             _quickSlots[i].Modulate = mod;
         }
 
-        if (unit?.SkillTree == null) return;
-
-        var activeSkills = unit.SkillTree.GetActiveSkills();
-        int slotIdx = 0;
-        foreach (var skillNode in activeSkills)
+        if (unit?.Data == null || unit.SkillTree == null)
         {
-            if (slotIdx >= 10) break;
-            if (string.IsNullOrEmpty(skillNode.SkillEffect)) continue;
-
-            _quickSlotSkills[slotIdx] = $"skill_{skillNode.SkillEffect}";
-            _quickSlotDescriptions[slotIdx] = GetSkillDescription(skillNode.SkillEffect, skillNode.NodeName);
-            _quickSlots[slotIdx].Text = skillNode.NodeName.Length > 3
-                ? skillNode.NodeName[..3]
-                : skillNode.NodeName;
-            _quickSlots[slotIdx].TooltipText = skillNode.NodeName;
-            var mod = _quickSlots[slotIdx].Modulate;
-            mod.A = 1.0f;
-            _quickSlots[slotIdx].Modulate = mod;
-            slotIdx++;
+            GD.Print($"[SkillTarget] RefreshQuickSlots: unit={unit?.Name ?? "null"} data={(unit?.Data == null ? "null" : "ok")} tree={(unit?.SkillTree == null ? "null" : "ok")}");
+            return;
         }
 
-        // 职业技能
-        var careerSkill = unit.GetCareerSkill();
-        if (careerSkill != null && slotIdx < 10)
+        // 按 UnitData.EquippedSkills（最多 10 个）填槽
+        var data = unit.Data;
+        var tree = unit.SkillTree;
+        int filled = 0;
+        for (int i = 0; i < 10; i++)
         {
-            _quickSlotSkills[slotIdx] = "career_skill";
-            _quickSlotDescriptions[slotIdx] = $"[b]{careerSkill.DisplayName}[/b]\n职业技能\nAP消耗: {careerSkill.ApCost}";
-            _quickSlots[slotIdx].Text = careerSkill.DisplayName.Length > 3
-                ? careerSkill.DisplayName[..3]
-                : careerSkill.DisplayName;
-            _quickSlots[slotIdx].TooltipText = careerSkill.DisplayName;
-            var mod = _quickSlots[slotIdx].Modulate;
+            string entry = data.GetEquippedSkill(i);
+            if (string.IsNullOrEmpty(entry)) continue;
+
+            if (SpellStudyCatalog.IsEquippedSpellEntry(entry))
+            {
+                string spellId = SpellStudyCatalog.GetSpellIdFromEntry(entry);
+                var spell = SpellStudyCatalog.GetKnownSpell(data, spellId);
+                if (spell == null) continue;
+
+                _quickSlotSkills[i] = entry;
+                _quickSlotDescriptions[i] = GetSpellDescription(spell);
+                _quickSlots[i].Text = spell.SpellName.Length > 3 ? spell.SpellName[..3] : spell.SpellName;
+                _quickSlots[i].TooltipText = spell.SpellName;
+                var spellMod = _quickSlots[i].Modulate;
+                spellMod.A = 1.0f;
+                _quickSlots[i].Modulate = spellMod;
+                filled++;
+                continue;
+            }
+
+            string effect = entry;
+            if (!BladeHex.Combat.SkillRegistry.IsEquippableCombatSkill(effect)) continue;
+
+            // 找到对应技能盘节点（拿 NodeName 用作槽位标签）
+            string nodeName = effect;
+            BladeHex.Strategic.SkillNodeData? matchedNode = null;
+            foreach (var node in tree.GetActiveSkills())
+            {
+                if (node.SkillEffect == effect) { matchedNode = node; nodeName = node.NodeName; break; }
+            }
+
+            // 数据校验：装备的技能必须在已激活节点列表里。否则槽位灰显。
+            if (matchedNode == null) continue;
+
+            _quickSlotSkills[i] = $"skill_{effect}";
+            _quickSlotDescriptions[i] = GetSkillDescription(effect, nodeName);
+            _quickSlots[i].Text = nodeName.Length > 3 ? nodeName[..3] : nodeName;
+            _quickSlots[i].TooltipText = nodeName;
+            var mod = _quickSlots[i].Modulate;
             mod.A = 1.0f;
-            _quickSlots[slotIdx].Modulate = mod;
+            _quickSlots[i].Modulate = mod;
+            filled++;
         }
+
+        // 职业技能：不在技能栏显示（使用专用的职业技能面板）
+        // 职业技能通过底部面板的 _careerSkillPanel 点击触发
+
+        // 诊断：统计实际有技能的槽位数
+        int populated = 0;
+        for (int i = 0; i < 10; i++)
+            if (!string.IsNullOrEmpty(_quickSlotSkills[i])) populated++;
+        GD.Print($"[SkillTarget] RefreshQuickSlots: total populated={populated}/10 careerSkill={(unit.GetCareerSkill() != null ? unit.GetCareerSkill()!.DisplayName : "null")}");
+    }
+
+    /// <summary>
+    /// 刷新职业技能 UI 显示。根据单位是否有职业称号技能显示/隐藏面板。
+    /// v1.0: 仅五/六属性主动显示按钮; 被动职业不显示。
+    /// </summary>
+    public void RefreshCareerSkill(Unit? unit)
+    {
+        if (_careerSkillPanel == null || _careerSkillNameLabel == null || _careerSkillApLabel == null)
+            return;
+
+        var career = unit?.GetCareerSkill();
+        // v1.0: 只有 ShowInCombatUi=true 的技能(五/六属性主动)显示按钮
+        if (career == null || !career.ShowInCombatUi || !career.IsActive)
+        {
+            _careerSkillPanel.Visible = false;
+            return;
+        }
+
+        _careerSkillNameLabel.Text = career.DisplayName;
+
+        // v1.0: 根据分阶显示 AP 要求
+        if (career.RequiresFullAp)
+        {
+            bool apFull = unit!.CurrentAp >= unit.GetMaxAp() - 0.01f;
+            _careerSkillApLabel.Text = apFull ? "满AP ✓" : "需满AP";
+            _careerSkillApLabel.Modulate = apFull
+                ? new Color(0.6f, 0.85f, 1.0f)
+                : new Color(1.0f, 0.4f, 0.4f);
+        }
+        else if (career.IsOncePerTurn)
+        {
+            _careerSkillApLabel.Text = "每回合1次";
+            _careerSkillApLabel.Modulate = new Color(0.6f, 0.85f, 1.0f);
+        }
+        else
+        {
+            _careerSkillApLabel.Text = $"AP {career.ApCost}";
+            _careerSkillApLabel.Modulate = new Color(0.6f, 0.85f, 1.0f);
+        }
+
+        _careerSkillPanel.Visible = true;
     }
 
     /// <summary>按快捷键触发对应槽位</summary>
@@ -948,6 +1416,7 @@ public partial class CombatUI : CanvasLayer
             rtl.BbcodeEnabled = true;
             rtl.ScrollActive = false;
             rtl.FitContent = true;
+            rtl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             rtl.CustomMinimumSize = new Vector2(252, 0);
             rtl.MouseFilter = Control.MouseFilterEnum.Ignore;
             rtl.AddThemeFontSizeOverride("normal_font_size", 14);
@@ -979,21 +1448,31 @@ public partial class CombatUI : CanvasLayer
         {
             string name = registry.ContainsKey("name") ? registry["name"].AsString() : nodeName;
             string desc = registry.ContainsKey("description") ? registry["description"].AsString() : "";
-            int apCost = registry.ContainsKey("action_cost") ? registry["action_cost"].AsInt32() : 0;
+            string apText = BuildActionCostText(registry);
+            int manaCost = registry.ContainsKey("mana_cost") ? registry["mana_cost"].AsInt32() : 0;
+            int cooldown = registry.ContainsKey("cooldown") ? registry["cooldown"].AsInt32() : 0;
+            int usesPerBattle = registry.ContainsKey("uses_per_battle") ? registry["uses_per_battle"].AsInt32() : -1;
+            int range = SkillRegistry.GetRange(skillEffect);
+            int aoeRadius = SkillRegistry.GetAoeRadius(skillEffect);
+            string equipmentText = SkillRegistry.GetEquipmentRequirementText(skillEffect);
 
-            // 目标类型
+            // 目标类型（int 与 TargetType 枚举对应）
             string targetText = "";
             if (registry.ContainsKey("target"))
             {
                 int targetType = registry["target"].AsInt32();
                 targetText = targetType switch
                 {
-                    0 => "单体敌人",
-                    1 => "单体友军",
-                    2 => "自身",
-                    3 => "全体敌人",
-                    4 => "全体友军",
-                    5 => "区域",
+                    0 => "自身",
+                    1 => "单体敌人",
+                    2 => "单体友军",
+                    3 => "周围敌人",
+                    4 => "小范围AOE",
+                    5 => "锥形范围",
+                    6 => "远程单体",
+                    7 => "远程AOE",
+                    8 => "全体友军",
+                    9 => "地面",
                     _ => "",
                 };
             }
@@ -1008,14 +1487,77 @@ public partial class CombatUI : CanvasLayer
             if (!string.IsNullOrEmpty(desc))
                 sb.Append($"[color=#ddd]{desc}[/color]\n\n");
             // 属性行(灰标签 + 亮值)
-            if (apCost > 0)
-                sb.Append($"[color=#999]AP消耗:[/color]  [color=#7cf]{apCost}[/color]\n");
+            if (!string.IsNullOrEmpty(apText))
+                sb.Append($"[color=#999]AP消耗:[/color]  [color=#7cf]{apText}[/color]\n");
+            if (manaCost > 0)
+                sb.Append($"[color=#999]法力消耗:[/color]  [color=#9cf]{manaCost}[/color]\n");
+            if (cooldown > 0)
+                sb.Append($"[color=#999]冷却:[/color]    [color=#aed]{cooldown} 回合[/color]\n");
+            if (usesPerBattle > 0)
+                sb.Append($"[color=#999]次数:[/color]    [color=#aed]每场战斗 {usesPerBattle} 次[/color]\n");
+            if (!string.IsNullOrEmpty(equipmentText))
+                sb.Append($"[color=#999]装备需求:[/color]  [color=#fca]{equipmentText}[/color]\n");
             if (!string.IsNullOrEmpty(targetText))
                 sb.Append($"[color=#999]目标:[/color]    [color=#aed]{targetText}[/color]\n");
+            if (range > 0)
+                sb.Append($"[color=#999]射程:[/color]    [color=#aed]{range} 格[/color]\n");
+            if (aoeRadius > 0)
+                sb.Append($"[color=#999]范围:[/color]    [color=#aed]半径 {aoeRadius} 格[/color]\n");
 
             return sb.ToString().TrimEnd();
         }
         return $"[color=#e8c864][b]{nodeName}[/b][/color]\n[color=#888](无详细描述)[/color]";
+    }
+
+    private static string BuildActionCostText(Godot.Collections.Dictionary registry)
+    {
+        if (registry.ContainsKey("weapon_ap_bonus"))
+        {
+            int bonus = registry["weapon_ap_bonus"].AsInt32();
+            return bonus == 0 ? "武器AP" : $"武器AP+{bonus}";
+        }
+        if (registry.ContainsKey("movement_ap_bonus"))
+        {
+            int bonus = registry["movement_ap_bonus"].AsInt32();
+            return bonus == 0 ? "距离AP" : $"距离AP+{bonus}";
+        }
+        if (!registry.ContainsKey("action_cost"))
+            return "";
+
+        int cost = registry["action_cost"].AsInt32();
+        return cost == 0 ? "0 (免费行动)" : cost.ToString();
+    }
+
+    private static string GetSpellDescription(SpellData spell)
+    {
+        int apCost = spell.castingTime == SpellData.CastingTime.MainAction ? 4 : 0;
+        string shapeText = spell.shape switch
+        {
+            SpellData.SpellShape.Self => "自身",
+            SpellData.SpellShape.Single => "单体",
+            SpellData.SpellShape.Ray => "射线",
+            SpellData.SpellShape.Cone => "锥形",
+            SpellData.SpellShape.Sphere => "范围",
+            SpellData.SpellShape.Line => "线形",
+            SpellData.SpellShape.Cross => "十字",
+            SpellData.SpellShape.Touch => "触碰",
+            _ => "",
+        };
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"[color=#e8c864][b]{spell.SpellName}[/b][/color]\n");
+        sb.Append("[color=#555]────────────────────[/color]\n");
+        if (!string.IsNullOrEmpty(spell.Description))
+            sb.Append($"[color=#ddd]{spell.Description}[/color]\n\n");
+        sb.Append($"[color=#999]环阶:[/color]    [color=#aed]{(int)spell.tier} 环[/color]\n");
+        sb.Append($"[color=#999]AP消耗:[/color]  [color=#7cf]{apCost}[/color]\n");
+        sb.Append($"[color=#999]法力消耗:[/color] [color=#9cf]{spell.ManaCost}[/color]\n");
+        if (!string.IsNullOrEmpty(shapeText))
+            sb.Append($"[color=#999]目标:[/color]    [color=#aed]{shapeText}[/color]\n");
+        sb.Append($"[color=#999]射程:[/color]    [color=#aed]{spell.RangeCells} 格[/color]");
+        if (spell.ShapeSize > 1)
+            sb.Append($"\n[color=#999]范围:[/color]    [color=#aed]半径/长度 {spell.ShapeSize}[/color]");
+        return sb.ToString();
     }
 
     public override void _ExitTree()

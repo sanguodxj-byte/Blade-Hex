@@ -37,13 +37,18 @@ public partial class TraitData : Resource
 
     // 非属性效果（功能性特质）
     [Export] public string FunctionalEffect { get; set; } = "";
+    /// <summary>
+    /// 当前未使用：FunctionalEffect 在 ApplyFunctionalTraits 里走 if-else 分发，不读 EffectValue。
+    /// 如未来重构为统一管线，可考虑删除此字段或接入。
+    /// </summary>
     [Export] public float EffectValue;
     [Export] public float Weight { get; set; } = 1.0f;
 
-    // 图标（预留，后续替换为真实图标资源）
+    // 图标（设计预留，UI 当前不显示特质图标，无消费方）
     [Export] public string IconId { get; set; } = "";
 
-    // AI加点方向微调
+    // 设计预留：AI 加点方向倾向。当前 AiAllocatePoints 不读此字段，仅按 primary attr 走。
+    // 计划接入：让有"军事天才"等特质的 NPC 优先点 STR 路线。
     [Export] public Godot.Collections.Dictionary AiDirectionBonus = new();
 
     // ========================================
@@ -81,13 +86,13 @@ public partial class TraitData : Resource
         traits.Add(MakeFunc("iron_stomach", "铁胃", "免疫食物中毒，长途行军安全", "iron_stomach", 0.5f));
         traits.Add(MakeFunc("adaptability", "适应力", "疲劳惩罚减半，长途行军优势", "adaptability", 0.4f));
         traits.Add(MakeFunc("thick_skin_trait", "厚皮", "受到物理伤害-1，全局减伤", "thick_skin", 0.3f));
-        traits.Add(MakeFunc("indomitable", "不屈", "HP归零时50%概率保持1HP（每战1次）", "indomitable", 0.2f));
+        traits.Add(MakeFunc("indomitable", "不屈", "HP归零时50%概率保持1HP（每战1次）", "indomitable", 0.2f, new Godot.Collections.Dictionary { { "valor", 1.0f } }));
         traits.Add(MakeFunc("ether_resonance", "以太共鸣", "施法时恢复1d4 HP", "ether_resonance", 0.3f, new Godot.Collections.Dictionary { { "int", 0.1f } }));
-        traits.Add(MakeFunc("premonition", "预感", "被伏击时自动获得一轮准备", "premonition", 0.3f));
+        traits.Add(MakeFunc("premonition", "预感", "被伏击时自动获得一轮准备", "premonition", 0.3f, new Godot.Collections.Dictionary { { "calculating", 1.0f } }));
         traits.Add(MakeFunc("old_injury", "旧伤", "战斗开始时HP-10%", "old_wound", 0.6f, new Godot.Collections.Dictionary { { "con", 0.1f } }));
         traits.Add(MakeFunc("gluttony", "贪吃", "补给消耗×1.5", "gluttony", 0.5f));
-        traits.Add(MakeFunc("timid", "胆小", "HP<50%时攻击-1", "timid", 0.5f));
-        traits.Add(MakeFunc("xenophobia", "仇外", "与外族队友在一起时忠诚度-10", "xenophobia", 0.4f));
+        traits.Add(MakeFunc("timid", "胆小", "HP<50%时攻击-1", "timid", 0.5f, new Godot.Collections.Dictionary { { "mercy", 1.0f } }));
+        traits.Add(MakeFunc("xenophobia", "仇外", "与外族队友在一起时忠诚度-10", "xenophobia", 0.4f, new Godot.Collections.Dictionary { { "honor", -1.0f } }));
 
         return traits.ToArray();
     }
@@ -149,5 +154,45 @@ public partial class TraitData : Resource
         t.Weight = w;
         t.AiDirectionBonus = aiDir ?? new Godot.Collections.Dictionary();
         return t;
+    }
+
+    // T04: Get emoji icon for trait (placeholder until real art assets)
+    public string GetIconEmoji()
+    {
+        return TraitId switch
+        {
+            "night_vision" => "👁",
+            "iron_stomach" => "🍖",
+            "gluttony" => "🍔",
+            "timid" => "😨",
+            "xenophobia" => "🤬",
+            "alertness" => "👂",
+            "thick_skin_trait" => "🛡",
+            "indomitable" => "💪",
+            "ether_resonance" => "✨",
+            "premonition" => "🔮",
+            "old_injury" => "🩹",
+            "adaptability" => "🌿",
+            "brute_force" => "⚔️",
+            "long_arms" => "🦾",
+            "quick_hands" => "🖐️",
+            "eagle_eye" => "🎯",
+            "thick_bones" => "🦴",
+            "sturdy" => "🏋️",
+            "great_mind" => "🧠",
+            "spell_memory" => "📖",
+            "keen_intuition" => "👁️",
+            "born_leader" => "👑",
+            "affinity" => "💬",
+            "reckless_brave" => "😤",
+            "sorcerer_blood" => "🧙",
+            "frail_build" => "🥀",
+            "sluggish" => "🐌",
+            "fragile" => "💔",
+            "dull" => "😶",
+            "clumsy" => "🤡",
+            "bad_talker" => "🤐",
+            _ => "⭐",
+        };
     }
 }

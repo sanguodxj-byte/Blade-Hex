@@ -34,7 +34,6 @@ public class UnitRegistry
         else EnemyUnits.Add(unit);
 
         unit.CommandHistory = commandHistory;
-        unit.TreeExited += () => OnUnitRemoved(unit, isPlayer);
     }
 
     public void LockInitialCounts()
@@ -44,8 +43,9 @@ public class UnitRegistry
         KilledEnemyLevels = 0;
     }
 
-    private void OnUnitRemoved(Unit unit, bool isPlayer)
+    public void RemoveUnit(Unit unit)
     {
+        bool isPlayer = unit.IsPlayerSide;
         AllUnits.Remove(unit);
         if (isPlayer)
         {
@@ -80,16 +80,16 @@ public class UnitRegistry
             u.CurrentAp = u.Model.GetMaxAp();
             if (u.Data != null)
             {
-                u.Data.Runtime.IsRangedWeaponLoaded = true;
-                u.Data.Runtime.NonSpellSkillUsedThisTurn = false;  // v0.6 3.3
-                u.Data.Runtime.AooUsedThisTurn = false;
-                u.Data.Runtime.ExtraActionsThisTurn = 0;           // v0.6 11.7
-                u.Data.Runtime.TimeWarpUsedThisTurn = false;
+                u.Model.IsRangedWeaponLoaded = true;
+                u.Model.NonSpellSkillUsedThisTurn = false;  // v0.6 3.3
+                u.Model.AooUsedThisTurn = false;
+                u.Model.ExtraActionsThisTurn = 0;           // v0.6 11.7
+                u.Model.TimeWarpUsedThisTurn = false;
                 // v0.6 10.0 修订：每回合开始 Mana 恢复 floor(WIS/8)
                 int manaRegen = BladeHex.Combat.CombatStats.GetManaRegen(u.Data);
                 int maxMana = BladeHex.Combat.CombatStats.GetMaxMana(u.Data);
                 if (manaRegen > 0 && u.Data.CurrentMana < maxMana)
-                    u.Data.CurrentMana = System.Math.Min(maxMana, u.Data.CurrentMana + manaRegen);
+                    u.Model.CurrentMana = System.Math.Min(maxMana, u.Model.CurrentMana + manaRegen);
             }
         }
     }

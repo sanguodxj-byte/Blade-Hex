@@ -234,11 +234,7 @@ public partial class StatusEffectData : Resource
         if (effectB == "poison" && effectA == "burning")
             return new Godot.Collections.Dictionary { { "action", "spread" }, { "value", "poison_cloud" } };
 
-        // 恐惧 + 士气崩溃 → 优先溃逃
-        if (effectA == "fear" && effectB == "morale_rout")
-            return new Godot.Collections.Dictionary { { "action", "cancel_a" } };
-        if (effectB == "fear" && effectA == "morale_rout")
-            return new Godot.Collections.Dictionary { { "action", "cancel_b" } };
+        // (士气系统已移除)
 
         return new Godot.Collections.Dictionary { { "action", "none" } };
     }

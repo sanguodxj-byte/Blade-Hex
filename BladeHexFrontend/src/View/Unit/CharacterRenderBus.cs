@@ -65,7 +65,7 @@ public partial class CharacterRenderBus : Node
         _registry[uid] = renderNode;
 
         // 转发 RenderNode 的信号
-        renderNode.HpUpdated += (current, max) => OnHpUpdated(current, max, unit);
+        // 注：HP 变化信号已由 CharacterRenderNode.BuildHud() 内的 UnitHudController.HpChanged 直接转发
         renderNode.Died += () => OnDied(unit);
         renderNode.EquipmentSlotChanged += (slot) => OnEquipChanged(slot, unit);
 
@@ -270,9 +270,9 @@ public partial class CharacterRenderBus : Node
             if (dict.TryGetValue("id", out var idVar)) seen.Add(idVar.AsString());
         }
 
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
             if (seen.Add(inst.Id)) effects.Add(inst.ToGodotDict());
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
             if (seen.Add(buff.Id)) effects.Add(buff.ToGodotDict());
 
         return effects;
@@ -281,9 +281,6 @@ public partial class CharacterRenderBus : Node
     // ========================================
     // RenderNode 信号转发
     // ========================================
-
-    private void OnHpUpdated(int current, int max, Unit unit)
-        => EmitSignal(SignalName.UnitHpChanged, unit, current, max);
 
     private void OnDied(Unit unit)
         => EmitSignal(SignalName.UnitDied, unit);

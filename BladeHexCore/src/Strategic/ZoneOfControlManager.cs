@@ -124,10 +124,8 @@ public partial class ZoneOfControlManager : RefCounted
             OverworldPOI.POIType.Town => 3,
             OverworldPOI.POIType.Village => 2,
             OverworldPOI.POIType.Settlement => 2,
-            OverworldPOI.POIType.Outpost => 2,
             OverworldPOI.POIType.Lair => 1,
-            OverworldPOI.POIType.Port => 2,
-            _ => 0, // Tavern/Mine/Farm/Shrine 没有控制区
+            _ => 0, // Mine/Farm 没有控制区
         };
     }
 

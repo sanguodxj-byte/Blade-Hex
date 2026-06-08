@@ -8,5 +8,8 @@
       "PowerShell(cd \"D:\\\\123\\\\Blade&Hex\"; git status --short | Where-Object {$_ -match \"\\\\.\\(csproj|sln\\)$\"})",
       "PowerShell(cd \"D:\\\\123\\\\Blade&Hex\"; git diff --name-only HEAD | Where-Object {$_ -match \"\\\\.cs$\"} | Measure-Object | Select-Object -ExpandProperty Count)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "godot-mcp"
+  ]
 }

@@ -34,6 +34,7 @@ public partial class ChunkGenerator : RefCounted
     private FastNoiseLite? _noiseTemp;
     private FastNoiseLite? _noiseWarp;    // 大陆形状扭曲
     private FastNoiseLite? _noiseRegion;  // 地区性格（让大块区域偏向某种地形）
+    private FastNoiseLite? _noiseNutrient; // 养分/土壤肥力噪声
 
     /// <summary>世界生成模板网格（按 (gridX, gridY) 索引，每个格子一个独立模板）</summary>
     public WorldTemplate[,] TemplateGrid { get; private set; } = new WorldTemplate[1, 1];
@@ -151,6 +152,16 @@ public partial class ChunkGenerator : RefCounted
         _noiseRegion.FractalOctaves = 3;
         _noiseRegion.FractalLacunarity = 2.0f;
         _noiseRegion.FractalGain = 0.5f;
+
+        // 养分/土壤肥力噪声（低频大块，让同一区域内出现肥沃/贫瘠的自然变化）
+        _noiseNutrient = new FastNoiseLite();
+        _noiseNutrient.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
+        _noiseNutrient.Seed = WorldSeed + 5000;
+        _noiseNutrient.Frequency = 0.03f;  // 低频：大块肥沃/贫瘠区域
+        _noiseNutrient.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _noiseNutrient.FractalOctaves = 2;
+        _noiseNutrient.FractalLacunarity = 2.0f;
+        _noiseNutrient.FractalGain = 0.4f;
     }
 
     private void DefineRegions()
@@ -325,11 +336,21 @@ public partial class ChunkGenerator : RefCounted
             0.0f, 1.0f);
 
         // ========================================
-        // 4. 生物群落决策
+        // 4. 养分/土壤肥力
+        // ========================================
+        float nutrientBase = (_noiseNutrient!.GetNoise2D(worldQ, worldR) + 1.0f) * 0.5f; // [0,1]
+        // 湿润地区养分高（冲积效应）
+        float moistBoost = Mathf.Lerp(0.7f, 1.0f, moist);
+        // 高海拔贫瘠（薄土层）
+        float elevPenalty = elev > 0.65f ? Mathf.Lerp(1.0f, 0.5f, (elev - 0.65f) / 0.35f) : 1.0f;
+        float nutrient = Mathf.Clamp(nutrientBase * moistBoost * elevPenalty, 0.0f, 1.0f);
+
+        // ========================================
+        // 5. 生物群落决策
         // ========================================
         var terrain = BiomeRules.Decide(elev, moist, temp);
 
-        return HexOverworldTile.Create(worldQ, worldR, terrain, elev, moist, temp);
+        return HexOverworldTile.Create(worldQ, worldR, terrain, elev, moist, temp, nutrient);
     }
 
     /// <summary>

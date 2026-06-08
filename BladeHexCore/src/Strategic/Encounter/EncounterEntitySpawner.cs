@@ -9,12 +9,15 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using BladeHex.Data;
 using BladeHex.Map;
 
 namespace BladeHex.Strategic;
 
 public class EncounterEntitySpawner
 {
+    private ChunkManager? _chunkManagerRef;
+
     /// <summary>每次生成尝试的最少间隔（秒）</summary>
     public float SpawnIntervalSec = 8.0f;
 
@@ -29,7 +32,18 @@ public class EncounterEntitySpawner
     public float SpawnDistanceMax = 1600.0f;
 
     /// <summary>Chunk 模式寻路引用（由外部注入，用于追击路径避障）</summary>
-    public ChunkManager? ChunkManagerRef { get; set; }
+    public ChunkManager? ChunkManagerRef
+    {
+        get => _chunkManagerRef;
+        set
+        {
+            _chunkManagerRef = value;
+            TerrainQueryRef = value == null ? null : OverworldTerrainQuery.ForActiveChunks(value);
+        }
+    }
+
+    /// <summary>活跃大地图地形查询（用于追击路径避障）</summary>
+    public OverworldTerrainQuery? TerrainQueryRef { get; set; }
 
     /// <summary>触发战斗的距离（玩家与实体）</summary>
     public float EncounterDistance = 80.0f;
@@ -43,8 +57,22 @@ public class EncounterEntitySpawner
     /// <summary>不活跃实体池 — 离开活跃区域的实体在此休眠等待复用</summary>
     public DormantEntityPool DormantPool { get; set; } = new();
 
+    /// <summary>同步过来的玩家大地图战斗力</summary>
+    public float PlayerCombatPower { get; set; } = 10.0f;
+
+    private readonly PerceptionIntentResolver _perceptionResolver = new();
+    private readonly OverworldEntity _playerProxy = new()
+    {
+        EntityName = "PlayerParty",
+        EntityTypeEnum = OverworldEntity.EntityType.Adventurer,
+        Faction = "player",
+        IsHostileToPlayer = false,
+        IsAlive = true,
+    };
+
     private float _timeSinceLastSpawn = 0f;
     private Vector2 _lastPlayerPosition = Vector2.Zero;
+    private bool _positionInitialized = false;
     private float _accumulatedDistance = 0f;
     private readonly Random _rng = new();
 
@@ -75,10 +103,11 @@ public class EncounterEntitySpawner
     {
         var newlySpawned = new List<OverworldEntity>();
 
-        // 累积玩家移动距离
-        if (_lastPlayerPosition != Vector2.Zero)
+        // 累积玩家移动距离（首帧仅记录位置，不累积距离）
+        if (_positionInitialized)
             _accumulatedDistance += playerPosition.DistanceTo(_lastPlayerPosition);
         _lastPlayerPosition = playerPosition;
+        _positionInitialized = true;
 
         _timeSinceLastSpawn += delta;
 
@@ -96,12 +125,12 @@ public class EncounterEntitySpawner
             }
         }
 
-        // 更新所有敌对实体的追击 AI
+        // 1. 驱动所有活跃敌对实体的 AI 移动行为（使用 PerceptionIntentResolver 统一判定）
         foreach (var entity in existingEntities)
         {
-            if (!entity.IsAlive || !entity.IsHostileToPlayer) continue;
+            if (!entity.IsAlive || !IsHostileToPlayer(entity)) continue;
             if (entity.EntityTypeEnum == OverworldEntity.EntityType.Caravan) continue;
-            UpdateChaseAI(entity, playerPosition);
+            UpdateChaseAI(entity, playerPosition, existingEntities);
         }
 
         return newlySpawned;
@@ -114,7 +143,7 @@ public class EncounterEntitySpawner
         float closestDist = EncounterDistance;
         foreach (var e in entities)
         {
-            if (!e.IsAlive || !e.IsHostileToPlayer) continue;
+            if (!e.IsAlive || !IsHostileToPlayer(e)) continue;
             if (e.EntityTypeEnum == OverworldEntity.EntityType.Caravan) continue;
             float d = playerPosition.DistanceTo(e.Position);
             if (d <= closestDist)
@@ -131,7 +160,7 @@ public class EncounterEntitySpawner
         int n = 0;
         foreach (var e in entities)
         {
-            if (e.IsAlive && e.IsHostileToPlayer
+            if (e.IsAlive && IsHostileToPlayer(e)
                 && e.EntityTypeEnum != OverworldEntity.EntityType.Caravan)
                 n++;
         }
@@ -273,7 +302,47 @@ public class EncounterEntitySpawner
             }
         }
 
+        // 分配 AIStrategy — 按实体类型加权随机
+        entity.AIStrategy = PickAIStrategy(entityType);
+
         return entity;
+    }
+
+    /// <summary>按实体类型加权随机分配 AIStrategy</summary>
+    private AIStrategyEnum PickAIStrategy(OverworldEntity.EntityType type)
+    {
+        return type switch
+        {
+            OverworldEntity.EntityType.BanditParty =>
+                // 山贼: 鲁莽/狡诈/恐吓 三选一
+                new[] { AIStrategyEnum.Reckless, AIStrategyEnum.Cunning, AIStrategyEnum.Intimidate }[_rng.Next(3)],
+
+            OverworldEntity.EntityType.RobberParty =>
+                // 劫匪: 狡诈/谨慎 二选一（偷鸡摸狗型）
+                _rng.Next(2) == 0 ? AIStrategyEnum.Cunning : AIStrategyEnum.Cautious,
+
+            OverworldEntity.EntityType.PirateCrew =>
+                // 海寇: 鲁莽/恐吓/狂暴 三选一
+                new[] { AIStrategyEnum.Reckless, AIStrategyEnum.Intimidate, AIStrategyEnum.Berserk }[_rng.Next(3)],
+
+            OverworldEntity.EntityType.RaidingParty =>
+                // 怪物掠夺队: 本能/领地/狂暴 三选一
+                new[] { AIStrategyEnum.Instinct, AIStrategyEnum.Territorial, AIStrategyEnum.Berserk }[_rng.Next(3)],
+
+            OverworldEntity.EntityType.EpicMonster =>
+                // 史诗怪物: 领地/狂暴 二选一
+                _rng.Next(2) == 0 ? AIStrategyEnum.Territorial : AIStrategyEnum.Berserk,
+
+            OverworldEntity.EntityType.Adventurer =>
+                // 冒险者: 谨慎/战术 二选一
+                _rng.Next(2) == 0 ? AIStrategyEnum.Cautious : AIStrategyEnum.Tactical,
+
+            OverworldEntity.EntityType.Caravan =>
+                // 商队: 总是谨慎
+                AIStrategyEnum.Cautious,
+
+            _ => AIStrategyEnum.Instinct,
+        };
     }
 
     private OverworldEntity.EntityType PickEntityType()
@@ -352,36 +421,121 @@ public class EncounterEntitySpawner
         return names[_rng.Next(names.Length)];
     }
 
-    /// <summary>
-    /// 更新单个实体的追击 AI：
-    /// - 视野内 → 使用简化寻路追击玩家（避免穿模）
-    /// - 视野外 → 巡逻或返回基地
-    /// </summary>
     private void UpdateChaseAI(OverworldEntity entity, Vector2 playerPos)
     {
-        float distToPlayer = entity.Position.DistanceTo(playerPos);
+        UpdateChaseAI(entity, playerPos, new List<OverworldEntity>());
+    }
 
-        if (distToPlayer <= entity.VisionRange)
+    private void UpdateChaseAI(OverworldEntity entity, Vector2 playerPos, List<OverworldEntity> allEntities)
+    {
+        SyncPlayerProxy(playerPos);
+
+        float playerDistance = entity.Position.DistanceTo(playerPos);
+        if (playerDistance <= entity.VisionRange
+            && IsHostileToPlayer(entity)
+            && CanReactToPlayer(entity))
         {
-            // 进入追击状态
-            entity.CurrentAIState = OverworldEntity.AIState.Chasing;
-            entity.TargetPosition = playerPos;
-            entity.IsMoving = true;
-
-            // 使用多点追击路径（朝玩家方向步进，每 N 格采样一次）
-            // 避免直线穿越不可通行地形
-            entity.Path.Clear();
-            var chasePath = BuildChasePath(entity.Position, playerPos);
-            foreach (var p in chasePath)
-                entity.Path.Add(p);
+            var intent = _perceptionResolver.Resolve(entity, _playerProxy, null);
+            switch (intent.Type)
+            {
+                case Intent.IntentType.Chase:
+                    entity.CurrentAIState = OverworldEntity.AIState.Chasing;
+                    entity.ChaseTarget = _playerProxy;
+                    entity.CurrentTacticalTarget = _playerProxy;
+                    entity.LastIntentSummary = "追击玩家队伍";
+                    break;
+                case Intent.IntentType.Flee:
+                    entity.CurrentAIState = OverworldEntity.AIState.Fleeing;
+                    entity.ChaseTarget = null;
+                    entity.CurrentTacticalTarget = _playerProxy;
+                    entity.LastIntentSummary = "逃离玩家队伍";
+                    break;
+                // Intent.None → 战力相当或阈值范围内，不改变状态
+                default:
+                    break;
+            }
         }
-        else if (entity.CurrentAIState == OverworldEntity.AIState.Chasing)
+        else if (entity.CurrentAIState == OverworldEntity.AIState.Chasing && entity.ChaseTarget == _playerProxy)
         {
-            // 玩家逃出视野 → 切换到巡逻
+            entity.ChaseTarget = null;
+            entity.CurrentTacticalTarget = null;
             entity.CurrentAIState = OverworldEntity.AIState.Patrolling;
+            entity.LastIntentSummary = "";
             entity.IsMoving = false;
             entity.Path.Clear();
         }
+        else if (entity.CurrentAIState == OverworldEntity.AIState.Chasing &&
+                 (entity.ChaseTarget == null ||
+                  !GodotObject.IsInstanceValid(entity.ChaseTarget) ||
+                  !entity.ChaseTarget.IsAlive))
+        {
+            entity.ChaseTarget = null;
+            entity.CurrentTacticalTarget = null;
+            entity.CurrentAIState = OverworldEntity.AIState.Patrolling;
+            entity.LastIntentSummary = "";
+            entity.IsMoving = false;
+            entity.Path.Clear();
+        }
+
+        // 1. 追击决策移动 (Chasing)
+        if (entity.CurrentAIState == OverworldEntity.AIState.Chasing
+            && entity.ChaseTarget != null
+            && GodotObject.IsInstanceValid(entity.ChaseTarget)
+            && entity.ChaseTarget.IsAlive)
+        {
+            Vector2 targetPos = entity.ChaseTarget.Position;
+            entity.TargetPosition = targetPos;
+            entity.IsMoving = true;
+
+            entity.Path.Clear();
+            var chasePath = BuildChasePath(entity.Position, targetPos);
+            foreach (var p in chasePath)
+                entity.Path.Add(p);
+        }
+        // 2. 逃跑决策移动 (Fleeing)
+        else if (entity.CurrentAIState == OverworldEntity.AIState.Fleeing)
+        {
+            // 寻找使自身感到最紧迫威胁的最近敌对实体
+            var (threat, _) = ScanNearestThreat(entity, allEntities);
+            if (threat == null && playerDistance <= entity.VisionRange && IsHostileToPlayer(entity))
+                threat = _playerProxy;
+            if (threat != null)
+            {
+                // 反向移动：避障逃离威胁目标
+                Vector2 fleeDir = entity.Position - threat.Position;
+                if (fleeDir.LengthSquared() <= 0.001f)
+                    fleeDir = new Vector2(1, 0);
+                fleeDir = fleeDir.Normalized();
+                Vector2 fleeTarget = entity.Position + fleeDir * 500.0f;
+                entity.TargetPosition = fleeTarget;
+                entity.IsMoving = true;
+
+                entity.Path.Clear();
+                var fleePath = BuildChasePath(entity.Position, fleeTarget);
+                foreach (var p in fleePath)
+                    entity.Path.Add(p);
+            }
+            else
+            {
+                // 无威胁时跑回 HomePosition
+                if (entity.Position.DistanceTo(entity.HomePosition) > 50.0f)
+                {
+                    entity.TargetPosition = entity.HomePosition;
+                    entity.IsMoving = true;
+                    entity.Path.Clear();
+                    var returnPath = BuildChasePath(entity.Position, entity.HomePosition);
+                    foreach (var p in returnPath)
+                        entity.Path.Add(p);
+                }
+                else
+                {
+                    entity.CurrentAIState = OverworldEntity.AIState.Patrolling;
+                    entity.IsMoving = false;
+                    entity.Path.Clear();
+                }
+            }
+        }
+        // 3. 默认巡逻移动 (Patrolling)
         else if (!entity.IsMoving && entity.CurrentAIState == OverworldEntity.AIState.Patrolling)
         {
             // 巡逻：在领地范围内随机走动
@@ -394,6 +548,45 @@ public class EncounterEntitySpawner
             entity.TargetPosition = patrolTarget;
         }
     }
+
+    private (OverworldEntity? threat, float distance) ScanNearestThreat(OverworldEntity entity, List<OverworldEntity> allEntities)
+    {
+        OverworldEntity? best = null;
+        float bestDist = float.MaxValue;
+        foreach (var other in allEntities)
+        {
+            if (other == entity || !other.IsAlive) continue;
+            float d = entity.Position.DistanceTo(other.Position);
+            if (d > entity.VisionRange) continue;
+
+            if (!OverworldHostility.AreHostile(entity, other)) continue;
+
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = other;
+            }
+        }
+        return (best, bestDist != float.MaxValue ? bestDist : 0f);
+    }
+
+    private void SyncPlayerProxy(Vector2 playerPos)
+    {
+        _playerProxy.Position = playerPos;
+        _playerProxy.HomePosition = playerPos;
+        _playerProxy.CombatPower = Math.Max(1f, PlayerCombatPower);
+        _playerProxy.PartySize = Math.Max(1, (int)MathF.Ceiling(_playerProxy.CombatPower / 10f));
+        _playerProxy.IsAlive = true;
+    }
+
+    private bool IsHostileToPlayer(OverworldEntity entity)
+        => entity.EntityTypeEnum != OverworldEntity.EntityType.Caravan
+           && OverworldHostility.AreHostile(entity, _playerProxy);
+
+    private static bool CanReactToPlayer(OverworldEntity entity)
+        => entity.CurrentAIState == OverworldEntity.AIState.Idle
+        || entity.CurrentAIState == OverworldEntity.AIState.Patrolling
+        || (entity.CurrentAIState == OverworldEntity.AIState.Chasing && entity.ChaseTarget?.Faction == "player");
 
     /// <summary>
     /// 构建追击路径 — 沿直线方向每 200px 采样，跳过不可通行点。
@@ -463,14 +656,7 @@ public class EncounterEntitySpawner
     /// <summary>检查像素位置是否可通行（用于追击路径构建）</summary>
     private bool IsPositionPassable(Vector2 pos)
     {
-        if (ChunkManagerRef != null)
-        {
-            var axial = HexOverworldTile.PixelToAxial(pos.X, pos.Y);
-            var tile = ChunkManagerRef.GetTile(axial.X, axial.Y);
-            // 未加载的 tile 视为可通行（实体在视野外会被收容）
-            if (tile == null) return true;
-            return tile.IsPassable;
-        }
-        return true;
+        // 未加载的 tile 视为可通行（实体在视野外会被收容）
+        return TerrainQueryRef?.IsPassableAtPixel(pos, unknownIsPassable: true) ?? true;
     }
 }

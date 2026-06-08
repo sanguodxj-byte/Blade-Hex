@@ -160,6 +160,38 @@ public partial class ReputationTracker : Resource
     }
 
     // ========================================
+    // 头衔系统
+    // ========================================
+
+    /// <summary>nationId → 获得的头衔列表</summary>
+    private readonly Dictionary<string, List<string>> _titles = new();
+
+    /// <summary>添加头衔</summary>
+    public void AddTitle(string nationId, string title)
+    {
+        if (!_titles.ContainsKey(nationId))
+            _titles[nationId] = new List<string>();
+
+        if (!_titles[nationId].Contains(title))
+        {
+            _titles[nationId].Add(title);
+            GD.Print($"[Reputation] 获得头衔: {title} (势力: {nationId})");
+        }
+    }
+
+    /// <summary>检查是否拥有某头衔</summary>
+    public bool HasTitle(string nationId, string title)
+    {
+        return _titles.TryGetValue(nationId, out var titles) && titles.Contains(title);
+    }
+
+    /// <summary>获取某势力的所有头衔</summary>
+    public List<string> GetTitles(string nationId)
+    {
+        return _titles.TryGetValue(nationId, out var titles) ? new List<string>(titles) : new List<string>();
+    }
+
+    // ========================================
     // 声望事件（预定义增减量）
     // ========================================
 
@@ -208,6 +240,18 @@ public partial class ReputationTracker : Resource
         var dict = new Godot.Collections.Dictionary();
         foreach (var (k, v) in _reputation)
             dict[k] = v;
+
+        // 序列化头衔
+        var titlesDict = new Godot.Collections.Dictionary();
+        foreach (var (k, v) in _titles)
+        {
+            var arr = new Godot.Collections.Array();
+            foreach (var title in v)
+                arr.Add(title);
+            titlesDict[k] = arr;
+        }
+        dict["_titles"] = titlesDict;
+
         return dict;
     }
 
@@ -215,7 +259,23 @@ public partial class ReputationTracker : Resource
     {
         var tracker = new ReputationTracker();
         foreach (var key in data.Keys)
-            tracker._reputation[key.AsString()] = data[key].AsInt32();
+        {
+            if (key.AsString() == "_titles")
+            {
+                var titlesDict = (Godot.Collections.Dictionary)data[key];
+                foreach (var nationKey in titlesDict.Keys)
+                {
+                    var arr = (Godot.Collections.Array)titlesDict[nationKey];
+                    tracker._titles[nationKey.AsString()] = new List<string>();
+                    foreach (var title in arr)
+                        tracker._titles[nationKey.AsString()].Add(title.AsString());
+                }
+            }
+            else
+            {
+                tracker._reputation[key.AsString()] = data[key].AsInt32();
+            }
+        }
         return tracker;
     }
 

@@ -1,6 +1,7 @@
 // ProjectileTrajectory.cs
 // 投射物轨迹计算 — 纯数学，不依赖 Node
 using Godot;
+using BladeHex.Map;
 
 namespace BladeHex.Combat;
 
@@ -60,16 +61,19 @@ public static class ProjectileTrajectory
             "arrow" or "crossbow_bolt" => Arrow(from, to, t, arcHeight),
             "fireball" or "magic_bolt" or "ice_shard" or "lightning" => MagicBolt(from, to, t),
             _ => Knife(from, to, t), // 默认直线
-        };
+          };
     }
 
     /// <summary>
     /// 计算飞行时间（秒）
+    /// speed 单位为“格/秒”，需要乘以相邻格子的物理中心距（Size * √3）转换为 3D 世界速度
     /// </summary>
     public static float CalculateTravelTime(Vector3 from, Vector3 to, float speed)
     {
         if (speed <= 0) speed = 8.0f;
+        // 将格/秒转换为世界物理单位/秒 (1格 = Size * √3 ≈ 166.27 世界单位)
+        float physicalSpeed = speed * HexUtils.Size * Mathf.Sqrt(3.0f);
         float distance = from.DistanceTo(to);
-        return distance / speed;
+        return Mathf.Max(0.05f, distance / physicalSpeed);
     }
 }

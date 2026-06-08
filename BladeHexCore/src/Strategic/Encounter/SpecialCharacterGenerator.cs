@@ -16,6 +16,29 @@ public class SpecialCharacterGenerator
 {
     private readonly Random _rng;
 
+    /// <summary>
+    /// 生成配置 — 控制各类角色的数量范围
+    /// </summary>
+    public class GenerationConfig
+    {
+        /// <summary>主要国家领主最小数量</summary>
+        public int MajorNationLordsMin { get; set; } = 15;
+        /// <summary>主要国家领主最大数量</summary>
+        public int MajorNationLordsMax { get; set; } = 25;
+        /// <summary>小势力领主最小数量</summary>
+        public int MinorNationLordsMin { get; set; } = 5;
+        /// <summary>小势力领主最大数量</summary>
+        public int MinorNationLordsMax { get; set; } = 10;
+        /// <summary>每个主要国家的家族数量</summary>
+        public int FamiliesPerMajorNation { get; set; } = 4;
+        /// <summary>每个小势力的家族数量</summary>
+        public int FamiliesPerMinorNation { get; set; } = 2;
+        /// <summary>冒险者总数</summary>
+        public int AdventurerCount { get; set; } = 40;
+        /// <summary>玩家可招募的中立 Companion 数量</summary>
+        public int CompanionPoolForPlayer { get; set; } = 12;
+    }
+
     // 领主家族姓池（按种族）
     private static readonly Dictionary<string, string[]> LordSurnamesZH = new()
     {
@@ -56,8 +79,10 @@ public class SpecialCharacterGenerator
         List<NationConfig> nations,
         Dictionary<string, NationTerritory> territories,
         List<OverworldPOI> pois,
-        int worldTileCount)
+        int worldTileCount,
+        GenerationConfig? config = null)
     {
+        config ??= new GenerationConfig();
         var result = new List<OverworldEntity>();
 
         // 生成领主
@@ -65,7 +90,9 @@ public class SpecialCharacterGenerator
         {
             if (!territories.TryGetValue(nation.Id, out var territory)) continue;
 
-            int lordCount = nation.IsMajorNation ? 3 + _rng.Next(3) : 1 + _rng.Next(2); // 主要国家 3~5，小势力 1~2
+            int lordCount = nation.IsMajorNation
+                ? config.MajorNationLordsMin + _rng.Next(config.MajorNationLordsMax - config.MajorNationLordsMin + 1)
+                : config.MinorNationLordsMin + _rng.Next(config.MinorNationLordsMax - config.MinorNationLordsMin + 1);
             var nationPois = GetNationPois(pois, nation.Id);
 
             for (int i = 0; i < lordCount; i++)
@@ -76,7 +103,7 @@ public class SpecialCharacterGenerator
         }
 
         // 生成冒险者
-        int adventurerCount = Math.Max(12, worldTileCount / 8000 + 8);
+        int adventurerCount = config.AdventurerCount;
         for (int i = 0; i < adventurerCount; i++)
         {
             var adventurer = GenerateAdventurer(i, pois);

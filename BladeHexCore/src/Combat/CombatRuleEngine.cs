@@ -49,6 +49,10 @@ public static class CombatRuleEngine
         /// 不影响 d20 暴击阈值，避免与必中必暴规则冲突。
         /// </summary>
         public float BonusCritChance;
+
+        public bool ForceHit;
+        public bool ForceCritical;
+        public bool SuppressCritical;
     }
 
     /// <summary>攻击检定结果</summary>
@@ -173,11 +177,11 @@ public static class CombatRuleEngine
         result.HitChancePercent = Mathf.RoundToInt(hitPct * 100.0f);
 
         // 暴击/大失败判定
-        result.IsCritical = roll >= input.CritThreshold;
+        result.IsCritical = input.ForceCritical || (!input.SuppressCritical && roll >= input.CritThreshold);
         result.IsFumble = roll == 1;
 
         // 命中判定
-        bool isHit = result.IsCritical || (!result.IsFumble && totalAttack >= finalAc);
+        bool isHit = input.ForceHit || result.IsCritical || (!result.IsFumble && totalAttack >= finalAc);
 
         // 擦伤机制：差 ≤2 的未命中转为半伤命中
         if (!isHit && !result.IsFumble)
@@ -194,7 +198,7 @@ public static class CombatRuleEngine
 
         // v0.6 11.5: 节点 critical_rate 独立追加暴击概率。
         // 仅在已命中且尚未暴击时生效；不影响自然 20 必暴 / 自然 1 必失败规则。
-        if (isHit && !result.IsCritical && !result.IsFumble && input.BonusCritChance > 0f)
+        if (isHit && !result.IsCritical && !result.IsFumble && !input.SuppressCritical && input.BonusCritChance > 0f)
         {
             // 用 0..999 的整数桶映射 0..1，避免浮点 / 整数比较的边界踩雷。
             int threshold = (int)(input.BonusCritChance * 1000f);
@@ -215,17 +219,19 @@ public static class CombatRuleEngine
     /// </summary>
     public static DamageCalcResult CalculateDamage(in DamageInput input)
     {
-        int damage = input.BaseDamage;
+        // 全程用 float 累积，仅在末尾取整一次，避免多个乘区逐步截断造成的系统性偏低。
+        // 运算顺序与语义保持不变：擦伤→暴击→偷袭→近战平加/倍率→包夹→冲锋→骑乘→减免→最终倍率。
+        float damage = input.BaseDamage;
 
         // 擦伤减半
         if (input.IsGraze)
-            damage = Math.Max(1, damage / 2);
+            damage = Math.Max(1f, damage / 2f);
 
         // 暴击
         if (input.IsCritical)
         {
             damage *= Math.Max(1, input.CritMultiplier);
-            damage = Math.Max(1, (int)(damage * input.CritDamageTakenMultiplier));
+            damage = Math.Max(1f, damage * input.CritDamageTakenMultiplier);
         }
 
         // 偷袭
@@ -235,31 +241,33 @@ public static class CombatRuleEngine
         if (input.IsMelee)
         {
             damage += input.PassiveMeleeBonus;
-            damage = (int)(damage * input.PassiveMeleeMultiplier);
+            damage *= input.PassiveMeleeMultiplier;
         }
 
         // 包夹
-        damage = (int)(damage * input.FlankMultiplier);
+        damage *= input.FlankMultiplier;
 
         // 冲锋
-        damage = (int)(damage * input.ChargeMultiplier);
+        damage *= input.ChargeMultiplier;
 
         // 骑乘
         damage += input.MountBonus;
 
-        damage = Math.Max(1, damage);
+        damage = Math.Max(1f, damage);
 
-        // 被动伤害减免
-        int reductionApplied = Math.Min(damage - 1, input.DamageReduction);
-        damage = Math.Max(1, damage - reductionApplied);
+        // 被动伤害减免（在最终倍率之前结算，口径与旧版一致）
+        int preReduction = Math.Max(1, (int)damage);
+        int reductionApplied = Math.Min(preReduction - 1, input.DamageReduction);
+        damage -= reductionApplied;
+        damage = Math.Max(1f, damage);
 
         // 最终倍率（如 AoO 半伤）
         if (input.FinalMultiplier != 1.0f)
-            damage = Math.Max(1, (int)(damage * input.FinalMultiplier));
+            damage *= input.FinalMultiplier;
 
         return new DamageCalcResult
         {
-            FinalDamage = damage,
+            FinalDamage = Math.Max(1, (int)damage),
             DamageReductionApplied = reductionApplied,
         };
     }
@@ -274,20 +282,6 @@ public static class CombatRuleEngine
         if (directionMultiplier <= 0.0f) return 0;
         int baseDmg = weaponDiceCount * (weaponDiceSides + 1) / 2 + strMod;
         return Math.Max(1, (int)(baseDmg * directionMultiplier));
-    }
-
-    // ============================================================================
-    // 暴击阈值修正
-    // ============================================================================
-
-    /// <summary>
-    /// 计算士气修正后的暴击阈值
-    /// 高士气降低暴击阈值（更容易暴击），最低 15
-    /// </summary>
-    public static int GetAdjustedCritThreshold(int baseCritThreshold, float moraleCritBonus)
-    {
-        if (moraleCritBonus <= 0) return baseCritThreshold;
-        return Math.Max(15, baseCritThreshold - (int)(moraleCritBonus * 5));
     }
 
     // ============================================================================

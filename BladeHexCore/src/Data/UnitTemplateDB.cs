@@ -11,7 +11,7 @@ namespace BladeHex.Data;
 /// <summary>
 /// 单位模板数据库 — 纯静态工具类
 /// </summary>
-public static class UnitTemplateDB
+public static partial class UnitTemplateDB
 {
     // ========================================
     // 属性分配权重预设
@@ -111,16 +111,17 @@ public static class UnitTemplateDB
     {
         var unit = new UnitData();
         unit.UnitName = tpl["name"].AsString();
+        unit.EnemyTemplateId = tpl.ContainsKey("template_id") ? tpl["template_id"].AsString() : "";
         unit.Level = tpl["level"].AsInt32();
         unit.IsEnemy = true;
         unit.enemyType = (UnitData.EnemyType)tpl["enemy_type"].AsInt32();
         unit.creatureSize = tpl.ContainsKey("creature_size")
             ? (UnitData.CreatureSize)tpl["creature_size"].AsInt32()
             : UnitData.CreatureSize.Medium;
+        unit.FootprintW = tpl.ContainsKey("footprint_w") ? tpl["footprint_w"].AsInt32() : 0;
+        unit.FootprintH = tpl.ContainsKey("footprint_h") ? tpl["footprint_h"].AsInt32() : 0;
         unit.ThreatLevel = CalculateCrFromTemplate(tpl);
         unit.aiStrategy = (UnitData.AIStrategy)tpl["ai_strategy"].AsInt32();
-        unit.Morale = tpl.ContainsKey("morale") ? tpl["morale"].AsInt32() : 0;
-
         // 属性
         var attrs = BuildAttrsFromTemplate(tpl);
         unit.Str = attrs["str"];
@@ -167,7 +168,25 @@ public static class UnitTemplateDB
         { "grunt_slime", GruntSlime },
         { "grunt_imp", GruntImp },
         { "grunt_lava_slime", GruntLavaSlime },
-        // ... 其他模板可以在这里注册
+        // 遭遇战新怪物映射
+        { "goblin_warrior", GruntGoblinWarrior },
+        { "goblin_archer", GruntGoblinArcher },
+        { "wolf", GruntForestWolf },
+        { "kobold_trapper", KoboldTrapper },
+        { "minotaur_warrior", MinotaurWarrior },
+        { "cultist", Cultist },
+        { "bandit", Bandit },
+        { "treant", Treant },
+        { "lizardman", Lizardman },
+        { "ogre", Ogre },
+        { "harpy", Harpy },
+        { "ice_wolf", IceWolf },
+        { "yeti", Yeti },
+        { "caravan_guard", CaravanGuard },
+        { "soldier", Soldier },
+        { "archer", Archer },
+        { "dragon", Dragon },
+        { "iron_golem", IronGolem }
     };
 
     public static Godot.Collections.Dictionary? GetTemplateById(string id)
@@ -184,6 +203,172 @@ public static class UnitTemplateDB
     }
 
     // ========================================
+    // 遭遇战新怪物模板（从 EncounterUnitFactory 迁移，消除属性硬编码）
+    // ========================================
+
+    public static Godot.Collections.Dictionary KoboldTrapper() => new()
+    {
+        { "template_id", "kobold_trapper" }, { "name", "狗头人陷阱师" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 2 },
+        { "attr_weights", ToVariantArray([0.8f, 1.5f, 0.8f, 1.0f, 0.8f, 0.6f]) },
+        { "base_hp", 5 }, { "ac_bonus", 2 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Cunning },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.ArmingSword },
+        { "description", "擅长布置精巧陷阱的狗头人，动作极其敏捷。" },
+    };
+
+    public static Godot.Collections.Dictionary MinotaurWarrior() => new()
+    {
+        { "template_id", "minotaur_warrior" }, { "name", "牛头人战士" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 5 },
+        { "attr_weights", ToVariantArray([1.8f, 1.0f, 1.6f, 0.6f, 0.8f, 0.6f]) },
+        { "base_hp", 20 }, { "ac_bonus", 4 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Reckless },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.GreatAxe },
+        { "description", "力大无穷的狂暴牛头人战士，在战场上横冲直撞。" },
+    };
+
+    public static Godot.Collections.Dictionary Cultist() => new()
+    {
+        { "template_id", "cultist" }, { "name", "暗影教徒" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 3 },
+        { "attr_weights", ToVariantArray([1.0f, 1.2f, 1.0f, 1.4f, 1.2f, 1.0f]) },
+        { "base_hp", 9 }, { "ac_bonus", 2 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Tactical },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.ArmingSword },
+        { "description", "崇拜虚空暗影的邪教徒，精通刺杀与暗影法术。" },
+    };
+
+    public static Godot.Collections.Dictionary Bandit() => new()
+    {
+        { "template_id", "bandit" }, { "name", "山贼" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 3 },
+        { "attr_weights", ToVariantArray([1.2f, 1.2f, 1.2f, 1.0f, 1.0f, 1.0f]) },
+        { "base_hp", 11 }, { "ac_bonus", 2 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Cautious },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.ArmingSword },
+        { "description", "剪径拦路的山贼，擅长合击与围殴。" },
+    };
+
+    public static Godot.Collections.Dictionary Treant() => new()
+    {
+        { "template_id", "treant" }, { "name", "树人" },
+        { "enemy_type", (int)UnitData.EnemyType.Construct }, { "level", 5 },
+        { "attr_weights", ToVariantArray([1.6f, 0.6f, 1.6f, 0.6f, 1.0f, 0.6f]) },
+        { "base_hp", 25 }, { "ac_bonus", 5 }, { "move_range", 4 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Territorial },
+        { "description", "古老的森林守护者，身躯庞大且坚韧。" },
+    };
+
+    public static Godot.Collections.Dictionary Lizardman() => new()
+    {
+        { "template_id", "lizardman" }, { "name", "蜥蜴人" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 4 },
+        { "attr_weights", ToVariantArray([1.4f, 1.2f, 1.4f, 0.8f, 1.0f, 0.8f]) },
+        { "base_hp", 15 }, { "ac_bonus", 4 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Tactical },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.ArmingSword },
+        { "description", "冷血的沼泽猎手，战术纪律性极强。" },
+    };
+
+    public static Godot.Collections.Dictionary Ogre() => new()
+    {
+        { "template_id", "ogre" }, { "name", "食人魔" },
+        { "enemy_type", (int)UnitData.EnemyType.Giant }, { "level", 4 },
+        { "attr_weights", ToVariantArray([1.8f, 0.8f, 1.6f, 0.4f, 0.6f, 0.4f]) },
+        { "base_hp", 30 }, { "ac_bonus", 1 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Reckless },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.GreatAxe },
+        { "description", "体型巨大的双头或单头食人魔，以蛮力碾碎一切。" },
+    };
+
+    public static Godot.Collections.Dictionary Harpy() => new()
+    {
+        { "template_id", "harpy" }, { "name", "鹰身女妖" },
+        { "enemy_type", (int)UnitData.EnemyType.Beast }, { "level", 3 },
+        { "attr_weights", ToVariantArray([1.0f, 1.6f, 1.0f, 0.8f, 1.0f, 1.2f]) },
+        { "base_hp", 12 }, { "ac_bonus", 3 }, { "move_range", 6 }, { "initiative_bonus", 2 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Cunning },
+        { "description", "半人半鸟的怪物，其尖叫声能让人心神受挫。" },
+    };
+
+    public static Godot.Collections.Dictionary IceWolf() => new()
+    {
+        { "template_id", "ice_wolf" }, { "name", "冰霜狼" },
+        { "enemy_type", (int)UnitData.EnemyType.Beast }, { "level", 4 },
+        { "attr_weights", ToVariantArray([1.4f, 1.4f, 1.4f, 0.3f, 1.2f, 0.6f]) },
+        { "base_hp", 14 }, { "ac_bonus", 3 }, { "move_range", 8 }, { "initiative_bonus", 3 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Instinct },
+        { "natural_dr", 10 }, { "natural_dr_threshold", 2 },
+        { "description", "生存在北境冰原的霜狼，利齿带有一丝寒霜。" },
+    };
+
+    public static Godot.Collections.Dictionary Yeti() => new()
+    {
+        { "template_id", "yeti" }, { "name", "雪人" },
+        { "enemy_type", (int)UnitData.EnemyType.Giant }, { "level", 4 },
+        { "attr_weights", ToVariantArray([1.8f, 1.0f, 1.6f, 0.6f, 1.0f, 0.6f]) },
+        { "base_hp", 28 }, { "ac_bonus", 2 }, { "move_range", 5 }, { "initiative_bonus", -1 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Territorial },
+        { "description", "雪山深处的白色巨兽，能发出令人战栗的怒吼。" },
+    };
+
+    public static Godot.Collections.Dictionary CaravanGuard() => new()
+    {
+        { "template_id", "caravan_guard" }, { "name", "商队护卫" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 3 },
+        { "attr_weights", ToVariantArray([1.4f, 1.2f, 1.4f, 1.0f, 1.0f, 1.0f]) },
+        { "base_hp", 14 }, { "ac_bonus", 4 }, { "move_range", 5 }, { "initiative_bonus", 1 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Cautious },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.ArmingSword },
+        { "description", "常年护送商队的雇佣兵，战斗经验丰富且注重防守。" },
+    };
+
+    public static Godot.Collections.Dictionary Soldier() => new()
+    {
+        { "template_id", "soldier" }, { "name", "士兵" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 3 },
+        { "attr_weights", ToVariantArray([1.4f, 1.2f, 1.4f, 1.0f, 1.0f, 1.0f]) },
+        { "base_hp", 14 }, { "ac_bonus", 5 }, { "move_range", 5 }, { "initiative_bonus", 0 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Tactical },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.ArmingSword },
+        { "description", "训练有素的帝国正规军士兵，精通阵型与协作。" },
+    };
+
+    public static Godot.Collections.Dictionary Archer() => new()
+    {
+        { "template_id", "archer" }, { "name", "弓箭手" },
+        { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 3 },
+        { "attr_weights", ToVariantArray([1.0f, 1.6f, 1.0f, 1.0f, 1.2f, 1.0f]) },
+        { "base_hp", 10 }, { "ac_bonus", 3 }, { "move_range", 5 }, { "initiative_bonus", 1 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Cautious },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.Shortbow },
+        { "description", "擅长在后方提供精准箭雨支援的射手。" },
+    };
+
+    public static Godot.Collections.Dictionary Dragon() => new()
+    {
+        { "template_id", "dragon" }, { "name", "巨龙" },
+        { "enemy_type", (int)UnitData.EnemyType.Dragon }, { "level", 10 },
+        { "attr_weights", ToVariantArray([2.2f, 1.0f, 2.0f, 1.6f, 1.4f, 1.8f]) },
+        { "base_hp", 80 }, { "ac_bonus", 8 }, { "move_range", 6 }, { "initiative_bonus", 2 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Tactical },
+        { "description", "傲视群雄的古老巨龙，口吐烈焰，坚鳞入骨。" },
+    };
+
+    public static Godot.Collections.Dictionary IronGolem() => new()
+    {
+        { "template_id", "iron_golem" }, { "name", "铁魔像" },
+        { "enemy_type", (int)UnitData.EnemyType.Construct }, { "level", 8 },
+        { "attr_weights", ToVariantArray([2.0f, 0.6f, 2.0f, 0.3f, 1.0f, 0.1f]) },
+        { "base_hp", 60 }, { "ac_bonus", 8 }, { "move_range", 4 }, { "initiative_bonus", -2 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Territorial },
+        { "natural_dr", 15 }, { "natural_dr_threshold", 4 },
+        { "description", "由附魔钢铁打造的无情守卫，免疫绝大多数物理伤害。" },
+    };
+
+
+    // ========================================
     // 杂兵模板（等级 1~5）
     // ========================================
 
@@ -196,6 +381,7 @@ public static class UnitTemplateDB
         { "ai_strategy", (int)UnitData.AIStrategy.Instinct },
         { "traits", new string[] { "群体战术", "卑鄙偷袭" } },
         { "description", "矮小狡猾的哥布林，数量众多时格外危险。" },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.Kukri },
     };
 
     public static Godot.Collections.Dictionary GruntGoblinArcher() => new()
@@ -207,6 +393,7 @@ public static class UnitTemplateDB
         { "ai_strategy", (int)UnitData.AIStrategy.Cautious },
         { "traits", new string[] { "远程骚扰", "游击战" } },
         { "description", "擅长在远处用淬毒箭矢骚扰敌人。" },
+        { "weapon_subtype", (int)WeaponData.WeaponSubtype.Shortbow },
     };
 
     public static Godot.Collections.Dictionary GruntSkeletonWarrior() => new()
@@ -309,7 +496,7 @@ public static class UnitTemplateDB
         { "enemy_type", (int)UnitData.EnemyType.Humanoid }, { "level", 9 },
         { "attr_weights", ToVariantArray(WMeleeBruiser) },
         { "base_hp", 8 }, { "ac_bonus", 1 }, { "move_range", 5 }, { "initiative_bonus", 1 },
-        { "ai_strategy", (int)UnitData.AIStrategy.Reckless }, { "morale", 10 },
+        { "ai_strategy", (int)UnitData.AIStrategy.Reckless },
         { "traits", new string[] { "鲁莽攻击：攻击优势但被攻击也有优势" } },
         { "description", "嗜血的兽人战士，崇尚绝对的力量。" },
     };
@@ -1345,14 +1532,19 @@ public static class UnitTemplateDB
         AdventurerBard(),
     ];
 
-    public static List<Godot.Collections.Dictionary> GetLegendaryTemplates() =>
-    [
-        LegendaryYoungRedDragon(), LegendaryAdultRedDragon(),
-        LegendaryAncientFrostDragon(), LegendaryLich(),
-        LegendaryDeathKnightKing(), LegendaryLavaLord(),
-        LegendaryAbyssalLord(), LegendaryAwakenedSentinel(),
-        LegendaryMeteorDragon(),
-    ];
+    public static List<Godot.Collections.Dictionary> GetLegendaryTemplates()
+    {
+        var result = new List<Godot.Collections.Dictionary>
+        {
+            LegendaryYoungRedDragon(), LegendaryAdultRedDragon(),
+            LegendaryAncientFrostDragon(), LegendaryLich(),
+            LegendaryDeathKnightKing(), LegendaryLavaLord(),
+            LegendaryAbyssalLord(), LegendaryAwakenedSentinel(),
+            LegendaryMeteorDragon(),
+        };
+        result.AddRange(GetLegendaryTemplatesPart2());
+        return result;
+    }
 
     public static List<Godot.Collections.Dictionary> GetTemplatesByCr(float minCr, float maxCr)
     {
@@ -1400,7 +1592,7 @@ public static class UnitTemplateDB
         return result;
     }
 
-    private static Godot.Collections.Array<Godot.Collections.Dictionary> CopyDictArray(
+    public static Godot.Collections.Array<Godot.Collections.Dictionary> CopyDictArray(
         Godot.Collections.Dictionary tpl, string key)
     {
         if (!tpl.ContainsKey(key)) return new Godot.Collections.Array<Godot.Collections.Dictionary>();

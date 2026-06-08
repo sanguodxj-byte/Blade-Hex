@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.AI;
 
@@ -33,16 +34,11 @@ public abstract class AIStrategyBase
     }
 
     /// <summary>主入口：决定本回合行为，返回 AIAction</summary>
-    public AIAction DecideAction(Unit actor, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid)
+    public AIAction DecideAction(Unit actor, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid, CombatManager? combatMgr = null)
     {
         if (actor.Data == null) return DecideIdleAction(actor, hexGrid);
 
-        // 第1步：士气强制行为（溃逃等）
-        var moraleLevel = actor.Data.GetMoraleLevel();
-        var forced = CheckMoraleOverride(actor, moraleLevel, playerUnits, hexGrid);
-        if (forced != null) return forced;
-
-        // 第2步：HP过低撤退检查
+        // 第1步：HP过低撤退检查
         var retreat = CheckRetreat(actor, playerUnits, hexGrid);
         if (retreat != null) return retreat;
 
@@ -58,32 +54,170 @@ public abstract class AIStrategyBase
         }
         if (targets.Count == 0) return DecideIdleAction(actor, hexGrid);
 
-        // 第4步：策略特定决策（子类实现）
+        // 第4步：评估是否使用职业技能
+        var careerSkillAction = EvaluateCareerSkill(actor, targets, playerUnits, enemyUnits, hexGrid);
+        if (careerSkillAction != null) return careerSkillAction;
+
+        // 第4.5步：评估是否使用与技能盘无关的天生技能
+        var intrinsicSkillAction = EvaluateIntrinsicSkill(actor, targets, playerUnits, enemyUnits, hexGrid, combatMgr);
+        if (intrinsicSkillAction != null) return intrinsicSkillAction;
+
+        // 第5步：策略特定决策（子类实现）
         return DecideStrategyAction(actor, targets, playerUnits, enemyUnits, hexGrid);
     }
 
     /// <summary>核心策略逻辑，由子类实现</summary>
     protected abstract AIAction DecideStrategyAction(Unit actor, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid);
 
-    /// <summary>士气强制行为检查</summary>
-    protected virtual AIAction? CheckMoraleOverride(Unit actor, UnitData.MoraleLevel moraleLevel, List<Unit> playerUnits, HexGrid hexGrid)
+    /// <summary>v0.8 D3-A: 评估是否使用职业技能。返回 null = 不使用。</summary>
+    protected virtual AIAction? EvaluateCareerSkill(Unit actor, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid)
     {
-        // 亡灵永远不会因士气溃逃
-        if (actor.Data!.enemyType == UnitData.EnemyType.Undead) return null;
+        return null; // 默认不使用
+    }
 
-        if (moraleLevel == UnitData.MoraleLevel.Routing)
+    /// <summary>评估是否使用非人形怪物的天生技能</summary>
+    protected virtual AIAction? EvaluateIntrinsicSkill(Unit actor, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid, CombatManager? combatMgr)
+    {
+        if (actor.Data == null || actor.Data.enemyType == UnitData.EnemyType.Humanoid) return null;
+        if (actor.CurrentAp < 1) return null;
+
+        // 如果本回合已经使用过主动技能，则跳过
+        if (actor.Data.Runtime.NonSpellSkillUsedThisTurn) return null;
+
+        var availableSkills = new List<SkillData>();
+        foreach (var skill in actor.Data.Skills)
         {
-            return new AIAction
+            if (skill == null || string.IsNullOrEmpty(skill.SkillName)) continue;
+
+            if (combatMgr != null)
             {
-                Type = AIAction.ActionType.Retreat,
-                Actor = actor,
-                TargetPosition = AISpatialAnalyzer.FindRetreatPosition(hexGrid, actor, playerUnits),
-                Description = $"{actor.Data.UnitName} 士气崩溃，正在溃逃！",
-                PriorityScore = 100.0f
-            };
+                long casterId = (long)actor.GetInstanceId();
+                if (combatMgr.CooldownTracker.IsOnCooldown(casterId, skill.SkillName)) continue;
+            }
+
+            if (actor.CurrentAp < skill.ApCost) continue;
+
+            availableSkills.Add(skill);
+        }
+
+        if (availableSkills.Count == 0) return null;
+
+        var sortedSkills = availableSkills.OrderByDescending(s => s.Cooldown).ToList();
+
+        foreach (var skill in sortedSkills)
+        {
+            int apCost = skill.ApCost;
+            int range = skill.RangeCells;
+
+            foreach (var scored in scoredTargets)
+            {
+                var target = scored.Unit;
+                if (!GodotObject.IsInstanceValid(target) || target.CurrentHp <= 0) continue;
+
+                int dist = actor.DistanceTo(target);
+                var targetCell = hexGrid.GetCell(target.GridPos.X, target.GridPos.Y);
+                if (dist <= range && (targetCell == null || !CombatAttackRules.IsMeleeSkillElevationBlocked(actor, skill.SkillName, targetCell, hexGrid)))
+                {
+                    return new AIAction
+                    {
+                        Type = AIAction.ActionType.UseSkill,
+                        Actor = actor,
+                        TargetUnit = target,
+                        TargetPosition = target.GridPos,
+                        SkillId = skill.SkillName,
+                        Description = $"{actor.Data.UnitName} 施展天生技能 {skill.SkillName} 攻击 {target.Data!.UnitName}！",
+                        PriorityScore = 95f
+                    };
+                }
+
+                float moveBudget = actor.CurrentAp - apCost;
+                if (moveBudget > 0)
+                {
+                    var reachable = hexGrid.GetCellsInRange(actor.GridPos.X, actor.GridPos.Y, moveBudget);
+                    Vector2I? bestMovePos = null;
+                    float minPathCost = 999f;
+                    List<Vector2I>? bestPath = null;
+
+                    foreach (var pos in reachable)
+                    {
+                        var cell = hexGrid.GetCell(pos.X, pos.Y);
+                        if (cell == null || (cell.Occupant != null && cell.Occupant != actor)) continue;
+
+                        int d = HexUtils.Distance(pos.X, pos.Y, target.GridPos.X, target.GridPos.Y);
+                        if (d > range) continue;
+
+                        var targetCell2 = hexGrid.GetCell(target.GridPos.X, target.GridPos.Y);
+                        if (targetCell2 == null || CombatAttackRules.IsMeleeSkillElevationBlocked(actor, skill.SkillName, targetCell2, hexGrid, pos))
+                            continue;
+
+                        var path = hexGrid.FindPath(actor.GridPos, pos);
+                        if (path.Count == 0) continue;
+
+                        float cost = hexGrid.GetPathCost(actor.GridPos, path);
+                        if (cost <= moveBudget && cost < minPathCost)
+                        {
+                            minPathCost = cost;
+                            bestMovePos = pos;
+                            bestPath = path;
+                        }
+                    }
+
+                    if (bestMovePos.HasValue && bestPath != null)
+                    {
+                        return new AIAction
+                        {
+                            Type = AIAction.ActionType.UseSkill,
+                            Actor = actor,
+                            TargetUnit = target,
+                            TargetPosition = bestMovePos.Value,
+                            AttackPosition = bestMovePos.Value,
+                            MovePath = bestPath,
+                            SkillId = skill.SkillName,
+                            Description = $"{actor.Data.UnitName} 接近并施展天生技能 {skill.SkillName} 攻击 {target.Data!.UnitName}！",
+                            PriorityScore = 95f
+                        };
+                    }
+                }
+            }
         }
 
         return null;
+    }
+
+    /// <summary>v0.8 D4-A: 根据职业技能效果类型选择目标格</summary>
+    protected Vector2I SelectCareerSkillTarget(Unit actor, CareerSkillData skill, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> enemyUnits, HexGrid hexGrid)
+    {
+        string effectId = skill.EffectId ?? "";
+        // 自Buff类技能：目标为自己
+        if (effectId.Contains("living_wall") || effectId.Contains("arcane_overload")
+            || effectId.Contains("rune_imbue") || effectId.Contains("blood_resonance")
+            || effectId.Contains("battle_hymn") || effectId.Contains("whirling_strike")
+            || effectId.Contains("hold_the_line") || effectId.Contains("spellweave")
+            || effectId.Contains("stone_body") || effectId.Contains("mountain_stance")
+            || effectId.Contains("juggernaut") || effectId.Contains("unstoppable")
+            || effectId.Contains("death_sentence") || effectId.Contains("riposte")
+            || effectId.Contains("mana_shield") || effectId.Contains("forewarning")
+            || effectId.Contains("twist_fate") || effectId.Contains("dread_aura")
+            || effectId.Contains("wind_favor") || effectId.Contains("silent_strike")
+            || effectId.Contains("harbinger") || effectId.Contains("iron_grip")
+            || effectId.Contains("jack_of_all") || effectId.Contains("tyrant_wrath")
+            || effectId.Contains("twilight_stride") || effectId.Contains("paragon")
+            || effectId.Contains("myriad") || effectId.Contains("war_king")
+            || effectId.Contains("iron_law") || effectId.Contains("omnibus")
+            || effectId.Contains("tailwind") || effectId.Contains("lead_front"))
+        {
+            return actor.GridPos;
+        }
+
+        // 对敌技能：选最高评分目标的位置
+        if (scoredTargets.Count > 0)
+        {
+            var best = scoredTargets[0].Unit;
+            return best.GridPos;
+        }
+
+        // 没有目标则默认自身位置
+        return actor.GridPos;
     }
 
     /// <summary>HP过低撤退检查</summary>
@@ -91,15 +225,15 @@ public abstract class AIStrategyBase
     {
         if (actor.Data!.enemyType == UnitData.EnemyType.Undead) return null;
         if (actor.Data.aiStrategy == UnitData.AIStrategy.Reckless) return null;
+        if (!SkillTreeKeystoneResolver.CanRetreat(actor.Data)) return null;
 
         float hpPct = (float)actor.CurrentHp / Math.Max(actor.Model.GetMaxHp(), 1);
         float threshold = 0.25f * DifficultyConfig.RetreatThresholdMultiplier;
 
         if (hpPct <= threshold)
         {
-            // 士气崩溃时必定撤退，否则50%概率
-            var moraleLevel = actor.Data.GetMoraleLevel();
-            if (moraleLevel >= UnitData.MoraleLevel.Broken || Rand.NextDouble() < 0.5)
+            // 50%概率撤退
+            if (Rand.NextDouble() < 0.5)
             {
                 return new AIAction
                 {
@@ -165,7 +299,9 @@ public abstract class AIStrategyBase
                 $"{actor.Data!.UnitName} 攻击 {target.Data!.UnitName}",
                 $"{actor.Data!.UnitName} 接近 {target.Data!.UnitName}");
 
-            if (action.MovePath.Count >= 3 && DifficultyConfig.UsesCharge)
+            var curWeapon = actor.Model.GetMainHand() as WeaponData;
+            bool isMelee = curWeapon == null || (!curWeapon.IsRanged && !curWeapon.IsCatalyst);
+            if (action.MovePath.Count >= 3 && DifficultyConfig.UsesCharge && isMelee)
             {
                 action.IsCharge = AISpatialAnalyzer.CanCharge(hexGrid, action.MovePath, actor.GridPos);
             }
@@ -329,7 +465,8 @@ public abstract class AIStrategyBase
             maxVision = BaseMaxVision + HighGroundVisionBonus;
         int atkRange = Math.Min(weaponRange, maxVision);
         int dist = HexUtils.Distance(fromPos.X, fromPos.Y, target.GridPos.X, target.GridPos.Y);
-        return dist <= atkRange;
+        return dist <= atkRange
+            && !CombatAttackRules.IsMeleeElevationBlocked(actor, target, hexGrid, fromPos);
     }
 
     protected AIAction BuildMoveThenAttackOrMoveOnly(Unit actor, Unit target, Vector2I desiredPos, HexGrid hexGrid, string attackDescription, string moveOnlyDescription)

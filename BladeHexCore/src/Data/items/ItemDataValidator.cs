@@ -97,9 +97,7 @@ public static class ItemDataValidator
                 errors.Add($"{ctx}: WeaponRegistry lookup failed for {w.Subtype}: {ex.Message}");
             }
 
-            // 投掷武器必须 ranged=false（投掷是单独标志）
-            if (w.IsThrowing && w.IsRanged)
-                errors.Add($"{ctx}: cannot be both throwing and ranged");
+            // 投掷武器现在已允许同时为 ranged=true（共享远程武器基类行为）
 
             // 双手武器不应可双持
             if (w.IsTwoHanded && w.IsDualWieldable)

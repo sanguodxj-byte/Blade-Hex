@@ -40,6 +40,9 @@ public partial class HexCellMultiMeshBatcher : Node3D
     /// <summary>HexCell → 它所属的桶 key（用于快速查找反注册）</summary>
     private readonly Dictionary<HexCell, string> _cellBucketMap = new();
 
+    /// <summary>HexCell → 已存储的高亮状态（用于 MultiMesh 重建后恢复高亮）</summary>
+    private readonly Dictionary<HexCell, (bool active, Color color, bool isSolid)> _cellHighlightState = new();
+
     /// <summary>六棱柱网格几何体缓存（所有桶共享同一份网格）</summary>
     private CylinderMesh? _sharedMesh;
 
@@ -109,6 +112,7 @@ public partial class HexCellMultiMeshBatcher : Node3D
             bucket = new BucketData();
             bucket.Instance3D = new MultiMeshInstance3D();
             bucket.Instance3D.Name = $"Bucket_{key}";
+            bucket.Instance3D.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
             AddChild(bucket.Instance3D);
             _buckets[key] = bucket;
         }
@@ -134,11 +138,16 @@ public partial class HexCellMultiMeshBatcher : Node3D
         }
 
         _cellBucketMap.Remove(cell);
+        _cellHighlightState.Remove(cell); // 清理高亮状态缓存
     }
 
     /// <summary>设置格子高亮状态</summary>
-    public void SetCellHighlight(HexCell cell, bool active, Color? color = null)
+    public void SetCellHighlight(HexCell cell, bool active, Color? color = null, bool isSolid = false)
     {
+        // 始终存储高亮状态（即使 MultiMesh 尚未构建，RebuildBucket 时会恢复）
+        Color hlColor = color ?? new Color(1, 1, 1, 0.3f);
+        _cellHighlightState[cell] = (active, hlColor, isSolid);
+
         if (!_cellBucketMap.TryGetValue(cell, out string? key))
             return;
 
@@ -151,8 +160,6 @@ public partial class HexCellMultiMeshBatcher : Node3D
         int idx = bucket.Cells.IndexOf(cell);
         if (idx < 0 || idx >= mm.InstanceCount) return;
 
-        Color hlColor = color ?? new Color(1, 1, 1, 0.3f);
-
         // CustomData 打包: R=highlight flag, G=hlR, B=hlG, A=hlB
         var packed = new Color(
             active ? 1f : 0f,
@@ -163,7 +170,7 @@ public partial class HexCellMultiMeshBatcher : Node3D
         mm.SetInstanceCustomData(idx, packed);
 
         // 独立高亮覆盖层（在纹理层之上）
-        UpdateHighlightOverlay(cell, active, hlColor);
+        UpdateHighlightOverlay(cell, active, hlColor, isSolid);
     }
 
     /// <summary>设置格子迷雾/遮蔽状态（当前通过 modulate 实现，custom data 预留）</summary>
@@ -189,6 +196,7 @@ public partial class HexCellMultiMeshBatcher : Node3D
 
     private readonly Dictionary<HexCell, MeshInstance3D> _highlightOverlays = new();
     private static ArrayMesh? _highlightRingMesh;
+    private static ArrayMesh? _highlightSolidMesh;
 
     /// <summary>创建六边形环 mesh（中间镂空）</summary>
     private static ArrayMesh CreateHexRingMesh()
@@ -204,8 +212,8 @@ public partial class HexCellMultiMeshBatcher : Node3D
 
         for (int i = 0; i < sides; i++)
         {
-            float a1 = Mathf.DegToRad(60f * i + 30f); // +30 for flat-top
-            float a2 = Mathf.DegToRad(60f * (i + 1) + 30f);
+            float a1 = Mathf.DegToRad(60f * i);
+            float a2 = Mathf.DegToRad(60f * (i + 1));
 
             var outerV1 = new Vector3(Mathf.Cos(a1) * outerR, height * 0.5f, Mathf.Sin(a1) * outerR);
             var outerV2 = new Vector3(Mathf.Cos(a2) * outerR, height * 0.5f, Mathf.Sin(a2) * outerR);
@@ -228,32 +236,72 @@ public partial class HexCellMultiMeshBatcher : Node3D
         return st.Commit();
     }
 
-    private void UpdateHighlightOverlay(HexCell cell, bool active, Color color)
+    /// <summary>创建实心六边形 Mesh（无镂空）</summary>
+    private static ArrayMesh CreateHexSolidMesh()
+    {
+        // 实心六边形：外半径 0.92f，高度 0.3f
+        float r = HexRadius * 0.92f;
+        float height = 0.3f;
+        int sides = 6;
+
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        var center = new Vector3(0, height * 0.5f, 0);
+
+        for (int i = 0; i < sides; i++)
+        {
+            float a1 = Mathf.DegToRad(60f * i);
+            float a2 = Mathf.DegToRad(60f * (i + 1));
+
+            var v1 = new Vector3(Mathf.Cos(a1) * r, height * 0.5f, Mathf.Sin(a1) * r);
+            var v2 = new Vector3(Mathf.Cos(a2) * r, height * 0.5f, Mathf.Sin(a2) * r);
+
+            st.SetNormal(Vector3.Up);
+
+            st.AddVertex(center);
+            st.AddVertex(v1);
+            st.AddVertex(v2);
+        }
+
+        return st.Commit();
+    }
+
+    private void UpdateHighlightOverlay(HexCell cell, bool active, Color color, bool isSolid = false)
     {
         if (active)
         {
             if (!_highlightOverlays.TryGetValue(cell, out var overlay))
             {
-                _highlightRingMesh ??= CreateHexRingMesh();
-
                 overlay = new MeshInstance3D();
-                overlay.Mesh = _highlightRingMesh;
                 overlay.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
                 AddChild(overlay);
                 _highlightOverlays[cell] = overlay;
+            }
+
+            if (isSolid)
+            {
+                _highlightSolidMesh ??= CreateHexSolidMesh();
+                overlay.Mesh = _highlightSolidMesh;
+            }
+            else
+            {
+                _highlightRingMesh ??= CreateHexRingMesh();
+                overlay.Mesh = _highlightRingMesh;
             }
 
             // 位置：纹理层之上（OverlayLayer）
             float overlayY = BladeHex.View.Combat.CombatLayerHeight.HexTopOffset + BladeHex.View.Combat.CombatLayerHeight.OverlayLayer;
             overlay.Position = cell.Position + new Vector3(0, overlayY, 0);
 
-            // 半透明材质
+            // 半透明材质 — 参与深度测试，确保被角色和场景装饰物遮挡
             var mat = new StandardMaterial3D();
             mat.AlbedoColor = new Color(color.R, color.G, color.B, Mathf.Clamp(color.A * 1.2f, 0.2f, 0.7f));
             mat.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
             mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
             mat.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
-            mat.NoDepthTest = true;
+            mat.NoDepthTest = false;
+            mat.RenderPriority = 5; // 高于地形六棱柱(默认0)，避免 Z-fighting
             overlay.MaterialOverride = mat;
             overlay.Visible = true;
         }
@@ -265,6 +313,7 @@ public partial class HexCellMultiMeshBatcher : Node3D
             }
         }
     }
+
 
     // ============================================================================
     // 内部方法
@@ -368,9 +417,24 @@ public partial class HexCellMultiMeshBatcher : Node3D
             var xform = new Transform3D(basis, pos);
             mm.SetInstanceTransform(i, xform);
 
-            // CustomData: 打包高亮+遮蔽到单个 Color
-            var custom = new Color(0f, 0f, 0f, 0f); // 默认：无高亮，无遮蔽
-            mm.SetInstanceCustomData(i, custom);
+            // CustomData: 应用已存储的高亮状态，或使用默认值
+            if (_cellHighlightState.TryGetValue(cell, out var hlState) && hlState.active)
+            {
+                var hlPacked = new Color(
+                    1f,
+                    hlState.color.R,
+                    hlState.color.G,
+                    hlState.color.B
+                );
+                mm.SetInstanceCustomData(i, hlPacked);
+                // 同步创建/更新高亮覆盖层
+                UpdateHighlightOverlay(cell, true, hlState.color, hlState.isSolid);
+            }
+            else
+            {
+                var custom = new Color(0f, 0f, 0f, 0f); // 默认：无高亮，无遮蔽
+                mm.SetInstanceCustomData(i, custom);
+            }
         }
 
         bucket.Dirty = false;

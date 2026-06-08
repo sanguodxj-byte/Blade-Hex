@@ -32,6 +32,8 @@ public partial class FiefData : Resource
     // ============================================================================
     [Export] public Godot.Collections.Array<FiefBuilding> Buildings { get; set; } = new();
 
+    [Export] public Godot.Collections.Dictionary<string, int> PendingShipments { get; set; } = new();
+
     // ============================================================================
     // 计算属性
     // ============================================================================
@@ -159,4 +161,5 @@ public struct FiefDailyReport
     public int GoldEarned;
     public int FoodProduced;
     public int FoodConsumed;
+    public int WorkshopIncome;
 }

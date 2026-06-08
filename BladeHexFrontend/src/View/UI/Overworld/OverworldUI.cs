@@ -1,435 +1,349 @@
-// OverworldUI.cs
-// 大地图HUD覆盖层 — 包含顶部信息栏、底部功能栏、子面板、ESC菜单
-// 对应策划：09-UI设计.md — 战略层UI
-// 对应策划：04-战略层系统.md — 大地图/城镇/遭遇
-using Godot;
-using Godot.Collections;
+using System;
 using System.Collections.Generic;
 using BladeHex.Data;
-using BladeHex.Strategic;
+using BladeHex.Localization;
 using BladeHex.Scenes.Overworld;
+using BladeHex.Scenes.Overworld2d;
+using BladeHex.Strategic;
+using BladeHex.Strategic.WorldEvents;
 using BladeHex.UI;
+using BladeHex.View.AssetSystem;
+using Godot;
 
 namespace BladeHex.View.UI.Overworld;
 
 [GlobalClass]
 public partial class OverworldUI : CanvasLayer
 {
-    // ============================================================================
-    // 信号
-    // ============================================================================
-    [Signal]
-    public delegate void MenuOpenedEventHandler(string menuName);
+    private const string SkillTreeAction = "skill_tree";
+    private const string SkillTreeIconId = "Astral_Node_Active";
+    private const string SkillTreeIconPath = "res://BladeHexFrontend/src/assets/ui/Astral_Node_Active.png";
+    private const string IconButtonShaderPath = "res://BladeHexFrontend/src/assets/shaders/icon_button.gdshader";
 
-    [Signal]
-    public delegate void PartyClickedEventHandler();
+    [Signal] public delegate void MenuOpenedEventHandler(string menuName);
+    [Signal] public delegate void PartyClickedEventHandler();
+    [Signal] public delegate void InventoryClickedEventHandler();
+    [Signal] public delegate void PanelDismissedEventHandler();
 
-    [Signal]
-    public delegate void InventoryClickedEventHandler();
-
-    [Signal]
-    public delegate void PanelDismissedEventHandler();
-
-    // ============================================================================
-    // 主题常量
-    // ============================================================================
-    private static readonly Color BgPrimary = new(0.08f, 0.08f, 0.10f, 0.85f);
-    private static readonly Color BgSecondary = new(0.12f, 0.12f, 0.14f, 0.80f);
-    private static readonly Color BgTertiary = new(0.06f, 0.06f, 0.08f, 0.75f);
-    private static readonly Color BgPanel = new(0.10f, 0.10f, 0.12f, 0.85f);
-    private static readonly Color BgCard = new(0.15f, 0.14f, 0.18f, 0.75f);
-    private static readonly Color BgCardHover = new(0.25f, 0.22f, 0.30f, 0.90f);
-    private static readonly Color BorderDefault = new(0.3f, 0.3f, 0.35f, 0.6f);
-    private static readonly Color BorderHighlight = new(0.5f, 0.45f, 0.3f, 0.8f);
-    private static readonly Color TextPrimary = new(0.95f, 0.93f, 0.88f);
-    private static readonly Color TextSecondary = new(0.7f, 0.68f, 0.63f);
-    private static readonly Color TextMuted = new(0.5f, 0.48f, 0.45f);
-    private static readonly Color TextAccent = new(0.9f, 0.8f, 0.5f);
-    private static readonly Color TextPositive = new(0.3f, 0.85f, 0.3f);
-    private static readonly Color TextNegative = new(0.9f, 0.3f, 0.25f);
-    private static readonly Color TextMagic = new(0.7f, 0.6f, 1.0f);
-    private static readonly Color TextWarning = new(0.9f, 0.7f, 0.2f);
-
-    private const int FontSizeXxl = 24;
-    private const int FontSizeXl = 20;
-    private const int FontSizeLg = 16;
-    private const int FontSizeMd = 14;
-    private const int FontSizeSm = 12;
-    private const int FontSizeXs = 10;
-    private const int SpacingMd = 8;
-    private const int SpacingSm = 4;
-    private const int SpacingLg = 12;
-    private const int SpacingXl = 16;
-    private const int SpacingXxl = 24;
-    private const int RadiusMd = 8;
-    private const int RadiusSm = 4;
-    private const int RadiusLg = 12;
-    private const int ButtonHeight = 36;
-    private const int ButtonHeightLg = 45;
-
-    // ============================================================================
-    // 字段
-    // ============================================================================
     private Control _root = null!;
-    private PanelContainer _topPanel = null!;
-    private PanelContainer _bottomPanelContainer = null!;
-    private Label _dayLabel = null!;
-    private Label _goldLabel = null!;
-    private Label _foodLabel = null!;
-    private Label _speedStatusLabel = null!;   // 速度状态 (正常/急行/扎营)
-    private Label _moraleStatusLabel = null!;  // 士气 (高昂/正常/低落)
-    private Label _reputationLabel = null!;    // 声望
-    private Label _speedLabel = null!;         // 季节
-    private Label _moraleLabel = null!;        // 时间
-    private Label _terrainLabel = null!;
-    private Label _weatherLabel = null!;
-    private HBoxContainer _bottomBar = null!;
+    private OverworldTopHUD _topHUD = null!;
+    private OverworldBottomBar _bottomBar = null!;
+    private OverworldDayNightClock _clock = null!;
+    private OverworldPanelManager _panelManager = null!;
     private PanelContainer _escMenu = null!;
+    private SimpleFloatingTooltip _skillTreeTooltip = null!;
 
-    // 子面板
-    private PartyPanel _partyPanel = null!;
-    private EconomyPanel? _economyPanel;
+    private int _unreadNewsCount;
 
-    // 外部系统引用 (由 OverworldScene3D 设置)
-    public Node EconomyManager { get; set; } = null!;
+    public EconomyManager EconomyManager { get; set; } = null!;
+    public OverworldEntityManager? EntityMgr { get; set; }
     public SaveManager SaveMgr { get; private set; } = new();
 
-    // 强类型场景上下文（替代 GetParent().Get("...") 反射访问）
     private IOverworldContext? _context;
     private UIFactory _factory = null!;
 
-    // 暂未迁移的子面板（保留为字段，等后续转换）
-    private Node _skillTreeUi = null!;
-    private Node _questLog = null!;
-
-    // ============================================================================
-    // 生命周期
-    // ============================================================================
+    public Control TopPanel => _topHUD;
+    public Control BottomPanel => _bottomBar;
 
     public override void _Ready()
     {
         Layer = 10;
         _factory = new UIFactory();
-        _SetupUi();
+        SetupUi();
+        ConnectGlobalMenuSignals();
+    }
 
-        // 连接全局菜单的存档/加载信号
-        var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
-        if (gameMenu != null)
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is not InputEventKey keyEvent || !keyEvent.Pressed || keyEvent.Keycode != Key.Escape)
+            return;
+
+        var gameMenu = Globals.GameMenuOrNull;
+        if (gameMenu != null && gameMenu.IsOpen)
+            return;
+
+        if (AnyManagedPanelVisible())
+            _panelManager.CloseAllPanels();
+        else
+            gameMenu?.Toggle();
+
+        GetViewport().SetInputAsHandled();
+    }
+
+    public void UpdateTopInfo(int year, int month, int day, string season, string clock,
+        int gold, int food, int foodMax, string speedStatus, int reputation)
+    {
+        _clock.SetTime(clock);
+        _clock.UpdateSeason(season);
+        _clock.UpdateDate($"{year}-{month:D2}-{day:D2}");
+        _topHUD.UpdateTopInfo(year, month, day, season, clock, gold, food, foodMax, speedStatus, reputation);
+    }
+
+    public void UpdateTopInfo(int year, int month, int day, string season, string clock, int gold, int food, int foodMax)
+    {
+        UpdateTopInfo(year, month, day, season, clock, gold, food, foodMax, "Normal", 0);
+    }
+
+    public void UpdateTerrainDisplay(string terrainName, Color terrainColor)
+    {
+        _topHUD.UpdateTerrainDisplay(terrainName, terrainColor);
+    }
+
+    public void UpdateWeatherDisplay(string weatherText)
+    {
+        _clock.UpdateWeather(weatherText);
+        _topHUD.UpdateWeatherDisplay(weatherText);
+    }
+
+    public void HandleHotkey(string action)
+    {
+        if (_panelManager.IsPanelVisible(action))
         {
-            gameMenu.SaveRequested += () => _OnButtonPressed("save");
-            gameMenu.LoadRequested += () => _OnButtonPressed("load");
+            _panelManager.CloseAllPanels();
+            return;
         }
+
+        OnButtonPressed(action);
     }
 
-    /// <summary>
-    /// 延迟获取场景上下文（父节点在 _Ready 时可能尚未就绪）。
-    /// 首次调用时缓存引用。
-    /// </summary>
-    private IOverworldContext? GetContext()
+    public void UpdateInfo(GodotObject playerUnitData, GodotObject economy)
     {
-        if (_context != null) return _context;
-        _context = GetParent() as IOverworldContext;
-        return _context;
+        if (economy == null)
+            return;
+
+        var year = (int)economy.Get("Year").AsInt32();
+        var month = (int)economy.Get("Month").AsInt32();
+        var day = (int)economy.Get("DaysPassed").AsInt32();
+        var gold = (int)economy.Get("Gold").AsInt32();
+        var food = (int)economy.Get("Food").AsInt32();
+        var foodMax = (int)economy.Get("FoodMax").AsInt32();
+        var season = economy.HasMethod("GetSeasonName") ? economy.Call("GetSeasonName").AsString() : "";
+        var clock = $"{economy.Get("CurrentHour").AsInt32():D2}:00";
+        var speedStatus = ReadStringProperty(economy, "SpeedStatus", "Normal");
+        var reputation = ReadIntProperty(economy, "Reputation", 0);
+
+        UpdateTopInfo(year, month, day, season, clock, gold, food, foodMax, speedStatus, reputation);
+        SyncWaitingStatus();
     }
 
-
-
-    // ============================================================================
-    // UI构建
-    // ============================================================================
-
-    private void _SetupUi()
+    public void OpenPartyShop(string shopName, EconomyManager economy, List<ItemData> stock, int prosperity = 50,
+        OverworldPOI? poi = null, ReputationTracker? reputation = null, WorldEventEngine? worldEngine = null,
+        IOverworldContext? overworldScene = null)
     {
-        var root = new Control();
-        root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        root.MouseFilter = Control.MouseFilterEnum.Ignore;
-        AddChild(root);
-        _root = root;
+        _panelManager.OpenPartyShop(shopName, economy, stock, prosperity, poi, reputation, worldEngine, overworldScene);
+    }
 
-        // ─── 1. 顶部信息栏 ───
-        var topPanel = new PanelContainer();
-        _topPanel = topPanel;
-        var topStyle = new StyleBoxFlat
+    public void OpenPartyLoot(List<ItemData> loot, int goldGranted = 0, int xpGranted = 0)
+    {
+        _panelManager.OpenPartyLoot(loot, goldGranted, xpGranted);
+    }
+
+    public void UpdatePlayerSpeed(float speedValue, bool isCamping, string? speedTooltip = null)
+    {
+        _topHUD.UpdatePlayerSpeed(speedValue, isCamping, speedTooltip);
+    }
+
+    public void OnNewsReceived()
+    {
+        if (_panelManager.NewsPanel != null && _panelManager.NewsPanel.Visible)
+            return;
+
+        _unreadNewsCount++;
+        _bottomBar.UpdateNewsButtonText(_unreadNewsCount);
+    }
+
+    public IOverworldContext? GetContextInternal()
+    {
+        return GetContext();
+    }
+
+    private void SetupUi()
+    {
+        _root = new Control
         {
-            BgColor = BgPanel,
-            ShadowColor = new Color(0, 0, 0, 0.6f),
-            ShadowSize = 6
+            MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        topStyle.SetBorderWidthAll(2);
-        topStyle.BorderColor = BorderHighlight;
-        topPanel.AddThemeStyleboxOverride("panel", topStyle);
-        topPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
-        topPanel.MouseFilter = Control.MouseFilterEnum.Pass;
-        root.AddChild(topPanel);
+        _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        AddChild(_root);
 
-        var topMargin = new MarginContainer();
-        topMargin.AddThemeConstantOverride("margin_left", 20);
-        topMargin.AddThemeConstantOverride("margin_right", 20);
-        topMargin.AddThemeConstantOverride("margin_top", 6);
-        topMargin.AddThemeConstantOverride("margin_bottom", 6);
-        topPanel.AddChild(topMargin);
+        SetupClock();
+        SetupTopHud();
+        SetupBottomBar();
+        SetupMiddleSkillTreeBar();
 
-        var topHbox = new HBoxContainer();
-        topHbox.AddThemeConstantOverride("separation", SpacingLg * 2);
-        topMargin.AddChild(topHbox);
+        _panelManager = new OverworldPanelManager(_root, this);
+        SetupEscMenu();
+    }
 
-        _dayLabel = new Label();
-        _dayLabel.Text = "纪元  1250年 1月 1日";
-        _dayLabel.AddThemeColorOverride("font_color", TextAccent);
-        _dayLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_dayLabel);
+    private void SetupClock()
+    {
+        _clock = new OverworldDayNightClock { Name = "DayNightClock" };
+        _root.AddChild(_clock);
+        _clock.Initialize();
+    }
 
-        topHbox.AddChild(_CreateSeparatorV());
+    private void SetupTopHud()
+    {
+        _topHUD = new OverworldTopHUD { Name = "TopHUD" };
+        _root.AddChild(_topHUD);
+        _topHUD.Initialize();
+    }
 
-        _goldLabel = new Label();
-        _goldLabel.Text = "兵团金库: 1000 金";
-        _goldLabel.AddThemeColorOverride("font_color", TextAccent);
-        _goldLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_goldLabel);
+    private void SetupBottomBar()
+    {
+        _bottomBar = new OverworldBottomBar { Name = "BottomBar" };
+        _bottomBar.ButtonPressed += OnButtonPressed;
+        _root.AddChild(_bottomBar);
+        _bottomBar.Initialize();
+    }
 
-        _foodLabel = new Label();
-        _foodLabel.Text = "战友口粮: 20/40";
-        _foodLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _foodLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_foodLabel);
-
-        // 新增：速度状态
-        _speedStatusLabel = new Label();
-        _speedStatusLabel.Text = "行军: 正常";
-        _speedStatusLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _speedStatusLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_speedStatusLabel);
-
-        // 新增：士气
-        _moraleStatusLabel = new Label();
-        _moraleStatusLabel.Text = "士气: 正常";
-        _moraleStatusLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _moraleStatusLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_moraleStatusLabel);
-
-        // 新增：声望
-        _reputationLabel = new Label();
-        _reputationLabel.Text = "声望: 0";
-        _reputationLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _reputationLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_reputationLabel);
-
-        _speedLabel = new Label();
-        _speedLabel.Text = "季节: 春季";
-        _speedLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _speedLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_speedLabel);
-
-        _moraleLabel = new Label();
-        _moraleLabel.Text = "\u23f3 \u65f6\u95f4: 08:00";
-        _moraleLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _moraleLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_moraleLabel);
-
-        // 右侧弹性间隔
-        var topSpacer = new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        topHbox.AddChild(topSpacer);
-
-        // 地形显示（右上角）
-        _terrainLabel = new Label();
-        _terrainLabel.Text = "地形: ---";
-        _terrainLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _terrainLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_terrainLabel);
-
-        // 天气显示
-        _weatherLabel = new Label();
-        _weatherLabel.Text = "晴天";
-        _weatherLabel.AddThemeColorOverride("font_color", TextSecondary);
-        _weatherLabel.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        topHbox.AddChild(_weatherLabel);
-
-        // ─── 2. 底部功能栏 ───
-        var bottomPanel = new PanelContainer();
-        _bottomPanelContainer = bottomPanel;
-        var botStyle = new StyleBoxFlat
+    private void SetupEscMenu()
+    {
+        _escMenu = new PanelContainer
         {
-            BgColor = BgPanel,
-            ShadowColor = new Color(0, 0, 0, 0.8f),
-            ShadowSize = 10
+            Visible = false,
         };
-        botStyle.SetBorderWidthAll(3);
-        botStyle.BorderColor = BorderHighlight;
-        bottomPanel.AddThemeStyleboxOverride("panel", botStyle);
-        bottomPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomWide);
-        bottomPanel.GrowVertical = Control.GrowDirection.Begin;
-        bottomPanel.MouseFilter = Control.MouseFilterEnum.Pass;
-        root.AddChild(bottomPanel);
-
-        var bottomMargin = new MarginContainer();
-        bottomMargin.AddThemeConstantOverride("margin_left", 20);
-        bottomMargin.AddThemeConstantOverride("margin_right", 20);
-        bottomMargin.AddThemeConstantOverride("margin_top", 12);
-        bottomMargin.AddThemeConstantOverride("margin_bottom", 16);
-        bottomPanel.AddChild(bottomMargin);
-
-        _bottomBar = new HBoxContainer();
-        _bottomBar.Alignment = BoxContainer.AlignmentMode.Center;
-        _bottomBar.AddThemeConstantOverride("separation", SpacingLg);
-        bottomMargin.AddChild(_bottomBar);
-
-        // 底部功能按钮
-        _CreateBarButton("军队 [I]", "army", TextPrimary);
-        _CreateBarButton("技能盘 [K]", "skill_tree", TextMagic);
-        _CreateBarButton("任务 [J]", "quests", TextWarning);
-        _CreateBarButton("营地 [T]", "camp", TextPositive);
-        _CreateBarButton("领地 [F]", "territory", TextSecondary);
-        _CreateBarButton("财务账本", "economy_panel", TextAccent);
-
-        // ─── 3. 子面板初始化 ───
-        _partyPanel = new PartyPanel();
-        _partyPanel.Visible = false;
-        _partyPanel.PanelClosed += () => EmitSignal(SignalName.PanelDismissed);
-        root.AddChild(_partyPanel);
-
-        // ─── 4. ESC 系统菜单 ───
-        _escMenu = new PanelContainer();
-        var escBg = new StyleBoxFlat
-        {
-            BgColor = new Color(0.0f, 0.0f, 0.0f, 0.6f)
-        };
-        escBg.SetBorderWidthAll(2);
-        escBg.BorderColor = BorderHighlight;
-        escBg.SetCornerRadiusAll(RadiusMd);
-        _escMenu.AddThemeStyleboxOverride("panel", escBg);
+        _escMenu.AddThemeStyleboxOverride("panel", MakeEscBackdropStyle());
         _escMenu.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _escMenu.Visible = false;
-        root.AddChild(_escMenu);
+        _root.AddChild(_escMenu);
 
         var escCenter = new CenterContainer();
         escCenter.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _escMenu.AddChild(escCenter);
 
         var escInner = new PanelContainer();
-        var escInnerBg = new StyleBoxFlat
-        {
-            BgColor = BgPrimary
-        };
-        escInnerBg.SetBorderWidthAll(2);
-        escInnerBg.BorderColor = BorderHighlight;
-        escInnerBg.SetCornerRadiusAll(RadiusMd);
-        escInnerBg.SetContentMarginAll(30);
-        escInner.AddThemeStyleboxOverride("panel", escInnerBg);
+        escInner.AddThemeStyleboxOverride("panel", MakeEscPanelStyle());
         escCenter.AddChild(escInner);
 
-        var escVbox = new VBoxContainer();
+        var escVbox = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(220, 0),
+        };
         escVbox.AddThemeConstantOverride("alignment", 1);
-        escVbox.AddThemeConstantOverride("separation", SpacingLg);
-        escVbox.CustomMinimumSize = new Vector2(220, 0);
+        escVbox.AddThemeConstantOverride("separation", 12);
         escInner.AddChild(escVbox);
 
-        var escTitle = new Label();
-        escTitle.Text = "- \u7cfb\u7edf\u83dc\u5355 -";
-        escTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        escTitle.AddThemeFontSizeOverride("font_size", FontSizeXl);
-        escTitle.AddThemeColorOverride("font_color", TextAccent);
+        var escTitle = new Label
+        {
+            Text = L10n.Tr("MENU_SYSTEM_TITLE"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        escTitle.AddThemeFontSizeOverride("font_size", 20);
+        escTitle.AddThemeColorOverride("font_color", new Color(0.9f, 0.8f, 0.5f));
         escVbox.AddChild(escTitle);
 
-        _CreateEscButton("\u4fdd\u5b58\u6e38\u620f", "save", escVbox);
-        _CreateEscButton("\u52a0\u8f7d\u6e38\u620f", "load", escVbox);
-        _CreateEscButton("\u8bbe\u7f6e", "settings", escVbox);
-        _CreateEscButton("\u8fd4\u56de\u6e38\u620f", "resume", escVbox);
+        CreateEscButton(L10n.Tr("MENU_SAVE_GAME"), "save", escVbox);
+        CreateEscButton(L10n.Tr("MENU_LOAD_GAME"), "load", escVbox);
+        CreateEscButton(L10n.Tr("MENU_SETTINGS"), "settings", escVbox);
+        CreateEscButton(L10n.Tr("MENU_RESUME_GAME"), "resume", escVbox);
+        CreateMainMenuButton(escVbox);
+        CreateExitButton(escVbox);
+    }
 
-        var mainMenuBtn = _CreateButton("\u56de\u5230\u4e3b\u83dc\u5355", new Vector2(200, ButtonHeightLg));
-        mainMenuBtn.Pressed += () =>
+    private void CreateEscButton(string text, string actionName, Control parent)
+    {
+        var button = _factory.CreateButton(text, new Vector2(200, 45));
+        button.Pressed += () => OnButtonPressed(actionName);
+        parent.AddChild(button);
+    }
+
+    private void CreateMainMenuButton(Control parent)
+    {
+        var button = _factory.CreateButton(L10n.Tr("MENU_MAIN_MENU"), new Vector2(200, 45));
+        button.Pressed += () =>
         {
             _escMenu.Visible = false;
-            BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/main_menu.tscn");
+            BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
         };
-        escVbox.AddChild(mainMenuBtn);
-
-        var exitBtn = _CreateButton("\u9000\u51fa\u6e38\u620f", new Vector2(200, ButtonHeightLg));
-        exitBtn.AddThemeColorOverride("font_color", TextNegative);
-        exitBtn.Pressed += () => { GetTree().Quit(); };
-        escVbox.AddChild(exitBtn);
+        parent.AddChild(button);
     }
 
-    // ============================================================================
-    // 按钮创建
-    // ============================================================================
-
-    private void _CreateBarButton(string text, string actionName, Color color)
+    private void CreateExitButton(Control parent)
     {
-        var btn = _CreateButton(text, new Vector2(100, 42));
-        btn.AddThemeFontSizeOverride("font_size", FontSizeMd);
-        btn.AddThemeColorOverride("font_color", color);
-
-        var normalStyle = new StyleBoxFlat
-        {
-            BgColor = BgSecondary
-        };
-        normalStyle.SetBorderWidthAll(2);
-        normalStyle.BorderColor = BorderDefault;
-        normalStyle.SetCornerRadiusAll(4);
-        btn.AddThemeStyleboxOverride("normal", normalStyle);
-
-        var hoverStyle = new StyleBoxFlat
-        {
-            BgColor = BgCardHover
-        };
-        hoverStyle.SetBorderWidthAll(2);
-        hoverStyle.BorderColor = BorderHighlight;
-        hoverStyle.SetCornerRadiusAll(4);
-        btn.AddThemeStyleboxOverride("hover", hoverStyle);
-
-        var pressedStyle = new StyleBoxFlat
-        {
-            BgColor = BgTertiary
-        };
-        pressedStyle.SetBorderWidthAll(2);
-        pressedStyle.BorderColor = BorderHighlight;
-        pressedStyle.SetCornerRadiusAll(4);
-        btn.AddThemeStyleboxOverride("pressed", pressedStyle);
-
-        btn.Pressed += () => _OnButtonPressed(actionName);
-        btn.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
-        _bottomBar.AddChild(btn);
+        var button = _factory.CreateButton(L10n.Tr("MENU_QUIT_GAME"), new Vector2(200, 45));
+        button.AddThemeColorOverride("font_color", new Color(0.9f, 0.3f, 0.25f));
+        button.Pressed += () => GetTree().Quit();
+        parent.AddChild(button);
     }
 
-    private void _CreateEscButton(string text, string actionName, Control parent)
+    private void SetupMiddleSkillTreeBar()
     {
-        var btn = _CreateButton(text, new Vector2(200, ButtonHeightLg));
-        btn.Pressed += () => _OnButtonPressed(actionName);
-        parent.AddChild(btn);
+        var middleBar = new PanelContainer
+        {
+            Name = "MiddleBar",
+            CustomMinimumSize = new Vector2(96, 96),
+            GrowHorizontal = Control.GrowDirection.Both,
+            GrowVertical = Control.GrowDirection.Begin,
+            OffsetBottom = 0,
+            OffsetTop = -96,
+            OffsetLeft = -48,
+            OffsetRight = 48,
+        };
+        middleBar.AddThemeStyleboxOverride("panel", MakeQuickBarStyle());
+        middleBar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterBottom);
+
+        var button = CreateSkillTreeButton();
+        middleBar.AddChild(button);
+        _root.AddChild(middleBar);
+
+        _skillTreeTooltip = new SimpleFloatingTooltip { Name = "SkillTreeTooltip" };
+        _root.AddChild(_skillTreeTooltip);
     }
 
-    // ============================================================================
-    // 按钮处理
-    // ============================================================================
+    private Button CreateSkillTreeButton()
+    {
+        var button = _factory.CreateButton("", new Vector2(80, 80));
+        button.FocusMode = Control.FocusModeEnum.None;
+        button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
 
-    private void _OnButtonPressed(string actionName)
+        var icon = TextureAssetResolver.LoadUiTexture(SkillTreeIconId, SkillTreeIconPath);
+        if (icon != null)
+        {
+            button.Icon = icon;
+            button.ExpandIcon = true;
+            button.IconAlignment = HorizontalAlignment.Center;
+            button.VerticalIconAlignment = VerticalAlignment.Center;
+        }
+        else
+        {
+            GD.PushWarning($"[OverworldUI] Missing skill tree icon: {SkillTreeIconId}");
+        }
+
+        ApplyTransparentButtonStyle(button);
+        ApplyIconShader(button);
+        WireSkillTreeButton(button);
+        return button;
+    }
+
+    private void WireSkillTreeButton(Button button)
+    {
+        button.MouseEntered += () =>
+        {
+            SetShaderFlag(button, "is_hovered", true);
+            _skillTreeTooltip.SetText(L10n.Tr("TOOLTIP_SKILL_TREE"));
+            _skillTreeTooltip.ShowAtMouse();
+        };
+        button.MouseExited += () =>
+        {
+            SetShaderFlag(button, "is_hovered", false);
+            SetShaderFlag(button, "is_pressed", false);
+            _skillTreeTooltip.HidePanel();
+        };
+        button.ButtonDown += () => SetShaderFlag(button, "is_pressed", true);
+        button.ButtonUp += () => SetShaderFlag(button, "is_pressed", false);
+        button.Pressed += () => OnButtonPressed(SkillTreeAction);
+    }
+
+    private void OnButtonPressed(string actionName)
     {
         _escMenu.Visible = false;
+
         switch (actionName)
         {
             case "resume":
                 break;
             case "save":
-                if (EconomyManager is BladeHex.Data.EconomyManager econ)
-                {
-                    var ctx = GetContext();
-                    var playerUnit = ctx?.PlayerUnitData;
-                    var playerPos = ctx?.PlayerParty?.Position ?? Vector2.Zero;
-                    int raceId = ctx?.PlayerRaceId ?? 0;
-
-                    if (playerUnit != null)
-                    {
-                        var entityMgr = ctx?.EntityMgr;
-                        var gs = BladeHex.Data.Globals.StateOrNull;
-                        var saveData = SaveManager.BuildSaveData(
-                            playerUnit, raceId, playerPos, econ, entityMgr,
-                            gs?.WorldGen.Seed ?? 0, gs?.WorldGen.Size ?? 1, gs?.Save.CurrentSaveId);
-                        SaveMgr.SaveGame(saveData, gs?.Save.CurrentSaveId);
-                    }
-
-                    // 持久化世界 chunk 数据（只有手动保存时才写磁盘）
-                    ctx?.SaveWorldData();
-                }
+                SaveCurrentGame();
                 break;
             case "load":
                 EmitSignal(SignalName.MenuOpened, "load_game");
@@ -437,42 +351,42 @@ public partial class OverworldUI : CanvasLayer
             case "party":
             case "inventory":
             case "army":
-                _CloseAllPanels();
-                _OpenPartyPanel();
+                _panelManager.CloseAllPanels();
+                _panelManager.OpenPartyPanel();
                 break;
             case "quests":
-                _CloseAllPanels();
-                _OpenQuestLog();
+                _panelManager.CloseAllPanels();
+                _panelManager.OpenQuestLog();
                 break;
             case "camp":
-                {
-                    var ctx = GetContext();
-                    if (ctx != null)
-                    {
-                        bool isWaiting = !ctx.IsWaiting;
-                        ctx.IsWaiting = isWaiting;
-                        if (isWaiting && ctx.PlayerParty != null)
-                        {
-                            ctx.PlayerParty.IsMoving = false;
-                        }
-                        _UpdateTopInfoStatus(isWaiting ? "正在扎营等待..." : "");
-                    }
-                }
+                ToggleCamping();
                 break;
-            case "skill_tree":
-                _CloseAllPanels();
-                _OpenSkillTree();
+            case SkillTreeAction:
+                _panelManager.CloseAllPanels();
+                _panelManager.OpenSkillTree();
                 break;
             case "territory":
-                _CloseAllPanels();
-                _OpenTerritoryUI();
+                _panelManager.CloseAllPanels();
+                GD.Print("[OverworldUI] Territory panel is not implemented yet.");
                 break;
             case "economy_panel":
-                _CloseAllPanels();
-                _ToggleEconomyPanel();
+                _panelManager.CloseAllPanels();
+                _panelManager.ToggleEconomyPanel();
+                break;
+            case "kingdom_panel":
+                _panelManager.CloseAllPanels();
+                _panelManager.ToggleKingdomPanel();
+                break;
+            case "news_panel":
+                _panelManager.CloseAllPanels();
+                _panelManager.ToggleNewsPanel();
+                break;
+            case "encyclopedia_panel":
+                _panelManager.CloseAllPanels();
+                _panelManager.ToggleEncyclopediaPanel();
                 break;
             case "settings":
-                _OpenSettings();
+                OpenSettings();
                 break;
             default:
                 EmitSignal(SignalName.MenuOpened, actionName);
@@ -480,390 +394,190 @@ public partial class OverworldUI : CanvasLayer
         }
     }
 
-    // ============================================================================
-    // 公开接口
-    // ============================================================================
-
-    /// <summary>顶部信息栏面板引用（过渡动画用）</summary>
-    public Control TopPanel => _topPanel;
-
-    /// <summary>底部功能栏面板引用（过渡动画用）</summary>
-    public Control BottomPanel => _bottomPanelContainer;
-
-    /// <summary>
-    /// 更新顶部信息栏（含新增的速度/士气/声望）
-    /// </summary>
-    public void UpdateTopInfo(int year, int month, int day, string season, string clock,
-        int gold, int food, int foodMax, string speedStatus, string moraleStatus, int reputation)
+    private void SaveCurrentGame()
     {
-        _dayLabel.Text = $"纪元  {year}年 {month}月 {day}日";
-        _goldLabel.Text = $"兵团金库: {gold} 金";
-        _foodLabel.Text = $"战友口粮: {food}/{foodMax}";
-        _speedStatusLabel.Text = $"行军: {speedStatus}";
-        _moraleStatusLabel.Text = $"士气: {moraleStatus}";
-        _reputationLabel.Text = $"声望: {reputation}";
-        _speedLabel.Text = $"季节: {season}";
-        _moraleLabel.Text = $"时间: {clock}";
-    }
+        if (EconomyManager is not EconomyManager economy)
+            return;
 
-    /// <summary>
-    /// 向后兼容的旧签名（不含速度/士气/声望参数）
-    /// </summary>
-    public void UpdateTopInfo(int year, int month, int day, string season, string clock, int gold, int food, int foodMax)
-    {
-        UpdateTopInfo(year, month, day, season, clock, gold, food, foodMax, "\u6b63\u5e38", "\u6b63\u5e38", 0);
-    }
-
-    /// <summary>更新右上角地形显示</summary>
-    public void UpdateTerrainDisplay(string terrainName, Color terrainColor)
-    {
-        _terrainLabel.Text = $"地形: {terrainName}";
-        _terrainLabel.AddThemeColorOverride("font_color", terrainColor);
-    }
-
-    /// <summary>更新天气显示</summary>
-    public void UpdateWeatherDisplay(string weatherText)
-    {
-        _weatherLabel.Text = weatherText;
-    }
-
-    /// <summary>
-    /// 快捷键入口 — 由 OverworldScene3D 调用，触发对应面板操作。
-    /// 如果目标面板已打开则关闭（toggle 行为）。
-    /// </summary>
-    public void HandleHotkey(string action)
-    {
-        // 检查目标面板是否已打开 → toggle 关闭
-        bool targetOpen = action switch
+        var context = GetContext();
+        var playerUnit = context?.PlayerUnitData;
+        if (playerUnit == null)
         {
-            "army" or "inventory" or "party" => _partyPanel != null && _partyPanel.Visible,
-            "skill_tree" => _skillTreeUi != null && _skillTreeUi.Get("visible").AsBool(),
-            "quests" => _questLog is Control qlCtrl && qlCtrl.Visible,
-            "territory" => false,
-            _ => false,
+            context?.SaveWorldData();
+            return;
+        }
+
+        var playerPosition = context?.PlayerParty?.Position ?? Vector2.Zero;
+        var playerRaceId = context?.PlayerRaceId ?? 0;
+        var entityManager = (context as OverworldScene2D)?.EntityMgr;
+        var gameState = Globals.StateOrNull;
+        var saveData = SaveManager.BuildSaveData(
+            playerUnit,
+            playerRaceId,
+            playerPosition,
+            economy,
+            entityManager,
+            gameState?.WorldGen.Seed ?? 0,
+            gameState?.WorldGen.Size ?? 1,
+            gameState?.Save.CurrentSaveId);
+
+        SaveMgr.SaveGame(saveData, gameState?.Save.CurrentSaveId);
+        context?.SaveWorldData();
+    }
+
+    private void ToggleCamping()
+    {
+        var context = GetContext();
+        if (context == null)
+            return;
+
+        context.IsWaiting = !context.IsWaiting;
+        if (context.IsWaiting && context.PlayerParty != null)
+            context.PlayerParty.IsMoving = false;
+
+        _topHUD.UpdateTopInfoStatus(context.IsWaiting ? L10n.Tr("STATUS_WAITING_IN_CAMP") : "");
+    }
+
+    private void SyncWaitingStatus()
+    {
+        var context = GetContext();
+        if (context == null)
+            return;
+
+        _topHUD.UpdateTopInfoStatus(context.IsWaiting ? L10n.Tr("STATUS_WAITING_IN_CAMP") : "");
+    }
+
+    private IOverworldContext? GetContext()
+    {
+        if (_context != null)
+            return _context;
+
+        _context = GetParent() as IOverworldContext;
+        return _context;
+    }
+
+    private void OpenSettings()
+    {
+        Globals.GameMenuOrNull?.OpenSettings();
+    }
+
+    private void ConnectGlobalMenuSignals()
+    {
+        var gameMenu = Globals.GameMenuOrNull;
+        if (gameMenu == null)
+            return;
+
+        gameMenu.SaveRequested += () => OnButtonPressed("save");
+        gameMenu.LoadRequested += () => OnButtonPressed("load");
+    }
+
+    private bool AnyManagedPanelVisible()
+    {
+        return _panelManager.IsPanelVisible("party")
+            || _panelManager.IsPanelVisible(SkillTreeAction)
+            || _panelManager.IsPanelVisible("quests")
+            || _panelManager.IsPanelVisible("economy_panel")
+            || _panelManager.IsPanelVisible("kingdom_panel")
+            || _panelManager.IsPanelVisible("news_panel")
+            || _panelManager.IsPanelVisible("encyclopedia_panel");
+    }
+
+    private static string ReadStringProperty(GodotObject source, string propertyName, string fallback)
+    {
+        try
+        {
+            var value = source.Get(propertyName);
+            return value.VariantType == Variant.Type.String ? value.AsString() : fallback;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private static int ReadIntProperty(GodotObject source, string propertyName, int fallback)
+    {
+        try
+        {
+            var value = source.Get(propertyName);
+            return value.VariantType == Variant.Type.Nil ? fallback : value.AsInt32();
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private static void ApplyTransparentButtonStyle(Button button)
+    {
+        var emptyStyle = new StyleBoxEmpty();
+        button.AddThemeStyleboxOverride("normal", emptyStyle);
+        button.AddThemeStyleboxOverride("hover", emptyStyle);
+        button.AddThemeStyleboxOverride("pressed", emptyStyle);
+        button.AddThemeStyleboxOverride("disabled", emptyStyle);
+        button.AddThemeStyleboxOverride("focus", emptyStyle);
+    }
+
+    private static void ApplyIconShader(Button button)
+    {
+        var shader = ShaderAssetResolver.Load("icon_button", IconButtonShaderPath);
+        if (shader == null)
+            return;
+
+        button.Material = new ShaderMaterial
+        {
+            Shader = shader,
         };
-
-        if (targetOpen)
-        {
-            _CloseAllPanels();
-            return;
-        }
-
-        _OnButtonPressed(action);
     }
 
-    /// <summary>
-    /// 对接 C# OverworldScene3D.UpdateUIInfo 的统一入口
-    /// </summary>
-    public void UpdateInfo(GodotObject playerUnitData, GodotObject economy)
+    private static void SetShaderFlag(Button button, string name, bool value)
     {
-        if (economy == null) return;
-
-        int year = (int)economy.Get("Year").AsInt32();
-        int month = (int)economy.Get("Month").AsInt32();
-        int day = (int)economy.Get("DaysPassed").AsInt32();
-        int gold = (int)economy.Get("Gold").AsInt32();
-        int food = (int)economy.Get("Food").AsInt32();
-        int foodMax = (int)economy.Get("FoodMax").AsInt32();
-
-        string season = "";
-        if (economy.HasMethod("GetSeasonName"))
-            season = economy.Call("GetSeasonName").AsString();
-
-        string clock = $"{economy.Get("CurrentHour").AsInt32():D2}:00";
-
-        // Try to get new fields from economy; use defaults if not available
-        string speedStatus = "\u6b63\u5e38";
-        string moraleStatus = "\u6b63\u5e38";
-        int reputation = 0;
-
-        try
-        {
-            var speedVar = economy.Get("SpeedStatus");
-            if (speedVar.VariantType == Variant.Type.String)
-                speedStatus = speedVar.AsString();
-        }
-        catch { /* property not available yet */ }
-
-        try
-        {
-            var moraleVar = economy.Get("MoraleStatus");
-            if (moraleVar.VariantType == Variant.Type.String)
-                moraleStatus = moraleVar.AsString();
-        }
-        catch { /* property not available yet */ }
-
-        try
-        {
-            var repVar = economy.Get("Reputation");
-            if (repVar.VariantType != Variant.Type.Nil)
-                reputation = repVar.AsInt32();
-        }
-        catch { /* property not available yet */ }
-
-        UpdateTopInfo(year, month, day, season, clock, gold, food, foodMax, speedStatus, moraleStatus, reputation);
+        (button.Material as ShaderMaterial)?.SetShaderParameter(name, value);
     }
 
-    /// <summary>
-    /// 更新顶部状态文字（扎营等）
-    /// </summary>
-    private void _UpdateTopInfoStatus(string status)
+    private static StyleBoxFlat MakeEscBackdropStyle()
     {
-        if (!string.IsNullOrEmpty(status))
+        var style = new StyleBoxFlat
         {
-            _speedStatusLabel.Text = $"行军: {status}";
-            _speedStatusLabel.AddThemeColorOverride("font_color", Colors.Yellow);
-        }
-        else
-        {
-            _speedStatusLabel.Text = "行军: 正常";
-            _speedStatusLabel.RemoveThemeColorOverride("font_color");
-        }
+            BgColor = new Color(0.0f, 0.0f, 0.0f, 0.6f),
+            BorderColor = new Color(0.5f, 0.45f, 0.3f, 0.8f),
+        };
+        style.SetBorderWidthAll(2);
+        style.SetCornerRadiusAll(8);
+        return style;
     }
 
-    private void _OpenArmyManagement()
+    private static StyleBoxFlat MakeEscPanelStyle()
     {
-        _OpenPartyPanel();
+        var style = new StyleBoxFlat
+        {
+            BgColor = new Color(0.08f, 0.08f, 0.10f, 0.85f),
+            BorderColor = new Color(0.5f, 0.45f, 0.3f, 0.8f),
+        };
+        style.SetBorderWidthAll(2);
+        style.SetCornerRadiusAll(8);
+        style.SetContentMarginAll(30);
+        return style;
     }
 
-    private void _OpenPartyPanel()
+    private static StyleBoxFlat MakeQuickBarStyle()
     {
-        // 从 OverworldScene3D 的 PlayerParty 获取 roster 和 inventory
-        var ctx = GetContext();
-        PartyRoster? roster = null;
-        PartyInventory? inventory = null;
-
-        if (ctx?.PlayerParty != null)
+        return new StyleBoxFlat
         {
-            roster = ctx.PlayerParty.Roster;
-            inventory = ctx.PlayerParty.Inventory;
-        }
-
-        if (roster != null && inventory != null)
-            _partyPanel.Open(roster, inventory);
-        else
-            _partyPanel.OpenTab("party");
+            BgColor = new Color(0.08f, 0.08f, 0.10f, 0.76f),
+            BorderWidthLeft = 1,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            BorderColor = new Color(0.72f, 0.58f, 0.35f, 0.65f),
+            CornerRadiusTopLeft = 6,
+            CornerRadiusTopRight = 6,
+            CornerRadiusBottomLeft = 6,
+            CornerRadiusBottomRight = 6,
+            ContentMarginLeft = 8f,
+            ContentMarginRight = 8f,
+            ContentMarginTop = 8f,
+            ContentMarginBottom = 8f,
+        };
     }
-
-    /// <summary>以商店模式打开部队面板</summary>
-    public void OpenPartyShop(string shopName, EconomyManager economy, List<ItemData> stock, int prosperity = 50)
-    {
-        _CloseAllPanels();
-        var ctx = GetContext();
-        PartyRoster? roster = ctx?.PlayerParty?.Roster;
-        PartyInventory? inventory = ctx?.PlayerParty?.Inventory;
-
-        if (roster != null && inventory != null)
-            _partyPanel.OpenShop(roster, inventory, shopName, economy, stock, prosperity);
-        else
-            _partyPanel.OpenTab("party");
-    }
-
-    /// <summary>以战利品模式打开部队面板</summary>
-    public void OpenPartyLoot(List<ItemData> loot, int goldGranted = 0, int xpGranted = 0)
-    {
-        _CloseAllPanels();
-        var ctx = GetContext();
-        PartyRoster? roster = ctx?.PlayerParty?.Roster;
-        PartyInventory? inventory = ctx?.PlayerParty?.Inventory;
-
-        if (roster != null && inventory != null)
-            _partyPanel.OpenLoot(roster, inventory, loot, goldGranted, xpGranted);
-        else
-            _partyPanel.OpenTab("party");
-    }
-
-    private void _OpenTerritoryUI()
-    {
-        // TerritoryUI exists at BladeHex.View.UI.Overworld.TerritoryUI
-        GD.Print("[OverworldUI] 领地管理面板 — 待完善");
-    }
-
-    /// <summary>切换财务账本面板的显示状态（懒初始化）</summary>
-    private void _ToggleEconomyPanel()
-    {
-        if (_economyPanel == null)
-        {
-            _economyPanel = new EconomyPanel();
-            // 注入 EconomyManager 强类型引用
-            if (EconomyManager is BladeHex.Data.EconomyManager em)
-                _economyPanel.Economy = em;
-            _root.AddChild(_economyPanel);
-        }
-
-        if (_economyPanel.Visible)
-        {
-            _economyPanel.Visible = false;
-        }
-        else
-        {
-            // 刷新数据后显示
-            if (EconomyManager is BladeHex.Data.EconomyManager economy)
-                _economyPanel.Economy = economy;
-            _economyPanel.Refresh();
-            _economyPanel.Visible = true;
-        }
-    }
-
-    private void _OpenQuestLog()
-    {
-        if (_questLog == null)
-        {
-            _questLog = new BladeHex.UI.QuestLog();
-            if (_questLog is Control questCtrl)
-            {
-                questCtrl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-                _root.AddChild(questCtrl);
-            }
-        }
-
-        if (_questLog is Control qc)
-            qc.Visible = true;
-        else if (_questLog.HasMethod("show_log"))
-            _questLog.Call("show_log");
-    }
-
-    private void _OpenSkillTree()
-    {
-        if (_skillTreeUi == null)
-        {
-            _skillTreeUi = new BladeHex.UI.SkillTreeUI();
-            if (_skillTreeUi is Control skillCtrl)
-            {
-                skillCtrl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-                _root.AddChild(skillCtrl);
-            }
-        }
-
-        // 获取 SkillTreeManager 单例和当前角色的技能盘
-        var stm = BladeHex.Data.Globals.SkillTreesOrNull;
-        if (stm == null || stm.TreeData == null)
-        {
-            GD.PrintErr("[OverworldUI] SkillTreeManager 未初始化");
-            if (_skillTreeUi is Control sc2) sc2.Visible = true;
-            return;
-        }
-
-        // 从 OverworldScene3D 获取队长数据
-        CharacterSkillTree? charTree = null;
-        var ctx = GetContext();
-        if (ctx?.PlayerParty?.Roster != null && ctx.PlayerParty.Roster.Count > 0)
-        {
-            var leader = ctx.PlayerParty.Roster.Members[0];
-            long charId = (long)leader.GetInstanceId();
-
-            // 获取或创建角色技能盘
-            charTree = stm.GetSkillTree(charId);
-            if (charTree == null)
-            {
-                charTree = stm.CreateSkillTree(charId, leader.Level);
-                stm.InitCharacterLevel(charId, leader.Level);
-            }
-        }
-
-        // 如果没有队伍数据，创建一个临时技能盘供浏览
-        if (charTree == null)
-        {
-            charTree = new CharacterSkillTree(stm.TreeData, 1);
-        }
-
-        // 调用 UI 的 OpenSkillTree 传入数据
-        if (_skillTreeUi is BladeHex.UI.SkillTreeUI skillTreeUi)
-        {
-            skillTreeUi.OpenSkillTree(charTree, stm.TreeData);
-        }
-        else if (_skillTreeUi is Control sc)
-        {
-            sc.Visible = true;
-        }
-    }
-
-    private void _OpenSettings()
-    {
-        // 统一使用 GameMenuManager 的设置面板
-        var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
-        if (gameMenu != null)
-        {
-            gameMenu.OpenSettings();
-        }
-    }
-
-    private void _CloseAllPanels()
-    {
-        bool anyWasOpen = (_partyPanel != null && _partyPanel.Visible) ||
-            (_skillTreeUi != null && _skillTreeUi.Get("visible").AsBool()) ||
-            (_questLog != null && _questLog is Control qlc2 && qlc2.Visible);
-
-        if (_partyPanel != null) _partyPanel.Visible = false;
-        if (_skillTreeUi != null) _skillTreeUi.Set("visible", false);
-        if (_questLog != null && _questLog is Control qlCtrl) qlCtrl.Visible = false;
-
-        // 通知场景清理交互状态（解除 _poiEntered 锁定）
-        if (anyWasOpen)
-            EmitSignal(SignalName.PanelDismissed);
-    }
-
-    // ============================================================================
-    // 输入处理
-    // ============================================================================
-
-    public override void _UnhandledInput(InputEvent @event)
-    {
-        if (@event is InputEventKey keyEvent && keyEvent.Pressed && keyEvent.Keycode == Key.Escape)
-        {
-            // 全局菜单已开 → 让它自己处理
-            var gameMenu = BladeHex.Data.Globals.GameMenuOrNull;
-            if (gameMenu != null && gameMenu.IsOpen)
-                return;
-
-            bool anyPanelOpen = (_partyPanel != null && _partyPanel.Visible) ||
-                (_skillTreeUi != null && _skillTreeUi.Get("visible").AsBool()) ||
-                (_questLog != null && _questLog is Control qlc && qlc.Visible);
-
-            if (anyPanelOpen)
-                _CloseAllPanels();
-            else
-            {
-                // 打开全局系统菜单
-                gameMenu?.Toggle();
-            }
-
-            GetViewport().SetInputAsHandled();
-        }
-    }
-
-    // ============================================================================
-    // UI 组件工厂 — 委托给 UIFactory 统一实现
-    // ============================================================================
-
-    private static StyleBoxFlat MakePanelStyle(Color bg, Color border, int borderWidth = 1, int radius = 8, int margin = 8)
-    {
-        var s = new StyleBoxFlat { BgColor = bg };
-        s.SetBorderWidthAll(borderWidth);
-        s.BorderColor = border;
-        s.SetCornerRadiusAll(radius);
-        s.SetContentMarginAll(margin);
-        return s;
-    }
-
-    private Button _CreateButton(string text, Vector2 minSize)
-        => _factory.CreateButton(text, minSize);
-
-    private Label _CreateTitleLabel(string text, int fontSize = FontSizeXl)
-        => _factory.CreateTitleLabel(text, fontSize);
-
-    private Label _CreateBodyLabel(string text, Color? color = null)
-        => _factory.CreateBodyLabel(text, color);
-
-    private Label _CreateMutedLabel(string text)
-        => _factory.CreateMutedLabel(text);
-
-    private RichTextLabel _CreateRichText(Vector2 minSize)
-        => _factory.CreateRichText(minSize);
-
-    private HSeparator _CreateSeparatorH()
-        => _factory.CreateSeparatorH();
-
-    private VSeparator _CreateSeparatorV()
-        => _factory.CreateSeparatorV();
 }

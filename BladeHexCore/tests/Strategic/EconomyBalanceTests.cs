@@ -65,6 +65,7 @@ public static class EconomyBalanceTests
 
     private static (bool, string) EconomySimulation_DoubleFoodModelShowsEarlyStarvation()
     {
+        // 历史回归测试：验证已修复的双扣粮行为确实会导致早期饥饿
         var result = EconomySimulation.Run(new EconomySimProfile
         {
             Name = "双扣粮测试",

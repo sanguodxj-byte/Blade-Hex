@@ -1,0 +1,814 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blade & Hex — 三角形瓦片技能盘编辑器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at center, #0e1227 0%, #07080f 100%);
+            color: #e2e8f0;
+            overflow: hidden;
+        }
+        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+        .glass-panel {
+            background: rgba(13, 17, 33, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        [v-cloak] { display: none; }
+        .tri-tile { transition: fill 0.2s ease, stroke 0.2s ease, filter 0.2s ease; }
+        .tri-tile:hover { filter: brightness(1.3); }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col select-none">
+<div id="app" class="flex-1 flex flex-col overflow-hidden" v-cloak>
+
+<!-- HEADER -->
+<header class="h-14 border-b border-white/5 px-6 flex items-center justify-between glass-panel z-10">
+    <div class="flex items-center space-x-3">
+        <i class="fa-solid fa-shapes text-purple-500 text-xl"></i>
+        <div>
+            <h1 class="text-base font-bold font-orbitron tracking-wider text-purple-400">SKILL TILE EDITOR</h1>
+            <p class="text-[10px] text-slate-500">三角形瓦片(face)技能盘 · 节点=三角面片 · 邻接=共享边</p>
+        </div>
+    </div>
+    <div class="flex items-center space-x-2">
+        <button @click="saveToLS" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded text-xs"><i class="fa-solid fa-floppy-disk mr-1"></i>暂存</button>
+        <button @click="triggerImport" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded text-xs"><i class="fa-solid fa-file-import mr-1"></i>载入</button>
+        <button @click="exportJSON" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded text-xs"><i class="fa-solid fa-file-export mr-1"></i>导出</button>
+        <button @click="showExport=true" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-semibold"><i class="fa-solid fa-code mr-1"></i>生成 C#</button>
+    </div>
+</header>
+
+<!-- MAIN -->
+<main class="flex-1 flex overflow-hidden relative">
+
+<!-- LEFT: SVG Canvas -->
+<section class="flex-1 relative overflow-hidden" @mousedown="startPan" @wheel.prevent="onZoom">
+    <!-- Controls -->
+    <div class="absolute bottom-4 left-4 z-10 flex space-x-1 glass-panel p-1.5 rounded-lg">
+        <button @click="zoom*=1.15" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-plus"></i></button>
+        <button @click="zoom*=0.87" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-minus"></i></button>
+        <button @click="panX=0;panY=0;zoom=1" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-crosshairs"></i></button>
+    </div>
+    <!-- Info -->
+    <div class="absolute top-4 left-4 z-10 glass-panel px-3 py-1.5 rounded text-[10px] text-slate-500 font-mono">
+        半径={{hexRadius}} | 瓦片数={{totalTileCount}} | 已用={{nodes.length}} | 缩放={{(zoom*100).toFixed(0)}}%
+    </div>
+
+    <!-- SVG -->
+    <svg class="w-full h-full" style="display:block">
+        <g :transform="`translate(${svgCx + panX}, ${svgCy + panY}) scale(${zoom})`">
+            <!-- Background: all triangle tiles as faint outlines -->
+            <polygon v-for="tile in bgTiles" :key="tile.key"
+                     :points="tile.points"
+                     fill="rgba(20,24,40,0.4)"
+                     stroke="rgba(100,116,139,0.12)"
+                     stroke-width="0.5" />
+
+            <!-- Hex boundary -->
+            <polygon :points="hexBoundaryPoints" fill="none" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" />
+
+            <!-- Node tiles (assigned) -->
+            <polygon v-for="n in renderedNodes" :key="n.id"
+                     :points="n.triPoints"
+                     :fill="n.fill"
+                     :stroke="n.stroke"
+                     :stroke-width="n.selected ? 2.5 : 1.2"
+                     :filter="n.selected ? 'url(#glow)' : ''"
+                     class="tri-tile cursor-pointer"
+                     @click.stop="onNodeClick(n.id)" />
+
+            <!-- Node labels -->
+            <text v-for="n in renderedNodes" :key="'lbl-'+n.id"
+                  :x="n.cx" :y="n.cy + 3"
+                  font-size="7" text-anchor="middle" fill="#e2e8f0" class="pointer-events-none select-none"
+                  font-weight="600">{{n.label}}</text>
+
+            <!-- Neighbor edges -->
+            <line v-for="e in neighborEdges" :key="e.key"
+                  :x1="e.x1" :y1="e.y1" :x2="e.x2" :y2="e.y2"
+                  :stroke="e.color" stroke-width="1" stroke-opacity="0.5" />
+        </g>
+        <defs>
+            <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="4" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/>
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- Click-to-place overlay (invisible, captures clicks on empty tiles) -->
+    <svg class="w-full h-full absolute inset-0" style="display:block;pointer-events:none">
+        <g :transform="`translate(${svgCx + panX}, ${svgCy + panY}) scale(${zoom})`">
+            <polygon v-for="tile in emptyClickTiles" :key="'click-'+tile.key"
+                     :points="tile.points"
+                     fill="transparent"
+                     style="pointer-events:all;cursor:crosshair"
+                     @click.stop="onEmptyTileClick(tile.q, tile.r, tile.t)" />
+        </g>
+    </svg>
+</section>
+
+<!-- RIGHT: Edit Panel -->
+<aside class="w-80 h-full border-l border-white/5 flex flex-col glass-panel z-10 overflow-y-auto no-scrollbar">
+    <!-- No selection -->
+    <div v-if="!sel" class="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+        <i class="fa-solid fa-triangle-exclamation text-4xl text-slate-700 mb-3"></i>
+        <p class="text-sm font-semibold">点击三角形瓦片</p>
+        <p class="text-[11px] text-slate-600 mt-1">空瓦片=创建新节点 · 已有节点=编辑</p>
+        <p class="text-[11px] text-slate-600 mt-3">坐标系: (q, r, t)<br>q,r = axial hex格点坐标<br>t=0: ▽(q,r),(q+1,r),(q,r+1)<br>t=1: ▲(q+1,r),(q,r+1),(q+1,r+1)</p>
+    </div>
+
+    <!-- Edit form -->
+    <div v-else class="p-4 space-y-4">
+        <!-- Header -->
+        <div class="flex items-center space-x-2">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold border"
+                 :style="`background:${regionColor(sel.id,0.2)};color:${regionColor(sel.id,1)};border-color:${regionColor(sel.id,0.5)}`">
+                {{sel.type==='Start'?'◎':sel.type==='Keystone'?'★':sel.type==='Big'?'◆':'▲'}}
+            </div>
+            <div class="flex-1">
+                <input v-model="sel.name" class="w-full bg-slate-800/60 border border-slate-700/50 px-2 py-0.5 rounded text-sm text-white font-bold" />
+                <div class="text-[10px] text-slate-500 font-mono mt-0.5">{{sel.id}} · ({{sel.q}},{{sel.r}},{{sel.t}})</div>
+            </div>
+            <button @click="deleteNode" class="text-red-500 hover:text-red-400 text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
+        </div>
+
+        <!-- Type & Region -->
+        <div class="grid grid-cols-2 gap-2">
+            <div>
+                <label class="text-[10px] text-slate-500">类型</label>
+                <select v-model="sel.type" class="w-full bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-slate-300">
+                    <option value="Small">▲ Small</option>
+                    <option value="Big">◆ Big</option>
+                    <option value="Keystone">★ Keystone</option>
+                    <option value="Start">◎ Start</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-[10px] text-slate-500">深度(ring)</label>
+                <input type="number" v-model.number="sel.depth" class="w-full bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white" />
+            </div>
+        </div>
+
+        <!-- Stat Bonuses -->
+        <div>
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-slate-400 font-bold uppercase">属性加成</span>
+                <button @click="addBonus" class="text-purple-400 text-[10px]"><i class="fa-solid fa-plus mr-0.5"></i>添加</button>
+            </div>
+            <div v-if="Object.keys(sel.bonuses).length===0" class="text-[10px] text-slate-600 italic">无</div>
+            <div v-for="(v,k) in sel.bonuses" :key="k" class="flex items-center space-x-1 mb-1">
+                <select :value="k" @change="renameBonus(k,$event.target.value)" class="flex-1 bg-slate-800 border border-slate-700 px-1 py-0.5 rounded text-[10px] text-slate-300">
+                    <option v-for="o in STATS" :key="o.k" :value="o.k">{{o.n}}</option>
+                </select>
+                <input type="number" step="any" :value="v" @input="sel.bonuses[k]=parseFloat($event.target.value)||0" class="w-14 bg-slate-800 border border-slate-700 px-1 py-0.5 rounded text-[10px] text-white text-center font-mono" />
+                <button @click="delete sel.bonuses[k]" class="text-red-500 text-[10px] px-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <!-- Big node fields -->
+        <div v-if="sel.type==='Big'||sel.type==='Keystone'" class="space-y-2">
+            <label class="text-[10px] text-slate-400 font-bold uppercase">技能效果ID</label>
+            <input v-model="sel.effect" class="w-full bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white" placeholder="e.g. whirlwind" />
+            <label class="text-[10px] text-slate-400 font-bold uppercase">描述</label>
+            <textarea v-model="sel.description" rows="2" class="w-full bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-slate-300"></textarea>
+        </div>
+        <div v-if="sel.type==='Keystone'" class="space-y-2">
+            <label class="text-[10px] text-slate-400 font-bold uppercase">代价描述</label>
+            <textarea v-model="sel.cost_desc" rows="2" class="w-full bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-slate-300"></textarea>
+        </div>
+
+        <!-- Neighbors -->
+        <div>
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-slate-400 font-bold uppercase">邻接 (共享边)</span>
+                <button @click="autoLinkNeighbors" class="text-purple-400 text-[10px]"><i class="fa-solid fa-wand-magic-sparkles mr-0.5"></i>自动连接</button>
+            </div>
+            <div class="flex flex-wrap gap-1">
+                <span v-for="nb in sel.neighbors" :key="nb" class="px-1.5 py-0.5 bg-slate-800 text-[9px] rounded border border-white/5 text-purple-300 font-mono flex items-center">
+                    {{nb}}
+                    <i @click="removeNeighbor(nb)" class="fa-solid fa-xmark text-[8px] text-red-500 ml-1 cursor-pointer"></i>
+                </span>
+                <span v-if="sel.neighbors.length===0" class="text-[10px] text-slate-600 italic">无邻接</span>
+            </div>
+            <div class="mt-1 text-[9px] text-slate-600">提示: Shift+点击其他已有节点可添加/移除邻接连线</div>
+        </div>
+
+        <!-- Debug -->
+        <div class="flex space-x-2 pt-2">
+            <button @click="sel.isActivated=!sel.isActivated" :class="sel.isActivated?'bg-purple-600':'bg-slate-800 border border-white/5'" class="flex-1 py-1.5 text-xs rounded">
+                {{sel.isActivated?'✓ 已点亮':'点亮'}}
+            </button>
+        </div>
+    </div>
+</aside>
+</main>
+
+<!-- Export Modal -->
+<div v-if="showExport" class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-8" @click.self="showExport=false">
+    <div class="w-full max-w-4xl max-h-[80vh] glass-panel rounded-xl flex flex-col overflow-hidden">
+        <div class="px-5 py-3 border-b border-white/5 flex justify-between items-center">
+            <h2 class="text-sm font-bold font-orbitron text-purple-400">导出代码</h2>
+            <button @click="showExport=false" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="flex-1 overflow-auto p-4">
+            <pre class="text-[11px] text-slate-300 font-mono whitespace-pre-wrap select-text">{{generatedCode}}</pre>
+        </div>
+        <div class="px-5 py-3 border-t border-white/5 flex justify-end">
+            <button @click="copyCode" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-semibold">
+                <i class="fa-solid fa-copy mr-1"></i>{{copied?'已复制!':'复制'}}
+            </button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<input type="file" id="importFile" accept=".json" class="hidden" />
+
+<script>
+const { createApp, ref, computed, onMounted, watch } = Vue;
+
+// ============================================================
+// 三角形瓦片坐标系
+// ============================================================
+// 在 axial hex grid 的三角形格点网格中，节点位于格点(vertex)上。
+// 三角形面片(tile)是由 3 个相互邻接的格点围成的面。
+//
+// 两种三角形类型:
+//   ▽ (q, r, 0): 顶点为 (q,r), (q+1,r), (q,r+1)
+//                 即"朝下"三角形，底边在上
+//   ▲ (q, r, 1): 顶点为 (q+1,r), (q,r+1), (q+1,r+1)  
+//                 即"朝上"三角形，底边在下
+//                 等价地: (q,r), (q+1,r-1), (q+1,r) 用另一种索引
+//
+// 更简洁的索引方式（本编辑器采用）:
+//   每个格点 (q,r) 关联 2 个三角形:
+//     t=0 "下三角" ▽: 顶点 V(q,r), V(q+1,r), V(q,r+1)
+//     t=1 "上三角" ▲: 顶点 V(q+1,r), V(q,r+1), V(q+1,r+1)
+//
+// 邻接（共享边）:
+//   ▽(q,r,0) 的 3 个邻居:
+//     - ▲(q,r,1)       共享边 V(q+1,r)-V(q,r+1)
+//     - ▲(q-1,r,1)     共享边 V(q,r)-V(q,r+1)  [即 ▲(q-1,r,1) 的边 V(q,r)-V(q,r+1)]
+//     - ▲(q,r-1,1)     共享边 V(q,r)-V(q+1,r)  [即 ▲(q,r-1,1) 的边 V(q,r)-V(q+1,r)]
+//   ▲(q,r,1) 的 3 个邻居:
+//     - ▽(q,r,0)       共享边 V(q+1,r)-V(q,r+1)
+//     - ▽(q+1,r,0)     共享边 V(q+1,r)-V(q+1,r+1)
+//     - ▽(q,r+1,0)     共享边 V(q,r+1)-V(q+1,r+1)
+//
+// 六边形内的瓦片数:
+//   半径 R 的六边形有 3R²+3R+1 个格点
+//   三角形面数 = 格点数*2 - 边界修正 = 6R² (精确)
+// ============================================================
+
+const EDGE_LEN = 36; // 格点间距(像素) — 即三角形边长
+
+// 格点 (q,r) 的像素坐标 (pointy-top axial layout)
+function vertexPixel(q, r) {
+    const x = EDGE_LEN * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r);
+    const y = EDGE_LEN * (1.5 * r);
+    return { x, y };
+}
+
+// 三角形瓦片 (q,r,t) 的 3 个顶点像素坐标
+function tileVertices(q, r, t) {
+    if (t === 0) {
+        // ▽: V(q,r), V(q+1,r), V(q,r+1)
+        return [vertexPixel(q, r), vertexPixel(q + 1, r), vertexPixel(q, r + 1)];
+    } else {
+        // ▲: V(q+1,r), V(q,r+1), V(q+1,r+1)
+        return [vertexPixel(q + 1, r), vertexPixel(q, r + 1), vertexPixel(q + 1, r + 1)];
+    }
+}
+
+// 三角形瓦片重心
+function tileCentroid(q, r, t) {
+    const verts = tileVertices(q, r, t);
+    return {
+        x: (verts[0].x + verts[1].x + verts[2].x) / 3,
+        y: (verts[0].y + verts[1].y + verts[2].y) / 3,
+    };
+}
+
+function verticesStr(q, r, t) {
+    return tileVertices(q, r, t).map(v => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(' ');
+}
+
+// 判断格点 (q,r) 是否在半径 R 的正六边形内
+function insideHex(q, r, R) {
+    const s = -q - r;
+    return Math.abs(q) <= R && Math.abs(r) <= R && Math.abs(s) <= R;
+}
+
+// 判断三角形瓦片 (q,r,t) 是否完全在半径 R 的六边形内
+// (所有 3 个顶点都必须在六边形内)
+function tileInsideHex(q, r, t, R) {
+    if (t === 0) {
+        return insideHex(q, r, R) && insideHex(q + 1, r, R) && insideHex(q, r + 1, R);
+    } else {
+        return insideHex(q + 1, r, R) && insideHex(q, r + 1, R) && insideHex(q + 1, r + 1, R);
+    }
+}
+
+// 获取三角形瓦片的 3 个几何邻居 (共享边)
+function tileNeighbors3(q, r, t) {
+    if (t === 0) {
+        // ▽(q,r,0) neighbors:
+        return [
+            { q, r, t: 1 },         // shares edge V(q+1,r)-V(q,r+1)
+            { q: q - 1, r, t: 1 },  // shares edge V(q,r)-V(q,r+1)
+            { q, r: r - 1, t: 1 },  // shares edge V(q,r)-V(q+1,r)
+        ];
+    } else {
+        // ▲(q,r,1) neighbors:
+        return [
+            { q, r, t: 0 },         // shares edge V(q+1,r)-V(q,r+1)
+            { q: q + 1, r, t: 0 },  // shares edge V(q+1,r)-V(q+1,r+1)
+            { q, r: r + 1, t: 0 },  // shares edge V(q,r+1)-V(q+1,r+1)
+        ];
+    }
+}
+
+function tileKey(q, r, t) { return `${q},${r},${t}`; }
+
+// ============================================================
+
+const STATS = [
+    { k: "max_hp", n: "最大生命" }, { k: "ac", n: "闪避" },
+    { k: "melee_hit", n: "近战命中" }, { k: "melee_damage", n: "近战伤害" },
+    { k: "ranged_hit", n: "远程命中" }, { k: "ranged_damage", n: "远程伤害" },
+    { k: "critical_rate", n: "暴击率" }, { k: "speed", n: "移动速度" },
+    { k: "mana_max", n: "魔力上限" }, { k: "initiative", n: "先攻" },
+    { k: "all_save", n: "全豁免" }, { k: "range_bonus", n: "射程" },
+    { k: "morale", n: "士气" }, { k: "spell_hit", n: "法术命中" },
+    { k: "spell_damage", n: "法术伤害" }, { k: "heal_amount", n: "治疗量" },
+    { k: "ally_bonus", n: "友军增益" },
+];
+
+const REGION_COLORS = {
+    Str: '#ef4444', Dex: '#10b981', Con: '#f59e0b',
+    Int: '#3b82f6', Wis: '#84cc16', Cha: '#d946ef',
+    Transition: '#94a3b8', None: '#e2e8f0'
+};
+
+function getRegion(id) {
+    if (!id) return 'None';
+    if (id.startsWith('str_')) return 'Str';
+    if (id.startsWith('dex_')) return 'Dex';
+    if (id.startsWith('con_')) return 'Con';
+    if (id.startsWith('int_')) return 'Int';
+    if (id.startsWith('wis_')) return 'Wis';
+    if (id.startsWith('cha_')) return 'Cha';
+    if (id.startsWith('trans_')) return 'Transition';
+    if (id === 'start') return 'None';
+    return 'None';
+}
+
+// ============================================================
+// Vue App
+// ============================================================
+createApp({
+    setup() {
+        const hexRadius = ref(7);
+        const nodes = ref([]);
+        const selectedId = ref(null);
+        const zoom = ref(1.0);
+        const panX = ref(0);
+        const panY = ref(0);
+        const isPanning = ref(false);
+        const panStartX = ref(0);
+        const panStartY = ref(0);
+        const showExport = ref(false);
+        const copied = ref(false);
+        const linkMode = ref(false); // when true, clicking another tile adds/removes neighbor
+
+        const winW = ref(window.innerWidth);
+        const winH = ref(window.innerHeight);
+        const svgCx = computed(() => (winW.value - 320) / 2);
+        const svgCy = computed(() => (winH.value - 56) / 2);
+
+        const totalTileCount = computed(() => {
+            const R = hexRadius.value;
+            return 6 * R * R; // exact triangle count in hex of radius R
+        });
+
+        // All background tiles
+        const bgTiles = computed(() => {
+            const R = hexRadius.value;
+            const tiles = [];
+            // Iterate over all possible (q, r) that could form valid triangles
+            for (let q = -R - 1; q <= R; q++) {
+                for (let r = -R - 1; r <= R; r++) {
+                    if (tileInsideHex(q, r, 0, R)) {
+                        tiles.push({ key: tileKey(q, r, 0), q, r, t: 0, points: verticesStr(q, r, 0) });
+                    }
+                    if (tileInsideHex(q, r, 1, R)) {
+                        tiles.push({ key: tileKey(q, r, 1), q, r, t: 1, points: verticesStr(q, r, 1) });
+                    }
+                }
+            }
+            return tiles;
+        });
+
+        // Hex boundary polygon (6 vertices of the outer hex, using actual vertex positions)
+        const hexBoundaryPoints = computed(() => {
+            const R = hexRadius.value;
+            // The 6 corners of the hex in axial coords are:
+            // (R, 0), (0, R), (-R, R), (-R, 0), (0, -R), (R, -R)
+            const corners = [
+                [R, 0], [0, R], [-R, R], [-R, 0], [0, -R], [R, -R]
+            ];
+            return corners.map(([q, r]) => {
+                const p = vertexPixel(q, r);
+                return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+            }).join(' ');
+        });
+
+        // Node lookup by tile key
+        const nodeMap = computed(() => {
+            const m = {};
+            for (const n of nodes.value) {
+                m[tileKey(n.q, n.r, n.t)] = n;
+            }
+            return m;
+        });
+
+        // Selected node
+        const sel = computed(() => {
+            if (!selectedId.value) return null;
+            return nodes.value.find(n => n.id === selectedId.value) || null;
+        });
+
+        // Rendered nodes with visual info
+        const renderedNodes = computed(() => {
+            return nodes.value.map(n => {
+                const cent = tileCentroid(n.q, n.r, n.t);
+                const reg = getRegion(n.id);
+                const color = REGION_COLORS[reg] || '#e2e8f0';
+                const isSelected = n.id === selectedId.value;
+                return {
+                    id: n.id,
+                    triPoints: verticesStr(n.q, n.r, n.t),
+                    cx: cent.x,
+                    cy: cent.y,
+                    fill: n.isActivated ? color : `rgba(30,41,59,0.6)`,
+                    stroke: isSelected ? '#ffd86b' : color,
+                    selected: isSelected,
+                    label: n.name.slice(0, 3),
+                };
+            });
+        });
+
+        // Empty tiles (for click-to-create)
+        const emptyClickTiles = computed(() => {
+            const occupied = nodeMap.value;
+            return bgTiles.value.filter(t => !occupied[t.key]);
+        });
+
+        // Neighbor edges
+        const neighborEdges = computed(() => {
+            const edges = [];
+            const drawn = new Set();
+            for (const n of nodes.value) {
+                const c1 = tileCentroid(n.q, n.r, n.t);
+                for (const nbId of (n.neighbors || [])) {
+                    const nb = nodes.value.find(x => x.id === nbId);
+                    if (!nb) continue;
+                    const key = [n.id, nbId].sort().join('|');
+                    if (drawn.has(key)) continue;
+                    drawn.add(key);
+                    const c2 = tileCentroid(nb.q, nb.r, nb.t);
+                    const reg = getRegion(n.id);
+                    edges.push({
+                        key,
+                        x1: c1.x, y1: c1.y,
+                        x2: c2.x, y2: c2.y,
+                        color: (n.isActivated && nb.isActivated) ? (REGION_COLORS[reg] || '#a78bfa') : 'rgba(148,163,184,0.25)'
+                    });
+                }
+            }
+            return edges;
+        });
+
+        // ---- Interactions ----
+        function selectNode(id) {
+            selectedId.value = id;
+        }
+
+        // Shift+click on a rendered node to toggle neighbor link
+        // (handled via a separate event in the template — we'll use the existing click
+        //  and check if shift is held via a global flag)
+        let shiftHeld = false;
+        window.addEventListener('keydown', e => { if (e.key === 'Shift') shiftHeld = true; });
+        window.addEventListener('keyup', e => { if (e.key === 'Shift') shiftHeld = false; });
+
+        function onNodeClick(id) {
+            if (shiftHeld && selectedId.value && selectedId.value !== id) {
+                toggleNeighbor(selectedId.value, id);
+            } else {
+                selectedId.value = id;
+            }
+        }
+
+        function onEmptyTileClick(q, r, t) {
+            // Create new node at this tile
+            const prefix = guessPrefix(q, r, t);
+            const count = nodes.value.filter(n => n.id.startsWith(prefix)).length;
+            const id = `${prefix}${String(count + 1).padStart(2, '0')}`;
+            const newNode = {
+                id,
+                name: '新节点',
+                type: 'Small',
+                depth: Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)),
+                q, r, t,
+                bonuses: {},
+                effect: '',
+                isActive: false,
+                isActivated: false,
+                description: '',
+                cost_desc: '',
+                cost_bonuses: {},
+                neighbors: [],
+                prerequisites: [],
+            };
+            nodes.value.push(newNode);
+            selectedId.value = id;
+            saveToLS();
+        }
+
+        function guessPrefix(q, r, t) {
+            // Determine region from angle of centroid
+            const cent = tileCentroid(q, r, t);
+            const dist = Math.sqrt(cent.x * cent.x + cent.y * cent.y);
+            if (dist < EDGE_LEN * 0.5) return 'start';
+            // atan2 gives angle from positive X axis
+            // In our pointy-top layout: STR is dir0 (East), DEX dir1 (SE), etc.
+            const angle = (Math.atan2(cent.y, cent.x) * 180 / Math.PI + 360) % 360;
+            // 6 sectors of 60° each, starting from -30° (i.e. 330°-30° is STR)
+            if (angle < 30 || angle >= 330) return 'str_s';
+            if (angle < 90) return 'dex_s';
+            if (angle < 150) return 'con_s';
+            if (angle < 210) return 'int_s';
+            if (angle < 270) return 'wis_s';
+            return 'cha_s';
+        }
+
+        function deleteNode() {
+            if (!sel.value) return;
+            const id = sel.value.id;
+            // Remove from all neighbors
+            for (const n of nodes.value) {
+                const idx = (n.neighbors || []).indexOf(id);
+                if (idx >= 0) n.neighbors.splice(idx, 1);
+            }
+            const idx = nodes.value.findIndex(n => n.id === id);
+            if (idx >= 0) nodes.value.splice(idx, 1);
+            selectedId.value = null;
+            saveToLS();
+        }
+
+        function toggleNeighbor(id1, id2) {
+            const n1 = nodes.value.find(n => n.id === id1);
+            const n2 = nodes.value.find(n => n.id === id2);
+            if (!n1 || !n2) return;
+            if (!n1.neighbors) n1.neighbors = [];
+            if (!n2.neighbors) n2.neighbors = [];
+            const i1 = n1.neighbors.indexOf(id2);
+            const i2 = n2.neighbors.indexOf(id1);
+            if (i1 >= 0) {
+                n1.neighbors.splice(i1, 1);
+                if (i2 >= 0) n2.neighbors.splice(i2, 1);
+            } else {
+                n1.neighbors.push(id2);
+                n2.neighbors.push(id1);
+            }
+            saveToLS();
+        }
+
+        function removeNeighbor(nbId) {
+            if (!sel.value) return;
+            toggleNeighbor(sel.value.id, nbId);
+        }
+
+        function autoLinkNeighbors() {
+            if (!sel.value) return;
+            const n = sel.value;
+            const geoNbs = tileNeighbors3(n.q, n.r, n.t);
+            for (const g of geoNbs) {
+                const key = tileKey(g.q, g.r, g.t);
+                const nb = nodeMap.value[key];
+                if (nb && !n.neighbors.includes(nb.id)) {
+                    n.neighbors.push(nb.id);
+                    if (!nb.neighbors) nb.neighbors = [];
+                    if (!nb.neighbors.includes(n.id)) nb.neighbors.push(n.id);
+                }
+            }
+            saveToLS();
+        }
+
+        function addBonus() {
+            if (!sel.value) return;
+            const unused = STATS.find(s => !(s.k in sel.value.bonuses));
+            sel.value.bonuses[unused ? unused.k : 'max_hp'] = 1;
+        }
+
+        function renameBonus(oldK, newK) {
+            if (!sel.value) return;
+            const v = sel.value.bonuses[oldK];
+            delete sel.value.bonuses[oldK];
+            sel.value.bonuses[newK] = v;
+        }
+
+        function regionColor(id, alpha) {
+            const reg = getRegion(id);
+            const hex = REGION_COLORS[reg] || '#e2e8f0';
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+
+        // ---- Pan & Zoom ----
+        function startPan(e) {
+            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('textarea') || e.target.closest('aside')) return;
+            isPanning.value = true;
+            panStartX.value = e.clientX;
+            panStartY.value = e.clientY;
+            window.addEventListener('mousemove', onPanMove);
+            window.addEventListener('mouseup', endPan);
+        }
+        function onPanMove(e) {
+            if (!isPanning.value) return;
+            panX.value += e.clientX - panStartX.value;
+            panY.value += e.clientY - panStartY.value;
+            panStartX.value = e.clientX;
+            panStartY.value = e.clientY;
+        }
+        function endPan() {
+            isPanning.value = false;
+            window.removeEventListener('mousemove', onPanMove);
+            window.removeEventListener('mouseup', endPan);
+        }
+        function onZoom(e) {
+            const ratio = e.deltaY > 0 ? 0.9 : 1.1;
+            zoom.value = Math.max(0.2, Math.min(zoom.value * ratio, 4));
+        }
+
+        // ---- Persistence ----
+        function saveToLS() {
+            localStorage.setItem('bh_skill_tiles_v2', JSON.stringify({ hexRadius: hexRadius.value, nodes: nodes.value }));
+        }
+        function loadFromLS() {
+            const raw = localStorage.getItem('bh_skill_tiles_v2');
+            if (!raw) return false;
+            try {
+                const data = JSON.parse(raw);
+                if (data.nodes) { nodes.value = data.nodes; }
+                if (data.hexRadius) { hexRadius.value = data.hexRadius; }
+                return true;
+            } catch (e) { return false; }
+        }
+        function triggerImport() { document.getElementById('importFile').click(); }
+        function exportJSON() {
+            const blob = new Blob([JSON.stringify({ hexRadius: hexRadius.value, nodes: nodes.value }, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'skill_tiles.json';
+            a.click();
+        }
+
+        // ---- Code Generation ----
+        const generatedCode = computed(() => {
+            let code = '// ═══════════════════════════════════════════════════════\n';
+            code += '// 三角形瓦片技能盘 — 自动生成的 C# 拓扑代码\n';
+            code += '// 坐标系: (q, r, t) — q,r=axial hex, t=0(▲)/1(▽)\n';
+            code += '// 邻接: 共享边的三角形瓦片\n';
+            code += '// ═══════════════════════════════════════════════════════\n\n';
+
+            const regions = ['Str', 'Dex', 'Con', 'Int', 'Wis', 'Cha', 'Transition'];
+            for (const reg of regions) {
+                const regNodes = nodes.value.filter(n => getRegion(n.id) === reg);
+                if (regNodes.length === 0) continue;
+
+                code += `// ─── ${reg.toUpperCase()} (${regNodes.length} nodes) ───\n`;
+                code += `void Build${reg}Region()\n{\n`;
+
+                for (const n of regNodes) {
+                    const bonusStr = Object.keys(n.bonuses).length > 0
+                        ? 'D(' + Object.entries(n.bonuses).map(([k, v]) => `("${k}", ${Number.isInteger(v) ? v : v + 'f'})`).join(', ') + ')'
+                        : 'new Godot.Collections.Dictionary()';
+
+                    if (n.type === 'Small') {
+                        code += `    Ms("${n.id}", "${n.name}", ${n.depth}, [${n.prerequisites.map(p => `"${p}"`).join(', ')}], ${bonusStr}, new Vector2I(${n.q} * 2 + ${n.t}, ${n.r}));\n`;
+                    } else if (n.type === 'Big') {
+                        code += `    Mb("${n.id}", "${n.name}", ${n.depth}, [], [${n.prerequisites.map(p => `"${p}"`).join(', ')}], "${n.effect}", ${n.isActive}, "${n.description}", new Vector2I(${n.q} * 2 + ${n.t}, ${n.r}));\n`;
+                    } else if (n.type === 'Keystone') {
+                        const costStr = Object.keys(n.cost_bonuses || {}).length > 0
+                            ? 'D(' + Object.entries(n.cost_bonuses).map(([k, v]) => `("${k}", ${v})`).join(', ') + ')'
+                            : 'new Godot.Collections.Dictionary()';
+                        code += `    Mk("${n.id}", "${n.name}", ${n.depth}, [${n.prerequisites.map(p => `"${p}"`).join(', ')}], "${n.effect}", "${n.description}", "${n.cost_desc}", ${costStr}, new Vector2I(${n.q} * 2 + ${n.t}, ${n.r}));\n`;
+                    }
+                }
+
+                // Edges
+                code += '\n    // Neighbors (shared-edge adjacency)\n';
+                const edgeSet = new Set();
+                for (const n of regNodes) {
+                    for (const nbId of (n.neighbors || [])) {
+                        const key = [n.id, nbId].sort().join('|');
+                        if (edgeSet.has(key)) continue;
+                        edgeSet.add(key);
+                        code += `    Ac("${n.id}", "${nbId}");\n`;
+                    }
+                }
+                code += '}\n\n';
+            }
+
+            // Start node
+            const startNode = nodes.value.find(n => n.id === 'start');
+            if (startNode) {
+                code += '// ─── START ───\n';
+                code += `void BuildStartNode()\n{\n`;
+                code += `    var n = MakeNode("start", "启程", SkillNodeData.NodeType.Start,\n`;
+                code += `        SkillNodeData.Region.None, 0, [], [],\n`;
+                code += `        new Godot.Collections.Dictionary(), "", false, "所有角色的起点。", new Vector2I(${startNode.q} * 2 + ${startNode.t}, ${startNode.r}));\n`;
+                code += `    n.Neighbors = new List<string> { ${startNode.neighbors.map(x => `"${x}"`).join(', ')} };\n`;
+                code += '}\n';
+            }
+
+            return code;
+        });
+
+        function copyCode() {
+            navigator.clipboard.writeText(generatedCode.value).then(() => {
+                copied.value = true;
+                setTimeout(() => copied.value = false, 2000);
+            });
+        }
+
+        // ---- Init ----
+        onMounted(() => {
+            if (!loadFromLS()) {
+                // Create default start node at center
+                nodes.value = [{
+                    id: 'start', name: '启程', type: 'Start', depth: 0,
+                    q: 0, r: 0, t: 0,
+                    bonuses: {}, effect: '', isActive: false, isActivated: true,
+                    description: '所有角色的起点', cost_desc: '', cost_bonuses: {},
+                    neighbors: [], prerequisites: [],
+                }];
+            }
+
+            document.getElementById('importFile').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if (data.nodes) { nodes.value = data.nodes; hexRadius.value = data.hexRadius || 7; }
+                        else if (Array.isArray(data)) { nodes.value = data; }
+                        saveToLS();
+                        alert('载入成功: ' + nodes.value.length + ' 个瓦片节点');
+                    } catch (ex) { alert('JSON 解析失败'); }
+                };
+                reader.readAsText(file);
+            });
+
+            window.addEventListener('resize', () => {
+                winW.value = window.innerWidth;
+                winH.value = window.innerHeight;
+            });
+        });
+
+        // Auto-save on changes
+        watch(nodes, () => saveToLS(), { deep: true });
+
+        return {
+            hexRadius, nodes, selectedId, sel, zoom, panX, panY,
+            svgCx, svgCy, totalTileCount,
+            bgTiles, hexBoundaryPoints, renderedNodes, emptyClickTiles, neighborEdges,
+            selectNode, onNodeClick, onEmptyTileClick, deleteNode, autoLinkNeighbors,
+            removeNeighbor, linkMode,
+            addBonus, renameBonus, regionColor,
+            startPan, onZoom,
+            showExport, generatedCode, copyCode, copied,
+            saveToLS, triggerImport, exportJSON,
+            STATS,
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>

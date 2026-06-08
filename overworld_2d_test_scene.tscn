@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://overworld_2d_test_scene"]
+
+[ext_resource type="Script" path="res://BladeHexFrontend/src/Scenes/test/Overworld2DTest.cs" id="1"]
+
+[node name="Overworld2DTestScene" type="Node2D"]
+script = ExtResource("1")

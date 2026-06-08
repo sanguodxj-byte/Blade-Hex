@@ -20,7 +20,7 @@ public class BiomeZoneAnalyzer
     /// </summary>
     /// <param name="allChunks">全部已生成的 chunk（chunkCoord → ChunkData）</param>
     /// <returns>所有满足最小面积的生态区列表</returns>
-    public List<BiomeZone> Analyze(Dictionary<Vector2I, ChunkData> allChunks)
+    public List<BiomeZone> Analyze(IReadOnlyDictionary<Vector2I, ChunkData> allChunks)
     {
         var zones = new List<BiomeZone>();
         var visited = new HashSet<Vector2I>();
@@ -115,7 +115,7 @@ public class BiomeZoneAnalyzer
     /// 构建全局 tile 查找表（从所有 chunk 中提取）
     /// </summary>
     private static Dictionary<Vector2I, HexOverworldTile> BuildTileLookup(
-        Dictionary<Vector2I, ChunkData> allChunks)
+        IReadOnlyDictionary<Vector2I, ChunkData> allChunks)
     {
         var lookup = new Dictionary<Vector2I, HexOverworldTile>();
         foreach (var chunk in allChunks.Values)

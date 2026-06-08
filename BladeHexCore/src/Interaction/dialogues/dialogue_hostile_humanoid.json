@@ -1,0 +1,136 @@
+{
+  "dialogue_id": "hostile_humanoid",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3 && relation >= 0",
+          "text": "“（对方看着你，面色惨白，咽了咽口水，急忙将长剑收回鞘中）\n‘慢着！这位大人，误会！这绝对是一场误会！我们只是些无家可归的可怜虫，在这荒野中求口饭吃，绝不敢冒犯像您这样实力雄厚的领主……不如各退一步，免得动刀动枪伤了和气？’”"
+        },
+        {
+          "condition": "player_army >= npc_army * 3 && relation < 0",
+          "text": "“（对方咽了口唾沫，尽管面色发白，仍极力握紧武器强作镇定）\n‘大人的恶名我早就听说过。看来今天我们遇到了硬茬。不过，要是您非要把我们逼上绝路，我们兄弟也绝不含糊，临死也能咬下你们几块肉来！’”"
+        },
+        {
+          "condition": "player_army >= npc_army * 1.5",
+          "text": "“（对方有些忌惮地上下打量着你，往后退了半步，与身边的同伙交换了几个警惕的眼神）\n‘站住！虽然你们看起来不好对付，但我们兄弟的钢刀也不是吃素的！给点买路财 {bribe_cost} 金币，大家井水不犯河水！’”"
+        },
+        {
+          "condition": "npc_race == \"orc\"",
+          "text": "“（捶胸咆哮，粗重的鼻息夹杂着野兽般的狂怒）\n‘为了鲜血与荣耀！弱小的尘埃，留下你们身上所有的财物 {player_gold} 金币，或者和我们用钢铁与鲜血决一死战！你们的头颅将成为我们腰间的装饰品！’”"
+        },
+        {
+          "condition": "relation <= -50",
+          "text": "“（对方一看到你，顿时怒发冲冠，发出一声充满仇恨的嘶吼）\n‘又是你这个该死的家伙！上次的血债今天正好一起清算！兄弟们，把道路围起来，全部宰了，一个活口都不留！’”"
+        },
+        {
+          "text": "“（几个手持利刃、面容阴鸷的人从路旁的阴影中缓步走出，彻底封锁了前方的路口）\n‘站住！把钱留下，或者把命留下！不想死的话就快点交出 {bribe_cost} 金币的过路费！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "多说无益，手底下见真章吧！(正面迎击)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "condition": "player_gold >= bribe_cost",
+          "text": "少惹麻烦，这是过路费。(支付 {bribe_cost} 金币)",
+          "next": "bribe_success",
+          "action": "lose_gold;add_relation;add_faction_rep",
+          "action_param": "{bribe_cost};10;4"
+        },
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "老老实实投降归顺我，或者死！(尝试收编)",
+          "next": "recruit_confirm",
+          "action": "add_relation",
+          "action_param": "15"
+        },
+        {
+          "condition": "player_army >= npc_army",
+          "text": "我提议让我们的首领来场单挑，胜者决定一切！(单挑首领)",
+          "next": "duel_boss"
+        },
+        {
+          "text": "我投降！(缴械认输)",
+          "next": "surrender_end",
+          "action": "surrender"
+        }
+      ]
+    },
+    "bribe_success": {
+      "node_id": "bribe_success",
+      "texts": [
+        {
+          "text": "“（对方接过金币，咬了咬确认真伪后，露出了满意的冷笑）\n‘很好，算你识相。拿了你的钱，今天就放你一马。滚吧，别让我再看见你！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "告辞。(离开)",
+          "next": "end"
+        }
+      ]
+    },
+    "recruit_confirm": {
+      "node_id": "recruit_confirm",
+      "texts": [
+        {
+          "text": "“（几人面面相觑，在绝对的力量压迫下，终于缓缓放低了手中的武器）\n‘既然大人的实力如此强大，我们跟着您混总比在这荒野中挨饿要强。我们愿意归顺，希望您能遵守承诺，给兄弟们赏口饭吃……’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "很好，编入我的麾下吧！(收编)",
+          "next": "end",
+          "action": "recruit"
+        },
+        {
+          "text": "我改主意了，还是把你们送进监狱吧！(战斗)",
+          "next": "end",
+          "action": "combat"
+        }
+      ]
+    },
+    "duel_boss": {
+      "node_id": "duel_boss",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 2",
+          "text": "“（首领打量着你强壮的身躯，有些犹豫，但背后的部下都在看着，他避无可避）\n‘哼，单挑就单挑！别以为我怕了你。如果你输了，留下 100 金币！如果我输了，我们今天就放你们过去！’”"
+        },
+        {
+          "text": "“（首领发出一声不屑的冷笑，轻蔑地朝地上啐了一口唾沫）\n‘单挑？就凭你这小身板？哈哈！兄弟们听到了吗？这家伙想和我单挑！来吧，我会把你的脑袋当球踢！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "少废话，来吧！(开始单挑战斗)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "text": "（改变主意）那还是直接开战吧。",
+          "next": "end",
+          "action": "combat"
+        }
+      ]
+    },
+    "surrender_end": {
+      "node_id": "surrender_end",
+      "texts": [
+        {
+          "text": "“（对方爆发出一阵张狂的笑声，迅速收缴了你们地上的武器）\n‘哈哈！算你们聪明！全部抱头跪下，老老实实当我们的战利品吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "唉……(接受耻辱的命运)",
+          "next": "end"
+        }
+      ]
+    }
+  }
+}

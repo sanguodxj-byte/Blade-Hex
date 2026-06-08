@@ -1,11 +1,8 @@
-// CombatAttackAnimator.cs
-// 攻击动画编排器 — 独立组件
-// 职责：判断武器类型 → 编排动画序列（近战突刺 / 远程投射物飞行）→ 等待完成
-// 所有飞行参数从 WeaponData 获取，本组件不含硬编码数值
 using Godot;
 using System.Threading.Tasks;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Scenes;
 
 namespace BladeHex.Combat;
 
@@ -18,12 +15,20 @@ namespace BladeHex.Combat;
 [GlobalClass]
 public partial class CombatAttackAnimator : Node
 {
+    private static readonly bool DebugLogging = false;
     private ProjectileSystem _projectileSystem = null!;
 
+    /// <summary>当前攻击中双方是否都在视野内（PlayAttack 设置，子方法读取）</summary>
+    private bool _bothVisible;
+
+    /// <summary>可选：投射物飞行时用于相机跟随的相机控制器</summary>
+    public CombatCameraController? CameraCtrl { get; set; }
+
     /// <summary>注入投射物逻辑系统（必须在使用前调用）</summary>
-    public void Initialize(ProjectileSystem projectileSystem)
+    public void Initialize(ProjectileSystem projectileSystem, CombatCameraController? cameraCtrl = null)
     {
         _projectileSystem = projectileSystem;
+        CameraCtrl = cameraCtrl;
     }
 
     // ========================================
@@ -34,9 +39,28 @@ public partial class CombatAttackAnimator : Node
     /// 播放攻击动画并等待完成。
     /// <para>远程武器：发射投射物 → 目标播受击预备 → 等飞行时间</para>
     /// <para>近战武器：突刺动画 → 等固定时间</para>
+    /// <para>镜头策略：先框定攻击者+目标双方，确保两者都在视野内。</para>
     /// </summary>
     public async Task PlayAttack(Unit attacker, Unit target, WeaponData? weapon)
     {
+        if (DebugLogging) GD.Print($"[CombatAttackAnimator] PlayAttack: weapon={weapon?.ItemName}, IsRanged={weapon?.IsRanged}, _projectileSystem={_projectileSystem != null}");
+
+        // 攻击前调整朝向，使攻击者始终面对防守者，骨骼动画正确播放
+        int attackFacing = HexUtils.GetFacingDirection(attacker.GridPos, target.GridPos);
+        attacker.Facing = attackFacing;
+
+        // 镜头策略：仅当至少一方不在视野内时才框定，避免不必要的镜头移动
+        _bothVisible = false;
+        if (CameraCtrl != null)
+        {
+            _bothVisible = CameraCtrl.IsWorldPosVisible(attacker.Position)
+                        && CameraCtrl.IsWorldPosVisible(target.Position);
+            if (!_bothVisible)
+            {
+                await CameraCtrl.FrameTwoTargets(attacker.Position, target.Position, 0.3f);
+            }
+        }
+
         attacker.PlayAnim("attack");
 
         if (weapon != null && weapon.IsRanged)
@@ -52,7 +76,29 @@ public partial class CombatAttackAnimator : Node
     private async Task PlayMeleeAttack(Unit attacker, Unit target)
     {
         attacker.PlayAttackLunge(target.GlobalPosition);
-        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.6f);
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.4f);
+
+        if (_bothVisible)
+        {
+            // 双方都在视野内：不做任何镜头切换，保持当前跟随状态
+            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.2f);
+            return;
+        }
+
+        // 仅在一方不可见时：命中后短暂聚焦目标展示受击，再恢复攻击者
+        if (CameraCtrl != null && GodotObject.IsInstanceValid(target))
+        {
+            CameraCtrl.LockOnUnit(target);
+            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.25f);
+            if (GodotObject.IsInstanceValid(attacker) && attacker.CurrentHp > 0)
+                CameraCtrl.LockOnUnit(attacker);
+            else
+                CameraCtrl.Unlock();
+        }
+        else
+        {
+            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.2f);
+        }
     }
 
     // ========================================
@@ -61,6 +107,8 @@ public partial class CombatAttackAnimator : Node
 
     private async Task PlayRangedAttack(Unit attacker, Unit target, WeaponData weapon)
     {
+        if (DebugLogging) GD.Print($"[CombatAttackAnimator] PlayRangedAttack: attacker={attacker.Data?.UnitName}, target={target.Data?.UnitName}, weapon={weapon.ItemName}, IsRanged={weapon.IsRanged}");
+
         // 所有参数从 WeaponData 获取
         var data = new ProjectileData
         {
@@ -71,20 +119,44 @@ public partial class CombatAttackAnimator : Node
             ArcHeight = weapon.GetProjectileArcHeight(),
         };
 
+        if (DebugLogging) GD.Print($"[CombatAttackAnimator] ProjectileData: type={data.ProjectileType}, speed={data.Speed}, arc={data.ArcHeight}");
+
         // 发射（EventBus → ProjectilePool → ProjectileView 飞行动画）
         _projectileSystem.Launch(data);
 
         // 计算飞行时间
-        Vector3 fromWorld = HexUtils.AxialToWorld3D(data.Origin.X, data.Origin.Y);
-        Vector3 toWorld = HexUtils.AxialToWorld3D(data.Target.X, data.Target.Y);
-        float travelTime = ProjectileTrajectory.CalculateTravelTime(fromWorld, toWorld, data.Speed);
+        Vector3 logicalFromWorld = HexUtils.AxialToWorld3D(data.Origin.X, data.Origin.Y);
+        Vector3 logicalToWorld = HexUtils.AxialToWorld3D(data.Target.X, data.Target.Y);
+        float travelTime = ProjectileTrajectory.CalculateTravelTime(logicalFromWorld, logicalToWorld, data.Speed);
 
         // 飞行末段：目标播受击预备动画（飞行 70% 时触发）
         float braceDelay = travelTime * 0.7f;
         ScheduleBraceAnim(target, braceDelay);
 
-        // 等待飞行完成
+        // 镜头策略：不跟随投射物，保持双方都在视野内（FrameTwoTargets 已在 PlayAttack 中调用）
+        // 只需等待飞行时间完成
         await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, travelTime);
+
+        if (_bothVisible)
+        {
+            // 双方都在视野内：飞行结束后不做镜头切换
+            return;
+        }
+
+        // 仅在一方不可见时：飞行结束后短暂聚焦目标展示命中效果，再恢复攻击者
+        if (CameraCtrl != null)
+        {
+            if (GodotObject.IsInstanceValid(target) && target.CurrentHp > 0)
+            {
+                CameraCtrl.LockOnUnit(target);
+                await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.25f);
+            }
+
+            if (GodotObject.IsInstanceValid(attacker) && attacker.CurrentHp > 0)
+                CameraCtrl.LockOnUnit(attacker);
+            else
+                CameraCtrl.Unlock();
+        }
     }
 
     // ========================================

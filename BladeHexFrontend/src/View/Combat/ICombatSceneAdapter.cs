@@ -11,8 +11,8 @@ namespace BladeHex.Combat;
 /// </summary>
 public interface ICombatSceneAdapter
 {
-    /// <summary>移动单位到目标格(含动画)</summary>
-    void MoveUnitTo(Unit unit, int q, int r);
+    /// <summary>移动单位到目标格(含动画)，传入完整路径时逐格检测借机攻击</summary>
+    void MoveUnitTo(Unit unit, int q, int r, System.Collections.Generic.List<Godot.Vector2I>? path = null);
 
     /// <summary>播放单位动画</summary>
     void PlayUnitAnim(Unit unit, string animName);

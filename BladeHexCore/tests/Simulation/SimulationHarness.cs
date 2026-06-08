@@ -51,12 +51,15 @@ public static class SimulationHarness
             result = scenario.ToLowerInvariant() switch
             {
                 "combat"       => RunCombatBatch(battles, seed),
+                "combat_dragon" => RunCombatDragonBatch(battles, seed),
+                "combat_1v1"   => RunCombat1v1Inspect(battles, seed),
                 "combat_build" => RunBuildMatrixBatch(battles, seed),
                 "combat_comp"  => RunCompositionMatrixBatch(battles, seed),
                 "overworld_ai" => RunOverworldAiBatch(battles, seed),
                 "world_gen"    => RunWorldGenBatch(battles, seed),
                 "battle_scale" => RunBattleScaleBatch(battles, seed),
                 "economy"      => RunEconomyBatch(battles, seed),
+                "recruit_distribution" => RunRecruitDistributionBatch(battles, seed),
                 _              => RunUnknown(scenario, battles, seed),
             };
         }
@@ -79,6 +82,73 @@ public static class SimulationHarness
     // ========================================================================
     // Scenarios
     // ========================================================================
+
+    private static BatchResult RunCombatDragonBatch(int battles, int seed)
+    {
+        var sw = Stopwatch.StartNew();
+        battles = Math.Max(1, battles);
+
+        var rng = new SeededRandomSource(seed == 0 ? System.Environment.TickCount : seed);
+        using var scope = CombatRandom.Use(rng);
+        var sharedTreeData = _sharedTreeData ??= new BladeHex.Strategic.SkillTreeData();
+        var squadRng = new Random(seed == 0 ? System.Environment.TickCount + 1 : seed + 1);
+
+        int teamSize = 6;
+        int playerLevel = 90;
+        int bossLevel = ReadEnvInt("SIM_BOSS_LEVEL", 120);
+
+        int playerWins = 0;
+        int enemyWins = 0;
+        int timedOut = 0;
+        long totalRounds = 0;
+        long totalPlayerDmg = 0;
+        long totalEnemyDmg = 0;
+        int totalPlayerAtkAttempt = 0;
+        int totalPlayerAtkLand = 0;
+
+        for (int i = 0; i < battles; i++)
+        {
+            var player = BuildPlayerSquad(playerLevel, teamSize, squadRng, sharedTreeData);
+            var enemy  = BuildDragonSquad(bossLevel, squadRng);
+
+            var result = HeadlessCombatLoop.Run(player, enemy);
+
+            if (result.TimedOut) timedOut++;
+            else if (result.PlayerVictory) playerWins++;
+            else enemyWins++;
+
+            totalRounds            += result.RoundsElapsed;
+            totalPlayerDmg         += result.PlayerDamageDealt;
+            totalEnemyDmg          += result.EnemyDamageDealt;
+            totalPlayerAtkAttempt  += result.PlayerAttacksAttempted;
+            totalPlayerAtkLand     += result.PlayerAttacksLanded;
+        }
+
+        sw.Stop();
+        return new BatchResult
+        {
+            Scenario = $"combat_dragon_{bossLevel}",
+            Battles = battles,
+            Seed = seed,
+            ElapsedMs = sw.ElapsedMilliseconds,
+            Metrics = new()
+            {
+                ["player_winrate"] = (double)playerWins / battles,
+                ["enemy_winrate"]  = (double)enemyWins / battles,
+                ["timeout_rate"]   = (double)timedOut / battles,
+                ["avg_rounds"]     = (double)totalRounds / battles,
+                ["avg_player_dmg"] = (double)totalPlayerDmg / battles,
+                ["avg_enemy_dmg"]  = (double)totalEnemyDmg / battles,
+                ["player_hit_rate"] = totalPlayerAtkAttempt == 0 ? 0
+                                    : (double)totalPlayerAtkLand / totalPlayerAtkAttempt,
+            },
+            Notes = new()
+            {
+                $"team_size={teamSize}, player_lv={playerLevel}, boss_lv={bossLevel}",
+                "boss_template=legend_meteor_dragon",
+            },
+        };
+    }
 
     private static BatchResult RunCombatBatch(int battles, int seed)
     {
@@ -154,6 +224,355 @@ public static class SimulationHarness
                 "active rules: skill tree, charge, AoO, weapon mastery, LOS+cover (flat field)",
             },
         };
+    }
+
+    // ========================================================================
+    // 1v1 inspect scenario — generate one level-N player + one level-N enemy
+    // via CharacterGenerator + EquipmentGenerator, dump both sides' stats &
+    // gear, then run N battles to confirm theoretical vs actual hit rate.
+    //
+    // Knobs:
+    //   SIM_LEVEL    : level for both sides (default 120)
+    //   SIM_BATTLES  : repeated 1v1s for hit-rate sampling (default 100)
+    //   SIM_SEED     : deterministic seed
+    // ========================================================================
+
+    private static BatchResult RunCombat1v1Inspect(int battles, int seed)
+    {
+        var sw = Stopwatch.StartNew();
+        battles = Math.Max(1, battles);
+        int level = ReadEnvInt("SIM_LEVEL", 120);
+        float cr = RPGRuleEngine.GetCrFromLevel(level);
+        int itemLevel = EquipmentGenerator.GetItemLevelFromCr(cr);
+        string difficulty = EquipmentGenerator.GetDifficultyFromCr(cr);
+
+        var rng = new SeededRandomSource(seed == 0 ? System.Environment.TickCount : seed);
+        using var scope = CombatRandom.Use(rng);
+        var sharedTreeData = _sharedTreeData ??= new BladeHex.Strategic.SkillTreeData();
+
+        // === Build the two showcase units (fixed seed for inspector dump) ===
+        Godot.GD.Seed((ulong)(seed == 0 ? 1 : seed));
+        var playerData = CharacterGenerator.GenerateCharacter(level: level, seedVal: seed == 0 ? 1 : seed);
+        playerData.UnitName = "玩家测试角色";
+        playerData.IsEnemy = false;
+        StripStarterGear(playerData);
+        EquipmentGenerator.EquipFullSet(playerData, itemLevel, difficulty);
+
+        Godot.GD.Seed((ulong)(seed == 0 ? 2 : seed + 1));
+        var enemyData = CharacterGenerator.GenerateRandomEnemy(cr, UnitData.EnemyType.Humanoid);
+        enemyData.IsEnemy = true;
+        StripStarterGear(enemyData);
+        EquipmentGenerator.EquipFullSet(enemyData, itemLevel, difficulty);
+
+        var playerModel = new BattleUnitModel(playerData);
+        playerModel.Runtime.SkillTree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(playerData, sharedTreeData);
+        var enemyModel = new BattleUnitModel(enemyData);
+        enemyModel.Runtime.SkillTree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(enemyData, sharedTreeData);
+
+        // Apply tree HP bonus (BattleSquad.AddUnit does this normally — mirror here so
+        // GetMaxHp/GetCurrent display matches).
+        playerModel.Runtime.CurrentHp = playerModel.GetMaxHp();
+        enemyModel.Runtime.CurrentHp = enemyModel.GetMaxHp();
+
+        var notes = new List<string>();
+        notes.Add($"=== 1v1 角色检查 (level={level}, cr={cr:F1}, itemLevel={itemLevel}, difficulty={difficulty}) ===");
+        notes.Add("");
+        AppendUnitInspectionNotes(notes, "玩家", playerData, playerModel);
+        notes.Add("");
+        AppendUnitInspectionNotes(notes, "敌人", enemyData, enemyModel);
+        notes.Add("");
+
+        // === 理论命中率（无优势/劣势/护甲伤害减免外的修正） ===
+        int playerAtk = playerModel.GetAttackBonus();
+        int enemyAc   = enemyModel.GetAc();
+        int enemyAtk  = enemyModel.GetAttackBonus();
+        int playerAc  = playerModel.GetAc();
+        float playerHitTheory = RPGRuleEngine.CalculateHitChance(playerAtk, enemyAc, false, false);
+        float enemyHitTheory  = RPGRuleEngine.CalculateHitChance(enemyAtk,  playerAc, false, false);
+
+        notes.Add("=== 理论命中率（攻击加值 vs AC，无 advantage） ===");
+        notes.Add($"  玩家 → 敌人:  攻击 {playerAtk:+#;-#;0}  vs AC {enemyAc}   →  {playerHitTheory * 100:F1}%");
+        notes.Add($"  敌人 → 玩家:  攻击 {enemyAtk:+#;-#;0}  vs AC {playerAc}   →  {enemyHitTheory * 100:F1}%");
+        notes.Add("");
+
+        // === 实测命中率：跑 battles 次 1v1 ===
+        int playerWins = 0, enemyWins = 0, timedOut = 0;
+        long totalRounds = 0;
+        long totalPlayerDmg = 0, totalEnemyDmg = 0;
+        int totalPlayerAtt = 0, totalPlayerHit = 0;
+        int totalEnemyAtt = 0, totalEnemyHit = 0;
+        var battleRng = new Random(seed == 0 ? System.Environment.TickCount + 7 : seed + 7);
+
+        // Per-roll trace aggregator (player + enemy bucketed)
+        long pSumChance = 0, eSumChance = 0;
+        int  pAdv = 0, pDis = 0, pNeither = 0;
+        int  eAdv = 0, eDis = 0, eNeither = 0;
+        int  pNat1 = 0, pNat20 = 0, eNat1 = 0, eNat20 = 0;
+        long pSumEffAtk = 0, eSumEffAtk = 0;
+        long pSumTargetAc = 0, eSumTargetAc = 0;
+
+        HeadlessCombatLoop.AttackTraceSink = trace =>
+        {
+            if (trace.AttackerIsPlayer)
+            {
+                pSumChance += trace.HitChancePercent;
+                pSumEffAtk += trace.EffectiveAttackBonus;
+                pSumTargetAc += trace.TargetAc;
+                if (trace.HasAdvantage && !trace.HasDisadvantage) pAdv++;
+                else if (trace.HasDisadvantage && !trace.HasAdvantage) pDis++;
+                else pNeither++;
+                if (trace.NaturalRoll == 1)  pNat1++;
+                if (trace.NaturalRoll == 20) pNat20++;
+            }
+            else
+            {
+                eSumChance += trace.HitChancePercent;
+                eSumEffAtk += trace.EffectiveAttackBonus;
+                eSumTargetAc += trace.TargetAc;
+                if (trace.HasAdvantage && !trace.HasDisadvantage) eAdv++;
+                else if (trace.HasDisadvantage && !trace.HasAdvantage) eDis++;
+                else eNeither++;
+                if (trace.NaturalRoll == 1)  eNat1++;
+                if (trace.NaturalRoll == 20) eNat20++;
+            }
+        };
+
+        try
+        {
+            for (int i = 0; i < battles; i++)
+            {
+                var pSquad = Build1v1SquadFromTemplate("Player", isPlayer: true,  template: playerData,
+                                                        sharedTreeData: sharedTreeData);
+                var eSquad = Build1v1SquadFromTemplate("Enemy",  isPlayer: false, template: enemyData,
+                                                        sharedTreeData: sharedTreeData);
+                var r = HeadlessCombatLoop.Run(pSquad, eSquad);
+                if (r.TimedOut) timedOut++;
+                else if (r.PlayerVictory) playerWins++;
+                else enemyWins++;
+                totalRounds    += r.RoundsElapsed;
+                totalPlayerDmg += r.PlayerDamageDealt;
+                totalEnemyDmg  += r.EnemyDamageDealt;
+                totalPlayerAtt += r.PlayerAttacksAttempted;
+                totalPlayerHit += r.PlayerAttacksLanded;
+                totalEnemyAtt  += r.EnemyAttacksAttempted;
+                totalEnemyHit  += r.EnemyAttacksLanded;
+            }
+        }
+        finally
+        {
+            HeadlessCombatLoop.AttackTraceSink = null;
+        }
+
+        double playerHitActual = totalPlayerAtt == 0 ? 0 : (double)totalPlayerHit / totalPlayerAtt;
+        double enemyHitActual  = totalEnemyAtt == 0 ? 0 : (double)totalEnemyHit / totalEnemyAtt;
+
+        notes.Add($"=== 实测命中率 (battles={battles}) ===");
+        notes.Add($"  玩家 → 敌人:  尝试 {totalPlayerAtt}  命中 {totalPlayerHit}  →  {playerHitActual * 100:F1}%   (理论 {playerHitTheory * 100:F1}%)");
+        notes.Add($"  敌人 → 玩家:  尝试 {totalEnemyAtt}  命中 {totalEnemyHit}  →  {enemyHitActual * 100:F1}%   (理论 {enemyHitTheory * 100:F1}%)");
+        notes.Add("");
+
+        // === 攻击诊断 (advantage / disadvantage / 平均 effAtk vs AC) ===
+        notes.Add("=== 攻击诊断 (RollAttack 实际入参) ===");
+        if (totalPlayerAtt > 0)
+        {
+            notes.Add($"  玩家攻击次数 {totalPlayerAtt}:");
+            notes.Add($"    优势 {pAdv} ({100.0 * pAdv / totalPlayerAtt:F1}%)  劣势 {pDis} ({100.0 * pDis / totalPlayerAtt:F1}%)  正常 {pNeither} ({100.0 * pNeither / totalPlayerAtt:F1}%)");
+            notes.Add($"    平均有效攻击加值 {(double)pSumEffAtk / totalPlayerAtt,+5:F2}  vs 平均 AC {(double)pSumTargetAc / totalPlayerAtt:F1}");
+            notes.Add($"    平均逐次命中率 {(double)pSumChance / totalPlayerAtt:F1}%  自然1={pNat1}  自然20={pNat20}");
+        }
+        if (totalEnemyAtt > 0)
+        {
+            notes.Add($"  敌人攻击次数 {totalEnemyAtt}:");
+            notes.Add($"    优势 {eAdv} ({100.0 * eAdv / totalEnemyAtt:F1}%)  劣势 {eDis} ({100.0 * eDis / totalEnemyAtt:F1}%)  正常 {eNeither} ({100.0 * eNeither / totalEnemyAtt:F1}%)");
+            notes.Add($"    平均有效攻击加值 {(double)eSumEffAtk / totalEnemyAtt,+5:F2}  vs 平均 AC {(double)eSumTargetAc / totalEnemyAtt:F1}");
+            notes.Add($"    平均逐次命中率 {(double)eSumChance / totalEnemyAtt:F1}%  自然1={eNat1}  自然20={eNat20}");
+        }
+        notes.Add("");
+
+        notes.Add($"=== 战斗结果 ===");
+        notes.Add($"  玩家胜:{playerWins}  敌人胜:{enemyWins}  超时:{timedOut}  平均回合:{(double)totalRounds / battles:F1}");
+        notes.Add($"  平均玩家伤害:{(double)totalPlayerDmg / battles:F1}   平均敌人伤害:{(double)totalEnemyDmg / battles:F1}");
+
+        sw.Stop();
+        return new BatchResult
+        {
+            Scenario = "combat_1v1",
+            Battles = battles,
+            Seed = seed,
+            ElapsedMs = sw.ElapsedMilliseconds,
+            Metrics = new()
+            {
+                ["player_winrate"]      = (double)playerWins / battles,
+                ["enemy_winrate"]       = (double)enemyWins  / battles,
+                ["timeout_rate"]        = (double)timedOut  / battles,
+                ["avg_rounds"]          = (double)totalRounds / battles,
+                ["player_hit_actual"]   = playerHitActual,
+                ["player_hit_theory"]   = playerHitTheory,
+                ["enemy_hit_actual"]    = enemyHitActual,
+                ["enemy_hit_theory"]    = enemyHitTheory,
+                ["player_attack_bonus"] = playerAtk,
+                ["enemy_attack_bonus"]  = enemyAtk,
+                ["player_ac"]           = playerAc,
+                ["enemy_ac"]            = enemyAc,
+            },
+            Notes = notes,
+        };
+    }
+
+    private static void StripStarterGear(UnitData data)
+    {
+        data.Armor = null;
+        data.Boots = null;
+        data.PrimaryMainHand = null;
+        data.Helmet = null;
+        data.Accessory1 = null;
+    }
+
+    /// <summary>Render one side's full inspection block (attributes + gear + derived).</summary>
+    private static void AppendUnitInspectionNotes(List<string> notes, string label, UnitData data, BattleUnitModel model)
+    {
+        // 战斗 HUD 用的 DR 池：InitDr 把 CurrentDr 设为 NaturalDr + Armor.DrThreshold + Shield.DrThreshold
+        // sim 里 BattleSquad.AddUnit 已经触发初始化，所以这里读到的是战斗开始时的实际 DR 池值
+        model.InitDr();
+        string raceName = data.Race != null ? data.Race.RaceName : "未知";
+        notes.Add($"--- {label}: {data.UnitName} ({raceName}, Lv{data.Level}) ---");
+        notes.Add($"  属性:  STR={data.Str}  DEX={data.Dex}  CON={data.Con}  INT={data.Intel}  WIS={data.Wis}  CHA={data.Cha}");
+        notes.Add($"  HP:    {model.Runtime.CurrentHp}/{model.GetMaxHp()}    AP={model.GetMaxAp()}    Move={data.BaseMoveRange}");
+        notes.Add($"  DR池:  {data.CurrentDr}/{data.MaxDr}    护甲耐久(身体): {data.Armor?.CurrentArmorPoints ?? 0}/{data.Armor?.MaxArmorPoints ?? 0}");
+
+        var tree = model.Runtime.SkillTree;
+        int treeAc      = tree?.GetAcBonus() ?? 0;
+        int treeMHit    = tree?.GetMeleeHitBonus() ?? 0;
+        int treeRHit    = tree?.GetRangedHitBonus() ?? 0;
+        int treeMDmg    = tree?.GetMeleeDamageBonus() ?? 0;
+        int treeRDmg    = tree?.GetRangedDamageBonus() ?? 0;
+        int treeHp      = tree?.GetHpBonus() ?? 0;
+
+        notes.Add($"  AC基础: {model.GetAc()}  +技能盘AC {treeAc} = 实战AC {model.GetAc() + treeAc}");
+        notes.Add($"  AttackBonus: {model.GetAttackBonus():+#;-#;0}  +技能盘近战 {treeMHit:+#;-#;0}  +技能盘远程 {treeRHit:+#;-#;0}");
+        notes.Add($"  技能盘其他: HP+{treeHp}  近伤+{treeMDmg}  远伤+{treeRDmg}");
+
+        // 武器精通诊断
+        if (data.PrimaryMainHand is WeaponData mw)
+        {
+            int masteryLv = data.WeaponMastery.GetLevelBySubtype(mw.Subtype);
+            int masteryHit = masteryLv / 2;
+            notes.Add($"  武器精通: {mw.Subtype} → Lv{masteryLv}/{WeaponMastery.MaxMasteryLevel}  (命中加成 +{masteryHit}, 伤害加成 +{masteryLv * 10}%)");
+        }
+
+        // 技能盘已激活节点诊断
+        if (tree != null)
+        {
+            var activeSkills = tree.GetActiveSkills();
+            var passiveSkills = tree.GetPassiveSkills();
+            notes.Add($"  已激活节点: {tree.GetActivatedCount()} 个 (主动:{activeSkills.Count}, 被动B+:{passiveSkills.Count})");
+            if (activeSkills.Count > 0)
+            {
+                var summary = string.Join(", ", activeSkills.Select(s => $"{s.NodeName}({s.SkillEffect})"));
+                notes.Add($"    主动技能: {summary}");
+            }
+            else
+            {
+                notes.Add($"    主动技能: (无)");
+            }
+            var passiveEffects = tree.GetActiveSkillEffects()
+                .Where(e => !activeSkills.Any(a => a.SkillEffect == e))
+                .Distinct()
+                .ToList();
+            if (passiveEffects.Count > 0)
+                notes.Add($"    被动效果ID: {string.Join(", ", passiveEffects)}");
+        }
+
+        // v0.7: 已装备技能槽位
+        var equipped = new List<string>();
+        for (int i = 0; i < UnitData.MaxEquippedSkills; i++)
+        {
+            string e = data.GetEquippedSkill(i);
+            if (!string.IsNullOrEmpty(e)) equipped.Add($"[{i}]{e}");
+        }
+        notes.Add($"  已装备 ({data.GetEquippedSkillCount()}/{UnitData.MaxEquippedSkills}): {(equipped.Count > 0 ? string.Join(", ", equipped) : "(空)")}");
+
+        notes.Add($"  装备:");
+        notes.Add($"    主手:  {FormatWeapon(data.PrimaryMainHand)}");
+        notes.Add($"    副手:  {FormatItem(data.PrimaryOffHand)}");
+        notes.Add($"    护甲:  {FormatArmor(data.Armor)}");
+        notes.Add($"    盾牌:  {FormatArmor(data.Shield)}");
+        notes.Add($"    头盔:  {FormatArmor(data.Helmet)}");
+        notes.Add($"    护手:  {FormatArmor(data.Gauntlets)}");
+        notes.Add($"    鞋子:  {FormatArmor(data.Boots)}");
+        notes.Add($"    饰品1: {FormatItem(data.Accessory1)}");
+        notes.Add($"    饰品2: {FormatItem(data.Accessory2)}");
+    }
+
+    private static string FormatWeapon(WeaponData? w)
+    {
+        if (w == null) return "(无)";
+        return $"{w.ItemName} [T{w.Tier}, {w.GetTotalDamageDiceCount()}d{w.GetTotalDamageDiceSides()}]";
+    }
+
+    private static string FormatArmor(ArmorData? a)
+    {
+        if (a == null) return "(无)";
+        // v0.7: 真正用于减伤的字段是 DrThreshold (穿透检定 + 装甲耐久基数)，
+        // 三向 DR 字段已废弃。装甲耐久 = DrThreshold × 10。
+        return $"{a.ItemName} [{a.GetArmorTypeName()}, AC+{a.GetTotalAcBonus()}, DR阈值{a.DrThreshold}, 耐久{a.MaxArmorPoints}]";
+    }
+
+    private static string FormatItem(ItemData? it)
+    {
+        if (it == null) return "(无)";
+        if (it is WeaponData w) return FormatWeapon(w);
+        if (it is ArmorData a)  return FormatArmor(a);
+        return $"{it.ItemName} ({it.GetType().Name})";
+    }
+
+    /// <summary>
+    /// Clone the inspected template by re-running the equip pipeline so each
+    /// repeat battle gets the same nominal stats but a fresh runtime/HP slate.
+    /// We deep-copy via re-equipping the *same* ItemData refs (those are
+    /// generator-managed and treated as immutable for stat reads).
+    /// </summary>
+    private static BattleSquad Build1v1SquadFromTemplate(string sideName, bool isPlayer,
+        UnitData template, BladeHex.Strategic.SkillTreeData sharedTreeData)
+    {
+        // Reuse the same UnitData shell — HeadlessCombatLoop only mutates Runtime state,
+        // and BattleSquad.AddUnit re-syncs Runtime.CurrentHp from GetMaxHp().
+        var copy = new UnitData
+        {
+            Level = template.Level,
+            UnitName = template.UnitName,
+            IsEnemy = !isPlayer,
+            Race = template.Race,
+            Str = template.Str, Dex = template.Dex, Con = template.Con,
+            Intel = template.Intel, Wis = template.Wis, Cha = template.Cha,
+            BaseMaxHp = template.BaseMaxHp,
+            BaseAc = template.BaseAc,
+            BaseAp = template.BaseAp,
+            BaseMoveRange = template.BaseMoveRange,
+            Armor = template.Armor != null ? (ArmorData)template.Armor.Duplicate() : null,
+            Shield = template.Shield != null ? (ArmorData)template.Shield.Duplicate() : null,
+            Helmet = template.Helmet != null ? (ArmorData)template.Helmet.Duplicate() : null,
+            Gauntlets = template.Gauntlets != null ? (ArmorData)template.Gauntlets.Duplicate() : null,
+            Boots = template.Boots != null ? (ArmorData)template.Boots.Duplicate() : null,
+            Accessory1 = template.Accessory1,
+            Accessory2 = template.Accessory2,
+            PrimaryMainHand = template.PrimaryMainHand,
+            PrimaryOffHand = template.PrimaryOffHand,
+            SkillPoints = template.SkillPoints,
+        };
+        copy.Armor?.InitializeArmorPoints();
+        copy.Shield?.InitializeArmorPoints();
+        copy.Helmet?.InitializeArmorPoints();
+        copy.Gauntlets?.InitializeArmorPoints();
+        copy.Boots?.InitializeArmorPoints();
+        copy.RefreshAccessoryBonuses();
+
+        var squad = new BattleSquad(sideName, isPlayer);
+        var model = new BattleUnitModel(copy);
+        model.Runtime.SkillTree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(copy, sharedTreeData);
+        int col = isPlayer ? 0 : 10;
+        squad.AddUnit(model, new Vector2I(col, 0));
+        return squad;
     }
 
 
@@ -1528,6 +1947,115 @@ public static class SimulationHarness
         yield return new Vector2I(coord.X - 1, coord.Y + 1);
     }
 
+    // ========================================================================
+    // recruit_distribution scenario — T01: RecruitmentDifficulty validation
+    // Rolls N recruits per race and outputs distribution statistics.
+    // ========================================================================
+
+    private static BatchResult RunRecruitDistributionBatch(int rollsPerRace, int seed)
+    {
+        var sw = Stopwatch.StartNew();
+        rollsPerRace = Math.Max(10, rollsPerRace);
+
+        var races = RaceData.GetAllRaces();
+        var notes = new List<string>();
+        var metrics = new Dictionary<string, double>();
+
+        notes.Add($"=== 招募种族分布测试 (rolls_per_race={rollsPerRace}, seed={seed}) ===");
+        notes.Add("");
+        notes.Add("种族 | RecruitmentDifficulty | 权重(1/diff) | 出现次数 | 出现率 | 预期率 | 偏差");
+        notes.Add(new string('-', 80));
+
+        var rng = new Random(seed == 0 ? System.Environment.TickCount : seed);
+
+        // 统计：对每个 race 模拟 rollsPerRace 次"是否被选中"
+        // 假设标准 race (diff=1.0) 出现概率 = 1.0
+        // 其他 race 出现概率 = 1.0 / diff
+        var raceResults = new List<(RaceData race, int count, double expectedRate)>();
+
+        foreach (var race in races)
+        {
+            int count = 0;
+            float weight = race.RecruitmentDifficulty <= 0f
+                ? 0f
+                : 1.0f / race.RecruitmentDifficulty;
+
+            for (int i = 0; i < rollsPerRace; i++)
+            {
+                // 模拟：权重 > random(0,1) 则选中
+                if (weight > 0f && rng.NextDouble() < weight)
+                    count++;
+            }
+
+            double actualRate = (double)count / rollsPerRace;
+            double expectedRate = weight;
+            double deviation = expectedRate > 0 ? (actualRate - expectedRate) / expectedRate * 100 : 0;
+
+            raceResults.Add((race, count, expectedRate));
+
+            string flag = "";
+            if (race.RecruitmentDifficulty <= 0f)
+                flag = " [BLOCKED]";
+            else if (race.RecruitmentDifficulty >= 1.9f)
+                flag = " [半频]";
+            else if (race.RecruitmentDifficulty <= 0.1f)
+                flag = " [ERROR: should be blocked]";
+
+            notes.Add($"{race.RaceName,-8} | {race.RecruitmentDifficulty,22:F1} | {weight,12:F2} | {count,8} | {actualRate * 100,6:F1}% | {expectedRate * 100,6:F1}% | {deviation,+6:F1}%{flag}");
+
+            metrics[$"recruit_{race.raceId}_count"] = count;
+            metrics[$"recruit_{race.raceId}_rate"] = actualRate;
+            metrics[$"recruit_{race.raceId}_difficulty"] = race.RecruitmentDifficulty;
+        }
+
+        // 验证：diff=0 的 race 应该 0 次出现
+        notes.Add("");
+        notes.Add("=== 验证 ===");
+        bool allBlockedCorrect = true;
+        foreach (var race in races)
+        {
+            if (race.RecruitmentDifficulty <= 0f)
+            {
+                var result = raceResults.FirstOrDefault(r => r.race.raceId == race.raceId);
+                if (result.count > 0)
+                {
+                    notes.Add($"  ❌ {race.RaceName}: RecruitmentDifficulty=0 但出现了 {result.count} 次!");
+                    allBlockedCorrect = false;
+                }
+            }
+        }
+        if (allBlockedCorrect)
+            notes.Add("  ✓ 所有 RecruitmentDifficulty=0 的种族均未出现");
+
+        // 写报告文件
+        try
+        {
+            string reportPath = "_recruit_dist.txt";
+            using var file = FileAccess.Open(reportPath, FileAccess.ModeFlags.Write);
+            if (file != null)
+            {
+                foreach (var line in notes)
+                    file.StoreLine(line);
+                GD.Print($"[SimulationHarness] Wrote recruit distribution report to {reportPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            notes.Add($"  [WARN] Failed to write report: {ex.Message}");
+        }
+
+        sw.Stop();
+        return new BatchResult
+        {
+            Scenario = "recruit_distribution",
+            Battles = rollsPerRace * races.Length,
+            Seed = seed,
+            ElapsedMs = sw.ElapsedMilliseconds,
+            Metrics = metrics,
+            Notes = notes,
+        };
+    }
+
     private static BatchResult RunUnknown(string name, int battles, int seed)
     {
         return new BatchResult
@@ -1586,6 +2114,50 @@ public static class SimulationHarness
             model.Runtime.SkillTree = skillTree;
             squad.AddUnit(model, pos);
         }
+        return squad;
+    }
+
+    private static BattleSquad BuildPlayerSquad(int level, int teamSize, Random rng, BladeHex.Strategic.SkillTreeData sharedTreeData)
+    {
+        var squad = new BattleSquad("PlayerSquad", isPlayerSide: true);
+        float cr = RPGRuleEngine.GetCrFromLevel(level);
+        int itemLevel = EquipmentGenerator.GetItemLevelFromCr(cr);
+        string difficulty = EquipmentGenerator.GetDifficultyFromCr(cr);
+
+        for (int i = 0; i < teamSize; i++)
+        {
+            Godot.GD.Seed((ulong)rng.Next());
+            UnitData data = CharacterGenerator.GenerateCharacter(level: level, seedVal: rng.Next());
+            data.Armor = null;
+            data.Boots = null;
+            data.PrimaryMainHand = null;
+            data.Helmet = null;
+            data.Accessory1 = null;
+
+            EquipmentGenerator.EquipFullSet(data, itemLevel, difficulty);
+            var skillTree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(data, sharedTreeData);
+
+            int row = i;
+            int col = 0;
+            var pos = new Vector2I(col, row);
+
+            var model = new BattleUnitModel(data);
+            model.Runtime.SkillTree = skillTree;
+            squad.AddUnit(model, pos);
+        }
+        return squad;
+    }
+
+    private static BattleSquad BuildDragonSquad(int dragonLevel, Random rng)
+    {
+        var squad = new BattleSquad("DragonSquad", isPlayerSide: false);
+        var tpl = UnitTemplateDB.LegendaryMeteorDragon();
+        var data = CharacterGenerator.GenerateFromTemplate(tpl, dragonLevel);
+
+        var pos = new Vector2I(8, 2);
+
+        var model = new BattleUnitModel(data);
+        squad.AddUnit(model, pos);
         return squad;
     }
 

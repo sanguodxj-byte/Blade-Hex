@@ -48,15 +48,18 @@ public partial class TurnOrderBar : HBoxContainer
     // ============================================================================
     private void _Setup()
     {
-        // 确保顶栏有可见背景
         var panelBg = new PanelContainer();
 
+        // Combat_TurnOrder_Bg is much taller than the actual 600x60 strip.
+        // Keep the square unit frames textured, but avoid horizontally crushing the strip art.
         var style = new StyleBoxFlat();
-        style.BgColor = new Color(0.06f, 0.06f, 0.10f, 0.9f);
+        style.BgColor = new Color(0.070f, 0.060f, 0.052f, 0.90f);
         style.SetBorderWidthAll(1);
-        style.BorderColor = new Color(0.35f, 0.30f, 0.22f);
+        style.BorderColor = new Color(0.42f, 0.34f, 0.23f, 0.78f);
         style.SetCornerRadiusAll(4);
         style.SetContentMarginAll(6);
+        style.ShadowColor = new Color(0, 0, 0, 0.28f);
+        style.ShadowSize = 4;
         panelBg.AddThemeStyleboxOverride("panel", style);
         panelBg.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         panelBg.CustomMinimumSize = new Vector2(580, 0);
@@ -177,22 +180,40 @@ public partial class TurnOrderBar : HBoxContainer
         icon.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         icon.SetMeta("unit_ref", unit);
 
-        StyleBoxFlat style;
         if (isActive)
         {
-            style = _theme.MakePanelStyle(
-                new Color(0.3f, 0.28f, 0.1f, 0.9f), _theme.BorderHighlight, 2, _theme.RadiusSm, 2);
+            if (_theme.CombatTurnOrderActiveFrame != null)
+            {
+                var activeStyle = new StyleBoxTexture { Texture = _theme.CombatTurnOrderActiveFrame };
+                activeStyle.SetContentMarginAll(4);
+                icon.AddThemeStyleboxOverride("panel", activeStyle);
+            }
+            else
+            {
+                var style = _theme.MakePanelStyle(
+                    new Color(0.3f, 0.28f, 0.1f, 0.9f), _theme.BorderHighlight, 2, _theme.RadiusSm, 2);
+                icon.AddThemeStyleboxOverride("panel", style);
+            }
         }
         else
         {
-            bool isEnemy = unit.Data?.IsEnemy ?? false;
-            var bg = isEnemy
-                ? new Color(0.2f, 0.08f, 0.08f, 0.7f)
-                : new Color(0.08f, 0.12f, 0.2f, 0.7f);
-            var border = isEnemy ? _theme.BorderEnemy : _theme.BorderFriendly;
-            style = _theme.MakePanelStyle(bg, border, 1, _theme.RadiusSm, 2);
+            if (_theme.CombatTurnOrderNormalFrame != null)
+            {
+                var normalStyle = new StyleBoxTexture { Texture = _theme.CombatTurnOrderNormalFrame };
+                normalStyle.SetContentMarginAll(4);
+                icon.AddThemeStyleboxOverride("panel", normalStyle);
+            }
+            else
+            {
+                bool isEnemy = unit.Data?.IsEnemy ?? false;
+                var bg = isEnemy
+                    ? new Color(0.2f, 0.08f, 0.08f, 0.7f)
+                    : new Color(0.08f, 0.12f, 0.2f, 0.7f);
+                var border = isEnemy ? _theme.BorderEnemy : _theme.BorderFriendly;
+                var style = _theme.MakePanelStyle(bg, border, 1, _theme.RadiusSm, 2);
+                icon.AddThemeStyleboxOverride("panel", style);
+            }
         }
-        icon.AddThemeStyleboxOverride("panel", style);
 
         // 缩略信息
         var vbox = new VBoxContainer();
@@ -243,6 +264,16 @@ public partial class TurnOrderBar : HBoxContainer
     /// <summary>更新图标样式（高亮/普通）</summary>
     private void _UpdateIconStyle(Control icon, bool isActive)
     {
+        if (_theme.CombatTurnOrderActiveFrame != null && _theme.CombatTurnOrderNormalFrame != null)
+        {
+            var activeStyle = new StyleBoxTexture { Texture = _theme.CombatTurnOrderActiveFrame };
+            activeStyle.SetContentMarginAll(4);
+            var normalStyle = new StyleBoxTexture { Texture = _theme.CombatTurnOrderNormalFrame };
+            normalStyle.SetContentMarginAll(4);
+            icon.AddThemeStyleboxOverride("panel", isActive ? activeStyle : normalStyle);
+            return;
+        }
+
         var style = icon.GetThemeStylebox("panel") as StyleBoxFlat;
         if (style == null)
             return;

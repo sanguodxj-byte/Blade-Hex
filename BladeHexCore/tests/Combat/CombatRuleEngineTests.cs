@@ -13,6 +13,8 @@
 //   - CalculateCounterDamage（反击伤害）
 using System.Collections.Generic;
 using BladeHex.Combat.Buff;
+using BladeHex.Data;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.Tests;
 
@@ -46,9 +48,6 @@ public static class CombatRuleEngineTests
         yield return Run(nameof(Damage_FinalMultiplier_AoOHalves), Damage_FinalMultiplier_AoOHalves);
         yield return Run(nameof(Range_d6Plus2_ReturnsMinMaxAvg), Range_d6Plus2_ReturnsMinMaxAvg);
         yield return Run(nameof(Range_NeverZero), Range_NeverZero);
-        yield return Run(nameof(CritThreshold_NoMorale_Unchanged), CritThreshold_NoMorale_Unchanged);
-        yield return Run(nameof(CritThreshold_HighMorale_Reduces), CritThreshold_HighMorale_Reduces);
-        yield return Run(nameof(CritThreshold_FloorAtFifteen), CritThreshold_FloorAtFifteen);
         yield return Run(nameof(Counter_FullDirection_FullDamage), Counter_FullDirection_FullDamage);
         yield return Run(nameof(Counter_HalfDirection_HalvesDamage), Counter_HalfDirection_HalvesDamage);
         yield return Run(nameof(Counter_ZeroDirection_NoDamage), Counter_ZeroDirection_NoDamage);
@@ -57,6 +56,10 @@ public static class CombatRuleEngineTests
         yield return Run(nameof(Buff_ResolveResult_BaseAndIncreasedAndMore), Buff_ResolveResult_BaseAndIncreasedAndMore);
         yield return Run(nameof(Buff_ResolveResult_FullMultiplicative), Buff_ResolveResult_FullMultiplicative);
         yield return Run(nameof(Buff_ResolveResult_OverrideValue), Buff_ResolveResult_OverrideValue);
+        yield return Run(nameof(Buff_AcBonusAlias_AffectsCombatStatsAc), Buff_AcBonusAlias_AffectsCombatStatsAc);
+        yield return Run(nameof(Buff_DamageTaken_AppliesIncomingMultiplier), Buff_DamageTaken_AppliesIncomingMultiplier);
+        yield return Run(nameof(Buff_CritTaken_CanIncreaseCriticalDamage), Buff_CritTaken_CanIncreaseCriticalDamage);
+        yield return Run(nameof(Buff_ApplyDirect_RespectsAgnosticCommand), Buff_ApplyDirect_RespectsAgnosticCommand);
     }
 
     private static (string, bool, string) Run(string name, System.Func<(bool, string)> test)
@@ -199,30 +202,6 @@ public static class CombatRuleEngineTests
     }
 
     // ========================================
-    // 暴击阈值修正
-    // ========================================
-
-    private static (bool, string) CritThreshold_NoMorale_Unchanged()
-    {
-        int t = CombatRuleEngine.GetAdjustedCritThreshold(20, 0f);
-        return Expect(t == 20, $"expected 20, got {t}");
-    }
-
-    private static (bool, string) CritThreshold_HighMorale_Reduces()
-    {
-        // moraleCritBonus = 0.4 → 减少 (int)(0.4 * 5) = 2 点
-        int t = CombatRuleEngine.GetAdjustedCritThreshold(20, 0.4f);
-        return Expect(t == 18, $"expected 18 (20-2), got {t}");
-    }
-
-    private static (bool, string) CritThreshold_FloorAtFifteen()
-    {
-        // 即使大幅降低，也不应低于 15
-        int t = CombatRuleEngine.GetAdjustedCritThreshold(20, 10.0f);
-        return Expect(t == 15, $"expected 15 (floor), got {t}");
-    }
-
-    // ========================================
     // 反击
     // ========================================
 
@@ -343,5 +322,96 @@ public static class CombatRuleEngineTests
         };
         float final = result.Apply(100f);
         return Expect(System.Math.Abs(final - 88f) < 0.001f, $"expected 88, got {final}");
+    }
+
+    private static (bool, string) Buff_AcBonusAlias_AffectsCombatStatsAc()
+    {
+        var unit = MakeUnit();
+        int baseAc = CombatStats.GetAc(unit, usingPrimaryWeapon: true);
+        unit.Runtime.ActiveBuffs.Add(new BuffInstance
+        {
+            Id = "ward_blessing_buff",
+            Modifiers = new List<StatModifier> { new() { Stat = "ac_bonus", Value = 2 } },
+        });
+
+        int buffedAc = CombatStats.GetAc(unit, usingPrimaryWeapon: true);
+        return Expect(buffedAc == baseAc + 2, $"expected AC {baseAc + 2}, got {buffedAc}");
+    }
+
+    private static (bool, string) Buff_DamageTaken_AppliesIncomingMultiplier()
+    {
+        var defender = MakeUnit(currentHp: 100);
+        defender.Runtime.ActiveBuffs.Add(new BuffInstance
+        {
+            Id = "stance_guard",
+            Modifiers = new List<StatModifier> { new() { Stat = "damage_taken", Value = -0.15f } },
+        });
+
+        var model = new BattleUnitModel(defender) { CurrentHp = 100 };
+        var result = model.ApplyDamage(DamageSource.Skill, 100);
+        return Expect(result.HpDamage == 85 && model.CurrentHp == 15,
+            $"expected 85 hp damage and 15 hp left, got damage={result.HpDamage}, hp={model.CurrentHp}");
+    }
+
+    private static (bool, string) Buff_CritTaken_CanIncreaseCriticalDamage()
+    {
+        var input = MakeBaseDamageInput(baseDamage: 10);
+        input.IsCritical = true;
+        input.CritMultiplier = 2;
+        input.CritDamageTakenMultiplier = 1.20f;
+
+        var result = CombatRuleEngine.CalculateDamage(in input);
+        return Expect(result.FinalDamage == 24, $"expected 24, got {result.FinalDamage}");
+    }
+
+    private static (bool, string) Buff_ApplyDirect_RespectsAgnosticCommand()
+    {
+        var treeData = new SkillTreeData();
+        string agnosticNode = "";
+        foreach (var node in treeData.Nodes.Values)
+        {
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone && node.SkillEffect == "agnostic_command")
+            {
+                agnosticNode = node.NodeId;
+                break;
+            }
+        }
+        if (string.IsNullOrEmpty(agnosticNode))
+            return (false, "missing agnostic_command node");
+
+        var characterTree = new CharacterSkillTree();
+        characterTree.Deserialize(new Godot.Collections.Dictionary
+        {
+            { "activated_nodes", new Godot.Collections.Array<string>(new[] { SkillTreeData.StartNodeId, agnosticNode }) },
+            { "available_skill_points", 0 },
+            { "character_level", 99 },
+        }, treeData);
+
+        var unit = MakeUnit();
+        unit.Runtime.SkillTree = characterTree;
+        BuffSystem.ApplyDirect(unit, new BuffInstance { Id = "lua_positive", IsNegative = false });
+
+        return Expect(unit.Runtime.ActiveBuffs.Count == 0,
+            $"agnostic_command should reject positive ApplyDirect buffs, got {unit.Runtime.ActiveBuffs.Count}");
+    }
+
+    private static UnitData MakeUnit(int currentHp = 20)
+    {
+        return new UnitData
+        {
+            UnitName = "combat_rule_test",
+            Level = 1,
+            BaseMaxHp = 20,
+            BaseAc = 10,
+            BaseAp = 12,
+            BaseMoveRange = 4,
+            Str = 10,
+            Dex = 10,
+            Con = 10,
+            Intel = 10,
+            Wis = 10,
+            Cha = 10,
+            Runtime = { CurrentHp = currentHp },
+        };
     }
 }

@@ -10,6 +10,15 @@ using System.Text.Json.Serialization;
 
 namespace BladeHex.View.Unit.Skeleton.Editor;
 
+/// <summary>物理缓动曲线类型</summary>
+public enum EasingType
+{
+    Linear,
+    QuadOut,      // 快速出招，缓慢收势
+    BackOut,      // 超调后微弱回弹
+    Bounce,       // 物理砸地反弹余震
+}
+
 /// <summary>单骨骼姿态</summary>
 public struct BonePose
 {
@@ -25,20 +34,89 @@ public struct BonePose
     /// <summary>Sprite 自身旋转（度，仅 Weapon 使用，控制武器图片角度）</summary>
     public float SpriteRotation { get; set; }
 
-    public static BonePose Zero => new() { RotationZ = 0, PositionY = 0, PositionX = 0, SpriteRotation = 0 };
+    /// <summary>X 轴缩放倍率（默认 1.0f）</summary>
+    public float ScaleX { get; set; }
 
-    /// <summary>线性插值</summary>
+    /// <summary>Y 轴缩放倍率（默认 1.0f）</summary>
+    public float ScaleY { get; set; }
+
+    /// <summary>此关键帧后续过渡采用的缓动类型</summary>
+    public EasingType Easing { get; set; }
+
+    public static BonePose Zero => new() 
+    { 
+        RotationZ = 0, 
+        PositionY = 0, 
+        PositionX = 0, 
+        SpriteRotation = 0,
+        ScaleX = 1.0f,
+        ScaleY = 1.0f,
+        Easing = EasingType.Linear
+    };
+
+    /// <summary>高精度物理曲线与 TRS 插值</summary>
     public static BonePose Lerp(BonePose a, BonePose b, float t)
     {
+        float easedT = EvaluateEasing(a.Easing, t);
+
         return new BonePose
         {
-            RotationZ = a.RotationZ + (b.RotationZ - a.RotationZ) * t,
-            PositionY = a.PositionY + (b.PositionY - a.PositionY) * t,
-            PositionX = a.PositionX + (b.PositionX - a.PositionX) * t,
-            SpriteRotation = a.SpriteRotation + (b.SpriteRotation - b.SpriteRotation) * t,
+            RotationZ = a.RotationZ + (b.RotationZ - a.RotationZ) * easedT,
+            PositionY = a.PositionY + (b.PositionY - a.PositionY) * easedT,
+            PositionX = a.PositionX + (b.PositionX - a.PositionX) * easedT,
+            SpriteRotation = a.SpriteRotation + (b.SpriteRotation - a.SpriteRotation) * easedT,
+            ScaleX = a.ScaleX + (b.ScaleX - a.ScaleX) * easedT,
+            ScaleY = a.ScaleY + (b.ScaleY - a.ScaleY) * easedT,
+            Easing = a.Easing
         };
     }
+
+    private static float EvaluateEasing(EasingType easing, float t)
+    {
+        t = Mathf.Clamp(t, 0f, 1f);
+        switch (easing)
+        {
+            case EasingType.Linear:
+                return t;
+            case EasingType.QuadOut:
+                return t * (2f - t);
+            case EasingType.BackOut:
+                float f = t - 1f;
+                return 1f + 2.70158f * f * f * f + 1.70158f * f * f;
+            case EasingType.Bounce:
+                return EvaluateBounce(t);
+            default:
+                return t;
+            }
+    }
+
+    private static float EvaluateBounce(float t)
+    {
+        const float n1 = 7.5625f;
+        const float d1 = 2.75f;
+
+        if (t < 1f / d1)
+        {
+            return n1 * t * t;
+        }
+        else if (t < 2f / d1)
+        {
+            t -= 1.5f / d1;
+            return n1 * t * t + 0.75f;
+        }
+        else if (t < 2.5f / d1)
+        {
+            t -= 2.25f / d1;
+            return n1 * t * t + 0.9375f;
+        }
+        else
+        {
+            t -= 2.625f / d1;
+            return n1 * t * t + 0.984375f;
+        }
+    }
 }
+
 
 /// <summary>
 /// 武器动画类别 — 决定使用哪套攻击/待机动画。
@@ -397,7 +475,9 @@ public static class AnimClipInterpolator
 /// <summary>动画片段 JSON 序列化/反序列化</summary>
 public static class AnimClipSerializer
 {
-    private const string SaveDir = "user://custom_animations";
+    public static string SaveDir => (OS.HasFeature("editor") || OS.IsDebugBuild()) 
+        ? "res://assets/animations" 
+        : "user://custom_animations";
 
     /// <summary>获取指定武器类别的存储目录</summary>
     private static string GetCategoryDir(WeaponAnimCategory cat)
@@ -421,10 +501,10 @@ public static class AnimClipSerializer
         GD.Print($"[AnimClipSerializer] 已保存: {path}");
     }
 
-    /// <summary>从 user:// 目录加载动画（按武器类别查找）</summary>
+    /// <summary>从 user:// 目录加载动画（按武器类别查找，并支持智能 common 通用动作回退）</summary>
     public static AnimClip? Load(string animName, WeaponAnimCategory category)
     {
-        // 优先 user:// 自定义
+        // 优先 1: user:// 自定义武器类别动作
         string userPath = $"{GetCategoryDir(category)}/{animName}.json";
         if (FileAccess.FileExists(userPath))
         {
@@ -432,7 +512,7 @@ public static class AnimClipSerializer
             if (file != null) return FromJson(file.GetAsText());
         }
 
-        // 回退 res://assets/animations/ 内置
+        // 优先 2: res://assets/animations/ 内置武器类别动作
         string resPath = $"res://assets/animations/{category.ToString().ToLower()}/{animName}.json";
         if (FileAccess.FileExists(resPath))
         {
@@ -440,6 +520,30 @@ public static class AnimClipSerializer
             if (file != null)
             {
                 GD.Print($"[AnimClipSerializer] 从内置加载: {resPath}");
+                return FromJson(file.GetAsText());
+            }
+        }
+
+        // 回退 3: user:// 自定义通用 common 动作
+        string commonUserPath = $"{SaveDir}/common/{animName}.json";
+        if (FileAccess.FileExists(commonUserPath))
+        {
+            using var file = FileAccess.Open(commonUserPath, FileAccess.ModeFlags.Read);
+            if (file != null)
+            {
+                GD.Print($"[AnimClipSerializer] 智能回退从自定义common加载: {commonUserPath}");
+                return FromJson(file.GetAsText());
+            }
+        }
+
+        // 回退 4: res:// 内置通用 common 动作
+        string commonResPath = $"res://assets/animations/common/{animName}.json";
+        if (FileAccess.FileExists(commonResPath))
+        {
+            using var file = FileAccess.Open(commonResPath, FileAccess.ModeFlags.Read);
+            if (file != null)
+            {
+                GD.Print($"[AnimClipSerializer] 智能回退从内置common加载: {commonResPath}");
                 return FromJson(file.GetAsText());
             }
         }
@@ -542,7 +646,16 @@ public static class AnimClipSerializer
                 time = kf.Time,
                 bones = kf.Bones.ToDictionary(
                     kvp => kvp.Key,
-                    kvp => new BonePoseDto { rotation_z = kvp.Value.RotationZ, position_y = kvp.Value.PositionY, position_x = kvp.Value.PositionX, sprite_rotation = kvp.Value.SpriteRotation }
+                    kvp => new BonePoseDto 
+                    { 
+                        rotation_z = kvp.Value.RotationZ, 
+                        position_y = kvp.Value.PositionY, 
+                        position_x = kvp.Value.PositionX, 
+                        sprite_rotation = kvp.Value.SpriteRotation,
+                        scale_x = kvp.Value.ScaleX,
+                        scale_y = kvp.Value.ScaleY,
+                        easing = kvp.Value.Easing.ToString(),
+                    }
                 )
             }).ToList()
         };
@@ -577,6 +690,9 @@ public static class AnimClipSerializer
                         PositionY = poseDto.position_y,
                         PositionX = poseDto.position_x,
                         SpriteRotation = poseDto.sprite_rotation,
+                        ScaleX = poseDto.scale_x ?? 1.0f,
+                        ScaleY = poseDto.scale_y ?? 1.0f,
+                        Easing = Enum.TryParse<EasingType>(poseDto.easing ?? "Linear", true, out var ease) ? ease : EasingType.Linear,
                     };
                 }
                 clip.Keyframes.Add(kf);
@@ -613,5 +729,8 @@ public static class AnimClipSerializer
         public float position_y { get; set; }
         public float position_x { get; set; }
         public float sprite_rotation { get; set; }
+        public float? scale_x { get; set; }
+        public float? scale_y { get; set; }
+        public string? easing { get; set; }
     }
 }

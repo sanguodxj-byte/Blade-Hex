@@ -25,6 +25,9 @@ public class DormantEntityPool
     /// <summary>池中实体的最大存活天数（超过后淘汰）</summary>
     public int MaxDormantDays { get; set; } = 30;
 
+    /// <summary>休眠实体交战结算回调 — 由 OverworldEntityManager 注入 BattleResolver.ResolveDormantEngagement</summary>
+    public Action<OverworldEntity>? DormantEngagementResolver { get; set; }
+
     // 按实体类型分桶存储
     private readonly Dictionary<OverworldEntity.EntityType, List<DormantEntry>> _pool = new();
     private readonly Random _rng = new();
@@ -66,11 +69,16 @@ public class DormantEntityPool
             bucket.RemoveAt(0);
         }
 
-        // 重置运行时状态（保留核心属性）
+        // 重置运行时状态（保留核心属性和交战状态）
         entity.IsMoving = false;
         entity.Path.Clear();
-        entity.CurrentAIState = OverworldEntity.AIState.Idle;
-        entity.ChaseTarget = null;
+        // 保留交战状态 — 交战数据(EngagedWith/EngagedSinceHour等)不清除，
+        // 在 TryReuse 时由 BattleResolver.ResolveDormantEngagement 一次性结算
+        if (entity.CurrentAIState != OverworldEntity.AIState.Engaged)
+        {
+            entity.CurrentAIState = OverworldEntity.AIState.Idle;
+            entity.ChaseTarget = null;
+        }
         entity.SiegeTarget = null;
         entity.ReinforceTarget = null;
 
@@ -101,6 +109,10 @@ public class DormantEntityPool
         bucket.RemoveAt(lastIdx);
 
         var entity = entry.Entity;
+
+        // 休眠交战一次性结算
+        if (entity.CurrentAIState == OverworldEntity.AIState.Engaged)
+            DormantEngagementResolver?.Invoke(entity);
 
         // 更新位置和状态
         entity.Position = newPosition;

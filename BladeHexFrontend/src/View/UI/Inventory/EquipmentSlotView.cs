@@ -4,7 +4,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
-using BladeHex.View.Data;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.View.UI.Inventory;
 
@@ -135,9 +135,7 @@ public partial class EquipmentSlotView : VBoxContainer, IItemContainer
         slot.AddThemeStyleboxOverride("panel", style);
 
         // 图标 / 占位符
-        Texture2D? tex = (equipped != null && !string.IsNullOrEmpty(equipped.IconId))
-            ? (ResourceRegistry.GetIcon(equipped.IconId) ?? ResourceRegistry.GetIcon(equipped.IconFallbackId))
-            : null;
+        Texture2D? tex = TextureAssetResolver.LoadItemIcon(equipped);
 
         if (tex != null)
         {
@@ -213,13 +211,13 @@ public partial class EquipmentSlotView : VBoxContainer, IItemContainer
     public bool CanAccept(DragSource source, ContainerHitInfo hit)
     {
         if (_unit == null || hit.Target is not string slotId) return false;
-        return CanEquipToSlot(source.Item, slotId);
+        return CanEquipToSlot(source.Item, slotId) && _unit.CanEquipItemBySkillTree(source.Item, slotId);
     }
 
     public bool Accept(DragSource source, ContainerHitInfo hit)
     {
         if (_unit == null || hit.Target is not string slotId) return false;
-        if (!CanEquipToSlot(source.Item, slotId)) return false;
+        if (!CanEquipToSlot(source.Item, slotId) || !_unit.CanEquipItemBySkillTree(source.Item, slotId)) return false;
 
         // 同槽位内交换：先卸下源槽位
         if (source.Origin is string fromSlotId && fromSlotId != slotId)
@@ -247,7 +245,7 @@ public partial class EquipmentSlotView : VBoxContainer, IItemContainer
         if (hit?.Container != this || hit.Target is not string slotId) return;
         if (!_slots.TryGetValue(slotId, out var slot)) return;
 
-        bool ok = CanEquipToSlot(source.Item, slotId);
+        bool ok = _unit != null && CanEquipToSlot(source.Item, slotId) && _unit.CanEquipItemBySkillTree(source.Item, slotId);
         var border = ok ? new Color(0.3f, 0.8f, 0.3f, 0.9f) : new Color(0.8f, 0.3f, 0.3f, 0.9f);
 
         var style = (StyleBoxFlat)slot.GetThemeStylebox("panel");

@@ -111,10 +111,19 @@ public partial class HexCell : Area3D
         Batcher.RegisterCell(this, terrainType, Elevation, Position);
     }
 
-    /// <summary>设置高亮状态 — 委托给 Batcher（fallback 为无操作）</summary>
-    public void SetHighlight(bool active, Color? color = null)
+    /// <summary>地形变更后刷新视觉效果（重新注册到 Batcher）</summary>
+    public void RefreshTerrainVisual()
     {
-        Batcher?.SetCellHighlight(this, active, color);
+        if (Batcher == null) return;
+        var terrainType = Data?.terrainType ?? BattleCellData.TerrainType.Plains;
+        Batcher.UnregisterCell(this);
+        Batcher.RegisterCell(this, terrainType, Elevation, Position);
+    }
+
+    /// <summary>设置高亮状态 — 委托给 Batcher（fallback 为无操作）</summary>
+    public void SetHighlight(bool active, Color? color = null, bool isSolid = false)
+    {
+        Batcher?.SetCellHighlight(this, active, color, isSolid);
     }
 
     /// <summary>设置迷雾遮蔽状态 — 委托给 Batcher</summary>
@@ -129,6 +138,7 @@ public partial class HexCell : Area3D
         {
             if (mouseEvent.ButtonIndex == MouseButton.Left)
             {
+                GD.Print($"[HexCell] left click at ({GridPos.X},{GridPos.Y}) occupant={Occupant?.Data?.UnitName ?? "null"}");
                 if (mouseEvent.DoubleClick) EmitSignal(SignalName.CellDoubleClicked, this);
                 else EmitSignal(SignalName.CellSingleClicked, this);
             }

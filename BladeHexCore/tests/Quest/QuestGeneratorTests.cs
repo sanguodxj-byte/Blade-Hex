@@ -39,6 +39,7 @@ public static class QuestGeneratorTests
     private static IEnumerable<(string name, bool ok, string msg)> EnumerateTests()
     {
         yield return Run(nameof(EmptyPoiList_ReturnsEmptyQuests), EmptyPoiList_ReturnsEmptyQuests);
+        yield return Run(nameof(GetAvailableQuests_GeneratesOnFirstDay), GetAvailableQuests_GeneratesOnFirstDay);
         yield return Run(nameof(GetAvailableQuests_RespectsMaxPerPoi), GetAvailableQuests_RespectsMaxPerPoi);
         yield return Run(nameof(GetAvailableQuests_ConsistentWithinInterval), GetAvailableQuests_ConsistentWithinInterval);
         yield return Run(nameof(GetAvailableQuests_RefreshAfterInterval), GetAvailableQuests_RefreshAfterInterval);
@@ -71,6 +72,17 @@ public static class QuestGeneratorTests
         gen.Initialize(new List<OverworldPOI>(), worldSeed: 42);
         var quests = gen.GetAvailableQuests("noexist", currentDay: 1);
         if (quests.Count != 0) return (false, $"expected 0, got {quests.Count}");
+        return (true, "");
+    }
+
+    private static (bool, string) GetAvailableQuests_GeneratesOnFirstDay()
+    {
+        var gen = new QuestGenerator();
+        var pois = MakePoiPair();
+        gen.Initialize(pois, worldSeed: 42);
+
+        var quests = gen.GetAvailableQuests("Town_A", currentDay: 1);
+        if (quests.Count == 0) return (false, "expected first-day quest pool to be generated");
         return (true, "");
     }
 

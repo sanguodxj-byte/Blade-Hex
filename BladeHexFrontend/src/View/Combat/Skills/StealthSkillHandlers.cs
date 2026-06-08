@@ -14,54 +14,41 @@ public static class StealthSkillHandlers
 {
     public static void Stealth(in SkillHandlerContext ctx)
     {
-        ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "target", ctx.Attacker }, { "effect_id", "invisibility" }, { "duration", 99 }
-        });
+        ctx.Builder.AddStatusEffect("invisibility", ctx.Attacker, 99);
     }
 
     public static void ShadowClone(in SkillHandlerContext ctx)
     {
-        ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "target", ctx.Attacker }, { "effect_id", "phantom" }, { "duration", 3 }
-        });
+        ctx.Builder.AddStatusEffect("phantom", ctx.Attacker, 3);
     }
 
     public static void PoisonBlade(in SkillHandlerContext ctx)
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
+        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
         var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
-        ctx.Result["results"].AsGodotArray().Add(r);
-        ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "target", target }, { "effect_id", "poison" }, { "duration", 3 }
-        });
+        ctx.Builder.AddDamageFromResolver(target, r);
+        ctx.Builder.AddStatusEffect("poison", target, 3);
     }
 
     public static void ShadowStrike(in SkillHandlerContext ctx)
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
+        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
 
         bool hasStealth = ctx.Attacker.Data != null &&
-            ctx.Attacker.Data.Runtime.ActiveStatusEffects.Any(e => e.Id == "invisibility");
+            ctx.Attacker.Model.ActiveStatusEffects.Any(e => e.Id == "invisibility");
         float mult = hasStealth ? 2.0f : 1.0f;
         var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, hasStealth, false, 0, mult);
-        ctx.Result["results"].AsGodotArray().Add(r);
+        ctx.Builder.AddDamageFromResolver(target, r);
         if (hasStealth)
         {
-            ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-                { "target", ctx.Attacker }, { "special", "remove_effects" },
-                { "remove_ids", new Godot.Collections.Array { "invisibility" } }
-            });
+            ctx.Builder.AddRemoveEffect(ctx.Attacker, "invisibility");
         }
     }
 
     public static void TrapMaster(in SkillHandlerContext ctx)
     {
-        ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "target", ctx.Attacker }, { "effect_id", "trap_placed" }, { "duration", 99 },
-            { "trap_position", ctx.TargetCell }, { "trap_damage", RPGRuleEngine.RollDice(2, 6) },
-            { "stat_modifiers", new Godot.Collections.Dictionary { { "slow", 1 } } }
-        });
+        ctx.Builder.AddStatusEffect("trap_placed", ctx.Attacker, 99);
     }
 }

@@ -3,13 +3,14 @@
 //
 // 设计原则：
 //   - 纯静态测试，不依赖 Godot 场景树
-//   - 覆盖 WageSystem 欠饷→离队链、FoodSystem 断粮→惩罚链、新存档字段往返序列化
+//   - 覆盖 WageSystem 欠饷→阻断恢复链、FoodSystem 断粮→惩罚链、新存档字段往返序列化
 //   - 每个 Test_xxx 方法返回 (bool ok, string description)
 
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Tests.Strategic;
 
@@ -32,7 +33,7 @@ public static class EconomySystemIntegrationTests
     {
         yield return Run(nameof(WageSystem_Deducts_Gold_Each_Day),          WageSystem_Deducts_Gold_Each_Day);
         yield return Run(nameof(WageSystem_Tracks_Unpaid_Days),              WageSystem_Tracks_Unpaid_Days);
-        yield return Run(nameof(WageSystem_Deserts_Unit_After_3_Unpaid),     WageSystem_Deserts_Unit_After_3_Unpaid);
+        yield return Run(nameof(WageSystem_Blocks_Restore_And_Keeps_Roster_When_Unpaid), WageSystem_Blocks_Restore_And_Keeps_Roster_When_Unpaid);
         yield return Run(nameof(WageSystem_Setter_Restores_UnpaidDays),      WageSystem_Setter_Restores_UnpaidDays);
         yield return Run(nameof(FoodSystem_Deducts_Food_Each_Day),           FoodSystem_Deducts_Food_Each_Day);
         yield return Run(nameof(FoodSystem_Sets_Starving_When_No_Food),      FoodSystem_Sets_Starving_When_No_Food);
@@ -102,27 +103,27 @@ public static class EconomySystemIntegrationTests
         return (true, "");
     }
 
-    /// <summary>连续 3 天欠饷后，士气最低的队员应离队</summary>
-    private static (bool, string) WageSystem_Deserts_Unit_After_3_Unpaid()
+    /// <summary>欠饷时应阻断自然恢复，但不移除队员</summary>
+    private static (bool, string) WageSystem_Blocks_Restore_And_Keeps_Roster_When_Unpaid()
     {
         var wage = new WageSystem();
         var roster = BuildRoster(leaderLevel: 5, memberLevel: 2, memberCount: 2);
-        // 设低士气以保证此成员被选中离队
-        roster.Members[1].Morale = -99;
+
         int gold = 0;
-        string? desertedName = null;
+        int desertedCount = 0;
 
         for (int day = 1; day <= 3; day++)
         {
             var r = wage.ProcessDaily(roster, day, amt => gold >= amt);
-            if (r.DesertedUnits.Count > 0)
-                desertedName = r.DesertedUnits[0];
+            desertedCount += r.DesertedUnits.Count;
         }
 
-        if (desertedName == null)
-            return (false, "3天欠饷后应有人离队，但无人离队");
-        if (roster.Members.Count != 2) // 1 队长 + 1 剩余队员（原 3 人 → 离队 1）
-            return (false, $"离队后队伍人数异常：期望 2，实际 {roster.Members.Count}");
+        if (wage.CanRestore)
+            return (false, "欠饷时应禁止自然恢复");
+        if (desertedCount != 0)
+            return (false, $"当前设计为欠饷不离队，但记录了 {desertedCount} 名离队");
+        if (roster.Members.Count != 3)
+            return (false, $"欠饷不应移除队员：期望 3，实际 {roster.Members.Count}");
 
         return (true, "");
     }
@@ -265,7 +266,6 @@ public static class EconomySystemIntegrationTests
         {
             var m = new UnitData { UnitName = $"佣兵{i + 1}", Level = memberLevel };
             PartyRoster.SetCurrentHp(m, m.BaseMaxHp);
-            m.Morale = 0;
             roster.Add(m);
         }
 

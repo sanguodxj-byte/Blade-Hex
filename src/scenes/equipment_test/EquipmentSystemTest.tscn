@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://equipment_system_test"]
-
-[ext_resource type="Script" path="res://src/scenes/equipment_test/EquipmentSystemTest.gd" id="1"]
-
-[node name="EquipmentSystemTest" type="Node"]
-script = ExtResource("1")

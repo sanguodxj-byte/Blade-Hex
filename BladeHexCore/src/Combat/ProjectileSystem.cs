@@ -15,16 +15,21 @@ public class ProjectileSystem : IProjectileSystem
     public event System.Action<Godot.Collections.Dictionary>? ProjectileLaunched;
     public event System.Action<Godot.Collections.Dictionary>? ProjectileImpact;
 
+    /// <summary>调试日志开关。默认关闭。</summary>
+    public static bool DebugLogging { get; set; } = false;
+
     public ProjectileSystem(ITickScheduler scheduler) => _scheduler = scheduler;
 
     public void Launch(ProjectileData data)
     {
-        if (data == null) return;
+        if (data == null) { GD.PrintErr("[ProjectileSystem] Launch called with NULL data!"); return; }
 
         Vector3 from = HexUtils.AxialToWorld3D(data.Origin.X, data.Origin.Y);
         Vector3 to = HexUtils.AxialToWorld3D(data.Target.X, data.Target.Y);
         float travelTime = ProjectileTrajectory.CalculateTravelTime(from, to, data.Speed);
 
+        if (DebugLogging)
+            GD.Print($"[ProjectileSystem] Launch: type={data.ProjectileType}, from={data.Origin}, to={data.Target}, has_subscribers={ProjectileLaunched != null}");
         ProjectileLaunched?.Invoke(new Godot.Collections.Dictionary
         {
             { "data", data.Serialize() },

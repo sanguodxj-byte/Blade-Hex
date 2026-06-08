@@ -38,8 +38,10 @@ public partial class QuestManager : Node
     private static readonly Random _random = new();
 
     public List<QuestData> ActiveQuests = new();
+    public List<QuestData> RewardReadyQuests = new();
     public List<string> CompletedQuestIds = new();
     public Dictionary<string, QuestTargetSite> ActiveTargetSites = new();
+    private readonly Dictionary<string, (QuestData Quest, int FailedDay)> _pendingFailedQuests = new();
 
     public float GameTime = 0.0f;
     public int PlayerReputation = 0;
@@ -61,6 +63,9 @@ public partial class QuestManager : Node
         _expirationCheckTimer.Autostart = true;
         _expirationCheckTimer.Timeout += CheckQuestExpiration;
         AddChild(_expirationCheckTimer);
+
+        // 订阅 POI 易手事件，处理任务的敌方夺取中断与夺回恢复
+        PoiTransferService.PoiTransferred += OnPoiTransferred;
     }
 
     public override void _Process(double delta)
@@ -132,6 +137,12 @@ public partial class QuestManager : Node
     {
         // 这里需要 QuestData 的 can_accept 逻辑，如果 C# QuestData 没写，暂时返回 true
         // if (!quest.CanAccept(PlayerReputation, CompletedQuestIds)) return false;
+        if (ActiveQuests.Any(q => q.QuestId == quest.QuestId) ||
+            RewardReadyQuests.Any(q => q.QuestId == quest.QuestId) ||
+            CompletedQuestIds.Contains(quest.QuestId))
+        {
+            return false;
+        }
 
         AvailableQuests.Remove(quest);
         // quest.Accept(GameTime); // 同理，如果 QuestData 没写这个方法，手动设置
@@ -156,19 +167,48 @@ public partial class QuestManager : Node
             if (quest.Progress >= quest.TargetCount)
             {
                 quest.Status = QuestData.QuestStatus.Completed;
-                CompleteQuest(quest);
+                MarkQuestReadyForReward(quest);
             }
         }
     }
 
-    private void CompleteQuest(QuestData quest)
+    private void MarkQuestReadyForReward(QuestData quest)
     {
         quest.CompletionTime = GameTime;
-        GrantRewards(quest);
         ClearQuestTarget(quest.QuestId);
         ActiveQuests.Remove(quest);
-        CompletedQuestIds.Add(quest.QuestId);
+        if (!RewardReadyQuests.Any(q => q.QuestId == quest.QuestId))
+            RewardReadyQuests.Add(quest);
         EmitSignal(SignalName.QuestCompleted, quest);
+    }
+
+    public List<QuestData> GetRewardReadyQuestsForPoi(string poiId)
+    {
+        return RewardReadyQuests
+            .Where(q => q.IssuerName == poiId)
+            .ToList();
+    }
+
+    public QuestData? GetActiveQuest(string questId)
+    {
+        return ActiveQuests.FirstOrDefault(q => q.QuestId == questId);
+    }
+
+    public QuestTargetSite? GetActiveTargetSite(string questId)
+    {
+        return ActiveTargetSites.TryGetValue(questId, out var site) ? site : null;
+    }
+
+    public bool ClaimReward(string questId)
+    {
+        var quest = RewardReadyQuests.FirstOrDefault(q => q.QuestId == questId);
+        if (quest == null) return false;
+
+        GrantRewards(quest);
+        RewardReadyQuests.Remove(quest);
+        if (!CompletedQuestIds.Contains(quest.QuestId))
+            CompletedQuestIds.Add(quest.QuestId);
+        return true;
     }
 
     public void FailQuest(QuestData quest)
@@ -188,6 +228,75 @@ public partial class QuestManager : Node
             ClearQuestTarget(q.QuestId);
             EmitSignal(SignalName.QuestExpired, q);
         }
+
+        CheckPendingFailedQuests();
+    }
+
+    private void CheckPendingFailedQuests()
+    {
+        if (GetParent() is Scenes.Overworld.IOverworldContext ctx)
+        {
+            int currentDay = ctx.CurrentDay;
+            var expiredIds = new List<string>();
+
+            foreach (var kvp in _pendingFailedQuests)
+            {
+                if (currentDay - kvp.Value.FailedDay >= 3)
+                {
+                    expiredIds.Add(kvp.Key);
+                }
+            }
+
+            foreach (string qid in expiredIds)
+            {
+                var val = _pendingFailedQuests[qid];
+                _pendingFailedQuests.Remove(qid);
+                FailQuest(val.Quest);
+                GD.Print($"[Quest] 超过3天未收复聚落，任务永久失败: {val.Quest.QuestName}");
+            }
+        }
+    }
+
+    private void OnPoiTransferred(PoiTransferEvent evt)
+    {
+        if (evt?.Poi == null) return;
+
+        string? playerFaction = GetPlayerFaction();
+        if (string.IsNullOrEmpty(playerFaction)) return;
+
+        // 如果该聚落原属于玩家阵营，但被非玩家阵营夺取
+        if (evt.OldFaction == playerFaction && evt.NewFaction != playerFaction)
+        {
+            var toHang = ActiveQuests.Where(q => q.IssuerName == evt.Poi.PoiName).ToList();
+            foreach (var q in toHang)
+            {
+                ActiveQuests.Remove(q);
+                q.Status = QuestData.QuestStatus.Failed; // 设为临时挂起
+                _pendingFailedQuests[q.QuestId] = (q, evt.Day);
+                GD.Print($"[Quest] 聚落被夺，任务挂起失败（宽限期3天）: {q.QuestName}");
+            }
+        }
+        // 如果该聚落重新被玩家阵营收复
+        else if (evt.NewFaction == playerFaction)
+        {
+            var toRestore = _pendingFailedQuests.Where(kvp => kvp.Value.Quest.IssuerName == evt.Poi.PoiName).ToList();
+            foreach (var kvp in toRestore)
+            {
+                _pendingFailedQuests.Remove(kvp.Key);
+                kvp.Value.Quest.Status = QuestData.QuestStatus.Active;
+                ActiveQuests.Add(kvp.Value.Quest);
+                GD.Print($"[Quest] 收复聚落，任务重新恢复: {kvp.Value.Quest.QuestName}");
+            }
+        }
+    }
+
+    private string? GetPlayerFaction()
+    {
+        if (GetParent() is Scenes.Overworld.IOverworldContext ctx && ctx.ReputationTracker != null)
+        {
+            return new PlayerNationResolver().GetCurrent(ctx.ReputationTracker, ctx.CurrentDay);
+        }
+        return null;
     }
 
     private void GrantRewards(QuestData quest)
@@ -195,10 +304,22 @@ public partial class QuestManager : Node
         PlayerGold += quest.RewardGold;
         PlayerReputation += quest.RewardReputation;
 
+        if (GetParent() is Scenes.Overworld.IOverworldContext ctx)
+        {
+            if (quest.RewardGold != 0)
+                ctx.AddGold(quest.RewardGold);
+
+            string faction = !string.IsNullOrEmpty(quest.RewardFaction)
+                ? quest.RewardFaction
+                : GetPlayerFaction() ?? "";
+            if (!string.IsNullOrEmpty(faction) && ctx.ReputationTracker != null)
+                ctx.ReputationTracker.OnQuestCompleted(faction, quest.RewardReputation);
+        }
+
         // 发放物品奖励到队伍背包
         if (quest.RewardItems != null && quest.RewardItems.Length > 0)
         {
-            var party = GetParent()?.GetNodeOrNull<OverworldParty>("PlayerParty");
+            var party = (GetParent() as Scenes.Overworld.IOverworldContext)?.PlayerParty;
             if (party != null)
             {
                 foreach (var itemName in quest.RewardItems)
@@ -272,6 +393,7 @@ public partial class QuestManager : Node
             { "reputation", PlayerReputation },
             { "gold", PlayerGold },
             { "completed", new Godot.Collections.Array<string>(CompletedQuestIds) },
+            { "reward_ready", new Godot.Collections.Array<string>(RewardReadyQuests.Select(q => q.QuestId)) },
             { "active", activeArr },
             { "available", new Godot.Collections.Array<string>(AvailableQuests.Select(q => q.QuestId)) },
             { "targets", targetSitesData }

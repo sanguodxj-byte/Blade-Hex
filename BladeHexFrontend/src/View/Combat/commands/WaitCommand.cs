@@ -38,7 +38,7 @@ public class WaitCommand : CommandBase
         unit.HasMoved = true;
         unit.CurrentAp = 0;
 
-        return CommandResult.Ok(new Godot.Collections.Dictionary { { "unit_id", UnitId } });
+        return CommandResult.Ok(new WaitResult(UnitId));
     }
 
     public override void Undo(CommandContext ctx)

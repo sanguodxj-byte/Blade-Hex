@@ -7,6 +7,7 @@ using System.Linq;
 using BladeHex.Data;
 using BladeHex.Strategic;
 using BladeHex.Strategic.Economy;
+using BladeHex.Strategic.WorldEvents;
 
 namespace BladeHex.View.UI.Inventory;
 
@@ -40,11 +41,23 @@ public partial class ShopGridView : Control, IItemContainer
     /// <summary>繁荣度（影响价格，仅商店模式）</summary>
     public int Prosperity { get; set; } = 50;
 
+    public OverworldPOI? Poi { get; set; }
+    public EconomyEventEngine? EventEngine { get; set; }
+    public ReputationTracker? Reputation { get; set; }
+    public WorldEventEngine? WorldEngine { get; set; }
+    public int PlayerLevel { get; set; } = 1;
+
+    /// <summary>是否为敌国城镇（用于走私功能）</summary>
+    public bool IsEnemyTown { get; set; } = false;
+
     /// <summary>当玩家从其他容器拖入此区域时的回调（用于卖出/丢弃）</summary>
     public Action<DragSource>? OnItemDroppedFromOutside { get; set; }
 
     /// <summary>金币变化回调（用于刷新外部 UI 标签）</summary>
     public Action<int>? OnGoldChanged { get; set; }
+
+    /// <summary>走私结果回调</summary>
+    public Action<string>? OnSmuggleResult { get; set; }
 
     public override void _Ready()
     {
@@ -62,20 +75,70 @@ public partial class ShopGridView : Control, IItemContainer
 
     public List<ItemData>? Stock => _stock;
 
+    private string GetItemCategory(ItemData item)
+    {
+        if (item == null) return "all";
+        if (item.ItemId.Contains("horse") || item.ItemName.Contains("马")) return "horse";
+        if (item.ItemId == "rations" || item.ItemId == "beer" || item.ItemId == "bandage" || item.ItemId.Contains("food") || item.ItemName.Contains("口粮") || item.ItemName.Contains("麦") || item.ItemName.Contains("酒")) return "food";
+        if (item.EquipSlotTarget == ItemData.EquipSlot.Weapon || item.EquipSlotTarget == ItemData.EquipSlot.Helmet || item.ItemId.Contains("sword") || item.ItemId.Contains("shield") || item.ItemId.Contains("armor") || item.ItemId.Contains("bow") || item.ItemId.Contains("boots")) return "weapon";
+        return "all";
+    }
+
     public int GetBuyPrice(ItemData item)
     {
-        return TradePricingService.GetBuyPrice(item, Prosperity);
+        return TradePricingService.GetBuyPrice(item, Prosperity, 1.0f, null, Poi, EventEngine);
     }
 
     public int GetSellPrice(ItemData item)
     {
-        return TradePricingService.GetSellPrice(item, Prosperity);
+        return TradePricingService.GetSellPrice(item, Prosperity, 1.0f, null, Poi, EventEngine);
+    }
+
+    public int GetSmuggleBuyPrice(ItemData item)
+    {
+        return (int)Math.Round(TradePricingService.GetBuyPrice(item, Prosperity) * 0.8);
+    }
+
+    public int GetSmuggleSellPrice(ItemData item)
+    {
+        return (int)Math.Round(TradePricingService.GetSellPrice(item, Prosperity) * 1.1);
     }
 
     public bool CanPurchase(ItemData item)
     {
         if (Economy == null) return true; // 战利品模式：免费拾取
         return Economy.Gold >= GetBuyPrice(item);
+    }
+
+    /// <summary>检查是否可以走私（敌国城镇 + 声望≤-50 或 金币≥5000）</summary>
+    public bool CanSmuggle()
+    {
+        if (!IsEnemyTown || Economy == null || Poi == null || Reputation == null) return false;
+        int rep = Reputation.GetReputation(Poi.OwningFaction);
+        return rep <= -50 || Economy.Gold >= 5000;
+    }
+
+    /// <summary>尝试走私购入</summary>
+    public bool TrySmuggleBuy(ItemData item, int qty)
+    {
+        if (Economy == null || Poi == null || Reputation == null) return false;
+
+        var result = SmugglingService.TryBuySmuggle(
+            item, qty, Poi, PlayerLevel, Economy.DaysPassed,
+            Economy, WorldEngine, Reputation);
+
+        if (result.Success)
+        {
+            OnSmuggleResult?.Invoke($"走私成功！购入 {qty}x {item.ItemName}，花费 {-result.GoldDelta} 金币");
+            OnGoldChanged?.Invoke(Economy.Gold);
+            return true;
+        }
+        else
+        {
+            OnSmuggleResult?.Invoke($"[color=red]走私失败！{result.FailReason}[/color]");
+            OnGoldChanged?.Invoke(Economy.Gold);
+            return false;
+        }
     }
 
     /// <summary>重建布局并渲染</summary>
@@ -182,6 +245,24 @@ public partial class ShopGridView : Control, IItemContainer
         int quantity = IsStackableForDisplay(gi.Item) && _stockQuantities.TryGetValue(GetStockKey(gi.Item), out int qty) ? qty : gi.Quantity;
         string overlay = Economy != null ? $"{GetBuyPrice(gi.Item)}金" : "拾取";
         var color = Economy != null ? new Color(0.3f, 0.85f, 0.3f) : new Color(0.9f, 0.8f, 0.5f);
+        
+        if (Economy != null && Poi != null && EventEngine != null)
+        {
+            float m = EventEngine.GetPriceMultiplierFor(Poi, GetItemCategory(gi.Item));
+            if (m > 1.01f)
+            {
+                int pct = (int)Math.Round((m - 1.0f) * 100);
+                overlay += $" (+{pct}%)";
+                color = new Color(0.9f, 0.3f, 0.3f);
+            }
+            else if (m < 0.99f)
+            {
+                int pct = (int)Math.Round((1.0f - m) * 100);
+                overlay += $" (-{pct}%)";
+                color = new Color(0.9f, 0.8f, 0.3f);
+            }
+        }
+        
         var w = ItemGridWidget.Create(gi.Item, CellSize, CellGap, quantity, overlay, color);
         w.Position = new Vector2(gi.GridX * (CellSize + CellGap), gi.GridY * (CellSize + CellGap));
 

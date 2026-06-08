@@ -55,6 +55,7 @@ public partial class HexOverworldGenerator : RefCounted
     private FastNoiseLite? _noiseMoist;
     private FastNoiseLite? _noiseTemp;
     private FastNoiseLite? _noiseDetail;
+    private FastNoiseLite? _noiseNutrient;
 
     public HexOverworldGrid? Grid { get; private set; }
     private readonly List<RegionDef> _regions = [];
@@ -344,6 +345,15 @@ public partial class HexOverworldGenerator : RefCounted
         _noiseDetail.Seed = Seed + 3000;
         _noiseDetail.Frequency = 0.05f;
         _noiseDetail.CellularDistanceFunction = FastNoiseLite.CellularDistanceFunctionEnum.Euclidean;
+
+        _noiseNutrient = new FastNoiseLite();
+        _noiseNutrient.NoiseType = FastNoiseLite.NoiseTypeEnum.Simplex;
+        _noiseNutrient.Seed = Seed + 5000;
+        _noiseNutrient.Frequency = 0.03f;
+        _noiseNutrient.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _noiseNutrient.FractalOctaves = 2;
+        _noiseNutrient.FractalLacunarity = 2.0f;
+        _noiseNutrient.FractalGain = 0.4f;
     }
 
     // ========================================
@@ -370,6 +380,13 @@ public partial class HexOverworldGenerator : RefCounted
             // 高海拔降温：海拔超过 0.5 时开始降温，最大降低 0.3
             float altitudePenalty = Mathf.Clamp(t.Elevation - 0.5f, 0.0f, 0.5f) * 0.6f;
             t.Temperature = Mathf.Clamp(latitudeFactor + tempNoise - altitudePenalty, 0.0f, 1.0f);
+
+            // 养分：基础噪声 × 湿度加成 × 高海拔惩罚
+            float nutrientBase = (_noiseNutrient!.GetNoise2D(q, r) + 1.0f) * 0.5f;
+            float moistBoost = Mathf.Lerp(0.7f, 1.0f, t.Moisture);
+            float elevPenalty = t.Elevation > 0.65f
+                ? Mathf.Lerp(1.0f, 0.5f, (t.Elevation - 0.65f) / 0.35f) : 1.0f;
+            t.Nutrient = Mathf.Clamp(nutrientBase * moistBoost * elevPenalty, 0.0f, 1.0f);
         }
     }
 
@@ -718,6 +735,7 @@ public partial class HexOverworldGenerator : RefCounted
             if (tile == null || tile.IsRiver) continue;
 
             tile.IsRoad = true;
+            tile.RoadClassVal = 1;
 
             if (i > 0)
             {

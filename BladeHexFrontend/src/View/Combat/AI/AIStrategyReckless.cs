@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.AI;
 
@@ -62,7 +63,8 @@ public class AIStrategyReckless : AIStrategyBase
                 int curRange = curWeapon?.RangeCells ?? 1;
                 var chargePath = hexGrid.FindPath(actor.GridPos, chargePos);
 
-                if (chargeCell != null && chargeCell.Occupant == null && chargeDist <= curRange && CanAffordMoveThenAttack(actor, hexGrid, chargePath))
+                bool isMelee = curWeapon == null || (!curWeapon.IsRanged && !curWeapon.IsCatalyst);
+                if (chargeCell != null && chargeCell.Occupant == null && chargeDist <= curRange && CanAffordMoveThenAttack(actor, hexGrid, chargePath) && isMelee)
                 {
                     action.TargetPosition = chargePos;
                     action.AttackPosition = chargePos;
@@ -74,6 +76,40 @@ public class AIStrategyReckless : AIStrategyBase
 
         action.Description = $"{actor.Data!.UnitName} 狂暴地冲向 {closestTarget.Data!.UnitName}！";
         return action;
+    }
+
+    /// <summary>v0.8 D3-B: 鲁莽型 — 被2+敌人包围或HP<30%时使用职业技能</summary>
+    protected override AIAction? EvaluateCareerSkill(Unit actor, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid)
+    {
+        var skill = actor.GetCareerSkill();
+        if (skill == null || !skill.IsActive || !actor.CanUseCareerSkill()) return null;
+        if (actor.CurrentAp < 1f) return null;
+
+        // 条件1: 被2+敌人包围
+        int adjacentEnemies = 0;
+        foreach (var enemy in enemyUnits)
+        {
+            if (!GodotObject.IsInstanceValid(enemy) || enemy.CurrentHp <= 0) continue;
+            int dist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, enemy.GridPos.X, enemy.GridPos.Y);
+            if (dist <= 1) adjacentEnemies++;
+        }
+
+        // 条件2: HP<30%
+        float hpPct = (float)actor.CurrentHp / Math.Max(actor.Model.GetMaxHp(), 1);
+
+        if (adjacentEnemies >= 2 || hpPct < 0.3f)
+        {
+            var targetCell = SelectCareerSkillTarget(actor, skill, scoredTargets, enemyUnits, hexGrid);
+            return new AIAction
+            {
+                Type = AIAction.ActionType.UseCareerSkill,
+                Actor = actor,
+                SkillTargetCell = targetCell,
+                Description = $"{actor.Data!.UnitName} 释放职业技能 {skill.DisplayName}！"
+            };
+        }
+
+        return null;
     }
 
     /// <summary>覆盖：鲁莽型不会因低HP撤退</summary>

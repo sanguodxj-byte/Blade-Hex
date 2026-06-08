@@ -9,7 +9,7 @@ namespace BladeHex.View.Unit.Skeleton.Editor;
 /// <summary>骨骼选择与属性编辑面板</summary>
 public partial class AnimEditorBonePanel : PanelContainer
 {
-    [Signal] public delegate void BonePoseChangedEventHandler(string boneName, float rotationZ, float positionY, float positionX, float spriteRotation);
+    [Signal] public delegate void BonePoseChangedEventHandler(string boneName, float rotationZ, float positionY, float positionX, float spriteRotation, float scaleX, float scaleY, string easingName);
     [Signal] public delegate void BoneSelectedEventHandler(string boneName);
 
     private string _selectedBone = "Torso";
@@ -17,11 +17,19 @@ public partial class AnimEditorBonePanel : PanelContainer
     private HSlider _posSlider = null!;
     private HSlider _posXSlider = null!;
     private HSlider _spriteRotSlider = null!;
+    private HSlider _scaleXSlider = null!;
+    private HSlider _scaleYSlider = null!;
+    private OptionButton _easingSelect = null!;
+
     private Label _rotLabel = null!;
     private Label _posLabel = null!;
     private Label _posXLabel = null!;
     private Label _spriteRotLabel = null!;
+    private Label _scaleXLabel = null!;
+    private Label _scaleYLabel = null!;
+    private Label _easingLabel = null!;
     private Label _selectedLabel = null!;
+
     private VBoxContainer _posRow = null!;
     private VBoxContainer _posXRow = null!;
     private VBoxContainer _spriteRotRow = null!;
@@ -143,6 +151,59 @@ public partial class AnimEditorBonePanel : PanelContainer
         _spriteRotSlider.ValueChanged += OnSpriteRotChanged;
         _spriteRotRow.AddChild(_spriteRotSlider);
 
+        vbox.AddChild(new HSeparator());
+
+        // 缩放X滑条
+        var scaleXRow = new VBoxContainer();
+        vbox.AddChild(scaleXRow);
+        _scaleXLabel = new Label { Text = "缩放X: 1.00" };
+        _scaleXLabel.AddThemeFontSizeOverride("font_size", 11);
+        scaleXRow.AddChild(_scaleXLabel);
+
+        _scaleXSlider = new HSlider
+        {
+            MinValue = 0.1,
+            MaxValue = 5.0,
+            Step = 0.05,
+            Value = 1.0,
+            CustomMinimumSize = new Vector2(0, 20),
+        };
+        _scaleXSlider.ValueChanged += OnScaleXChanged;
+        scaleXRow.AddChild(_scaleXSlider);
+
+        // 缩放Y滑条
+        var scaleYRow = new VBoxContainer();
+        vbox.AddChild(scaleYRow);
+        _scaleYLabel = new Label { Text = "缩放Y: 1.00" };
+        _scaleYLabel.AddThemeFontSizeOverride("font_size", 11);
+        scaleYRow.AddChild(_scaleYLabel);
+
+        _scaleYSlider = new HSlider
+        {
+            MinValue = 0.1,
+            MaxValue = 5.0,
+            Step = 0.05,
+            Value = 1.0,
+            CustomMinimumSize = new Vector2(0, 20),
+        };
+        _scaleYSlider.ValueChanged += OnScaleYChanged;
+        scaleYRow.AddChild(_scaleYSlider);
+
+        // Easing物理缓动
+        var easingRow = new VBoxContainer();
+        vbox.AddChild(easingRow);
+        _easingLabel = new Label { Text = "帧物理缓动:" };
+        _easingLabel.AddThemeFontSizeOverride("font_size", 11);
+        easingRow.AddChild(_easingLabel);
+
+        _easingSelect = new OptionButton { CustomMinimumSize = new Vector2(0, 24) };
+        _easingSelect.AddItem("Linear (匀速)");
+        _easingSelect.AddItem("QuadOut (物理减速)");
+        _easingSelect.AddItem("BackOut (物理回弹)");
+        _easingSelect.AddItem("Bounce (重击余震)");
+        _easingSelect.ItemSelected += OnEasingSelected;
+        easingRow.AddChild(_easingSelect);
+
         // 初始选中
         SelectBone("Torso");
     }
@@ -152,10 +213,11 @@ public partial class AnimEditorBonePanel : PanelContainer
     {
         _selectedBone = boneName;
         _selectedLabel.Text = $"选中: {BoneDisplayName(boneName)}";
-        bool isTorsoOrWeapon = boneName == "Torso" || boneName == "Weapon";
         bool isWeapon = boneName == "Weapon";
-        _posRow.Visible = isTorsoOrWeapon;
-        _posXRow.Visible = isWeapon;
+
+        // 所有骨骼都显示位移滑条
+        _posRow.Visible = true;
+        _posXRow.Visible = true;
         _spriteRotRow.Visible = isWeapon;
 
         // 更新标签文字
@@ -167,6 +229,7 @@ public partial class AnimEditorBonePanel : PanelContainer
         else
         {
             _posLabel.Text = "位移Y: 0";
+            _posXLabel.Text = "位移X: 0";
         }
 
         // 更新按钮状态
@@ -188,6 +251,14 @@ public partial class AnimEditorBonePanel : PanelContainer
         _posXLabel.Text = $"位移X: {pose.PositionX:F0}";
         _spriteRotSlider.Value = pose.SpriteRotation;
         _spriteRotLabel.Text = $"图片旋转: {pose.SpriteRotation:F0}°";
+
+        // 升级高精物理通道参数显示
+        _scaleXSlider.Value = pose.ScaleX;
+        _scaleXLabel.Text = $"缩放X: {pose.ScaleX:F2}";
+        _scaleYSlider.Value = pose.ScaleY;
+        _scaleYLabel.Text = $"缩放Y: {pose.ScaleY:F2}";
+        _easingSelect.Selected = (int)pose.Easing;
+
         _suppressEvents = false;
     }
 
@@ -219,11 +290,34 @@ public partial class AnimEditorBonePanel : PanelContainer
         EmitPoseChanged();
     }
 
+    private void OnScaleXChanged(double value)
+    {
+        if (_suppressEvents) return;
+        _scaleXLabel.Text = $"缩放X: {value:F2}";
+        EmitPoseChanged();
+    }
+
+    private void OnScaleYChanged(double value)
+    {
+        if (_suppressEvents) return;
+        _scaleYLabel.Text = $"缩放Y: {value:F2}";
+        EmitPoseChanged();
+    }
+
+    private void OnEasingSelected(long index)
+    {
+        if (_suppressEvents) return;
+        EmitPoseChanged();
+    }
+
     private void EmitPoseChanged()
     {
+        string easingName = ((EasingType)_easingSelect.Selected).ToString();
         EmitSignal(SignalName.BonePoseChanged, _selectedBone,
             (float)_rotSlider.Value, (float)_posSlider.Value,
-            (float)_posXSlider.Value, (float)_spriteRotSlider.Value);
+            (float)_posXSlider.Value, (float)_spriteRotSlider.Value,
+            (float)_scaleXSlider.Value, (float)_scaleYSlider.Value,
+            easingName);
     }
 
     private static string BoneDisplayName(string bone) => bone switch

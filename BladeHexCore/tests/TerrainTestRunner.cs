@@ -4,7 +4,7 @@
 //   - 在 Godot 编辑器中运行此场景，或 --headless 模式
 //   - 通过环境变量 TEST_MODE 切换：
 //       "terrain"     → TerrainGenerationTest（默认）
-//       "golden_record" → 记录 WorldPipeline 基线 hash
+//       "golden_record" → 记录 WorldPipeline 基线 hash + 骨骼动画截图物理校准
 //       "golden_verify" → 验证 WorldPipeline hash 与基线一致
 //       "unit"        → 运行架构优化 spec R7 的全部单元测试
 using BladeHex.Combat.Tests;
@@ -74,6 +74,7 @@ public partial class TerrainTestRunner : Node
             GetTree().Quit();
     }
 
+
     /// <summary>
     /// 聚合执行所有架构优化 spec R7 引入的单元测试套件。
     /// 按模块组织，输出统一的 PASS/FAIL 摘要。
@@ -84,6 +85,7 @@ public partial class TerrainTestRunner : Node
         int totalFailed = 0;
 
         RunSuite("CombatRuleEngineTests", CombatRuleEngineTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("SpellTargetRulesTests", SpellTargetRulesTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("CombatStateMachineTests", CombatStateMachineTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("LosCoreTests", LosCoreTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("HighLevelSanityCheck", HighLevelSanityCheck.RunAll, ref totalPassed, ref totalFailed);
@@ -101,6 +103,54 @@ public partial class TerrainTestRunner : Node
         RunSuite("CampaignMedicSystemTests", CampaignMedicSystemTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("EconomySystemIntegrationTests", EconomySystemIntegrationTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("EconomyBalanceTests", EconomyBalanceTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("ProjectileSystemTests", ProjectileSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("BuffSystemTests", BuffSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("WarSystemTests", WarSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("ArmySystemTests", ArmySystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("HeroNetworkTests", HeroNetworkTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("EntitySpatialIndexTests", BladeHex.Tests.Spatial.EntitySpatialIndexTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("EntityPerformanceBenchmark", BladeHex.Tests.Performance.EntityPerformanceBenchmark.RunAll, ref totalPassed, ref totalFailed);
+        // M5 测试套件
+        RunSuite("WorkshopTests", WorkshopTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("SmugglingTests", SmugglingTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("EconomyEventTests", EconomyEventTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("TournamentTests", TournamentTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("EncyclopediaServiceTests", BladeHex.Tests.View.Encyclopedia.EncyclopediaServiceTests.RunAll, ref totalPassed, ref totalFailed);
+        // M6 测试套件
+        RunSuite("FamilyRegistryTests", FamilyRegistryTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("NobleSuccessionTests", NobleSuccessionTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("NpcWorkshopBootstrapTests", NpcWorkshopBootstrapTests.RunAll, ref totalPassed, ref totalFailed);
+        // M7 测试套件
+        RunSuite("PlayerKingdomServiceTests", PlayerKingdomServiceTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("KingdomLawsTests", KingdomLawsTests.RunAll, ref totalPassed, ref totalFailed);
+        // WarLoopSimulationTests 包含大地图与 Node 实体，已迁移至 Frontend 层（通过反射调用以防编译依赖）
+        var warLoopTestType = System.Type.GetType("BladeHex.Tests.Strategic.WarLoopSimulationTests, BladeHexFrontend");
+        if (warLoopTestType != null)
+        {
+            var runAllMethod = warLoopTestType.GetMethod("RunAll", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (runAllMethod != null)
+            {
+                var result = runAllMethod.Invoke(null, null);
+                if (result is System.ValueTuple<int, int, System.Collections.Generic.List<string>> tuple)
+                {
+                    var (p, f, details) = tuple;
+                    GD.Print("--- WarLoopSimulationTests (Reflection) ---");
+                    foreach (var line in details) GD.Print(line);
+                    GD.Print($"  {p} passed, {f} failed");
+                    GD.Print();
+                    totalPassed += p;
+                    totalFailed += f;
+                }
+            }
+            else
+            {
+                GD.PrintErr("[TestRunner] WarLoopSimulationTests.RunAll method not found via reflection");
+            }
+        }
+        else
+        {
+            GD.PrintErr("[TestRunner] WarLoopSimulationTests type not found via reflection");
+        }
 
         GD.Print();
         GD.Print("========================================");

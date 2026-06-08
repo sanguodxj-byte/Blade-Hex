@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.AI;
 
@@ -130,7 +131,9 @@ public class AIStrategyTactical : AIStrategyBase
             action.Description = $"{actor.Data!.UnitName} 侧翼包抄 {target.Data!.UnitName}！";
         }
 
-        if (action.MovePath.Count >= 3 && DifficultyConfig.UsesCharge)
+        var curWeapon = actor.Model.GetMainHand() as WeaponData;
+        bool isMelee = curWeapon == null || (!curWeapon.IsRanged && !curWeapon.IsCatalyst);
+        if (action.MovePath.Count >= 3 && DifficultyConfig.UsesCharge && isMelee)
         {
             action.IsCharge = AISpatialAnalyzer.CanCharge(hexGrid, action.MovePath, actor.GridPos);
         }
@@ -188,5 +191,45 @@ public class AIStrategyTactical : AIStrategyBase
             MovePath = hexGrid.FindPath(actor.GridPos, bestPos),
             Description = $"{actor.Data!.UnitName} 安全接近 {target.Data!.UnitName}"
         };
+    }
+
+    /// <summary>v0.8 D3-C: 战术型 — AOE覆盖3+敌人或可斩杀高价值目标时使用</summary>
+    protected override AIAction? EvaluateCareerSkill(Unit actor, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid)
+    {
+        var skill = actor.GetCareerSkill();
+        if (skill == null || !skill.IsActive || !actor.CanUseCareerSkill()) return null;
+        if (actor.CurrentAp < 1f) return null;
+
+        // 条件1: 可斩杀高评分目标（评分 > 15 且目标HP低）
+        bool canExecute = false;
+        if (scoredTargets.Count > 0 && scoredTargets[0].Score > 15f)
+        {
+            var target = scoredTargets[0].Unit;
+            float hpPct = (float)target.CurrentHp / Math.Max(target.Model.GetMaxHp(), 1);
+            if (hpPct < 0.3f) canExecute = true;
+        }
+
+        // 条件2: 周围2格内有3+敌人（模拟AOE覆盖）
+        int nearbyEnemies = 0;
+        foreach (var enemy in enemyUnits)
+        {
+            if (!GodotObject.IsInstanceValid(enemy) || enemy.CurrentHp <= 0) continue;
+            int dist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, enemy.GridPos.X, enemy.GridPos.Y);
+            if (dist <= 2) nearbyEnemies++;
+        }
+
+        if (canExecute || nearbyEnemies >= 3)
+        {
+            var targetCell = SelectCareerSkillTarget(actor, skill, scoredTargets, enemyUnits, hexGrid);
+            return new AIAction
+            {
+                Type = AIAction.ActionType.UseCareerSkill,
+                Actor = actor,
+                SkillTargetCell = targetCell,
+                Description = $"{actor.Data!.UnitName} 战术释放职业技能 {skill.DisplayName}！"
+            };
+        }
+
+        return null;
     }
 }

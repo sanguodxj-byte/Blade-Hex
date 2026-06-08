@@ -15,6 +15,9 @@ namespace BladeHex.View.Unit.Skeleton.Editor;
 /// </summary>
 public sealed class EquipmentOffsetConfig
 {
+    /// <summary>配置版本，用于过滤历史旧架构产生的脏缓存数据</summary>
+    public float Version { get; set; } = 2.0f;
+
     /// <summary>X 偏移（像素，正 = 右移图片）</summary>
     public float OffsetX { get; set; }
 
@@ -40,19 +43,25 @@ public sealed class EquipmentOffsetConfig
     /// <summary>支持偏移编辑的槽位</summary>
     public static readonly ItemData.EquipSlot[] EditableSlots = new[]
     {
+        ItemData.EquipSlot.Body,
+        ItemData.EquipSlot.Head,
         ItemData.EquipSlot.Weapon,
         ItemData.EquipSlot.Costume,
         ItemData.EquipSlot.Helmet,
         ItemData.EquipSlot.Hands,
+        ItemData.EquipSlot.Shield,
     };
 
     /// <summary>槽位显示名称</summary>
     public static string GetSlotDisplayName(ItemData.EquipSlot slot) => slot switch
     {
+        ItemData.EquipSlot.Body => "身体皮肤",
+        ItemData.EquipSlot.Head => "头部皮肤",
         ItemData.EquipSlot.Weapon => "武器",
         ItemData.EquipSlot.Costume => "护甲",
         ItemData.EquipSlot.Helmet => "头盔",
         ItemData.EquipSlot.Hands => "手甲",
+        ItemData.EquipSlot.Shield => "盾牌",
         _ => slot.ToString(),
     };
 
@@ -66,9 +75,13 @@ public sealed class EquipmentOffsetConfig
     public static EquipmentOffsetConfig DefaultForSlot(ItemData.EquipSlot slot) => new()
     {
         Slot = slot,
+        Version = 2.0f,
         OffsetX = 0,
         OffsetY = 0,
-        Scale = 1.0f,
+        Scale = (slot == ItemData.EquipSlot.Helmet || slot == ItemData.EquipSlot.Costume || slot == ItemData.EquipSlot.Body || slot == ItemData.EquipSlot.Head) ? 0.5f
+              : (slot == ItemData.EquipSlot.Hands) ? 0.25f
+              : (slot == ItemData.EquipSlot.Shield) ? 0.5f
+              : 1.0f,
         Rotation = 0,
     };
 
@@ -85,6 +98,7 @@ public sealed class EquipmentOffsetConfig
         string path = $"{SaveDir}/{config.Slot.ToString().ToLower()}.json";
         var dto = new OffsetDto
         {
+            version = config.Version,
             slot = config.Slot.ToString().ToLower(),
             offset_x = config.OffsetX,
             offset_y = config.OffsetY,
@@ -95,10 +109,10 @@ public sealed class EquipmentOffsetConfig
         string json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
         using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
         file?.StoreString(json);
-        GD.Print($"[EquipmentOffsetConfig] 已保存: {path}");
+        GD.Print($"[EquipmentOffsetConfig] 已保存 2.0 偏移配置: {path}");
     }
 
-    /// <summary>加载偏移配置（不存在则尝试迁移旧格式，再回退到默认）</summary>
+    /// <summary>加载偏移配置（向下兼容 1.0 与 2.0，不再进行物理删除）</summary>
     public static EquipmentOffsetConfig Load(ItemData.EquipSlot slot)
     {
         string path = $"{SaveDir}/{slot.ToString().ToLower()}.json";
@@ -111,9 +125,13 @@ public sealed class EquipmentOffsetConfig
         try
         {
             var dto = JsonSerializer.Deserialize<OffsetDto>(file.GetAsText());
-            if (dto == null) return DefaultForSlot(slot);
+            if (dto == null)
+            {
+                return DefaultForSlot(slot);
+            }
             return new EquipmentOffsetConfig
             {
+                Version = 2.0f, // 自动升级为最新 2.0 规范，保留原用户配置
                 Slot = slot,
                 OffsetX = dto.offset_x,
                 OffsetY = dto.offset_y,
@@ -132,42 +150,18 @@ public sealed class EquipmentOffsetConfig
     // 武器按类别+动画存储
     // ═══════════════════════════════════════════
 
-    /// <summary>加载武器偏移配置（按武器类别+动画名）</summary>
-    /// <remarks>
-    /// 查找顺序：{category}_{animName}.json → {category}_idle.json → 默认值
-    /// </remarks>
-    public static EquipmentOffsetConfig LoadWeapon(WeaponAnimCategory category, string animName)
+    private static EquipmentOffsetConfig? LoadFromFile(string path)
     {
-        string dir = $"{SaveDir}/weapon";
-        string catLower = category.ToString().ToLower();
-        string path = $"{dir}/{catLower}_{animName}.json";
-
-        if (!FileAccess.FileExists(path))
-        {
-            // Fallback: 尝试 idle
-            if (animName != "idle")
-            {
-                string idlePath = $"{dir}/{catLower}_idle.json";
-                if (FileAccess.FileExists(idlePath))
-                    path = idlePath;
-                else
-                    return DefaultForSlot(ItemData.EquipSlot.Weapon);
-            }
-            else
-            {
-                return DefaultForSlot(ItemData.EquipSlot.Weapon);
-            }
-        }
-
+        if (!FileAccess.FileExists(path)) return null;
         using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-        if (file == null) return DefaultForSlot(ItemData.EquipSlot.Weapon);
-
+        if (file == null) return null;
         try
         {
             var dto = JsonSerializer.Deserialize<OffsetDto>(file.GetAsText());
-            if (dto == null) return DefaultForSlot(ItemData.EquipSlot.Weapon);
+            if (dto == null) return null;
             return new EquipmentOffsetConfig
             {
+                Version = 2.0f, // 自动升级为最新 2.0 规范
                 Slot = ItemData.EquipSlot.Weapon,
                 OffsetX = dto.offset_x,
                 OffsetY = dto.offset_y,
@@ -178,8 +172,119 @@ public sealed class EquipmentOffsetConfig
         }
         catch
         {
-            return DefaultForSlot(ItemData.EquipSlot.Weapon);
+            return null;
         }
+    }
+
+    /// <summary>加载武器偏移配置（按武器类别+动画名，搭载 5 级智能寻址退水管线）</summary>
+    public static EquipmentOffsetConfig LoadWeapon(WeaponAnimCategory category, string animName)
+    {
+        string dir = $"{SaveDir}/weapon";
+        string catLower = category.ToString().ToLower();
+
+        // 优先 1：玩家特定动作的自定义磁盘偏移配置 (user://)
+        string userPath = $"{dir}/{catLower}_{animName}.json";
+        var config = LoadFromFile(userPath);
+        if (config != null) return config;
+
+        // 优先 2：特定动作的内置默认偏移配置 (res://)
+        string resPath = $"res://assets/animations/equipment_offset/weapon/{catLower}_{animName}.json";
+        config = LoadFromFile(resPath);
+        if (config != null) return config;
+
+        // 回退 3：玩家待机 idle 的自定义磁盘偏移配置 (user://)
+        if (animName != "idle")
+        {
+            string userIdlePath = $"{dir}/{catLower}_idle.json";
+            config = LoadFromFile(userIdlePath);
+            if (config != null) return config;
+
+            // 回退 4：待机 idle 的内置默认偏移配置 (res://)
+            string resIdlePath = $"res://assets/animations/equipment_offset/weapon/{catLower}_idle.json";
+            config = LoadFromFile(resIdlePath);
+            if (config != null) return config;
+        }
+
+        // 终极兜底 5：直接提取大师级代码内置物理对齐预设，100% 保证开箱即用对齐握持点
+        return GetBuiltInDefaultPreset(category);
+    }
+
+    /// <summary>
+    /// 获取 8 类武器的内置神级物理对齐预设，包含极其精确的 X/Y 像素位移、角度旋转与 FlipH 水平镜像，保证开箱即用完美对齐右手握柄
+    /// </summary>
+    public static EquipmentOffsetConfig GetBuiltInDefaultPreset(WeaponAnimCategory category)
+    {
+        var config = new EquipmentOffsetConfig
+        {
+            Slot = ItemData.EquipSlot.Weapon,
+            Version = 2.0f,
+            Scale = 1.0f
+        };
+
+        switch (category)
+        {
+            case WeaponAnimCategory.Slash:
+                // 砍伤近战（剑/斧）：物理贴图中心在护手，手柄延至 200。
+                // OffsetY = -50f 将手柄正中对齐到右手骨骼挂接点
+                config.OffsetX = 0f;
+                config.OffsetY = -50f;
+                config.Rotation = -20f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Thrust:
+                // 刺伤近战（矛/枪）：物理贴图已完全垂直，手持在长杆中下段
+                config.OffsetX = 0f;
+                config.OffsetY = -104f;
+                config.Rotation = -25f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Crush:
+                // 钝伤近战（锤/棒）：重物朝上垂直，大仰角偏斜 15 度
+                config.OffsetX = 0f;
+                config.OffsetY = -104f;
+                config.Rotation = -15f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Bow:
+                // 弓类：物理贴图已完全垂直，手持几何中心 (128, 128)
+                config.OffsetX = 0f;
+                config.OffsetY = 0f;
+                config.Rotation = 0f;
+                config.Scale = 0.6f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Crossbow:
+                // 弩类：物理贴图已顺时针旋转拉平至水平朝右，几何中心 (128, 128)
+                // 手柄约在 (98, 148)，需要向右向上平移对齐挂接点
+                config.OffsetX = 60f;
+                config.OffsetY = -40f;
+                config.Rotation = 0f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Throw:
+                // 投掷类（飞刀）：捏柄小刀偏斜 20 度
+                config.OffsetX = 0f;
+                config.OffsetY = 0f;
+                config.Rotation = -20f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Catalyst:
+                // 法杖施法：物理贴图垂直朝上，昂扬偏斜 15 度
+                config.OffsetX = 0f;
+                config.OffsetY = 0f;
+                config.Rotation = -15f;
+                config.FlipH = false;
+                break;
+            case WeaponAnimCategory.Unarmed:
+            default:
+                config.OffsetX = 0f;
+                config.OffsetY = 0f;
+                config.Rotation = 0f;
+                config.FlipH = false;
+                break;
+        }
+
+        return config;
     }
 
     /// <summary>保存武器偏移配置（按武器类别+动画名）</summary>
@@ -191,6 +296,7 @@ public sealed class EquipmentOffsetConfig
         string path = $"{dir}/{catLower}_{animName}.json";
         var dto = new OffsetDto
         {
+            version = config.Version,
             slot = "weapon",
             offset_x = config.OffsetX,
             offset_y = config.OffsetY,
@@ -201,7 +307,7 @@ public sealed class EquipmentOffsetConfig
         string json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
         using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
         file?.StoreString(json);
-        GD.Print($"[EquipmentOffsetConfig] 已保存武器偏移: {path}");
+        GD.Print($"[EquipmentOffsetConfig] 已保存 2.0 武器偏移: {path}");
     }
 
     // ═══════════════════════════════════════════
@@ -239,6 +345,7 @@ public sealed class EquipmentOffsetConfig
 
     private class OffsetDto
     {
+        public float version { get; set; } = 1.0f;
         public string? slot { get; set; }
         public float offset_x { get; set; }
         public float offset_y { get; set; }

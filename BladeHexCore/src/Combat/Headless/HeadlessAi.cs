@@ -191,8 +191,12 @@ public static class HeadlessAi
         if (alive.Count == 0) return null;
 
         // 决定 actor 类型：DEX 主或 INT 主优先打高威胁后排；其他打最近
-        bool prefersThreat = actor.Data.Dex >= Math.Max(actor.Data.Str, actor.Data.Con)
-                          || actor.Data.Intel >= Math.Max(actor.Data.Str, actor.Data.Con);
+        int actorStr = CombatStats.GetEffectiveStr(actor.Data);
+        int actorDex = CombatStats.GetEffectiveDex(actor.Data);
+        int actorCon = CombatStats.GetEffectiveCon(actor.Data);
+        int actorInt = CombatStats.GetEffectiveInt(actor.Data);
+        bool prefersThreat = actorDex >= Math.Max(actorStr, actorCon)
+                          || actorInt >= Math.Max(actorStr, actorCon);
 
         BattleUnitModel? best = null;
         double bestScore = double.NegativeInfinity;
@@ -221,11 +225,15 @@ public static class HeadlessAi
     private static int ThreatRating(BattleUnitModel u)
     {
         // INT 主 = 法师 / 术士
-        if (u.Data.Intel >= Math.Max(Math.Max(u.Data.Str, u.Data.Dex), u.Data.Con)) return 5;
+        int str = CombatStats.GetEffectiveStr(u.Data);
+        int dex = CombatStats.GetEffectiveDex(u.Data);
+        int con = CombatStats.GetEffectiveCon(u.Data);
+        int intel = CombatStats.GetEffectiveInt(u.Data);
+        if (intel >= Math.Max(Math.Max(str, dex), con)) return 5;
         // DEX 主 = 游侠 / 猎人
-        if (u.Data.Dex > u.Data.Str && u.Data.Dex > u.Data.Con) return 3;
+        if (dex > str && dex > con) return 3;
         // CON 主 = 守卫 / 重战
-        if (u.Data.Con >= Math.Max(u.Data.Str, u.Data.Dex)) return 1;
+        if (con >= Math.Max(str, dex)) return 1;
         // 其他 STR 系
         return 2;
     }

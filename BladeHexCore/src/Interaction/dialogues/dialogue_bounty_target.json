@@ -1,0 +1,84 @@
+{
+  "dialogue_id": "bounty_target",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3 && relation >= 0",
+          "text": "“（通缉犯看到你们的强大人数，眼角猛跳，慌忙倒退了数步，把手中的尖刀指向地面以示无意战斗）\n‘等等！这位大人，我们没必要为了几个染血的赏金把命搭上！那些悬赏我的贵族才是真正的吸血鬼。我们来做个交易，我出双倍的价钱买我的命，如何？’”"
+        },
+        {
+          "condition": "player_race == npc_race",
+          "text": "“（通缉犯有些绝望地看着你，语气中多了一份同胞之间的哀求）\n‘同族……在这片吃人的荒原上，我们能活到今天不容易。你真的要为了官府那几个带着血污的硬币，把我送上断头台吗？放我一条生路，我发誓以后隐姓埋名！’”"
+        },
+        {
+          "condition": "relation <= -30",
+          "text": "“（通缉犯吐了口唾沫，面容扭曲，眼神像被逼入绝境的野兽般疯狂）\n‘嘿，又是一个为了那几百金币来送死的狗腿子！既然你想拿我的头去领赏，那就先看看你的脖子够不够硬吧！死斗到底！’”"
+        },
+        {
+          "text": "“（通缉犯警惕地打量着你，慢慢将重心下移，随时准备暴起发难）\n‘旅人，这里不欢迎爱多管闲事的人。如果你是想替哪个领主抓我，那就做好血溅当场的准备！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "废话少说，拿着你的头我才能去领赏！(开战)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "交出你全部抢来的积蓄，我可以当做没见过你。(索要 300 金币)",
+          "next": "bribe_deal",
+          "action": "gain_gold;add_relation",
+          "action_param": "300;10"
+        },
+        {
+          "condition": "player_army >= npc_army * 4 && relation >= 10",
+          "text": "把你的宝藏和金币全部交出来，少一个子就送你见法官！(索要 500 金币买命钱)",
+          "next": "bribe_deal_large",
+          "action": "gain_gold;add_relation",
+          "action_param": "500;5"
+        },
+        {
+          "text": "我今天心情不错，滚吧，别让我再看见你。(放行)",
+          "next": "end",
+          "action": "add_relation",
+          "action_param": "20"
+        }
+      ]
+    },
+    "bribe_deal": {
+      "node_id": "bribe_deal",
+      "texts": [
+        {
+          "text": "“（通缉犯虽然满脸怒意，但在绝对的武力威胁下，只能咬牙从怀里抛出一个布袋，随后迅速闪身钻入乱石堆中）\n‘这是 300 金币，我全部的积蓄了！算你狠，后会有期！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "收起金币。(离开)",
+          "next": "end",
+          "action": "add_faction_rep",
+          "action_param": "-10"
+        }
+      ]
+    },
+    "bribe_deal_large": {
+      "node_id": "bribe_deal_large",
+      "texts": [
+        {
+          "text": "“（通缉犯浑身颤抖，心痛欲裂地将两袋沉甸甸的金币掷在地上，眼中闪过一丝极度屈辱和忌惮的眼光）\n‘500 金币……这是我这几年拿命换来的家当！全给你！今天的事，你最好守口如瓶！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "很好，我们的交易达成了。滚吧。(离开)",
+          "next": "end",
+          "action": "add_faction_rep",
+          "action_param": "-20"
+        }
+      ]
+    }
+  }
+}

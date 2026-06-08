@@ -63,6 +63,7 @@ public partial class TipsDisplay : Control
         _tipLabel.BbcodeEnabled = true;
         _tipLabel.ScrollActive = false;
         _tipLabel.FitContent = true;
+        _tipLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _tipLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _tipLabel.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         _tipLabel.AddThemeFontSizeOverride("normal_font_size", theme.FontSizeSm);

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b5apt5sv747od"]
+
+[ext_resource type="Script" uid="uid://lh3pjqr1e04p" path="res://BladeHexFrontend/src/Scenes/overworld2d/OverworldScene2D.cs" id="1"]
+
+[node name="OverworldScene2D" type="Node2D" unique_id=1335084979]
+script = ExtResource("1")

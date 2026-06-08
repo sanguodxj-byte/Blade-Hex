@@ -1,4 +1,4 @@
-﻿// HexOverworldTile.cs
+// HexOverworldTile.cs
 // 大地图六边形瓦片数据模型 — 存储单个六角格的完整地形信息
 // 战场兄弟风格: 大量瓦片在游戏世界初始化时按规则和逻辑生成
 using Godot;
@@ -131,6 +131,9 @@ public partial class HexOverworldTile : Resource
     public float Moisture = 0.5f;
     public float Temperature = 0.5f;
 
+    /// <summary>养分/土壤肥力 (0=贫瘠, 1=肥沃) — 影响植被精灵密度和大小</summary>
+    public float Nutrient = 0.5f;
+
     // ========================================
     // 寻路与通行
     // ========================================
@@ -146,6 +149,9 @@ public partial class HexOverworldTile : Resource
     public bool IsRiver = false;
     public int RoadDirections = 0;
     public int RiverDirections = 0;
+
+    /// <summary>道路等级：0 = 林间野径 (Wild Trail), 1 = 乡间马车道 (Carriage Road), 2 = 国王大道 (Royal Highway)</summary>
+    public int RoadClassVal = 1;
 
     /// <summary>桥 — 道路覆盖在河流/水域上的格子（视觉与寻路的中间形态）</summary>
     public bool IsBridge => IsRoad && (Terrain == TerrainType.River
@@ -202,7 +208,7 @@ public partial class HexOverworldTile : Resource
     // ========================================
 
     /// <summary>创建完整初始化的瓦片</summary>
-    public static HexOverworldTile Create(int q, int r, TerrainType terrain, float elev, float moist, float temp)
+    public static HexOverworldTile Create(int q, int r, TerrainType terrain, float elev, float moist, float temp, float nutrient = 0.5f)
     {
         var tile = new HexOverworldTile();
         tile.Coord = new Vector2I(q, r);
@@ -211,6 +217,7 @@ public partial class HexOverworldTile : Resource
         tile.Elevation = elev;
         tile.Moisture = moist;
         tile.Temperature = temp;
+        tile.Nutrient = nutrient;
         tile.UpdateTerrainProperties();
         return tile;
     }
@@ -591,10 +598,12 @@ public partial class HexOverworldTile : Resource
             ["elevation"] = Elevation,
             ["moisture"] = Moisture,
             ["temperature"] = Temperature,
+            ["nutrient"] = Nutrient,
             ["is_road"] = IsRoad,
             ["is_river"] = IsRiver,
             ["road_dirs"] = RoadDirections,
             ["river_dirs"] = RiverDirections,
+            ["road_class"] = RoadClassVal,
             ["has_settlement"] = HasSettlement,
             ["settlement_type"] = SettlementType,
             ["poi_id"] = PoiId,
@@ -617,10 +626,12 @@ public partial class HexOverworldTile : Resource
         tile.Elevation = data.ContainsKey("elevation") ? (float)data["elevation"] : 0.0f;
         tile.Moisture = data.ContainsKey("moisture") ? (float)data["moisture"] : 0.5f;
         tile.Temperature = data.ContainsKey("temperature") ? (float)data["temperature"] : 0.5f;
+        tile.Nutrient = data.ContainsKey("nutrient") ? (float)data["nutrient"] : 0.5f;
         tile.IsRoad = data.ContainsKey("is_road") && (bool)data["is_road"];
         tile.IsRiver = data.ContainsKey("is_river") && (bool)data["is_river"];
         tile.RoadDirections = data.ContainsKey("road_dirs") ? (int)data["road_dirs"] : 0;
         tile.RiverDirections = data.ContainsKey("river_dirs") ? (int)data["river_dirs"] : 0;
+        tile.RoadClassVal = data.ContainsKey("road_class") ? (int)data["road_class"] : 1;
         tile.HasSettlement = data.ContainsKey("has_settlement") && (bool)data["has_settlement"];
         tile.SettlementType = data.ContainsKey("settlement_type") ? (int)data["settlement_type"] : 0;
         tile.PoiId = data.ContainsKey("poi_id") ? (string)data["poi_id"] : "";

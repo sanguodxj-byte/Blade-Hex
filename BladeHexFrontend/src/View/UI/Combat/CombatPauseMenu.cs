@@ -1,6 +1,7 @@
 // CombatPauseMenu.cs
 // 战斗中的 ESC 菜单：返回游戏 / 设置 / 回到主菜单 / 退出
 // 打开时暂停游戏树（ProcessMode.Always 保证菜单本身仍能处理输入）
+using BladeHex.Localization;
 using Godot;
 
 namespace BladeHex.UI.Combat;
@@ -108,31 +109,31 @@ public partial class CombatPauseMenu : CanvasLayer
 
         var title = new Label
         {
-            Text = "- 系统菜单 -",
+            Text = L10n.Tr("MENU_SYSTEM_TITLE"),
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         title.AddThemeFontSizeOverride("font_size", FontSizeXl);
         title.AddThemeColorOverride("font_color", TextAccent);
         vbox.AddChild(title);
 
-        var resumeBtn = MakeButton("返回游戏");
+        var resumeBtn = MakeButton(L10n.Tr("MENU_RESUME_GAME"));
         resumeBtn.Pressed += Close;
         vbox.AddChild(resumeBtn);
 
-        var settingsBtn = MakeButton("设置");
+        var settingsBtn = MakeButton(L10n.Tr("MENU_SETTINGS"));
         settingsBtn.Pressed += OpenSettings;
         vbox.AddChild(settingsBtn);
 
-        var mainMenuBtn = MakeButton("回到主菜单");
+        var mainMenuBtn = MakeButton(L10n.Tr("MENU_MAIN_MENU"));
         mainMenuBtn.Pressed += () =>
         {
             // 切换场景前必须解除暂停 + 清理所有挂在 /root 下的游离场景（战斗场景/大地图等）
-            BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/main_menu.tscn");
+            BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
             EmitSignal(SignalName.ReturnToMainMenuRequested);
         };
         vbox.AddChild(mainMenuBtn);
 
-        var exitBtn = MakeButton("退出游戏");
+        var exitBtn = MakeButton(L10n.Tr("MENU_QUIT_GAME"));
         exitBtn.AddThemeColorOverride("font_color", TextNegative);
         exitBtn.Pressed += () =>
         {

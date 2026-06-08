@@ -82,8 +82,7 @@ public static class LuaSkillBridge
 
         if (!success && error != null)
         {
-            ctx.Result["success"] = false;
-            ctx.Result["reason"] = error;
+            _currentCtx.Builder.Fail(error);
         }
 
         // 清理
@@ -105,6 +104,23 @@ public static class LuaSkillBridge
         table["target_q"] = _currentCtx.TargetCell.X;
         table["target_r"] = _currentCtx.TargetCell.Y;
 
+        // v0.8: 注入 tier_multiplier / attribute_count / consume_all_ap
+        var skill = _currentCtx.Attacker.GetCareerSkill();
+        if (skill != null)
+        {
+            table["tier"] = (double)skill.EffectParams.GetValueOrDefault("tier_multiplier", 1.0f).AsSingle();
+            table["attribute_count"] = skill.EffectParams.GetValueOrDefault("attribute_count", 1).AsInt32();
+            table["consume_all_ap"] = skill.EffectParams.GetValueOrDefault("consume_all_ap", true).AsBool();
+            table["effect_id"] = skill.EffectId;
+        }
+        else
+        {
+            table["tier"] = 1.0;
+            table["attribute_count"] = 1;
+            table["consume_all_ap"] = true;
+            table["effect_id"] = "";
+        }
+
         // enemies / allies 作为 C# 数组（NLua 自动转为可遍历对象）
         var enemyList = new List<LuaUnitProxy>();
         foreach (var u in _currentCtx.Enemies)
@@ -117,6 +133,9 @@ public static class LuaSkillBridge
             if (GodotObject.IsInstanceValid(u) && u.CurrentHp > 0)
                 allyList.Add(CreateUnitProxy(u));
         table["allies"] = allyList.ToArray();
+
+        // grid 引用（供 hex API 使用）
+        table["has_grid"] = _currentCtx.Grid != null;
 
         return table;
     }
@@ -134,12 +153,12 @@ public static class LuaSkillBridge
             name = unit.Data?.UnitName ?? "Unknown",
             level = unit.Data?.Level ?? 1,
             is_enemy = unit.Data?.IsEnemy ?? false,
-            str = unit.Data?.Str ?? 10,
-            dex = unit.Data?.Dex ?? 10,
-            con = unit.Data?.Con ?? 10,
-            intel = unit.Data?.Intel ?? 10,
-            wis = unit.Data?.Wis ?? 10,
-            cha = unit.Data?.Cha ?? 10,
+            str = CombatStats.GetEffectiveStr(unit.Data),
+            dex = CombatStats.GetEffectiveDex(unit.Data),
+            con = CombatStats.GetEffectiveCon(unit.Data),
+            intel = CombatStats.GetEffectiveInt(unit.Data),
+            wis = CombatStats.GetEffectiveWis(unit.Data),
+            cha = CombatStats.GetEffectiveCha(unit.Data),
             max_hp = unit.GetMaxHp(),
             max_mana = unit.Data != null ? BladeHex.Combat.CombatStats.GetMaxMana(unit.Data) : 0,
             mana = unit.Data?.CurrentMana ?? 0,
@@ -166,12 +185,13 @@ public static class LuaSkillBridge
 
         // 填充状态效果。迁移期同时读取旧 StatusEffect 与新 Buff,让 Lua 的
         // proxy:has_effect("...") 对两套运行时状态保持一致。
-        if (unit.Data?.Runtime.ActiveStatusEffects != null)
-            foreach (var eff in unit.Data.Runtime.ActiveStatusEffects)
+        if (unit.Data != null)
+        {
+            foreach (var eff in unit.Model.ActiveStatusEffects)
                 proxy.ActiveEffects.Add(eff.Id);
-        if (unit.Data?.Runtime.ActiveBuffs != null)
-            foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+            foreach (var buff in unit.Model.ActiveBuffs)
                 proxy.ActiveEffects.Add(buff.Id);
+        }
 
         // 注册到映射表
         _unitMap[proxy.InternalId] = unit;
@@ -185,7 +205,7 @@ public static class LuaSkillBridge
         proxy.OnManaChanged = (id, newMana) =>
         {
             if (_unitMap.TryGetValue(id, out var u) && u.Data != null)
-                u.Data.CurrentMana = newMana;
+                u.Model.CurrentMana = newMana;
         };
         proxy.OnApChanged = (id, newAp) =>
         {
@@ -194,7 +214,7 @@ public static class LuaSkillBridge
         proxy.OnExtraActionsChanged = (id, value) =>
         {
             if (_unitMap.TryGetValue(id, out var u) && u.Data != null)
-                u.Data.Runtime.ExtraActionsThisTurn = value;
+                u.Model.ExtraActionsThisTurn = value;
         };
 
         return proxy;
@@ -237,7 +257,7 @@ public static class LuaSkillBridge
         {
             var u = ResolveUnit(proxy);
             if (u == null) return 0;
-            int actual = u.Heal(amount);
+            int actual = u.Heal(amount, _currentCtx.Attacker);
             proxy.hp = u.CurrentHp;
             return actual;
         }
@@ -250,19 +270,44 @@ public static class LuaSkillBridge
             proxy.hp = u.CurrentHp;
         }
 
-        public void change_morale(LuaUnitProxy proxy, int amount)
-        {
-            var u = ResolveUnit(proxy);
-            if (u == null) return;
-            MoraleSystem.ChangeMorale(u, amount);
-        }
-
         public bool is_valid(LuaUnitProxy? proxy)
         {
             if (proxy == null) return false;
             var u = ResolveUnit(proxy);
             return u != null && GodotObject.IsInstanceValid(u) && u.CurrentHp > 0;
         }
+
+        public bool can_push_to(int q, int r)
+        {
+            var grid = _currentCtx.Grid;
+            if (grid == null) return true;
+            var cell = grid.GetCell(q, r);
+            if (cell == null) return false;
+            if (cell.Occupant != null) return false;
+            return cell.Data == null || cell.Data.isPassable;
+        }
+
+        /// <summary>传送单位到指定位置 (Lua: unit.teleport(proxy, q, r))</summary>
+        public void teleport(LuaUnitProxy proxy, int q, int r)
+        {
+            var u = ResolveUnit(proxy);
+            if (u == null) return;
+            var oldPos = u.GridPos;
+            u.GridPos = new Vector2I(q, r);
+            proxy.q = q;
+            proxy.r = r;
+            _currentCtx.Builder.AddTeleport(u, new Vector2I(q, r), oldPos);
+        }
+
+        /// <summary>获取单位距离 (Lua: unit.distance(proxy1, proxy2))</summary>
+        public int distance(LuaUnitProxy a, LuaUnitProxy b)
+            => HexUtils.Distance(a.q, a.r, b.q, b.r);
+
+        /// <summary>获取六角方向向量 (Lua: unit.direction(dir))</summary>
+        public Vector2I direction(int dir) => HexUtils.Directions[dir];
+
+        /// <summary>获取邻格坐标 (Lua: unit.get_neighbor(q, r, dir))</summary>
+        public Vector2I get_neighbor(int q, int r, int dir) => HexUtils.GetNeighbor(q, r, dir);
     }
 
     // ========================================================================
@@ -285,6 +330,9 @@ public static class LuaSkillBridge
         {
             var u = ResolveUnit(proxy);
             if (u?.Data == null || string.IsNullOrEmpty(buffId)) return false;
+            if (PassiveSkillResolver.IsFearEffect(buffId)
+                && !PassiveSkillResolver.CanApplyFearEffect(u, u.CombatManager?.AllUnits))
+                return false;
 
             string actualSource = string.IsNullOrEmpty(source) ? "lua_skill" : source;
             int sourceUnitId = GodotObject.IsInstanceValid(_currentCtx.Attacker)
@@ -305,15 +353,17 @@ public static class LuaSkillBridge
 
                 instance.Id = buffId;
                 if (string.IsNullOrEmpty(instance.Name)) instance.Name = buffId;
+                if (template == null && _currentCtx.Attacker?.Data != null && u.Data != null)
+                    instance.IsNegative = u.Data.IsEnemy != _currentCtx.Attacker.Data.IsEnemy;
                 instance.Duration = duration > 0 ? duration : instance.Duration;
                 if (instance.Duration == 0) instance.Duration = duration;
                 instance.SourceUnitId = sourceUnitId;
                 instance.Source = actualSource;
                 instance.Modifiers = LuaTableToStatModifiers(mods);
 
-                Buff.BuffSystem.ApplyDirect(u.Data, instance);
-                applied = u.Data.Runtime.ActiveBuffs.Find(b => b.Id == buffId && b.Source == actualSource);
-                ApplyImmediateRuntimeModifiers(u, proxy, instance.Modifiers);
+                applied = Buff.BuffSystem.ApplyDirect(u.Data, instance);
+                if (applied != null)
+                    ApplyImmediateRuntimeModifiers(u, proxy, instance.Modifiers);
             }
 
             if (applied == null) return false;
@@ -329,7 +379,7 @@ public static class LuaSkillBridge
             if (u?.Data == null || string.IsNullOrEmpty(buffId)) return false;
 
             bool removed = Buff.BuffSystem.Remove(u.Data, buffId);
-            removed |= u.Data.Runtime.ActiveStatusEffects.RemoveAll(e => e.Id == buffId) > 0;
+            removed |= u.Model.RemoveStatusEffect(buffId);
 
             if (removed)
             {
@@ -340,6 +390,21 @@ public static class LuaSkillBridge
             if (removed)
             {
                 proxy.ActiveEffects.Remove(buffId);
+                NotifyBuffChanged(u);
+            }
+            return removed;
+        }
+
+        public bool remove_source(LuaUnitProxy proxy, string source)
+        {
+            var u = ResolveUnit(proxy);
+            if (u?.Data == null || string.IsNullOrEmpty(source)) return false;
+
+            bool removed = Buff.BuffSystem.RemoveBySource(u.Data, source);
+            if (removed)
+            {
+                BladeHex.Events.EventBus.Instance?.Publish(BladeHex.Events.EventBus.Signals.StatusEffectRemoved,
+                    new Godot.Collections.Dictionary { { "unit", u }, { "effect_id", source } });
                 NotifyBuffChanged(u);
             }
             return removed;
@@ -389,8 +454,8 @@ public static class LuaSkillBridge
                     case "extra_action":
                         if (modifier.Value != 0f)
                         {
-                            unit.Data.Runtime.ExtraActionsThisTurn += 1;
-                            proxy.extra_actions = unit.Data.Runtime.ExtraActionsThisTurn;
+                            unit.Model.ExtraActionsThisTurn += 1;
+                            proxy.extra_actions = unit.Model.ExtraActionsThisTurn;
                         }
                         break;
                 }
@@ -405,87 +470,87 @@ public static class LuaSkillBridge
     /// <summary>result 全局对象 — Lua 中通过 result.fail("reason") 调用</summary>
     public class ResultApiObject
     {
-        public void add_attack(LuaTable attackTable)
+        public void add_attack(LuaTable attackTable, LuaUnitProxy? targetProxy = null)
         {
-            var dict = LuaTableToGodotDict(attackTable);
-            _currentCtx.Result["results"].AsGodotArray().Add(dict);
+            var u = targetProxy != null ? ResolveUnit(targetProxy) : ResolveAttackTarget(attackTable);
+            if (u == null) return;
+
+            // 从 Lua table 提取攻击结果字段
+            bool hit = attackTable["hit"] is bool b && b;
+            if (!hit) return;
+
+            int damage = 0;
+            var dmgVal = attackTable["damage"];
+            if (dmgVal is long dl) damage = (int)dl;
+            else if (dmgVal is double dd) damage = (int)dd;
+
+            bool critical = attackTable["critical"] is bool cb && cb;
+            bool killingBlow = attackTable["killing_blow"] is bool kb && kb;
+
+            _currentCtx.Builder.AddDamage(u, damage, critical, killingBlow);
+        }
+
+        private static Unit? ResolveAttackTarget(LuaTable attackTable)
+        {
+            var targetIdValue = attackTable["__target_internal_id"];
+            int targetId = targetIdValue switch
+            {
+                int i => i,
+                long l => (int)l,
+                double d => (int)d,
+                _ => 0,
+            };
+
+            return targetId > 0 && _unitMap.TryGetValue(targetId, out var u) ? u : null;
         }
 
         public void add_damage(LuaUnitProxy proxy, int value, string? damageType = null)
         {
             var u = ResolveUnit(proxy);
             if (u == null) return;
-            var dict = new Godot.Collections.Dictionary
-            {
-                { "type", "damage" },
-                { "target", u },
-                { "value", value },
-            };
-            if (!string.IsNullOrEmpty(damageType))
-                dict["damage_type"] = damageType;
-            _currentCtx.Result["results"].AsGodotArray().Add(dict);
+            _currentCtx.Builder.AddDamage(u, value);
         }
 
         public void add_heal(LuaUnitProxy proxy, int value)
         {
             var u = ResolveUnit(proxy);
             if (u == null) return;
-            _currentCtx.Result["results"].AsGodotArray().Add(new Godot.Collections.Dictionary
-            {
-                { "type", "heal" }, { "target", u }, { "value", value }
-            });
+            _currentCtx.Builder.AddHeal(u, value);
         }
 
         public void add_effect(LuaUnitProxy proxy, string effectId, int duration, LuaTable? mods = null)
         {
             var u = ResolveUnit(proxy);
             if (u == null) return;
-            var dict = new Godot.Collections.Dictionary
-            {
-                { "target", u },
-                { "effect_id", effectId },
-                { "duration", duration },
-            };
-            if (mods != null)
-                dict["stat_modifiers"] = LuaTableToGodotDict(mods);
-            _currentCtx.Result["status_effects"].AsGodotArray().Add(dict);
+            _currentCtx.Builder.AddStatusEffect(effectId, u, duration);
         }
 
         public void add_remove_effect(LuaUnitProxy proxy, LuaTable idsTable)
         {
             var u = ResolveUnit(proxy);
             if (u == null) return;
-            var ids = new Godot.Collections.Array();
             foreach (var key in idsTable.Keys)
             {
-                var val = idsTable[key];
-                if (val is string s) ids.Add(s);
+                if (idsTable[key] is string id)
+                    _currentCtx.Builder.AddRemoveEffect(u, id);
             }
-            _currentCtx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary
-            {
-                { "target", u },
-                { "special", "remove_effects" },
-                { "remove_ids", ids },
-            });
         }
 
         public void add_teleport(LuaUnitProxy proxy, int dq, int dr, int oq, int or2)
         {
             var u = ResolveUnit(proxy);
             if (u == null) return;
-            _currentCtx.Result["results"].AsGodotArray().Add(new Godot.Collections.Dictionary
-            {
-                { "type", "teleport" },
-                { "target", u },
-                { "destination", new Vector2I(dq, dr) },
-                { "origin", new Vector2I(oq, or2) },
-            });
+            _currentCtx.Builder.AddTeleport(u, new Vector2I(dq, dr), new Vector2I(oq, or2));
+        }
+
+        public void add_anchor(string anchorId, string source, int q, int r, int duration, bool destructible = false, int hp = 1)
+        {
+            _currentCtx.Builder.AddBattleAnchor(anchorId, source, new Vector2I(q, r), duration, destructible, hp);
         }
 
         public void fail(string reason)
         {
-            _currentCtx.Result["success"] = false;
-            _currentCtx.Result["reason"] = reason;
+            _currentCtx.Builder.Fail(reason);
         }
 
         // resolve_attack 放在 result 对象上（需要访问 Grid）
@@ -501,6 +566,8 @@ public static class LuaSkillBridge
             int hitMod = 0;
             float damageMult = 1.0f;
             float nodeFlatScale = 1.0f;
+            float extraCritChance = 0.0f;
+            float targetAcMultiplier = 1.0f;
 
             if (opts != null)
             {
@@ -510,15 +577,45 @@ public static class LuaSkillBridge
                 else if (opts["hit_mod"] is double hmd) hitMod = (int)hmd;
                 if (opts["damage_mult"] is double dm) damageMult = (float)dm;
                 if (opts["node_flat_scale"] is double nfs) nodeFlatScale = (float)nfs;
+                if (opts["critical_rate"] is double cr) extraCritChance = (float)cr;
+                else if (opts["critical_rate"] is long crl) extraCritChance = crl;
+                else if (opts["critical_rate"] is int cri) extraCritChance = cri;
+                if (opts["target_ac_mult"] is double tam) targetAcMultiplier = (float)tam;
+                else if (opts["target_ac_mult"] is long taml) targetAcMultiplier = taml;
+                else if (opts["target_ac_mult"] is int tami) targetAcMultiplier = tami;
             }
 
+            var attackerAllies = GetContextAlliesFor(attacker, exclude: attacker);
+            var defenderAllies = GetContextAlliesFor(target, exclude: target);
             var godotResult = CombatResolver.ResolveAttack(
                 attacker, target, _currentCtx.Grid,
-                advantage, disadvantage, hitMod, damageMult, null, nodeFlatScale);
+                advantage, disadvantage, hitMod, damageMult,
+                attackerAllies: attackerAllies,
+                nodePassiveScale: nodeFlatScale,
+                defenderAllies: defenderAllies,
+                extraCritChance: extraCritChance,
+                targetAcMultiplier: targetAcMultiplier);
 
             // 转换 Godot Dictionary → Lua table
-            return GodotDictToLuaTable(godotResult);
+            var table = GodotDictToLuaTable(godotResult);
+            if (table == null) return null;
+            table["__target_internal_id"] = targetProxy.InternalId;
+            return table;
         }
+    }
+
+    private static Unit[] GetContextAlliesFor(Unit unit, Unit? exclude = null)
+    {
+        IEnumerable<Unit> units = unit.IsPlayerSide == _currentCtx.Attacker.IsPlayerSide
+            ? _currentCtx.Allies
+            : _currentCtx.Enemies;
+
+        return units
+            .Where(u => GodotObject.IsInstanceValid(u)
+                && u != exclude
+                && u.CurrentHp > 0
+                && u.IsPlayerSide == unit.IsPlayerSide)
+            .ToArray();
     }
 
     // ========================================================================
@@ -585,7 +682,6 @@ public static class LuaSkillBridge
             Tags = (string[])template.Tags.Clone(),
             Duration = template.Duration,
             MaxStacks = template.MaxStacks,
-            CurrentStacks = 1,
             Modifiers = template.Modifiers.Select(m => new Buff.StatModifier
             {
                 Stat = m.Stat, Layer = m.Layer, Value = m.Value,
@@ -623,8 +719,19 @@ public static class LuaSkillBridge
                 float f => f,
                 _ => 0f,
             };
-            result.Add(new Buff.StatModifier { Stat = stat, Layer = Buff.ModifierLayer.Base, Value = value });
+            result.Add(new Buff.StatModifier { Stat = stat, Layer = InferModifierLayer(stat), Value = value });
         }
         return result;
+    }
+
+    private static Buff.ModifierLayer InferModifierLayer(string stat)
+    {
+        return stat switch
+        {
+            "damage" or "melee_damage" or "ranged_damage" => Buff.ModifierLayer.Increased,
+            "damage_taken_final_mult" => Buff.ModifierLayer.FinalMult,
+            "attack_advantage" => Buff.ModifierLayer.Override,
+            _ => Buff.ModifierLayer.Base,
+        };
     }
 }

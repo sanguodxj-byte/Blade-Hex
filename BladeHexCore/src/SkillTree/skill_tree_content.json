@@ -1,0 +1,7802 @@
+{
+  "version": 1,
+  "randomPools": {
+    "str": [
+      {
+        "stat": "melee_damage",
+        "min": 1,
+        "max": 2,
+        "weight": 30
+      },
+      {
+        "stat": "max_hp",
+        "min": 3,
+        "max": 6,
+        "weight": 25
+      },
+      {
+        "stat": "melee_hit",
+        "min": 1,
+        "max": 1,
+        "weight": 20
+      },
+      {
+        "stat": "ac",
+        "min": 1,
+        "max": 1,
+        "weight": 15
+      },
+      {
+        "stat": "critical_rate",
+        "min": 0.02,
+        "max": 0.03,
+        "weight": 10
+      }
+    ],
+    "dex": [
+      {
+        "stat": "ranged_damage",
+        "min": 1,
+        "max": 2,
+        "weight": 28
+      },
+      {
+        "stat": "ranged_hit",
+        "min": 1,
+        "max": 1,
+        "weight": 22
+      },
+      {
+        "stat": "initiative",
+        "min": 2,
+        "max": 3,
+        "weight": 20
+      },
+      {
+        "stat": "critical_rate",
+        "min": 0.02,
+        "max": 0.03,
+        "weight": 18
+      },
+      {
+        "stat": "speed",
+        "min": 1,
+        "max": 1,
+        "weight": 12
+      }
+    ],
+    "con": [
+      {
+        "stat": "max_hp",
+        "min": 5,
+        "max": 10,
+        "weight": 34
+      },
+      {
+        "stat": "ac",
+        "min": 1,
+        "max": 1,
+        "weight": 28
+      },
+      {
+        "stat": "all_save",
+        "min": 1,
+        "max": 1,
+        "weight": 28
+      },
+      {
+        "stat": "heal_amount",
+        "min": 1,
+        "max": 1,
+        "weight": 10
+      }
+    ],
+    "int": [
+      {
+        "stat": "mana_max",
+        "min": 3,
+        "max": 6,
+        "weight": 35
+      },
+      {
+        "stat": "spell_damage",
+        "min": 1,
+        "max": 1,
+        "weight": 25
+      },
+      {
+        "stat": "spell_hit",
+        "min": 1,
+        "max": 1,
+        "weight": 22
+      },
+      {
+        "stat": "ac",
+        "min": 1,
+        "max": 1,
+        "weight": 8
+      },
+      {
+        "stat": "all_save",
+        "min": 1,
+        "max": 1,
+        "weight": 10
+      }
+    ],
+    "wis": [
+      {
+        "stat": "critical_rate",
+        "min": 0.02,
+        "max": 0.05,
+        "weight": 44
+      },
+      {
+        "stat": "mana_max",
+        "min": 3,
+        "max": 5,
+        "weight": 28
+      },
+      {
+        "stat": "mana_regen",
+        "min": 1,
+        "max": 1,
+        "weight": 20
+      },
+      {
+        "stat": "all_save",
+        "min": 1,
+        "max": 1,
+        "weight": 8
+      }
+    ],
+    "cha": [
+      {
+        "stat": "ally_bonus",
+        "min": 1,
+        "max": 1,
+        "weight": 50
+      },
+      {
+        "stat": "initiative",
+        "min": 1,
+        "max": 2,
+        "weight": 30
+      },
+      {
+        "stat": "max_hp",
+        "min": 3,
+        "max": 5,
+        "weight": 20
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "name": "启程",
+      "description": "所有角色的技能星盘起点。",
+      "statBonuses": {}
+    },
+    {
+      "id": "str_a01",
+      "name": "连击",
+      "description": "攻击 2 次，第 2 次命中 -15%。",
+      "effect": "double_attack",
+      "isActiveSkill": true
+    },
+    {
+      "id": "str_p01",
+      "name": "裂帛",
+      "description": "近战伤害 +1。",
+      "effect": "str_p01_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_a02",
+      "name": "旋风斩",
+      "description": "半径 1，相邻敌人各受武器 100% 伤害。",
+      "effect": "whirlwind",
+      "isActiveSkill": true
+    },
+    {
+      "id": "str_p02",
+      "name": "碎骨",
+      "description": "近战伤害 +1。",
+      "effect": "str_p02_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_ks01",
+      "name": "狂暴之力",
+      "description": "近战伤害 +50%。",
+      "effect": "berserk_power",
+      "keystoneCost": "AC -3，不能用盾。",
+      "costBonuses": {
+        "ac": -3
+      }
+    },
+    {
+      "id": "str_a03",
+      "name": "狂战姿态",
+      "description": "姿态：近战伤害 +15%；受到伤害 +10%，全场持续，开启新姿态会关闭旧姿态。",
+      "effect": "berserk_stance",
+      "isActiveSkill": true
+    },
+    {
+      "id": "str_p03",
+      "name": "巨握",
+      "description": "近战伤害 +1。",
+      "effect": "str_p03_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_a04",
+      "name": "战吼震慑",
+      "description": "半径 3 敌人命中 -20%，持续 1 回合。",
+      "effect": "battle_cry",
+      "isActiveSkill": true
+    },
+    {
+      "id": "str_p04",
+      "name": "持刃者",
+      "description": "近战伤害 +1。",
+      "effect": "str_p04_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_ks02",
+      "name": "铁血技法",
+      "description": "近战攻击必定命中。",
+      "effect": "resolute_technique",
+      "keystoneCost": "永不暴击；远程攻击劣势。",
+      "costBonuses": {
+        "critical_rate": -1.0
+      }
+    },
+    {
+      "id": "str_a05",
+      "name": "无畏冲锋",
+      "description": "直线冲撞目标，造成武器 50% 伤害；命中附加 STUN 1 回合。",
+      "effect": "fearless_charge",
+      "isActiveSkill": true
+    },
+    {
+      "id": "str_p05",
+      "name": "坚骨",
+      "description": "最大 HP +5。",
+      "effect": "str_p05_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "max_hp": 5
+      }
+    },
+    {
+      "id": "str_ks03",
+      "name": "嗜血誓约",
+      "description": "近战命中按伤害 25% 吸血，溢出转临时 HP。",
+      "effect": "blood_oath",
+      "keystoneCost": "无法被他人治疗；每回合开始流失最大 HP。",
+      "costBonuses": {
+        "heal_amount": -99
+      }
+    },
+    {
+      "id": "str_g01",
+      "name": "ᚦᚢᚱᛋ",
+      "subtitle": "Thurs·蛮神",
+      "description": "Thurs·蛮神：当回合内每击杀 1 个敌人立即恢复全部 AP。",
+      "effect": "str_giant_apex",
+      "isActiveSkill": true,
+      "figureName": "ᚦᚢᚱᛋ巨型命座"
+    },
+    {
+      "id": "str_a06",
+      "name": "血腥漩涡",
+      "description": "半径 2 横扫，范围内敌人各受武器 100% 伤害；外圈每命中 1 敌回复 5% 最大 HP。",
+      "effect": "blood_vortex",
+      "isActiveSkill": true
+    },
+    {
+      "id": "str_p06",
+      "name": "乘胜",
+      "description": "近战伤害 +1。",
+      "effect": "str_p06_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_p07",
+      "name": "背水",
+      "description": "近战伤害 +1。",
+      "effect": "str_p07_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_p08",
+      "name": "怒锋",
+      "description": "近战伤害 +1。",
+      "effect": "str_p08_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "melee_damage": 1
+      }
+    },
+    {
+      "id": "str_s001",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914045
+    },
+    {
+      "id": "str_s002",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914046
+    },
+    {
+      "id": "str_s003",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914047
+    },
+    {
+      "id": "str_s004",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914048
+    },
+    {
+      "id": "str_s005",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914049
+    },
+    {
+      "id": "str_s006",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914050
+    },
+    {
+      "id": "str_s007",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914051
+    },
+    {
+      "id": "str_s008",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914052
+    },
+    {
+      "id": "str_s009",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914053
+    },
+    {
+      "id": "str_s010",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914075
+    },
+    {
+      "id": "str_s011",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914076
+    },
+    {
+      "id": "str_s012",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914077
+    },
+    {
+      "id": "str_s013",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914078
+    },
+    {
+      "id": "str_s014",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914079
+    },
+    {
+      "id": "str_s015",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914080
+    },
+    {
+      "id": "str_s016",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914081
+    },
+    {
+      "id": "str_s017",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914082
+    },
+    {
+      "id": "str_s018",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914083
+    },
+    {
+      "id": "str_s019",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914084
+    },
+    {
+      "id": "str_s020",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914106
+    },
+    {
+      "id": "str_s021",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914107
+    },
+    {
+      "id": "str_s022",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914108
+    },
+    {
+      "id": "str_s023",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914109
+    },
+    {
+      "id": "str_s024",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914110
+    },
+    {
+      "id": "str_s025",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914111
+    },
+    {
+      "id": "str_s026",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914112
+    },
+    {
+      "id": "str_s027",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914113
+    },
+    {
+      "id": "str_s028",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914114
+    },
+    {
+      "id": "str_s029",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914115
+    },
+    {
+      "id": "str_s030",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914137
+    },
+    {
+      "id": "str_s031",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914138
+    },
+    {
+      "id": "str_s032",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914139
+    },
+    {
+      "id": "str_s033",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914140
+    },
+    {
+      "id": "str_s034",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914141
+    },
+    {
+      "id": "str_s035",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914142
+    },
+    {
+      "id": "str_s036",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914143
+    },
+    {
+      "id": "str_s037",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914144
+    },
+    {
+      "id": "str_s038",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914145
+    },
+    {
+      "id": "str_s039",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914146
+    },
+    {
+      "id": "str_s040",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914168
+    },
+    {
+      "id": "str_s041",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914169
+    },
+    {
+      "id": "str_s042",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914170
+    },
+    {
+      "id": "str_s043",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914171
+    },
+    {
+      "id": "str_s044",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914172
+    },
+    {
+      "id": "str_s045",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914173
+    },
+    {
+      "id": "str_s046",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914174
+    },
+    {
+      "id": "str_s047",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914175
+    },
+    {
+      "id": "str_s048",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914176
+    },
+    {
+      "id": "str_s049",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914177
+    },
+    {
+      "id": "str_s050",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914199
+    },
+    {
+      "id": "str_s051",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914200
+    },
+    {
+      "id": "str_s052",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914201
+    },
+    {
+      "id": "str_s053",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914202
+    },
+    {
+      "id": "str_s054",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914203
+    },
+    {
+      "id": "str_s055",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914204
+    },
+    {
+      "id": "str_s056",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914205
+    },
+    {
+      "id": "str_s057",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914206
+    },
+    {
+      "id": "str_s058",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914207
+    },
+    {
+      "id": "str_s059",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914208
+    },
+    {
+      "id": "str_s060",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914230
+    },
+    {
+      "id": "str_s061",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914231
+    },
+    {
+      "id": "str_s062",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914232
+    },
+    {
+      "id": "str_s063",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914233
+    },
+    {
+      "id": "str_s064",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914234
+    },
+    {
+      "id": "str_s065",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914235
+    },
+    {
+      "id": "str_s066",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914236
+    },
+    {
+      "id": "str_s067",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914237
+    },
+    {
+      "id": "str_s068",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914238
+    },
+    {
+      "id": "trans_sd01",
+      "name": "过渡星纹",
+      "description": "STR 与 DEX 之间的横跨桥点。",
+      "contentMode": "random_attribute",
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "str_s070",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914261
+    },
+    {
+      "id": "str_s071",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914262
+    },
+    {
+      "id": "str_s072",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914263
+    },
+    {
+      "id": "str_s073",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914264
+    },
+    {
+      "id": "str_s074",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914265
+    },
+    {
+      "id": "str_s075",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914266
+    },
+    {
+      "id": "str_s076",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914267
+    },
+    {
+      "id": "str_s077",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914268
+    },
+    {
+      "id": "str_s078",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914269
+    },
+    {
+      "id": "str_s079",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914270
+    },
+    {
+      "id": "str_s080",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914292
+    },
+    {
+      "id": "str_s081",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914293
+    },
+    {
+      "id": "str_s082",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914294
+    },
+    {
+      "id": "str_s083",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914295
+    },
+    {
+      "id": "str_s084",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914296
+    },
+    {
+      "id": "str_s085",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914297
+    },
+    {
+      "id": "str_s086",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914298
+    },
+    {
+      "id": "str_s087",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914299
+    },
+    {
+      "id": "str_s088",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914300
+    },
+    {
+      "id": "str_s089",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914301
+    },
+    {
+      "id": "str_s090",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914323
+    },
+    {
+      "id": "str_s091",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914324
+    },
+    {
+      "id": "str_s092",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914325
+    },
+    {
+      "id": "str_s093",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914326
+    },
+    {
+      "id": "str_s094",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914327
+    },
+    {
+      "id": "str_s095",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914328
+    },
+    {
+      "id": "str_s096",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914329
+    },
+    {
+      "id": "str_s097",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914330
+    },
+    {
+      "id": "str_s098",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914331
+    },
+    {
+      "id": "str_s099",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123914332
+    },
+    {
+      "id": "str_s100",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915005
+    },
+    {
+      "id": "str_s101",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915006
+    },
+    {
+      "id": "str_s102",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915007
+    },
+    {
+      "id": "str_s103",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915008
+    },
+    {
+      "id": "str_s104",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915009
+    },
+    {
+      "id": "str_s105",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915010
+    },
+    {
+      "id": "str_s106",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915011
+    },
+    {
+      "id": "str_s107",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915012
+    },
+    {
+      "id": "str_s108",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915013
+    },
+    {
+      "id": "str_s109",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915014
+    },
+    {
+      "id": "str_s110",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915036
+    },
+    {
+      "id": "str_s111",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915037
+    },
+    {
+      "id": "str_s112",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915038
+    },
+    {
+      "id": "str_s113",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915039
+    },
+    {
+      "id": "str_s114",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915040
+    },
+    {
+      "id": "str_s115",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915041
+    },
+    {
+      "id": "str_s116",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915042
+    },
+    {
+      "id": "str_s117",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915043
+    },
+    {
+      "id": "str_s118",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915044
+    },
+    {
+      "id": "str_s119",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915045
+    },
+    {
+      "id": "str_s120",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915067
+    },
+    {
+      "id": "str_s121",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915068
+    },
+    {
+      "id": "str_s122",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915069
+    },
+    {
+      "id": "str_s123",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915070
+    },
+    {
+      "id": "str_s124",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915071
+    },
+    {
+      "id": "str_s125",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915072
+    },
+    {
+      "id": "str_s126",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915073
+    },
+    {
+      "id": "str_s127",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915074
+    },
+    {
+      "id": "str_s128",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915075
+    },
+    {
+      "id": "str_s129",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915076
+    },
+    {
+      "id": "str_s130",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915098
+    },
+    {
+      "id": "str_s131",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915099
+    },
+    {
+      "id": "str_s132",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915100
+    },
+    {
+      "id": "str_s133",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915101
+    },
+    {
+      "id": "str_s134",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915102
+    },
+    {
+      "id": "str_s135",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915103
+    },
+    {
+      "id": "str_s136",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915104
+    },
+    {
+      "id": "str_s137",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915105
+    },
+    {
+      "id": "str_s138",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915106
+    },
+    {
+      "id": "str_s139",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915107
+    },
+    {
+      "id": "str_s140",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915129
+    },
+    {
+      "id": "str_s141",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915130
+    },
+    {
+      "id": "str_s142",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915131
+    },
+    {
+      "id": "str_s143",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915132
+    },
+    {
+      "id": "str_s144",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915133
+    },
+    {
+      "id": "str_s145",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915134
+    },
+    {
+      "id": "str_s146",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915135
+    },
+    {
+      "id": "str_s147",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915136
+    },
+    {
+      "id": "str_s148",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915137
+    },
+    {
+      "id": "str_s149",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915138
+    },
+    {
+      "id": "str_s150",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915160
+    },
+    {
+      "id": "str_s151",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915161
+    },
+    {
+      "id": "str_s152",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915162
+    },
+    {
+      "id": "str_s153",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915163
+    },
+    {
+      "id": "str_s154",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915164
+    },
+    {
+      "id": "str_s155",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1123915165
+    },
+    {
+      "id": "str_pip01",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 480586073
+    },
+    {
+      "id": "str_pip02",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 480586074
+    },
+    {
+      "id": "str_pip03",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 480586075
+    },
+    {
+      "id": "dex_a01",
+      "name": "精准射击",
+      "description": "蓄力，下次远程攻击优势，并造成武器 200% 伤害。",
+      "effect": "precise_shot",
+      "isActiveSkill": true
+    },
+    {
+      "id": "dex_p01",
+      "name": "长弓手",
+      "description": "远程伤害 +1。",
+      "effect": "dex_p01_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ranged_damage": 1
+      }
+    },
+    {
+      "id": "dex_a02",
+      "name": "连珠箭",
+      "description": "连射 3 箭，每箭命中 -10%。",
+      "effect": "rapid_shot",
+      "isActiveSkill": true
+    },
+    {
+      "id": "dex_p02",
+      "name": "弩炮手",
+      "description": "远程伤害 +1。",
+      "effect": "dex_p02_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ranged_damage": 1
+      }
+    },
+    {
+      "id": "dex_ks01",
+      "name": "幽灵步伐",
+      "description": "受到远程攻击时获得永久掩护。",
+      "effect": "ghost_footwork",
+      "keystoneCost": "HP 上限 -20%。",
+      "costBonuses": {
+        "max_hp": -10
+      }
+    },
+    {
+      "id": "dex_a03",
+      "name": "致盲箭",
+      "description": "远程攻击命中后附加 BLIND 2 回合。",
+      "effect": "blind_arrow",
+      "isActiveSkill": true
+    },
+    {
+      "id": "dex_p03",
+      "name": "掷矛手",
+      "description": "远程伤害 +1。",
+      "effect": "dex_p03_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ranged_damage": 1
+      }
+    },
+    {
+      "id": "dex_a04",
+      "name": "闪避翻滚",
+      "description": "位移到 4 格内目标格，不触发借机攻击。",
+      "effect": "evasive_roll",
+      "isActiveSkill": true
+    },
+    {
+      "id": "dex_p04",
+      "name": "影袭者",
+      "description": "远程伤害 +1。",
+      "effect": "dex_p04_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ranged_damage": 1
+      }
+    },
+    {
+      "id": "dex_ks02",
+      "name": "杂技身法",
+      "description": "受到攻击 30% 概率完全免伤。",
+      "effect": "acrobatics",
+      "keystoneCost": "AC -4，不能穿中/重甲。",
+      "costBonuses": {
+        "ac": -4
+      }
+    },
+    {
+      "id": "dex_a05",
+      "name": "游猎姿态",
+      "description": "姿态：远程伤害 +15%；近战伤害 -20%，全场持续，开启新姿态会关闭旧姿态。",
+      "effect": "hunter_stance",
+      "isActiveSkill": true
+    },
+    {
+      "id": "dex_p05",
+      "name": "鹰瞵",
+      "description": "暴击率 +5%。",
+      "effect": "dex_p05_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "dex_ks03",
+      "name": "近迫精射",
+      "description": "近距离远程伤害 +50%。",
+      "effect": "point_blank",
+      "keystoneCost": "射程 -2，远距离伤害衰减。",
+      "costBonuses": {
+        "range_bonus": -2
+      }
+    },
+    {
+      "id": "dex_g01",
+      "name": "ᚱᚨᛁᚦ",
+      "subtitle": "Raið·疾驰",
+        "description": "Raið·疾驰：远程攻击命中即返还本次行动，最多连续 5 次；击杀刷新 AP 供继续移动。",
+      "effect": "dex_giant_apex",
+      "isActiveSkill": true,
+      "figureName": "ᚱᚨᛁᚦ巨型命座"
+    },
+    {
+      "id": "dex_a06",
+      "name": "流星箭雨",
+      "description": "半径 2 箭雨，范围内敌人各受武器 60% 伤害。",
+      "effect": "arrow_rain",
+      "isActiveSkill": true
+    },
+    {
+      "id": "dex_p06",
+      "name": "疾影",
+      "description": "速度 +1。",
+      "effect": "dex_p06_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "speed": 1
+      }
+    },
+    {
+      "id": "dex_p07",
+      "name": "致命专注",
+      "description": "远程伤害 +1。",
+      "effect": "dex_p07_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ranged_damage": 1
+      }
+    },
+    {
+      "id": "dex_p08",
+      "name": "锐眼",
+      "description": "远程伤害 +1。",
+      "effect": "dex_p08_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ranged_damage": 1
+      }
+    },
+    {
+      "id": "dex_s001",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684375
+    },
+    {
+      "id": "dex_s002",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684376
+    },
+    {
+      "id": "dex_s003",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684377
+    },
+    {
+      "id": "dex_s004",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684378
+    },
+    {
+      "id": "dex_s005",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684379
+    },
+    {
+      "id": "dex_s006",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684380
+    },
+    {
+      "id": "dex_s007",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684381
+    },
+    {
+      "id": "dex_s008",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684382
+    },
+    {
+      "id": "dex_s009",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684383
+    },
+    {
+      "id": "dex_s010",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684405
+    },
+    {
+      "id": "dex_s011",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684406
+    },
+    {
+      "id": "dex_s012",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684407
+    },
+    {
+      "id": "dex_s013",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684408
+    },
+    {
+      "id": "dex_s014",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684409
+    },
+    {
+      "id": "dex_s015",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684410
+    },
+    {
+      "id": "dex_s016",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684411
+    },
+    {
+      "id": "dex_s017",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684412
+    },
+    {
+      "id": "dex_s018",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684413
+    },
+    {
+      "id": "dex_s019",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684414
+    },
+    {
+      "id": "dex_s020",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684436
+    },
+    {
+      "id": "dex_s021",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684437
+    },
+    {
+      "id": "dex_s022",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684438
+    },
+    {
+      "id": "dex_s023",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684439
+    },
+    {
+      "id": "dex_s024",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684440
+    },
+    {
+      "id": "dex_s025",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684441
+    },
+    {
+      "id": "dex_s026",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684442
+    },
+    {
+      "id": "dex_s027",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684443
+    },
+    {
+      "id": "dex_s028",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684444
+    },
+    {
+      "id": "dex_s029",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684445
+    },
+    {
+      "id": "dex_s030",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684467
+    },
+    {
+      "id": "dex_s031",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684468
+    },
+    {
+      "id": "dex_s032",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684469
+    },
+    {
+      "id": "dex_s033",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684470
+    },
+    {
+      "id": "dex_s034",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684471
+    },
+    {
+      "id": "dex_s035",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684472
+    },
+    {
+      "id": "dex_s036",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684473
+    },
+    {
+      "id": "dex_s037",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684474
+    },
+    {
+      "id": "dex_s038",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684475
+    },
+    {
+      "id": "dex_s039",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684476
+    },
+    {
+      "id": "dex_s040",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684498
+    },
+    {
+      "id": "dex_s041",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684499
+    },
+    {
+      "id": "dex_s042",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684500
+    },
+    {
+      "id": "dex_s043",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684501
+    },
+    {
+      "id": "dex_s044",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684502
+    },
+    {
+      "id": "dex_s045",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684503
+    },
+    {
+      "id": "dex_s046",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684504
+    },
+    {
+      "id": "dex_s047",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684505
+    },
+    {
+      "id": "dex_s048",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684506
+    },
+    {
+      "id": "dex_s049",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684507
+    },
+    {
+      "id": "dex_s050",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684529
+    },
+    {
+      "id": "dex_s051",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684530
+    },
+    {
+      "id": "dex_s052",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684531
+    },
+    {
+      "id": "dex_s053",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684532
+    },
+    {
+      "id": "dex_s054",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684533
+    },
+    {
+      "id": "dex_s055",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684534
+    },
+    {
+      "id": "dex_s056",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684535
+    },
+    {
+      "id": "dex_s057",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684536
+    },
+    {
+      "id": "dex_s058",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684537
+    },
+    {
+      "id": "dex_s059",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684538
+    },
+    {
+      "id": "dex_s060",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684560
+    },
+    {
+      "id": "dex_s061",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684561
+    },
+    {
+      "id": "dex_s062",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684562
+    },
+    {
+      "id": "dex_s063",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684563
+    },
+    {
+      "id": "dex_s064",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684564
+    },
+    {
+      "id": "dex_s065",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684565
+    },
+    {
+      "id": "trans_dc01",
+      "name": "过渡星纹",
+      "description": "DEX 与 CON 之间的横跨桥点。",
+      "contentMode": "random_attribute",
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "dex_s067",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684567
+    },
+    {
+      "id": "dex_s068",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684568
+    },
+    {
+      "id": "dex_s069",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684569
+    },
+    {
+      "id": "dex_s070",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684591
+    },
+    {
+      "id": "dex_s071",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684592
+    },
+    {
+      "id": "dex_s072",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684593
+    },
+    {
+      "id": "dex_s073",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684594
+    },
+    {
+      "id": "dex_s074",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684595
+    },
+    {
+      "id": "dex_s075",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684596
+    },
+    {
+      "id": "dex_s076",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684597
+    },
+    {
+      "id": "dex_s077",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684598
+    },
+    {
+      "id": "dex_s078",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684599
+    },
+    {
+      "id": "dex_s079",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684600
+    },
+    {
+      "id": "dex_s080",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684622
+    },
+    {
+      "id": "dex_s081",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684623
+    },
+    {
+      "id": "dex_s082",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684624
+    },
+    {
+      "id": "dex_s083",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684625
+    },
+    {
+      "id": "dex_s084",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684626
+    },
+    {
+      "id": "dex_s085",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684627
+    },
+    {
+      "id": "dex_s086",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684628
+    },
+    {
+      "id": "dex_s087",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684629
+    },
+    {
+      "id": "dex_s088",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684630
+    },
+    {
+      "id": "dex_s089",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684631
+    },
+    {
+      "id": "dex_s090",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684653
+    },
+    {
+      "id": "dex_s091",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684654
+    },
+    {
+      "id": "dex_s092",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684655
+    },
+    {
+      "id": "dex_s093",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684656
+    },
+    {
+      "id": "dex_s094",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684657
+    },
+    {
+      "id": "dex_s095",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684658
+    },
+    {
+      "id": "dex_s096",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684659
+    },
+    {
+      "id": "dex_s097",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684660
+    },
+    {
+      "id": "dex_s098",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684661
+    },
+    {
+      "id": "dex_s099",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495684662
+    },
+    {
+      "id": "dex_s100",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685335
+    },
+    {
+      "id": "dex_s101",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685336
+    },
+    {
+      "id": "dex_s102",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685337
+    },
+    {
+      "id": "dex_s103",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685338
+    },
+    {
+      "id": "dex_s104",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685339
+    },
+    {
+      "id": "dex_s105",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685340
+    },
+    {
+      "id": "dex_s106",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685341
+    },
+    {
+      "id": "dex_s107",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685342
+    },
+    {
+      "id": "dex_s108",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685343
+    },
+    {
+      "id": "dex_s109",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685344
+    },
+    {
+      "id": "dex_s110",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685366
+    },
+    {
+      "id": "dex_s111",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685367
+    },
+    {
+      "id": "dex_s112",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685368
+    },
+    {
+      "id": "dex_s113",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685369
+    },
+    {
+      "id": "dex_s114",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685370
+    },
+    {
+      "id": "dex_s115",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685371
+    },
+    {
+      "id": "dex_s116",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685372
+    },
+    {
+      "id": "dex_s117",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685373
+    },
+    {
+      "id": "dex_s118",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685374
+    },
+    {
+      "id": "dex_s119",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685375
+    },
+    {
+      "id": "dex_s120",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685397
+    },
+    {
+      "id": "dex_s121",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685398
+    },
+    {
+      "id": "dex_s122",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685399
+    },
+    {
+      "id": "dex_s123",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685400
+    },
+    {
+      "id": "dex_s124",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685401
+    },
+    {
+      "id": "dex_s125",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685402
+    },
+    {
+      "id": "dex_s126",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685403
+    },
+    {
+      "id": "dex_s127",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685404
+    },
+    {
+      "id": "dex_s128",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685405
+    },
+    {
+      "id": "dex_s129",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685406
+    },
+    {
+      "id": "dex_s130",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685428
+    },
+    {
+      "id": "dex_s131",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685429
+    },
+    {
+      "id": "dex_s132",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685430
+    },
+    {
+      "id": "dex_s133",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685431
+    },
+    {
+      "id": "dex_s134",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685432
+    },
+    {
+      "id": "dex_s135",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685433
+    },
+    {
+      "id": "dex_s136",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685434
+    },
+    {
+      "id": "dex_s137",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685435
+    },
+    {
+      "id": "dex_s138",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685436
+    },
+    {
+      "id": "dex_s139",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685437
+    },
+    {
+      "id": "dex_s140",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685459
+    },
+    {
+      "id": "dex_s141",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685460
+    },
+    {
+      "id": "dex_s142",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685461
+    },
+    {
+      "id": "dex_s143",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685462
+    },
+    {
+      "id": "dex_s144",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685463
+    },
+    {
+      "id": "dex_s145",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685464
+    },
+    {
+      "id": "dex_s146",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685465
+    },
+    {
+      "id": "dex_s147",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685466
+    },
+    {
+      "id": "dex_s148",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685467
+    },
+    {
+      "id": "dex_s149",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685468
+    },
+    {
+      "id": "dex_s150",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685490
+    },
+    {
+      "id": "dex_s151",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685491
+    },
+    {
+      "id": "dex_s152",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685492
+    },
+    {
+      "id": "dex_s153",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685493
+    },
+    {
+      "id": "dex_s154",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 495685494
+    },
+    {
+      "id": "dex_pip01",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 332819135
+    },
+    {
+      "id": "dex_pip02",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 332819136
+    },
+    {
+      "id": "dex_pip03",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 332819137
+    },
+    {
+      "id": "dex_pip04",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 332819138
+    },
+    {
+      "id": "dex_pip05",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 332819139
+    },
+    {
+      "id": "con_a01",
+      "name": "盾击",
+      "description": "武器 100% 伤害并推开 1 格；推不动时造成目标最大 HP 8% 血量伤害。",
+      "effect": "shield_bash",
+      "isActiveSkill": true
+    },
+    {
+      "id": "con_p01",
+      "name": "厚盾",
+      "description": "AC +1。",
+      "effect": "con_p01_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ac": 1
+      }
+    },
+    {
+      "id": "con_a02",
+      "name": "盾牌猛击",
+      "description": "武器 120% 伤害并击退 2 格；命中后目标命中 -20%，持续 2 回合。",
+      "effect": "shield_slam",
+      "isActiveSkill": true
+    },
+    {
+      "id": "con_p02",
+      "name": "重铠",
+      "description": "最大 HP +5。",
+      "effect": "con_p02_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "max_hp": 5
+      }
+    },
+    {
+      "id": "con_ks01",
+      "name": "不朽之躯",
+      "description": "HP <0 时每场 1 次尝试恢复 1HP。",
+      "effect": "undying_body",
+      "keystoneCost": "移动速度 -2。",
+      "costBonuses": {
+        "speed": -2
+      }
+    },
+    {
+      "id": "con_a03",
+      "name": "守护链接",
+      "description": "指定 1 名友军，其受到伤害的 50% 转移到自己，持续 3 回合。",
+      "effect": "guardian_link",
+      "isActiveSkill": true
+    },
+    {
+      "id": "con_p03",
+      "name": "磐体",
+      "description": "最大 HP +5。",
+      "effect": "con_p03_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "max_hp": 5
+      }
+    },
+    {
+      "id": "con_a04",
+      "name": "守御姿态",
+      "description": "姿态：受到伤害 -15%；自身伤害 -15%，全场持续，开启新姿态会关闭旧姿态。",
+      "effect": "guard_stance",
+      "isActiveSkill": true
+    },
+    {
+      "id": "con_p04",
+      "name": "铁皮",
+      "description": "AC +1。",
+      "effect": "con_p04_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ac": 1
+      }
+    },
+    {
+      "id": "con_ks02",
+      "name": "守誓壁垒",
+      "description": "装备盾牌时近战伤害额外 -25%。",
+      "effect": "shield_bastion",
+      "keystoneCost": "不能装备双手武器；远程伤害 -50%。",
+      "costBonuses": {
+        "ranged_damage": -2
+      }
+    },
+    {
+      "id": "con_a05",
+      "name": "岿然不动",
+      "description": "立即回复 25% 最大 HP；本回合受到伤害 -30%。",
+      "effect": "unyielding_stand",
+      "isActiveSkill": true
+    },
+    {
+      "id": "con_p05",
+      "name": "坚毅",
+      "description": "全豁免 +1。",
+      "effect": "con_p05_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "con_ks03",
+      "name": "玄铁之躯",
+      "description": "免疫位移、击退、眩晕、恐惧，AC +3。",
+      "effect": "iron_body",
+      "keystoneCost": "不能闪避，速度 -2，不能主动后撤。",
+      "costBonuses": {
+        "speed": -2
+      }
+    },
+    {
+      "id": "con_g01",
+      "name": "ᛁᛋᚨ",
+      "subtitle": "Isa·凝滞",
+      "description": "Isa·凝滞：3 回合内 HP 最低锁定为 1，每场战斗 1 次。",
+      "effect": "con_giant_apex",
+      "isActiveSkill": true,
+      "figureName": "ᛁᛋᚨ巨型命座"
+    },
+    {
+      "id": "con_a06",
+      "name": "大地践踏",
+      "description": "相邻敌人各受武器 80% 伤害；强韧豁免失败则 STUN 1 回合。",
+      "effect": "earth_stomp",
+      "isActiveSkill": true
+    },
+    {
+      "id": "con_p06",
+      "name": "止血",
+      "description": "治疗量 +1。",
+      "effect": "con_p06_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "heal_amount": 1
+      }
+    },
+    {
+      "id": "con_p07",
+      "name": "困兽",
+      "description": "AC +1。",
+      "effect": "con_p07_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ac": 1
+      }
+    },
+    {
+      "id": "con_p08",
+      "name": "不退",
+      "description": "AC +1。",
+      "effect": "con_p08_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ac": 1
+      }
+    },
+    {
+      "id": "con_s001",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168396
+    },
+    {
+      "id": "con_s002",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168397
+    },
+    {
+      "id": "con_s003",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168398
+    },
+    {
+      "id": "con_s004",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168399
+    },
+    {
+      "id": "con_s005",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168400
+    },
+    {
+      "id": "con_s006",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168401
+    },
+    {
+      "id": "con_s007",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168402
+    },
+    {
+      "id": "con_s008",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168403
+    },
+    {
+      "id": "con_s009",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168404
+    },
+    {
+      "id": "con_s010",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168426
+    },
+    {
+      "id": "con_s011",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168427
+    },
+    {
+      "id": "con_s012",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168428
+    },
+    {
+      "id": "con_s013",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168429
+    },
+    {
+      "id": "con_s014",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168430
+    },
+    {
+      "id": "con_s015",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168431
+    },
+    {
+      "id": "con_s016",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168432
+    },
+    {
+      "id": "con_s017",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168433
+    },
+    {
+      "id": "con_s018",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168434
+    },
+    {
+      "id": "con_s019",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168435
+    },
+    {
+      "id": "con_s020",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168457
+    },
+    {
+      "id": "con_s021",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168458
+    },
+    {
+      "id": "con_s022",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168459
+    },
+    {
+      "id": "con_s023",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168460
+    },
+    {
+      "id": "con_s024",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168461
+    },
+    {
+      "id": "con_s025",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168462
+    },
+    {
+      "id": "trans_ci01",
+      "name": "过渡星纹",
+      "description": "CON 与 INT 之间的横跨桥点。",
+      "contentMode": "random_attribute",
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "con_s027",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168464
+    },
+    {
+      "id": "con_s028",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168465
+    },
+    {
+      "id": "con_s029",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168466
+    },
+    {
+      "id": "con_s030",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168488
+    },
+    {
+      "id": "con_s031",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168489
+    },
+    {
+      "id": "con_s032",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168490
+    },
+    {
+      "id": "con_s033",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168491
+    },
+    {
+      "id": "con_s034",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168492
+    },
+    {
+      "id": "con_s035",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168493
+    },
+    {
+      "id": "con_s036",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168494
+    },
+    {
+      "id": "con_s037",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168495
+    },
+    {
+      "id": "con_s038",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168496
+    },
+    {
+      "id": "con_s039",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168497
+    },
+    {
+      "id": "con_s040",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168519
+    },
+    {
+      "id": "con_s041",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168520
+    },
+    {
+      "id": "con_s042",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168521
+    },
+    {
+      "id": "con_s043",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168522
+    },
+    {
+      "id": "con_s044",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168523
+    },
+    {
+      "id": "con_s045",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168524
+    },
+    {
+      "id": "con_s046",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168525
+    },
+    {
+      "id": "con_s047",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168526
+    },
+    {
+      "id": "con_s048",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168527
+    },
+    {
+      "id": "con_s049",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168528
+    },
+    {
+      "id": "con_s050",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168550
+    },
+    {
+      "id": "con_s051",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168551
+    },
+    {
+      "id": "con_s052",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168552
+    },
+    {
+      "id": "con_s053",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168553
+    },
+    {
+      "id": "con_s054",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168554
+    },
+    {
+      "id": "con_s055",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168555
+    },
+    {
+      "id": "con_s056",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168556
+    },
+    {
+      "id": "con_s057",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168557
+    },
+    {
+      "id": "con_s058",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168558
+    },
+    {
+      "id": "con_s059",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168559
+    },
+    {
+      "id": "con_s060",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168581
+    },
+    {
+      "id": "con_s061",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168582
+    },
+    {
+      "id": "con_s062",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168583
+    },
+    {
+      "id": "con_s063",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168584
+    },
+    {
+      "id": "con_s064",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168585
+    },
+    {
+      "id": "con_s065",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168586
+    },
+    {
+      "id": "con_s066",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168587
+    },
+    {
+      "id": "con_s067",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168588
+    },
+    {
+      "id": "con_s068",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168589
+    },
+    {
+      "id": "con_s069",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168590
+    },
+    {
+      "id": "con_s070",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168612
+    },
+    {
+      "id": "con_s071",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168613
+    },
+    {
+      "id": "con_s072",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168614
+    },
+    {
+      "id": "con_s073",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168615
+    },
+    {
+      "id": "con_s074",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168616
+    },
+    {
+      "id": "con_s075",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168617
+    },
+    {
+      "id": "con_s076",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168618
+    },
+    {
+      "id": "con_s077",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168619
+    },
+    {
+      "id": "con_s078",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168620
+    },
+    {
+      "id": "con_s079",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168621
+    },
+    {
+      "id": "con_s080",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168643
+    },
+    {
+      "id": "con_s081",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168644
+    },
+    {
+      "id": "con_s082",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168645
+    },
+    {
+      "id": "con_s083",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168646
+    },
+    {
+      "id": "con_s084",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168647
+    },
+    {
+      "id": "con_s085",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168648
+    },
+    {
+      "id": "con_s086",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168649
+    },
+    {
+      "id": "con_s087",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168650
+    },
+    {
+      "id": "con_s088",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168651
+    },
+    {
+      "id": "con_s089",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168652
+    },
+    {
+      "id": "con_s090",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168674
+    },
+    {
+      "id": "con_s091",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168675
+    },
+    {
+      "id": "con_s092",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168676
+    },
+    {
+      "id": "con_s093",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168677
+    },
+    {
+      "id": "con_s094",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168678
+    },
+    {
+      "id": "con_s095",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168679
+    },
+    {
+      "id": "con_s096",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168680
+    },
+    {
+      "id": "con_s097",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168681
+    },
+    {
+      "id": "con_s098",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168682
+    },
+    {
+      "id": "con_s099",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899168683
+    },
+    {
+      "id": "con_s100",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169356
+    },
+    {
+      "id": "con_s101",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169357
+    },
+    {
+      "id": "con_s102",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169358
+    },
+    {
+      "id": "con_s103",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169359
+    },
+    {
+      "id": "con_s104",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169360
+    },
+    {
+      "id": "con_s105",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169361
+    },
+    {
+      "id": "con_s106",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169362
+    },
+    {
+      "id": "con_s107",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169363
+    },
+    {
+      "id": "con_s108",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169364
+    },
+    {
+      "id": "con_s109",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169365
+    },
+    {
+      "id": "con_s110",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169387
+    },
+    {
+      "id": "con_s111",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169388
+    },
+    {
+      "id": "con_s112",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169389
+    },
+    {
+      "id": "con_s113",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169390
+    },
+    {
+      "id": "con_s114",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169391
+    },
+    {
+      "id": "con_s115",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169392
+    },
+    {
+      "id": "con_s116",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169393
+    },
+    {
+      "id": "con_s117",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169394
+    },
+    {
+      "id": "con_s118",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169395
+    },
+    {
+      "id": "con_s119",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169396
+    },
+    {
+      "id": "con_s120",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169418
+    },
+    {
+      "id": "con_s121",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169419
+    },
+    {
+      "id": "con_s122",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169420
+    },
+    {
+      "id": "con_s123",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169421
+    },
+    {
+      "id": "con_s124",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169422
+    },
+    {
+      "id": "con_s125",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169423
+    },
+    {
+      "id": "con_s126",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169424
+    },
+    {
+      "id": "con_s127",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169425
+    },
+    {
+      "id": "con_s128",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169426
+    },
+    {
+      "id": "con_s129",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169427
+    },
+    {
+      "id": "con_s130",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169449
+    },
+    {
+      "id": "con_s131",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169450
+    },
+    {
+      "id": "con_s132",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169451
+    },
+    {
+      "id": "con_s133",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169452
+    },
+    {
+      "id": "con_s134",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169453
+    },
+    {
+      "id": "con_s135",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169454
+    },
+    {
+      "id": "con_s136",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169455
+    },
+    {
+      "id": "con_s137",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169456
+    },
+    {
+      "id": "con_s138",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169457
+    },
+    {
+      "id": "con_s139",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169458
+    },
+    {
+      "id": "con_s140",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169480
+    },
+    {
+      "id": "con_s141",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169481
+    },
+    {
+      "id": "con_s142",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169482
+    },
+    {
+      "id": "con_s143",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169483
+    },
+    {
+      "id": "con_s144",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169484
+    },
+    {
+      "id": "con_s145",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169485
+    },
+    {
+      "id": "con_s146",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169486
+    },
+    {
+      "id": "con_s147",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169487
+    },
+    {
+      "id": "con_s148",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169488
+    },
+    {
+      "id": "con_s149",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169489
+    },
+    {
+      "id": "con_s150",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169511
+    },
+    {
+      "id": "con_s151",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169512
+    },
+    {
+      "id": "con_s152",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169513
+    },
+    {
+      "id": "con_s153",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169514
+    },
+    {
+      "id": "con_s154",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169515
+    },
+    {
+      "id": "con_s155",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 899169516
+    },
+    {
+      "id": "con_pip01",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2103405546
+    },
+    {
+      "id": "con_pip02",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2103405547
+    },
+    {
+      "id": "con_pip03",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2103405548
+    },
+    {
+      "id": "int_a01",
+      "name": "法术研习·1 环(甲)",
+      "description": "点亮后选择 1 个法术体系，获得该体系对应的 1 环法术。",
+      "effect": "spell_slot_1",
+      "isActiveSkill": true
+    },
+    {
+      "id": "int_p01",
+      "name": "法杖客",
+      "description": "法术伤害 +1。",
+      "effect": "int_p01_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "spell_damage": 1
+      }
+    },
+    {
+      "id": "int_a02",
+      "name": "法术研习·1 环(乙)",
+      "description": "点亮后选择 1 个法术体系，获得该体系对应的 1 环法术。",
+      "effect": "spell_slot_1",
+      "isActiveSkill": true
+    },
+    {
+      "id": "int_p02",
+      "name": "法球师",
+      "description": "法术伤害 +1。",
+      "effect": "int_p02_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "spell_damage": 1
+      }
+    },
+    {
+      "id": "int_ks01",
+      "name": "绝对专注",
+      "description": "法术 DC +4。",
+      "effect": "absolute_focus",
+      "keystoneCost": "法术研习锁定同一体系。",
+      "costBonuses": {
+        "spell_hit": 1
+      }
+    },
+    {
+      "id": "int_a03",
+      "name": "法术研习·2 环(甲)",
+      "description": "点亮后选择 1 个法术体系，获得该体系对应的 2 环法术。",
+      "effect": "spell_slot_2",
+      "isActiveSkill": true
+    },
+    {
+      "id": "int_p03",
+      "name": "魔杖手",
+      "description": "法术伤害 +1。",
+      "effect": "int_p03_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "spell_damage": 1
+      }
+    },
+    {
+      "id": "int_a04",
+      "name": "法术研习·2 环(乙)",
+      "description": "点亮后选择 1 个法术体系，获得该体系对应的 2 环法术。",
+      "effect": "spell_slot_2",
+      "isActiveSkill": true
+    },
+    {
+      "id": "int_p04",
+      "name": "蓄能",
+      "description": "最大法力 +5。",
+      "effect": "int_p04_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "mana_max": 5
+      }
+    },
+    {
+      "id": "int_ks02",
+      "name": "血祭施法",
+      "description": "法术改用 HP 施放，无视法力。",
+      "effect": "blood_magic",
+      "keystoneCost": "法力上限归 0。",
+      "costBonuses": {
+        "mana_max": -99
+      }
+    },
+    {
+      "id": "int_a05",
+      "name": "法术研习·3 环(甲)",
+      "description": "点亮后选择 1 个法术体系，获得该体系对应的 3 环法术。",
+      "effect": "spell_slot_3",
+      "isActiveSkill": true
+    },
+    {
+      "id": "int_p05",
+      "name": "通流",
+      "description": "法力回复 +1。",
+      "effect": "int_p05_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "mana_regen": 1
+      }
+    },
+    {
+      "id": "int_ks03",
+      "name": "玄一之心",
+      "description": "免疫一切持续伤害与减益。",
+      "effect": "chaos_inoculation",
+      "keystoneCost": "HP 上限 -50%。",
+      "costBonuses": {
+        "max_hp": -20
+      }
+    },
+    {
+      "id": "int_g01",
+      "name": "ᚨᚾᛋ",
+      "subtitle": "Ans·启示",
+      "description": "Ans·启示：点亮即获得 1 个 4 环法术。",
+      "effect": "spell_slot_4",
+      "isActiveSkill": false,
+      "figureName": "ᚨᚾᛋ巨型命座"
+    },
+    {
+      "id": "int_a06",
+      "name": "法术研习·3 环(乙)",
+      "description": "点亮后选择 1 个法术体系，获得该体系对应的 3 环法术。",
+      "effect": "spell_slot_3",
+      "isActiveSkill": true
+    },
+    {
+      "id": "int_p06",
+      "name": "锐识",
+      "description": "法术命中 +1。",
+      "effect": "int_p06_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "spell_hit": 1
+      }
+    },
+    {
+      "id": "int_p07",
+      "name": "灌注",
+      "description": "法术伤害 +1。",
+      "effect": "int_p07_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "spell_damage": 1
+      }
+    },
+    {
+      "id": "int_p08",
+      "name": "凝神",
+      "description": "法术伤害 +1。",
+      "effect": "int_p08_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "spell_damage": 1
+      }
+    },
+    {
+      "id": "int_s001",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367039
+    },
+    {
+      "id": "int_s002",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367040
+    },
+    {
+      "id": "int_s003",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367041
+    },
+    {
+      "id": "int_s004",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367042
+    },
+    {
+      "id": "trans_iw01",
+      "name": "过渡星纹",
+      "description": "INT 与 WIS 之间的横跨桥点。",
+      "contentMode": "random_attribute",
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "int_s006",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367044
+    },
+    {
+      "id": "int_s007",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367045
+    },
+    {
+      "id": "int_s008",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367046
+    },
+    {
+      "id": "int_s009",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367047
+    },
+    {
+      "id": "int_s010",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367069
+    },
+    {
+      "id": "int_s011",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367070
+    },
+    {
+      "id": "int_s012",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367071
+    },
+    {
+      "id": "int_s013",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367072
+    },
+    {
+      "id": "int_s014",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367073
+    },
+    {
+      "id": "int_s015",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367074
+    },
+    {
+      "id": "int_s016",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367075
+    },
+    {
+      "id": "int_s017",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367076
+    },
+    {
+      "id": "int_s018",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367077
+    },
+    {
+      "id": "int_s019",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367078
+    },
+    {
+      "id": "int_s020",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367100
+    },
+    {
+      "id": "int_s021",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367101
+    },
+    {
+      "id": "int_s022",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367102
+    },
+    {
+      "id": "int_s023",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367103
+    },
+    {
+      "id": "int_s024",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367104
+    },
+    {
+      "id": "int_s025",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367105
+    },
+    {
+      "id": "int_s026",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367106
+    },
+    {
+      "id": "int_s027",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367107
+    },
+    {
+      "id": "int_s028",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367108
+    },
+    {
+      "id": "int_s029",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367109
+    },
+    {
+      "id": "int_s030",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367131
+    },
+    {
+      "id": "int_s031",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367132
+    },
+    {
+      "id": "int_s032",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367133
+    },
+    {
+      "id": "int_s033",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367134
+    },
+    {
+      "id": "int_s034",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367135
+    },
+    {
+      "id": "int_s035",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367136
+    },
+    {
+      "id": "int_s036",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367137
+    },
+    {
+      "id": "int_s037",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367138
+    },
+    {
+      "id": "int_s038",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367139
+    },
+    {
+      "id": "int_s039",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367140
+    },
+    {
+      "id": "int_s040",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367162
+    },
+    {
+      "id": "int_s041",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367163
+    },
+    {
+      "id": "int_s042",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367164
+    },
+    {
+      "id": "int_s043",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367165
+    },
+    {
+      "id": "int_s044",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367166
+    },
+    {
+      "id": "int_s045",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367167
+    },
+    {
+      "id": "int_s046",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367168
+    },
+    {
+      "id": "int_s047",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367169
+    },
+    {
+      "id": "int_s048",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367170
+    },
+    {
+      "id": "int_s049",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367171
+    },
+    {
+      "id": "int_s050",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367193
+    },
+    {
+      "id": "int_s051",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367194
+    },
+    {
+      "id": "int_s052",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367195
+    },
+    {
+      "id": "int_s053",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367196
+    },
+    {
+      "id": "int_s054",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367197
+    },
+    {
+      "id": "int_s055",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367198
+    },
+    {
+      "id": "int_s056",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367199
+    },
+    {
+      "id": "int_s057",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367200
+    },
+    {
+      "id": "int_s058",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367201
+    },
+    {
+      "id": "int_s059",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367202
+    },
+    {
+      "id": "int_s060",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367224
+    },
+    {
+      "id": "int_s061",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367225
+    },
+    {
+      "id": "int_s062",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367226
+    },
+    {
+      "id": "int_s063",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367227
+    },
+    {
+      "id": "int_s064",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367228
+    },
+    {
+      "id": "int_s065",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367229
+    },
+    {
+      "id": "int_s066",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367230
+    },
+    {
+      "id": "int_s067",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367231
+    },
+    {
+      "id": "int_s068",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367232
+    },
+    {
+      "id": "int_s069",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367233
+    },
+    {
+      "id": "int_s070",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367255
+    },
+    {
+      "id": "int_s071",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367256
+    },
+    {
+      "id": "int_s072",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367257
+    },
+    {
+      "id": "int_s073",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367258
+    },
+    {
+      "id": "int_s074",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367259
+    },
+    {
+      "id": "int_s075",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367260
+    },
+    {
+      "id": "int_s076",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367261
+    },
+    {
+      "id": "int_s077",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367262
+    },
+    {
+      "id": "int_s078",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367263
+    },
+    {
+      "id": "int_s079",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367264
+    },
+    {
+      "id": "int_s080",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367286
+    },
+    {
+      "id": "int_s081",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367287
+    },
+    {
+      "id": "int_s082",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367288
+    },
+    {
+      "id": "int_s083",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367289
+    },
+    {
+      "id": "int_s084",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367290
+    },
+    {
+      "id": "int_s085",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367291
+    },
+    {
+      "id": "int_s086",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367292
+    },
+    {
+      "id": "int_s087",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367293
+    },
+    {
+      "id": "int_s088",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367294
+    },
+    {
+      "id": "int_s089",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367295
+    },
+    {
+      "id": "int_s090",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367317
+    },
+    {
+      "id": "int_s091",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367318
+    },
+    {
+      "id": "int_s092",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367319
+    },
+    {
+      "id": "int_s093",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367320
+    },
+    {
+      "id": "int_s094",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367321
+    },
+    {
+      "id": "int_s095",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367322
+    },
+    {
+      "id": "int_s096",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367323
+    },
+    {
+      "id": "int_s097",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367324
+    },
+    {
+      "id": "int_s098",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367325
+    },
+    {
+      "id": "int_s099",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367326
+    },
+    {
+      "id": "int_s100",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050367999
+    },
+    {
+      "id": "int_s101",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368000
+    },
+    {
+      "id": "int_s102",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368001
+    },
+    {
+      "id": "int_s103",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368002
+    },
+    {
+      "id": "int_s104",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368003
+    },
+    {
+      "id": "int_s105",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368004
+    },
+    {
+      "id": "int_s106",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368005
+    },
+    {
+      "id": "int_s107",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368006
+    },
+    {
+      "id": "int_s108",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368007
+    },
+    {
+      "id": "int_s109",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368008
+    },
+    {
+      "id": "int_s110",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368030
+    },
+    {
+      "id": "int_s111",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368031
+    },
+    {
+      "id": "int_s112",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368032
+    },
+    {
+      "id": "int_s113",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368033
+    },
+    {
+      "id": "int_s114",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368034
+    },
+    {
+      "id": "int_s115",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368035
+    },
+    {
+      "id": "int_s116",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368036
+    },
+    {
+      "id": "int_s117",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368037
+    },
+    {
+      "id": "int_s118",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368038
+    },
+    {
+      "id": "int_s119",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368039
+    },
+    {
+      "id": "int_s120",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368061
+    },
+    {
+      "id": "int_s121",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368062
+    },
+    {
+      "id": "int_s122",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368063
+    },
+    {
+      "id": "int_s123",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368064
+    },
+    {
+      "id": "int_s124",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368065
+    },
+    {
+      "id": "int_s125",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368066
+    },
+    {
+      "id": "int_s126",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368067
+    },
+    {
+      "id": "int_s127",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368068
+    },
+    {
+      "id": "int_s128",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368069
+    },
+    {
+      "id": "int_s129",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368070
+    },
+    {
+      "id": "int_s130",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368092
+    },
+    {
+      "id": "int_s131",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368093
+    },
+    {
+      "id": "int_s132",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368094
+    },
+    {
+      "id": "int_s133",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368095
+    },
+    {
+      "id": "int_s134",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368096
+    },
+    {
+      "id": "int_s135",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368097
+    },
+    {
+      "id": "int_s136",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368098
+    },
+    {
+      "id": "int_s137",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368099
+    },
+    {
+      "id": "int_s138",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368100
+    },
+    {
+      "id": "int_s139",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368101
+    },
+    {
+      "id": "int_s140",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368123
+    },
+    {
+      "id": "int_s141",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368124
+    },
+    {
+      "id": "int_s142",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368125
+    },
+    {
+      "id": "int_s143",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368126
+    },
+    {
+      "id": "int_s144",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368127
+    },
+    {
+      "id": "int_s145",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368128
+    },
+    {
+      "id": "int_s146",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368129
+    },
+    {
+      "id": "int_s147",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368130
+    },
+    {
+      "id": "int_s148",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368131
+    },
+    {
+      "id": "int_s149",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368132
+    },
+    {
+      "id": "int_s150",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368154
+    },
+    {
+      "id": "int_s151",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368155
+    },
+    {
+      "id": "int_s152",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368156
+    },
+    {
+      "id": "int_s153",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368157
+    },
+    {
+      "id": "int_s154",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368158
+    },
+    {
+      "id": "int_s155",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 2050368159
+    },
+    {
+      "id": "int_pip01",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1283341463
+    },
+    {
+      "id": "int_pip02",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1283341464
+    },
+    {
+      "id": "int_pip03",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1283341465
+    },
+    {
+      "id": "wis_a01",
+      "name": "弱点穿刺",
+      "description": "单体攻击：本次暴击率 +30%，无视目标 50% AC；命中后目标暴击承伤 +15%。",
+      "effect": "weakpoint_pierce",
+      "isActiveSkill": true
+    },
+    {
+      "id": "wis_p01",
+      "name": "短匕客",
+      "description": "暴击率 +5%。",
+      "effect": "wis_p01_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "wis_a02",
+      "name": "影刃涂毒",
+      "description": "下次攻击命中时附加 POISON：每回合 1d4，持续 3 回合。",
+      "effect": "poison_blade",
+      "isActiveSkill": true
+    },
+    {
+      "id": "wis_p02",
+      "name": "剜心",
+      "description": "暴击率 +5%。",
+      "effect": "wis_p02_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "wis_ks01",
+      "name": "刺客本能",
+      "description": "暴击倍率 +0.5x，暴击率 +5%。",
+      "effect": "assassin_instinct",
+      "keystoneCost": "不能装备重甲，不能用盾。",
+      "costBonuses": {
+        "ac": -1
+      }
+    },
+    {
+      "id": "wis_a03",
+      "name": "七窍追命",
+      "description": "单体攻击：武器 120% 伤害，并施加定身 2 回合；感知豁免成功则 1 回合。",
+      "effect": "seven_apertures",
+      "isActiveSkill": true
+    },
+    {
+      "id": "wis_p03",
+      "name": "洞隙",
+      "description": "暴击率 +5%。",
+      "effect": "wis_p03_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "wis_a04",
+      "name": "疾影突袭",
+      "description": "突进到目标邻接格；下次攻击对该目标暴击率 +20%。",
+      "effect": "shadow_lunge",
+      "isActiveSkill": true
+    },
+    {
+      "id": "wis_p04",
+      "name": "凝杀",
+      "description": "暴击率 +5%。",
+      "effect": "wis_p04_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "wis_ks02",
+      "name": "元素失衡",
+      "description": "最近 2 回合内暴击过则所有伤害 +40%。",
+      "effect": "elemental_overload",
+      "keystoneCost": "暴击不再加倍伤害。",
+      "costBonuses": {
+        "critical_rate": -0.05
+      }
+    },
+    {
+      "id": "wis_a05",
+      "name": "影遁",
+      "description": "进入潜行：敌人远程命中 -50%；不受敌人控制区影响，但离开邻接格仍触发借机攻击。",
+      "effect": "shadow_hide",
+      "isActiveSkill": true
+    },
+    {
+      "id": "wis_p05",
+      "name": "灵蕴",
+      "description": "最大法力 +5。",
+      "effect": "wis_p05_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "mana_max": 5
+      }
+    },
+    {
+      "id": "wis_ks03",
+      "name": "痛觉专注",
+      "description": "HP <35% 时所有伤害 +30%、暴击率 +15%。",
+      "effect": "pain_attunement",
+      "keystoneCost": "HP 上限 -25%。",
+      "costBonuses": {
+        "max_hp": -10
+      }
+    },
+    {
+      "id": "wis_g01",
+      "name": "ᛇᚹᚨᛉ",
+      "subtitle": "Eihwaz·绝杀",
+      "description": "Eihwaz·绝杀：当回合内所有攻击必定命中且必定暴击。",
+      "effect": "wis_giant_apex",
+      "isActiveSkill": true,
+      "figureName": "ᛇᚹᚨᛉ巨型命座"
+    },
+    {
+      "id": "wis_a06",
+      "name": "致命标记",
+      "description": "标记 1 敌：对其暴击率 +20%，持续战斗或直到死亡。",
+      "effect": "deadly_mark",
+      "isActiveSkill": true
+    },
+    {
+      "id": "wis_p06",
+      "name": "锋寒",
+      "description": "暴击率 +3%。",
+      "effect": "wis_p06_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.03
+      }
+    },
+    {
+      "id": "wis_p07",
+      "name": "缢绳",
+      "description": "暴击率 +5%。",
+      "effect": "wis_p07_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "wis_p08",
+      "name": "嗜血",
+      "description": "暴击率 +5%。",
+      "effect": "wis_p08_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "critical_rate": 0.05
+      }
+    },
+    {
+      "id": "wis_s001",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727693
+    },
+    {
+      "id": "wis_s002",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727694
+    },
+    {
+      "id": "wis_s003",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727695
+    },
+    {
+      "id": "wis_s004",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727696
+    },
+    {
+      "id": "wis_s005",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727697
+    },
+    {
+      "id": "wis_s006",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727698
+    },
+    {
+      "id": "wis_s007",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727699
+    },
+    {
+      "id": "wis_s008",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727700
+    },
+    {
+      "id": "wis_s009",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727701
+    },
+    {
+      "id": "wis_s010",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727723
+    },
+    {
+      "id": "wis_s011",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727724
+    },
+    {
+      "id": "wis_s012",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727725
+    },
+    {
+      "id": "wis_s013",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727726
+    },
+    {
+      "id": "wis_s014",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727727
+    },
+    {
+      "id": "wis_s015",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727728
+    },
+    {
+      "id": "wis_s016",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727729
+    },
+    {
+      "id": "wis_s017",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727730
+    },
+    {
+      "id": "wis_s018",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727731
+    },
+    {
+      "id": "wis_s019",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727732
+    },
+    {
+      "id": "wis_s020",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727754
+    },
+    {
+      "id": "wis_s021",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727755
+    },
+    {
+      "id": "wis_s022",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727756
+    },
+    {
+      "id": "wis_s023",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727757
+    },
+    {
+      "id": "wis_s024",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727758
+    },
+    {
+      "id": "wis_s025",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727759
+    },
+    {
+      "id": "wis_s026",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727760
+    },
+    {
+      "id": "wis_s027",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727761
+    },
+    {
+      "id": "wis_s028",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727762
+    },
+    {
+      "id": "wis_s029",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727763
+    },
+    {
+      "id": "wis_s030",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727785
+    },
+    {
+      "id": "wis_s031",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727786
+    },
+    {
+      "id": "wis_s032",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727787
+    },
+    {
+      "id": "wis_s033",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727788
+    },
+    {
+      "id": "wis_s034",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727789
+    },
+    {
+      "id": "wis_s035",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727790
+    },
+    {
+      "id": "wis_s036",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727791
+    },
+    {
+      "id": "wis_s037",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727792
+    },
+    {
+      "id": "wis_s038",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727793
+    },
+    {
+      "id": "wis_s039",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727794
+    },
+    {
+      "id": "wis_s040",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727816
+    },
+    {
+      "id": "wis_s041",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727817
+    },
+    {
+      "id": "wis_s042",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727818
+    },
+    {
+      "id": "wis_s043",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727819
+    },
+    {
+      "id": "wis_s044",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727820
+    },
+    {
+      "id": "wis_s045",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727821
+    },
+    {
+      "id": "wis_s046",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727822
+    },
+    {
+      "id": "wis_s047",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727823
+    },
+    {
+      "id": "wis_s048",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727824
+    },
+    {
+      "id": "wis_s049",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727825
+    },
+    {
+      "id": "wis_s050",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727847
+    },
+    {
+      "id": "wis_s051",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727848
+    },
+    {
+      "id": "wis_s052",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727849
+    },
+    {
+      "id": "wis_s053",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727850
+    },
+    {
+      "id": "wis_s054",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727851
+    },
+    {
+      "id": "wis_s055",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727852
+    },
+    {
+      "id": "wis_s056",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727853
+    },
+    {
+      "id": "wis_s057",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727854
+    },
+    {
+      "id": "wis_s058",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727855
+    },
+    {
+      "id": "wis_s059",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727856
+    },
+    {
+      "id": "wis_s060",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727878
+    },
+    {
+      "id": "wis_s061",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727879
+    },
+    {
+      "id": "wis_s062",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727880
+    },
+    {
+      "id": "wis_s063",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727881
+    },
+    {
+      "id": "wis_s064",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727882
+    },
+    {
+      "id": "wis_s065",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727883
+    },
+    {
+      "id": "wis_s066",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727884
+    },
+    {
+      "id": "wis_s067",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727885
+    },
+    {
+      "id": "wis_s068",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727886
+    },
+    {
+      "id": "wis_s069",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727887
+    },
+    {
+      "id": "wis_s070",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727909
+    },
+    {
+      "id": "wis_s071",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727910
+    },
+    {
+      "id": "wis_s072",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727911
+    },
+    {
+      "id": "wis_s073",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727912
+    },
+    {
+      "id": "wis_s074",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727913
+    },
+    {
+      "id": "wis_s075",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727914
+    },
+    {
+      "id": "wis_s076",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727915
+    },
+    {
+      "id": "wis_s077",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727916
+    },
+    {
+      "id": "wis_s078",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727917
+    },
+    {
+      "id": "wis_s079",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727918
+    },
+    {
+      "id": "wis_s080",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727940
+    },
+    {
+      "id": "wis_s081",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727941
+    },
+    {
+      "id": "wis_s082",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727942
+    },
+    {
+      "id": "wis_s083",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727943
+    },
+    {
+      "id": "wis_s084",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727944
+    },
+    {
+      "id": "wis_s085",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727945
+    },
+    {
+      "id": "wis_s086",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727946
+    },
+    {
+      "id": "wis_s087",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727947
+    },
+    {
+      "id": "wis_s088",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727948
+    },
+    {
+      "id": "wis_s089",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727949
+    },
+    {
+      "id": "trans_wc01",
+      "name": "过渡星纹",
+      "description": "WIS 与 CHA 之间的横跨桥点。",
+      "contentMode": "random_attribute",
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "wis_s091",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727972
+    },
+    {
+      "id": "wis_s092",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727973
+    },
+    {
+      "id": "wis_s093",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727974
+    },
+    {
+      "id": "wis_s094",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727975
+    },
+    {
+      "id": "wis_s095",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727976
+    },
+    {
+      "id": "wis_s096",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727977
+    },
+    {
+      "id": "wis_s097",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727978
+    },
+    {
+      "id": "wis_s098",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727979
+    },
+    {
+      "id": "wis_s099",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508727980
+    },
+    {
+      "id": "wis_s100",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728653
+    },
+    {
+      "id": "wis_s101",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728654
+    },
+    {
+      "id": "wis_s102",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728655
+    },
+    {
+      "id": "wis_s103",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728656
+    },
+    {
+      "id": "wis_s104",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728657
+    },
+    {
+      "id": "wis_s105",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728658
+    },
+    {
+      "id": "wis_s106",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728659
+    },
+    {
+      "id": "wis_s107",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728660
+    },
+    {
+      "id": "wis_s108",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728661
+    },
+    {
+      "id": "wis_s109",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728662
+    },
+    {
+      "id": "wis_s110",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728684
+    },
+    {
+      "id": "wis_s111",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728685
+    },
+    {
+      "id": "wis_s112",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728686
+    },
+    {
+      "id": "wis_s113",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728687
+    },
+    {
+      "id": "wis_s114",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728688
+    },
+    {
+      "id": "wis_s115",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728689
+    },
+    {
+      "id": "wis_s116",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728690
+    },
+    {
+      "id": "wis_s117",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728691
+    },
+    {
+      "id": "wis_s118",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728692
+    },
+    {
+      "id": "wis_s119",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728693
+    },
+    {
+      "id": "wis_s120",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728715
+    },
+    {
+      "id": "wis_s121",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728716
+    },
+    {
+      "id": "wis_s122",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728717
+    },
+    {
+      "id": "wis_s123",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728718
+    },
+    {
+      "id": "wis_s124",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728719
+    },
+    {
+      "id": "wis_s125",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728720
+    },
+    {
+      "id": "wis_s126",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728721
+    },
+    {
+      "id": "wis_s127",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728722
+    },
+    {
+      "id": "wis_s128",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728723
+    },
+    {
+      "id": "wis_s129",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728724
+    },
+    {
+      "id": "wis_s130",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728746
+    },
+    {
+      "id": "wis_s131",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728747
+    },
+    {
+      "id": "wis_s132",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728748
+    },
+    {
+      "id": "wis_s133",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728749
+    },
+    {
+      "id": "wis_s134",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728750
+    },
+    {
+      "id": "wis_s135",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728751
+    },
+    {
+      "id": "wis_s136",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728752
+    },
+    {
+      "id": "wis_s137",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728753
+    },
+    {
+      "id": "wis_s138",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728754
+    },
+    {
+      "id": "wis_s139",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728755
+    },
+    {
+      "id": "wis_s140",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728777
+    },
+    {
+      "id": "wis_s141",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728778
+    },
+    {
+      "id": "wis_s142",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728779
+    },
+    {
+      "id": "wis_s143",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728780
+    },
+    {
+      "id": "wis_s144",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728781
+    },
+    {
+      "id": "wis_s145",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728782
+    },
+    {
+      "id": "wis_s146",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728783
+    },
+    {
+      "id": "wis_s147",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728784
+    },
+    {
+      "id": "wis_s148",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728785
+    },
+    {
+      "id": "wis_s149",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728786
+    },
+    {
+      "id": "wis_s150",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728808
+    },
+    {
+      "id": "wis_s151",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728809
+    },
+    {
+      "id": "wis_s152",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728810
+    },
+    {
+      "id": "wis_s153",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728811
+    },
+    {
+      "id": "wis_s154",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728812
+    },
+    {
+      "id": "wis_s155",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 508728813
+    },
+    {
+      "id": "wis_pip01",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 737161993
+    },
+    {
+      "id": "wis_pip02",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 737161994
+    },
+    {
+      "id": "wis_pip03",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 737161995
+    },
+    {
+      "id": "cha_a01",
+      "name": "战术调度",
+      "description": "指定 1 名友军：其下次行动获得额外 4 AP，可超出 AP 上限。",
+      "effect": "tactical_reposition",
+      "isActiveSkill": true
+    },
+    {
+      "id": "cha_p01",
+      "name": "号令",
+      "description": "指挥光环强化：自身指挥光环额外 +1 攻击与 +1 AC。",
+      "effect": "cha_p01_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ally_bonus": 1
+      }
+    },
+    {
+      "id": "cha_a02",
+      "name": "集结号令",
+      "description": "所有友军下回合命中 +10%、伤害 +10%，持续 1 回合。",
+      "effect": "gathering_order",
+      "isActiveSkill": true
+    },
+    {
+      "id": "cha_p02",
+      "name": "旌旗",
+      "description": "指挥光环强化：自身指挥光环额外 +1 攻击与 +1 AC。",
+      "effect": "cha_p02_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ally_bonus": 1
+      }
+    },
+    {
+      "id": "cha_ks01",
+      "name": "君临天下",
+      "description": "范围内友军全豁免 +2、不会恐慌。",
+      "effect": "royal_presence",
+      "keystoneCost": "自身 HP -20%。",
+      "costBonuses": {
+        "max_hp": -10
+      }
+    },
+    {
+      "id": "cha_a03",
+      "name": "威压",
+      "description": "半径 3 敌人命中 -10%，持续 3 回合；意志豁免成功则 2 回合。",
+      "effect": "command_intimidate",
+      "isActiveSkill": true
+    },
+    {
+      "id": "cha_p03",
+      "name": "威仪",
+      "description": "指挥光环强化：自身指挥光环额外 +1 攻击与 +1 AC。",
+      "effect": "cha_p03_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ally_bonus": 1
+      }
+    },
+    {
+      "id": "cha_a04",
+      "name": "英雄号召",
+      "description": "插下可摧毁战旗；半径 2 内友军命中 +10%、AC +1，持续 3 回合。",
+      "effect": "battle_banner",
+      "isActiveSkill": true
+    },
+    {
+      "id": "cha_p04",
+      "name": "慑势",
+      "description": "指挥光环强化：自身指挥光环额外 +1 攻击与 +1 AC。",
+      "effect": "cha_p04_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ally_bonus": 1
+      }
+    },
+    {
+      "id": "cha_ks02",
+      "name": "不可知论",
+      "description": "免疫心灵/恐惧效果，指挥光环范围翻倍。",
+      "effect": "agnostic_command",
+      "keystoneCost": "无法获得增益类 Buff。",
+      "costBonuses": {
+        "ally_bonus": -1
+      }
+    },
+    {
+      "id": "cha_a05",
+      "name": "鼓舞士气",
+      "description": "半径 2 内友军命中 +10%，持续 2 回合。",
+      "effect": "morale_boost",
+      "isActiveSkill": true
+    },
+    {
+      "id": "cha_p05",
+      "name": "财路",
+      "description": "先攻 +1。",
+      "effect": "cha_p05_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "initiative": 1
+      }
+    },
+    {
+      "id": "cha_ks03",
+      "name": "殉道誓约",
+      "description": "半径 3 友军伤害 50% 转移到你身上。",
+      "effect": "martyr_oath",
+      "keystoneCost": "转移伤害不可被减免；倒下则失效。",
+      "costBonuses": {
+        "ac": -2
+      }
+    },
+    {
+      "id": "cha_g01",
+      "name": "ᛋᛁᚷᚱ",
+      "subtitle": "Sigr·凯旋",
+      "description": "Sigr·凯旋：解除全场友军减益，并令窗口内友军总攻。",
+      "effect": "cha_giant_apex",
+      "isActiveSkill": true,
+      "figureName": "ᛋᛁᚷᚱ巨型命座"
+    },
+    {
+      "id": "cha_a06",
+      "name": "战阵激励",
+      "description": "半径 2 内友军获得等于最大 HP 10% 的临时 HP，持续 2 回合。",
+      "effect": "warband_inspiration",
+      "isActiveSkill": true
+    },
+    {
+      "id": "cha_p06",
+      "name": "鼓噪",
+      "description": "先攻 +2。",
+      "effect": "cha_p06_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "initiative": 2
+      }
+    },
+    {
+      "id": "cha_p07",
+      "name": "临阵",
+      "description": "最大 HP +5。",
+      "effect": "cha_p07_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "max_hp": 5
+      }
+    },
+    {
+      "id": "cha_p08",
+      "name": "锋芒",
+      "description": "指挥光环强化：自身指挥光环额外 +1 攻击与 +1 AC。",
+      "effect": "cha_p08_passive",
+      "isActiveSkill": false,
+      "statBonuses": {
+        "ally_bonus": 1
+      }
+    },
+    {
+      "id": "cha_s001",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914610
+    },
+    {
+      "id": "cha_s002",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914611
+    },
+    {
+      "id": "cha_s003",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914612
+    },
+    {
+      "id": "cha_s004",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914613
+    },
+    {
+      "id": "cha_s005",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914614
+    },
+    {
+      "id": "cha_s006",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914615
+    },
+    {
+      "id": "cha_s007",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914616
+    },
+    {
+      "id": "cha_s008",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914617
+    },
+    {
+      "id": "cha_s009",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914618
+    },
+    {
+      "id": "cha_s010",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914640
+    },
+    {
+      "id": "cha_s011",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914641
+    },
+    {
+      "id": "cha_s012",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914642
+    },
+    {
+      "id": "cha_s013",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914643
+    },
+    {
+      "id": "cha_s014",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914644
+    },
+    {
+      "id": "cha_s015",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914645
+    },
+    {
+      "id": "trans_cs01",
+      "name": "过渡星纹",
+      "description": "CHA 与 STR 之间的横跨桥点。",
+      "contentMode": "random_attribute",
+      "statBonuses": {
+        "all_save": 1
+      }
+    },
+    {
+      "id": "cha_s017",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914647
+    },
+    {
+      "id": "cha_s018",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914648
+    },
+    {
+      "id": "cha_s019",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914649
+    },
+    {
+      "id": "cha_s020",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914671
+    },
+    {
+      "id": "cha_s021",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914672
+    },
+    {
+      "id": "cha_s022",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914673
+    },
+    {
+      "id": "cha_s023",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914674
+    },
+    {
+      "id": "cha_s024",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914675
+    },
+    {
+      "id": "cha_s025",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914676
+    },
+    {
+      "id": "cha_s026",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914677
+    },
+    {
+      "id": "cha_s027",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914678
+    },
+    {
+      "id": "cha_s028",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914679
+    },
+    {
+      "id": "cha_s029",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914680
+    },
+    {
+      "id": "cha_s030",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914702
+    },
+    {
+      "id": "cha_s031",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914703
+    },
+    {
+      "id": "cha_s032",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914704
+    },
+    {
+      "id": "cha_s033",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914705
+    },
+    {
+      "id": "cha_s034",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914706
+    },
+    {
+      "id": "cha_s035",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914707
+    },
+    {
+      "id": "cha_s036",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914708
+    },
+    {
+      "id": "cha_s037",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914709
+    },
+    {
+      "id": "cha_s038",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914710
+    },
+    {
+      "id": "cha_s039",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914711
+    },
+    {
+      "id": "cha_s040",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914733
+    },
+    {
+      "id": "cha_s041",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914734
+    },
+    {
+      "id": "cha_s042",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914735
+    },
+    {
+      "id": "cha_s043",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914736
+    },
+    {
+      "id": "cha_s044",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914737
+    },
+    {
+      "id": "cha_s045",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914738
+    },
+    {
+      "id": "cha_s046",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914739
+    },
+    {
+      "id": "cha_s047",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914740
+    },
+    {
+      "id": "cha_s048",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914741
+    },
+    {
+      "id": "cha_s049",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914742
+    },
+    {
+      "id": "cha_s050",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914764
+    },
+    {
+      "id": "cha_s051",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914765
+    },
+    {
+      "id": "cha_s052",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914766
+    },
+    {
+      "id": "cha_s053",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914767
+    },
+    {
+      "id": "cha_s054",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914768
+    },
+    {
+      "id": "cha_s055",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914769
+    },
+    {
+      "id": "cha_s056",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914770
+    },
+    {
+      "id": "cha_s057",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914771
+    },
+    {
+      "id": "cha_s058",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914772
+    },
+    {
+      "id": "cha_s059",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914773
+    },
+    {
+      "id": "cha_s060",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914795
+    },
+    {
+      "id": "cha_s061",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914796
+    },
+    {
+      "id": "cha_s062",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914797
+    },
+    {
+      "id": "cha_s063",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914798
+    },
+    {
+      "id": "cha_s064",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914799
+    },
+    {
+      "id": "cha_s065",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914800
+    },
+    {
+      "id": "cha_s066",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914801
+    },
+    {
+      "id": "cha_s067",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914802
+    },
+    {
+      "id": "cha_s068",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914803
+    },
+    {
+      "id": "cha_s069",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914804
+    },
+    {
+      "id": "cha_s070",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914826
+    },
+    {
+      "id": "cha_s071",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914827
+    },
+    {
+      "id": "cha_s072",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914828
+    },
+    {
+      "id": "cha_s073",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914829
+    },
+    {
+      "id": "cha_s074",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914830
+    },
+    {
+      "id": "cha_s075",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914831
+    },
+    {
+      "id": "cha_s076",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914832
+    },
+    {
+      "id": "cha_s077",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914833
+    },
+    {
+      "id": "cha_s078",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914834
+    },
+    {
+      "id": "cha_s079",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914835
+    },
+    {
+      "id": "cha_s080",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914857
+    },
+    {
+      "id": "cha_s081",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914858
+    },
+    {
+      "id": "cha_s082",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914859
+    },
+    {
+      "id": "cha_s083",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914860
+    },
+    {
+      "id": "cha_s084",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914861
+    },
+    {
+      "id": "cha_s085",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914862
+    },
+    {
+      "id": "cha_s086",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914863
+    },
+    {
+      "id": "cha_s087",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914864
+    },
+    {
+      "id": "cha_s088",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914865
+    },
+    {
+      "id": "cha_s089",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914866
+    },
+    {
+      "id": "cha_s090",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914888
+    },
+    {
+      "id": "cha_s091",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914889
+    },
+    {
+      "id": "cha_s092",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914890
+    },
+    {
+      "id": "cha_s093",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914891
+    },
+    {
+      "id": "cha_s094",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914892
+    },
+    {
+      "id": "cha_s095",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914893
+    },
+    {
+      "id": "cha_s096",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914894
+    },
+    {
+      "id": "cha_s097",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914895
+    },
+    {
+      "id": "cha_s098",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914896
+    },
+    {
+      "id": "cha_s099",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756914897
+    },
+    {
+      "id": "cha_s100",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915570
+    },
+    {
+      "id": "cha_s101",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915571
+    },
+    {
+      "id": "cha_s102",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915572
+    },
+    {
+      "id": "cha_s103",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915573
+    },
+    {
+      "id": "cha_s104",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915574
+    },
+    {
+      "id": "cha_s105",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915575
+    },
+    {
+      "id": "cha_s106",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915576
+    },
+    {
+      "id": "cha_s107",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915577
+    },
+    {
+      "id": "cha_s108",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915578
+    },
+    {
+      "id": "cha_s109",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915579
+    },
+    {
+      "id": "cha_s110",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915601
+    },
+    {
+      "id": "cha_s111",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915602
+    },
+    {
+      "id": "cha_s112",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915603
+    },
+    {
+      "id": "cha_s113",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915604
+    },
+    {
+      "id": "cha_s114",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915605
+    },
+    {
+      "id": "cha_s115",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915606
+    },
+    {
+      "id": "cha_s116",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915607
+    },
+    {
+      "id": "cha_s117",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915608
+    },
+    {
+      "id": "cha_s118",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915609
+    },
+    {
+      "id": "cha_s119",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915610
+    },
+    {
+      "id": "cha_s120",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915632
+    },
+    {
+      "id": "cha_s121",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915633
+    },
+    {
+      "id": "cha_s122",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915634
+    },
+    {
+      "id": "cha_s123",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915635
+    },
+    {
+      "id": "cha_s124",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915636
+    },
+    {
+      "id": "cha_s125",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915637
+    },
+    {
+      "id": "cha_s126",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915638
+    },
+    {
+      "id": "cha_s127",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915639
+    },
+    {
+      "id": "cha_s128",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915640
+    },
+    {
+      "id": "cha_s129",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915641
+    },
+    {
+      "id": "cha_s130",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915663
+    },
+    {
+      "id": "cha_s131",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915664
+    },
+    {
+      "id": "cha_s132",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915665
+    },
+    {
+      "id": "cha_s133",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915666
+    },
+    {
+      "id": "cha_s134",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915667
+    },
+    {
+      "id": "cha_s135",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915668
+    },
+    {
+      "id": "cha_s136",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915669
+    },
+    {
+      "id": "cha_s137",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915670
+    },
+    {
+      "id": "cha_s138",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915671
+    },
+    {
+      "id": "cha_s139",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915672
+    },
+    {
+      "id": "cha_s140",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915694
+    },
+    {
+      "id": "cha_s141",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915695
+    },
+    {
+      "id": "cha_s142",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915696
+    },
+    {
+      "id": "cha_s143",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915697
+    },
+    {
+      "id": "cha_s144",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915698
+    },
+    {
+      "id": "cha_s145",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915699
+    },
+    {
+      "id": "cha_s146",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915700
+    },
+    {
+      "id": "cha_s147",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915701
+    },
+    {
+      "id": "cha_s148",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915702
+    },
+    {
+      "id": "cha_s149",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915703
+    },
+    {
+      "id": "cha_s150",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915725
+    },
+    {
+      "id": "cha_s151",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915726
+    },
+    {
+      "id": "cha_s152",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915727
+    },
+    {
+      "id": "cha_s153",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915728
+    },
+    {
+      "id": "cha_s154",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915729
+    },
+    {
+      "id": "cha_s155",
+      "name": "属性星纹",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 756915730
+    },
+    {
+      "id": "cha_pip01",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1988505476
+    },
+    {
+      "id": "cha_pip02",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1988505477
+    },
+    {
+      "id": "cha_pip03",
+      "name": "微光星点",
+      "description": "按角色种子从本扇区风格池生成纯属性。",
+      "contentMode": "random_attribute",
+      "seed": 1988505478
+    }
+  ]
+}

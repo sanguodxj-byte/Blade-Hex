@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://playability_check_scene"]
+
+[ext_resource type="Script" path="res://BladeHexFrontend/src/View/Debug/PlayabilityCheck.cs" id="1_check"]
+
+[node name="PlayabilityCheckScene" type="Node"]
+script = ExtResource("1_check")

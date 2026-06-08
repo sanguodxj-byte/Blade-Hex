@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
@@ -51,6 +51,12 @@ public partial class BattleContext : Resource
     public int PoiType = -1;
 
     /// <summary>
+    /// 大地图委托目标战斗关联的任务 ID。非委托战斗为空。
+    /// 战斗场景不直接修改任务状态，由大地图恢复后根据该字段回写 QuestManager。
+    /// </summary>
+    public string QuestId = "";
+
+    /// <summary>
     /// 敌方相对玩家的接近方向(以战场中心为原点的六边形 axial 方向向量)。
     /// null = 未知/不适用,DeploymentZone 退化到 q 轴左右切。
     /// 由 EncounterSpawner 在创建战斗时计算:POI 战取 `POI.CenterHex - PlayerCoord`,野外暂未实现保持 null。
@@ -100,6 +106,13 @@ public partial class BattleContext : Resource
     public bool IsAmbush = false;
 
     // ========================================
+    // 战争闭环 MVP 战事中途加入扩展
+    // ========================================
+
+    public JoinOpportunity? WarJoinOppRef { get; set; }
+    public bool PlayerJoinedAsAttacker { get; set; }
+
+    // ========================================
     // 工厂方法
     // ========================================
 
@@ -121,10 +134,10 @@ public partial class BattleContext : Resource
 
         // 生成部署
         if (attacker != null)
-            context.AttackerDeployment = attacker.GetDeployment(true);
+            context.AttackerDeployment = EntityCombatBridge.GetDeployment(attacker, true);
 
         if (defender != null)
-            context.DefenderDeployment = defender.GetDeployment(false);
+            context.DefenderDeployment = EntityCombatBridge.GetDeployment(defender, false);
         else if (poi != null)
             context.DefenderDeployment = poi.GenerateDefenseDeployment();
 

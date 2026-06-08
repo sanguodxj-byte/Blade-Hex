@@ -1,0 +1,74 @@
+{
+  "dialogue_id": "raiding_party",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "“（掠夺者头目环视了一圈，露出一口獠牙，发出粗重的鼻息）\n‘哼，来了一群难缠的硬骨头。不过在我们的字典里，没有逃跑这个词！要么留下财富，要么就把骨头踩碎！’”"
+        },
+        {
+          "condition": "player_race == \"halforc\" || player_race == \"orc\"",
+          "text": "“（看到你们领头者的半兽人面孔，掠夺者头目捶胸咆哮，表达对血脉的敬意）\n‘噢！也是个在泥潭里摸爬滚打的兄弟！你的身上有鲜血的腥味，我们不屑于掠夺同类。今天放你过去，但下次遇到，我们要在战场上用战斧决一死战！’”"
+        },
+        {
+          "text": "“（红眼的掠夺者们挥舞着沉重的巨斧和狼牙棒，嘴里发出怪异的嘶吼，狂暴的杀气铺面而来）\n‘弱小的血肉！留下你们所有的牲口和财物，或者化为我们铁蹄下的烂泥！杀！杀！杀！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "那就让你们的战斧和我们的利刃决一胜负！(战斗)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "condition": "player_gold >= bribe_cost * 2",
+          "text": "这是贡品。(支付 {bribe_cost} * 2 金币的巨额财富)",
+          "next": "bribe_success",
+          "action": "lose_gold;add_relation",
+          "action_param": "{bribe_cost} * 2;5"
+        },
+        {
+          "condition": "player_race == \"halforc\" || player_race == \"orc\"",
+          "text": "（以怒吼回应，捶胸致意）",
+          "next": "orc_salute"
+        },
+        {
+          "text": "避开锋芒，撤退。",
+          "next": "end"
+        }
+      ]
+    },
+    "bribe_success": {
+      "node_id": "bribe_success",
+      "texts": [
+        {
+          "text": "“（掠夺者头目夺过沉甸甸的黄金，不屑地大笑）\n‘哈哈！胆小如鼠的家伙！拿着你的命滚吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "走。",
+          "next": "end"
+        }
+      ]
+    },
+    "orc_salute": {
+      "node_id": "orc_salute",
+      "texts": [
+        {
+          "text": "“（掠夺者头目同样捶胸狂吼，猩红的眼睛里满是好战的狂热）\n‘很好！为了血与火！滚吧，我的兄弟！去把那些软弱者的城镇烧个精光！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "后会有期。(离开)",
+          "next": "end",
+          "action": "add_relation",
+          "action_param": "15"
+        }
+      ]
+    }
+  }
+}

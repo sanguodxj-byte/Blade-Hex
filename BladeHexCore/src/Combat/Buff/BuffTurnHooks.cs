@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BladeHex.Combat;
 using BladeHex.Data;
 
 namespace BladeHex.Combat.Buff;
@@ -32,7 +33,7 @@ public static class BuffTurnHooks
                 ticked.Add(buff.Id);
             }
 
-            if (ShouldRemoveBySave(buff))
+            if (ShouldRemoveBySave(target, buff))
             {
                 toRemove.Add(buff);
                 continue;
@@ -57,11 +58,18 @@ public static class BuffTurnHooks
         };
     }
 
-    private static bool ShouldRemoveBySave(BuffInstance buff)
+    private static bool ShouldRemoveBySave(UnitData target, BuffInstance buff)
     {
         if (string.IsNullOrEmpty(buff.SaveToRemove)) return false;
-        int roll = RPGRuleEngine.RollDice(1, 20);
-        return roll >= buff.SaveDc;
+        int abilityScore = buff.SaveToRemove switch
+        {
+            "fortitude" => CombatStats.GetEffectiveCon(target),
+            "reflex" => CombatStats.GetEffectiveDex(target),
+            "will" => CombatStats.GetEffectiveWis(target),
+            _ => 10,
+        };
+        var result = RPGRuleEngine.MakeSave(abilityScore, CombatStats.GetSaveBonus(target), false, buff.SaveDc);
+        return result.ContainsKey("success") && result["success"].AsBool();
     }
 
     private static bool ShouldExpireByDuration(BuffInstance buff)

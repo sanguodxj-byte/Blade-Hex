@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Combat;
 
 namespace BladeHex.Combat.AI;
 
@@ -58,11 +59,20 @@ public class AITargetEvaluator
                 reachBonus = 2.0f;
             }
 
+            // v0.8 E5-A: 野蛮直觉-怒涛战神 → 偏好HP最低目标
+            float savageBonus = 0f;
+            if (CareerSkillResolver.HasSavageInstinct(actor))
+            {
+                float targetHpPct = (float)pu.CurrentHp / Math.Max(pu.Model.GetMaxHp(), 1);
+                // HP越低分数越高：HP 10% 时 +10分, HP 100% 时 +0分
+                savageBonus = (1.0f - targetHpPct) * 10f;
+            }
+
             // 综合评分（难度影响权重分配精度）
             float accuracy = _difficultyConfig.TargetSelectionAccuracy;
             float noise = (1.0f - accuracy) * (float)(_rand.NextDouble() * 6.0 - 3.0);
 
-            float score = threat * 0.3f + vuln * 0.3f + strategic * 0.2f + reachBonus * 0.2f + noise;
+            float score = threat * 0.3f + vuln * 0.3f + strategic * 0.2f + reachBonus * 0.2f + savageBonus + noise;
             results.Add(new ScoredTarget { Unit = pu, Score = score });
         }
 
@@ -148,7 +158,7 @@ public class AITargetEvaluator
         var weapon = actor.Model.GetMainHand() as WeaponData;
         if (weapon != null)
         {
-            estimatedMaxDmg = weapon.DamageDiceCount * weapon.DamageDiceSides + RPGRuleEngine.GetStatModifier(actor.Data!.Str);
+            estimatedMaxDmg = weapon.DamageDiceCount * weapon.DamageDiceSides + RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveStr(actor.Data));
         }
 
         if (target.CurrentHp <= estimatedMaxDmg) score += 4.0f;

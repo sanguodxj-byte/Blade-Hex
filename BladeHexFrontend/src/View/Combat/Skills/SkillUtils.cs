@@ -13,10 +13,9 @@ public static class SkillUtils
     public static Unit? FindUnitAt(Vector2I pos, IEnumerable<Unit> units)
         => units.FirstOrDefault(u => u.GridPos == pos);
 
-    /// <summary>标记技能执行失败</summary>
-    public static void Fail(Godot.Collections.Dictionary result, string reason)
+    /// <summary>标记技能执行失败（通过 Builder）</summary>
+    public static void Fail(SkillResultBuilder builder, string reason)
     {
-        result["success"] = false;
-        result["reason"] = reason;
+        builder.Fail(reason);
     }
 }

@@ -1,9 +1,9 @@
 -- arcane_bomb.lua
--- 奥术炸弹：AOE区域，基础伤害3d6+INT，每个目标受到 max(1, base/2 + 1d4)（知识力量则+INT），类型arcane
+-- 奥术炸弹：AOE区域，基础伤害等级*骰+INT，每个目标受到 max(1, base/2 + 1d4)（知识力量则+INT），类型arcane
 
 function execute(ctx)
     local int_mod = combat:get_stat_mod(ctx.attacker.intel)
-    local base_dmg = combat:roll_dice(3, 6) + int_mod
+    local _, _, base_dmg = calc_skill_value(ctx, "arcane_bomb")
     local half_base = math.floor(base_dmg / 2)
 
     aoe_area(ctx.target_q, ctx.target_r, "enemies", function(target)

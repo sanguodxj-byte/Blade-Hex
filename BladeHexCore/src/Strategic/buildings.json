@@ -13,6 +13,10 @@
     { "id": "market", "name": "市集", "desc": "每日产出10金币，繁荣度+5。", "is_edge": false, "cost": 500, "days": 7, "base_hp": 50, "hp_per_level": 0, "attack": 0, "range": 0, "gold_bonus": 10, "prosperity_bonus": 5 },
     { "id": "barracks", "name": "兵营", "desc": "驻军上限+8，驻军每日恢复HP。", "is_edge": false, "cost": 400, "days": 7, "base_hp": 60, "hp_per_level": 0, "attack": 0, "range": 0, "garrison_bonus": 8 },
     { "id": "smithy", "name": "铁匠坊", "desc": "驻军装备品质+1。", "is_edge": false, "cost": 350, "days": 5, "base_hp": 50, "hp_per_level": 0, "attack": 0, "range": 0 },
-    { "id": "lord_manor", "name": "领主宅邸", "desc": "封地核心，不可拆除。", "is_edge": false, "cost": 0, "days": 0, "base_hp": 100, "hp_per_level": 0, "attack": 0, "range": 0 }
+    { "id": "lord_manor", "name": "领主宅邸", "desc": "封地核心，不可拆除。", "is_edge": false, "cost": 0, "days": 0, "base_hp": 100, "hp_per_level": 0, "attack": 0, "range": 0 },
+    { "id": "blacksmith_workshop", "name": "武器作坊", "desc": "生产武器装备的作坊。", "is_edge": false, "cost": 8000, "days": 4, "base_hp": 150, "hp_per_level": 20, "attack": 0, "range": 0 },
+    { "id": "brew_workshop", "name": "酿酒坊", "desc": "生产啤酒等口粮的作坊。", "is_edge": false, "cost": 5000, "days": 3, "base_hp": 100, "hp_per_level": 15, "attack": 0, "range": 0 },
+    { "id": "textile_workshop", "name": "织布作坊", "desc": "生产精美布料的作坊。", "is_edge": false, "cost": 6000, "days": 3, "base_hp": 110, "hp_per_level": 15, "attack": 0, "range": 0 },
+    { "id": "tannery_workshop", "name": "制革坊", "desc": "生产皮甲皮料的作坊。", "is_edge": false, "cost": 7000, "days": 4, "base_hp": 130, "hp_per_level": 18, "attack": 0, "range": 0 }
   ]
 }

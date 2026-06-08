@@ -6,6 +6,7 @@ using BladeHex.Data;
 using BladeHex.Map;
 using BladeHex.Combat;
 using BladeHex.Combat.Commands;
+using BladeHex.Combat.MonsterTraits;
 using BladeHex.Events;
 using BladeHex.Strategic;
 
@@ -27,9 +28,21 @@ public partial class Unit : Node3D, IFightable
     private BattleUnitModel? _model;
     public BattleUnitModel Model => _model ??= new BattleUnitModel(Data!);
     public CommandHistory? CommandHistory { get; set; }
+    public CombatManager? CombatManager { get; set; }
 
     public int CurrentHp { get; set; }
     public Vector2I GridPos { get; set; }
+
+    /// <summary>
+    /// 多格单位占用的所有格子坐标（含中心格 GridPos）。
+    /// 单格单位此数组长度为 1 或为空（兼容旧逻辑）。
+    /// </summary>
+    public Vector2I[] OccupiedCells { get; set; } = [];
+
+    /// <summary>多格占用宽度（缓存）。</summary>
+    public int FootprintW { get; set; } = 1;
+    /// <summary>多格占用高度（缓存）。</summary>
+    public int FootprintH { get; set; } = 1;
 
     /// <summary>是否为玩家阵营（由 CombatManager.RegisterUnit 设置）</summary>
     public bool IsPlayerSide { get; set; }
@@ -45,7 +58,7 @@ public partial class Unit : Node3D, IFightable
         get => Data?.Runtime.Facing ?? 0;
         set
         {
-            if (Data != null) Data.Runtime.Facing = ((value % 6) + 6) % 6;
+            if (Data != null) Model.Facing = ((value % 6) + 6) % 6;
             RenderNode?.SetFacing(Facing);
         }
     }
@@ -58,7 +71,7 @@ public partial class Unit : Node3D, IFightable
         {
             _skillTree = value;
             // 镜像到 Runtime 让纯逻辑代码（BattleUnitModel / CombatRuleEngine）能访问
-            if (Data != null) Data.Runtime.SkillTree = value;
+            if (Data != null) Model.SkillTree = value;
         }
     }
 
@@ -77,37 +90,97 @@ public partial class Unit : Node3D, IFightable
     bool IFightable.IsStack => false;
 
     // ==========================================
+    // 多格单位距离计算
+    // ==========================================
+
+    /// <summary>
+    /// 计算从指定坐标到本单位的距离（考虑多格占用）。
+    /// 对于多格单位，返回到最近占用格的距离。
+    /// </summary>
+    public int DistanceFrom(Vector2I from)
+    {
+        return UnitFootprint.DistanceTo(from, GridPos, FootprintW, FootprintH);
+    }
+
+    /// <summary>
+    /// 计算本单位到另一个单位的距离（双方都考虑多格占用）。
+    /// </summary>
+    public int DistanceTo(Unit other)
+    {
+        return UnitFootprint.DistanceBetween(GridPos, FootprintW, FootprintH, other.GridPos, other.FootprintW, other.FootprintH);
+    }
+
+    // ==========================================
     // 移动与动画
     // ==========================================
 
-    /// <summary>沿着路径平滑移动</summary>
+    /// <summary>跳跃最大高度（像素）</summary>
+    [Export] public float JumpMaxHeight { get; set; } = 30.0f;
+
+    /// <summary>每格移动持续时间（秒）</summary>
+    [Export] public float MoveStepDuration { get; set; } = 0.2f;
+
+    /// <summary>沿着路径平滑移动（点对点低抛物线）</summary>
     public async Task MoveAlongPath(List<Vector2I> path, HexGrid hexGrid)
     {
         if (path == null || path.Count <= 1) return;
 
-        // 起点不需要移动
-        for (int i = 1; i < path.Count; i++)
-        {
-            var nextCoord = path[i];
-            var cell = hexGrid.GetCell(nextCoord.X, nextCoord.Y);
-            int elevation = cell?.Elevation ?? 0;
-            
-            Vector3 targetPos = HexUtils.AxialToWorld3D(nextCoord.X, nextCoord.Y, elevation);
-            
-            // 使用 Tween 进行平滑位移
-            var tween = GetTree().CreateTween();
-            tween.SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
-            tween.TweenProperty(this, "position", targetPos, 0.15f);
-            
-            // 播放移动动画
-            PlayAnim("move");
-            
-            await ToSignal(tween, Tween.SignalName.Finished);
-            
-            // 更新逻辑坐标
-            GridPos = nextCoord;
-        }
-        
+        // 获取终点坐标
+        var finalCoord = path[path.Count - 1];
+        var finalCell = hexGrid.GetCell(finalCoord.X, finalCoord.Y);
+        Vector3 startPos = Position;
+        Vector3 targetPos = finalCell != null
+            ? finalCell.Position + new Vector3(0,
+                BladeHex.View.Combat.CombatLayerHeight.HexTopOffset + BladeHex.View.Combat.CombatLayerHeight.CharacterLayer,
+                0)
+            : HexUtils.AxialToWorld3D(finalCoord.X, finalCoord.Y) + new Vector3(0,
+                BladeHex.View.Combat.CombatLayerHeight.HexTopOffset + BladeHex.View.Combat.CombatLayerHeight.CharacterLayer,
+                0);
+
+        // 计算朝向（面向终点）
+        int nextFacing = HexUtils.GetFacingDirection(GridPos, finalCoord);
+        Facing = nextFacing;
+
+        // 播放移动动画
+        PlayAnim("move");
+
+        // 计算移动距离，动态调整持续时间
+        float distance = (targetPos - startPos).Length();
+        float baseDuration = MoveStepDuration * 2.0f; // 基础持续时间（比单格移动长）
+        float duration = Mathf.Max(baseDuration, distance * 0.001f); // 根据距离调整
+
+        // 使用 Tween 进行平滑点对点移动 + 低抛物线
+        var tween = GetTree().CreateTween();
+        tween.SetTrans(Tween.TransitionType.Linear).SetEase(Tween.EaseType.InOut);
+
+        // 水平位移（XZ 平面）。Y 轴由 jumpTween 控制，避免两个 tween 争抢 Y。
+        var horizontalTarget = new Vector3(targetPos.X, startPos.Y, targetPos.Z);
+        tween.TweenProperty(this, "position", horizontalTarget, duration)
+            .SetTrans(Tween.TransitionType.Sine);
+
+        // 垂直跳跃（Y 轴低抛物线）
+        float jumpHeight = JumpMaxHeight * 0.5f; // 降低跳跃高度
+        float halfDuration = duration * 0.5f;
+        var jumpTween = GetTree().CreateTween();
+
+        // 上升阶段。Godot 3D 的 Y 轴向上。
+        jumpTween.TweenProperty(this, "position:y", startPos.Y + jumpHeight, halfDuration)
+            .SetTrans(Tween.TransitionType.Sine)
+            .SetEase(Tween.EaseType.Out);
+
+        // 下降阶段
+        jumpTween.TweenProperty(this, "position:y", targetPos.Y, halfDuration)
+            .SetTrans(Tween.TransitionType.Sine)
+            .SetEase(Tween.EaseType.In);
+
+        // 等待动画完成
+        await ToSignal(tween, Tween.SignalName.Finished);
+
+        Position = targetPos;
+
+        // 更新逻辑坐标
+        GridPos = finalCoord;
+
         PlayAnim("default");
     }
 
@@ -118,6 +191,9 @@ public partial class Unit : Node3D, IFightable
             int maxHp = GetMaxHp();
             CurrentHp = maxHp;
             Model.CurrentHp = maxHp;
+
+            // T09: Apply monster traits at unit creation
+            BladeHex.Combat.MonsterTraits.MonsterTraitRegistry.ApplyAll(Data);
         }
         SetupVisuals();
         SetupClickArea();
@@ -272,12 +348,15 @@ public partial class Unit : Node3D, IFightable
 
     public int GetEffectiveAc(Unit? attacker = null)
     {
+        // v0.8: 毁灭之主-毁灭预兆 → AC 固定为 10
+        if (CareerSkillResolver.HasFixedAc(this))
+            return CareerSkillResolver.GetFixedAcValue();
+
         int passiveAcBonus = PassiveSkillResolver.GetPassiveAcBonus(this);
-        // 节点 AC 加成（技能盘 ac 节点；v0.6 11.6 NodeAC，独立加入，不受 MaxDex 限制）
-        passiveAcBonus += SkillTree?.GetAcBonus() ?? 0;
-        var moraleEffects = MoraleSystem.GetMoraleEffects(this);
+        // v1 职业被动: 铁幕领主/幻术师/铁壁将军/铁铸领主 AC 加成
+        passiveAcBonus += CareerPassiveHooks.GetPassiveAcBonus(this);
         bool isDefending = Data?.Runtime.IsDefending ?? false;
-        return Model.GetEffectiveAc(isDefending, passiveAcBonus, moraleEffects.AcModifier);
+        return Model.GetEffectiveAc(isDefending, passiveAcBonus);
     }
 
     public int GetDr() => Model.GetDr();
@@ -297,6 +376,19 @@ public partial class Unit : Node3D, IFightable
     public ItemData? GetMainHand() => Model.GetMainHand();
 
     public ItemData? GetOffHand() => Model.GetOffHand();
+
+    /// <summary>
+    /// v0.7: 武器有效射程 = weapon.RangeCells + SkillTree.range_bonus（dex_s07 长距瞄准等）。
+    /// 徒手默认 1。所有需要"武器射程"的地方都应该走这个入口。
+    /// </summary>
+    public int GetWeaponRange()
+    {
+        if (Model.GetMainHand() is not BladeHex.Data.WeaponData w) return 1;
+        int range = w.RangeCells;
+        // 远程武器才吃远程射程加成（避免近战武器变长矛）
+        if (w.IsRanged) range += SkillTree?.GetRangeBonus() ?? 0;
+        return Math.Max(1, range);
+    }
 
     public int GetAttackBonus() => Model.GetAttackBonus();
 
@@ -345,9 +437,11 @@ public partial class Unit : Node3D, IFightable
     /// </summary>
     /// <param name="amount">治疗量（正数）</param>
     /// <returns>实际治疗量</returns>
-    public int Heal(int amount)
+    public int Heal(int amount, Unit? source = null)
     {
         if (amount <= 0) return 0;
+        if (source != null && source != this && Data != null && SkillTreeKeystoneResolver.Has(Data, "blood_oath"))
+            return 0;
         int maxHp = Model.GetMaxHp();
         int before = CurrentHp;
         CurrentHp = Math.Min(CurrentHp + amount, maxHp);
@@ -389,16 +483,42 @@ public partial class Unit : Node3D, IFightable
         int naturalRoll = 20,
         Unit? attacker = null,
         WeaponData.WeaponSubtype weaponSubtype = WeaponData.WeaponSubtype.Unarmed,
-        WeaponData.WeightCategory weaponWeight = WeaponData.WeightCategory.Medium)
+        WeaponData.WeightCategory weaponWeight = WeaponData.WeightCategory.Medium,
+        bool isRanged = false)
     {
         var result = Model.ApplyDamage(
-            DamageSource.WeaponAttack,
-            amount,
-            damageType,
-            naturalRoll,
-            weaponWeight,
-            attacker?.Data?.WeaponMastery,
-            weaponSubtype);
+            source: DamageSource.WeaponAttack,
+            amount: amount,
+            damageType: damageType,
+            naturalRoll: naturalRoll,
+            weaponWeight: weaponWeight,
+            attackerMastery: attacker?.Data?.WeaponMastery,
+            weaponSubtype: weaponSubtype,
+            isRanged: isRanged);
+        SyncHpFromModel(result);
+    }
+
+    public void ApplyRedirectedHpDamage(int hpDamage, bool bypassMitigation = false)
+    {
+        if (hpDamage <= 0) return;
+
+        if (bypassMitigation)
+        {
+            CurrentHp = ApplyDirectHpLoss(CurrentHp, hpDamage);
+            Model.CurrentHp = CurrentHp;
+            if (Data != null) Data.Runtime.CurrentHp = CurrentHp;
+            UpdateHpBar();
+            Events.EventBus.Instance?.PublishUnitDamaged(this, hpDamage, CurrentHp);
+            _ = HandleDeathAnimAsync();
+            return;
+        }
+
+        var result = Model.ApplyDamage(
+            source: DamageSource.Other,
+            amount: hpDamage,
+            damageType: WeaponData.DamageType.Magic,
+            naturalRoll: 20,
+            allowDamageRedirect: false);
         SyncHpFromModel(result);
     }
 
@@ -421,8 +541,40 @@ public partial class Unit : Node3D, IFightable
         if (result.ArmorBroken)
             GD.Print($"{Name} 的护甲已完全毁坏，被彻底移除！");
 
-        Events.EventBus.Instance?.PublishUnitDamaged(this, result.TotalDealt, CurrentHp);
+        if (result.TotalDealt > 0 || result.RedirectedHpDamage > 0)
+            Events.EventBus.Instance?.PublishUnitDamaged(this, result.TotalDealt, CurrentHp);
+        ApplyRedirectedDamage(result);
         _ = HandleDeathAnimAsync();
+    }
+
+    public void ApplyRedirectedDamage(DamageResult result)
+    {
+        if (result.RedirectedHpDamage <= 0 || result.RedirectedToUnitId <= 0) return;
+
+        var guardian = FindUnitByInstanceId(result.RedirectedToUnitId);
+        if (guardian == null || guardian == this || guardian.CurrentHp <= 0) return;
+
+        guardian.ApplyRedirectedHpDamage(result.RedirectedHpDamage);
+    }
+
+    private int ApplyDirectHpLoss(int currentHp, int hpDamage)
+    {
+        if (Data != null && BladeHex.Combat.Buff.BuffModifierReader.FirstBuffWithTruthy(Data, "death_immunity") != null)
+            return Math.Max(1, currentHp - hpDamage);
+        return Math.Max(0, currentHp - hpDamage);
+    }
+
+    private Unit? FindUnitByInstanceId(long instanceId)
+    {
+        if (instanceId <= 0) return null;
+
+        if (CombatManager == null || !IsInstanceValid(CombatManager)) return null;
+        foreach (var unit in CombatManager.AllUnits)
+        {
+            if (IsInstanceValid(unit) && (long)unit.GetInstanceId() == instanceId)
+                return unit;
+        }
+        return null;
     }
 
     /// <summary>供 CombatResolver 使用的死亡动画触发入口</summary>
@@ -435,6 +587,12 @@ public partial class Unit : Node3D, IFightable
     {
         if (CurrentHp <= 0)
         {
+            // Legacy shallow_burial can still keep a unit active at 0 HP.
+            if (HasBuff("shallow_burial"))
+            {
+                UpdateHpBar();
+                return;
+            }
             RenderBus?.NotifyDeath(this);
             await ToSignal(GetTree().CreateTimer(1.0f), Timer.SignalName.Timeout);
             Die();
@@ -452,15 +610,25 @@ public partial class Unit : Node3D, IFightable
         if (RenderBus != null)
             RenderBus.Unregister(this);
         Events.EventBus.Instance?.PublishUnitDied(this, Data?.IsEnemy == false);
-        Data?.ClearRuntimeState();
+        if (Data != null) Model.ClearRuntimeState();
         QueueFree();
     }
 
     public bool HasSkillEffect(string effectId)
     {
-        if (SkillTree == null) return false;
-        // 正确实现：遍历已激活节点，比较其 SkillEffect 字段
-        return SkillTree.HasSkillEffect(effectId);
+        if (SkillTree != null)
+        {
+            return SkillTree.HasSkillEffect(effectId);
+        }
+        // 对于非人形（没有 SkillTree），检查其 UnitData 中的 Skills 是否包含该 SkillName
+        if (Data != null && Data.Skills != null)
+        {
+            foreach (var s in Data.Skills)
+            {
+                if (s.SkillName == effectId) return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>角色是否拥有某个职业技能效果</summary>
@@ -493,5 +661,12 @@ public partial class Unit : Node3D, IFightable
     public void ConsumeAp(float amount)
     {
         CurrentAp = Math.Max(0, CurrentAp - amount);
+    }
+
+    /// <summary>检查是否拥有指定 ID 的活跃 buff</summary>
+    public bool HasBuff(string buffId)
+    {
+        if (Data == null) return false;
+        return Model.HasBuff(buffId);
     }
 }

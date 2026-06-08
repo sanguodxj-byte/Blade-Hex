@@ -1,62 +1,109 @@
-// BattlePropRegistry.cs
-// 战斗地图立牌（tree/rock/building）贴图注册表
-//
-// 按 prop_id 查找 Texture2D；运行时加载并缓存。
-// 贴图路径契约：res://src/assets/props/battle/{propId}.png
+using BladeHex.View.AssetSystem;
 using Godot;
+using System;
 using System.Collections.Generic;
 
 namespace BladeHex.View.Map;
 
 public static class BattlePropRegistry
 {
-    private const string PropsBaseDir = "res://src/assets/props/battle";
+    private const string PropsBaseDir = "res://BladeHexFrontend/src/assets/props/battle";
 
-    private static readonly Dictionary<string, Texture2D> _cache = new();
+    private static readonly Dictionary<string, Texture2D> Cache = new();
     private static Texture2D? _placeholder;
 
-    /// <summary>按 prop_id 获取贴图；找不到时返回占位贴图（不返回 null）</summary>
     public static Texture2D GetTexture(string propId)
     {
-        if (_cache.TryGetValue(propId, out var tex))
-            return tex;
+        if (string.IsNullOrWhiteSpace(propId))
+            return GetPlaceholder();
 
-        string path = $"{PropsBaseDir}/{propId}.png";
-        if (ResourceLoader.Exists(path))
-        {
-            var loaded = GD.Load<Texture2D>(path);
-            if (loaded != null)
-            {
-                _cache[propId] = loaded;
-                return loaded;
-            }
-        }
+        if (Cache.TryGetValue(propId, out var texture))
+            return texture;
+
+        var resolved = TextureAssetResolver.LoadMapTexture(propId, $"{PropsBaseDir}/{propId}.png");
+        if (resolved != null)
+            return CacheAndReturn(propId, resolved);
+
+        string? fallbackId = GetVariantFallbackId(propId);
+        if (!string.IsNullOrWhiteSpace(fallbackId) && fallbackId != propId)
+            return CacheAndReturn(propId, GetTexture(fallbackId));
 
         return GetPlaceholder();
     }
 
-    /// <summary>prop 是否有真实贴图（美术资产齐全时返回 true）</summary>
     public static bool HasTexture(string propId)
     {
-        if (_cache.ContainsKey(propId)) return true;
-        return ResourceLoader.Exists($"{PropsBaseDir}/{propId}.png");
+        if (string.IsNullOrWhiteSpace(propId))
+            return false;
+
+        if (Cache.ContainsKey(propId))
+            return true;
+
+        string path = $"{PropsBaseDir}/{propId}.png";
+        var resolved = TextureAssetResolver.LoadMapTexture(propId, path);
+        if (resolved != null)
+        {
+            Cache[propId] = resolved;
+            return true;
+        }
+
+        string? fallbackId = GetVariantFallbackId(propId);
+        return !string.IsNullOrWhiteSpace(fallbackId)
+            && fallbackId != propId
+            && HasTexture(fallbackId);
+    }
+
+    public static void ClearCache()
+    {
+        Cache.Clear();
+        _placeholder = null;
+    }
+
+    private static Texture2D CacheAndReturn(string propId, Texture2D texture)
+    {
+        Cache[propId] = texture;
+        return texture;
+    }
+
+    private static string? GetVariantFallbackId(string propId)
+    {
+        if (propId.Contains("tree") || propId.Contains("forest"))
+        {
+            int index = Math.Abs(propId.GetHashCode()) % 4;
+            if (propId.Contains("pine"))
+                return $"tree_pine_{index}";
+            if (propId.Contains("dead"))
+                return $"tree_dead_{index}";
+            return $"tree_oak_{index}";
+        }
+
+        if (propId.Contains("bush") || propId.Contains("grass"))
+        {
+            int index = Math.Abs(propId.GetHashCode()) % 4;
+            return propId.Contains("dry") ? $"bush_dry_{index}" : $"bush_green_{index}";
+        }
+
+        if (propId.Contains("rock") || propId.Contains("stone") || propId.Contains("ruin"))
+        {
+            int index = Math.Abs(propId.GetHashCode()) % 4;
+            if (propId.Contains("moss"))
+                return $"rock_moss_{index}";
+            if (propId.Contains("small"))
+                return $"rock_small_{index}";
+            return $"rock_large_{index}";
+        }
+
+        return null;
     }
 
     private static Texture2D GetPlaceholder()
     {
-        if (_placeholder != null) return _placeholder;
+        if (_placeholder != null)
+            return _placeholder;
 
-        // 16x32 的紫色纸片占位，高而窄（类似树的比例）
-        var img = Image.CreateEmpty(16, 32, false, Image.Format.Rgba8);
-        img.Fill(new Color(0.8f, 0.2f, 0.8f, 1f));
-        _placeholder = ImageTexture.CreateFromImage(img);
+        var image = Image.CreateEmpty(16, 32, false, Image.Format.Rgba8);
+        image.Fill(new Color(0.8f, 0.2f, 0.8f, 1f));
+        _placeholder = ImageTexture.CreateFromImage(image);
         return _placeholder;
-    }
-
-    /// <summary>清空缓存（主要用于测试）</summary>
-    public static void ClearCache()
-    {
-        _cache.Clear();
-        _placeholder = null;
     }
 }

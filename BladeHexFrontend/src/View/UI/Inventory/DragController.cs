@@ -81,6 +81,7 @@ public partial class DragController : Node
         _ghost.GlobalPosition = mousePos + _dragOffset;
 
         _state = DragState.Dragging;
+        BladeHex.UI.CursorManager.SetState(BladeHex.UI.CursorState.Dragging);
         EmitSignal(SignalName.DragStarted);
     }
 
@@ -111,8 +112,18 @@ public partial class DragController : Node
             _lastHoveredContainer = newContainer;
         }
 
-        if (newContainer != null && _source != null)
+        if (newContainer != null && _source != null && hit != null)
+        {
             newContainer.HighlightDropTarget(_source, hit);
+            if (newContainer.CanAccept(_source, hit))
+                BladeHex.UI.CursorManager.SetState(BladeHex.UI.CursorState.Dragging);
+            else
+                BladeHex.UI.CursorManager.SetState(BladeHex.UI.CursorState.DragForbidden);
+        }
+        else
+        {
+            BladeHex.UI.CursorManager.SetState(BladeHex.UI.CursorState.DragForbidden);
+        }
     }
 
     public override void _Input(InputEvent ev)
@@ -192,5 +203,6 @@ public partial class DragController : Node
 
         _source = null;
         _state = DragState.Idle;
+        BladeHex.UI.CursorManager.SetState(BladeHex.UI.CursorState.Default);
     }
 }

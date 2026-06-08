@@ -3,6 +3,7 @@
 using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
+using BladeHex.Strategic.Kingdom;
 
 namespace BladeHex.Strategic;
 
@@ -17,18 +18,31 @@ public partial class RecruitService : RefCounted
     private List<OverworldPOI> _pois = new();
     private int _worldSeed = 0;
 
-    /// <summary>初始化（传入世界数据）</summary>
+    /// <summary>初始化（传入世界数据并订阅易手事件）</summary>
     public void Initialize(List<OverworldPOI> pois, List<NationConfig>? nations, int worldSeed)
     {
         _pois = pois;
         _nations = nations ?? new();
         _worldSeed = worldSeed;
+
+        // 订阅易手事件以重置招募池
+        PoiTransferService.PoiTransferred += OnPoiTransferred;
+    }
+
+    private void OnPoiTransferred(PoiTransferEvent evt)
+    {
+        if (evt?.Poi != null)
+        {
+            string poiId = evt.Poi.PoiName;
+            _pools.Remove(poiId);
+            GD.Print($"[RecruitService] 聚落易手，已重置其招募池: {poiId}");
+        }
     }
 
     /// <summary>
     /// 获取指定 POI 的招募池（自动创建 + 按需刷新）
     /// </summary>
-    public RecruitPool GetPool(string poiId, int currentDay)
+    public RecruitPool GetPool(string poiId, int currentDay, PlayerKingdom? playerKingdom = null)
     {
         if (!_pools.TryGetValue(poiId, out var pool))
         {
@@ -41,7 +55,15 @@ public partial class RecruitService : RefCounted
             var poi = FindPoi(poiId);
             var nation = FindNationForPoi(poi);
             int tier = GetPoiTier(poi);
-            pool.Refresh(currentDay, nation, tier, _worldSeed);
+
+            // M7: 应用征兵权法律修正
+            float conscriptionMult = 1.0f;
+            if (playerKingdom != null && poi?.OwningFaction == "player")
+            {
+                conscriptionMult = KingdomLawEffects.GetRecruitMultiplier(playerKingdom.Laws.Conscription);
+            }
+
+            pool.Refresh(currentDay, nation, tier, _worldSeed, conscriptionMult);
             GD.Print($"[RecruitService] 刷新招募池: {poiId}, 可招 {pool.Available.Count} 人");
         }
 

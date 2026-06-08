@@ -1,23 +1,34 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BladeHex.Map;
 using BladeHex.Events;
+using BladeHex.Strategic.WorldEvents;
+using BladeHex.Strategic.Army;
+using BladeHex.Strategic.Economy;
+using BladeHex.Strategic.Hero;
+using BladeHex.Strategic.Kingdom;
 
 namespace BladeHex.Strategic;
 
 /// <summary>
-/// 遭遇标记管理器（原 OverworldEntityManager 简化版，docs/26+27 Chunk 模式）
+/// 大地图实体管理器 — Frontend Adapter
 /// 
-/// 按 Chunk 模式重构：
-/// - AI 实体移动由 Core 层 DailyDecisionProcessor / MovementProcessor 处理（全图模式保留）
-/// - Chunk 模式下新增遭遇标记检测（CheckChunkEncounters）
+/// 架构优化后职责：
+/// - Godot Node 身份 + 信号声明
+/// - 持有 OverworldSimulationContext 和 OverworldSimulation
+/// - 委托模拟逻辑给 Core 层 OverworldSimulation
+/// - 将 Core 事件转发为 Godot 信号
+/// - 保留玩家交互查询、可视化缓存、战斗结果消费等 Frontend 专属方法
+/// 
+/// 核心更新方法（OnDayPassed/TickMovement/TickGameHour）委托给 Simulation。
 /// </summary>
 [GlobalClass]
 public partial class OverworldEntityManager : Node, ISiegeSignals
 {
     // ========================================
-    // 信号
+    // 信号（保留 — Frontend 消费者依赖这些信号）
     // ========================================
 
     [Signal] public delegate void EntityRemovedEventHandler(OverworldEntity entity);
@@ -29,43 +40,95 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
     [Signal] public delegate void AiBattleOccurredEventHandler(OverworldEntity attacker, OverworldEntity defender, bool attackerWon);
     [Signal] public delegate void PoiCapturedEventHandler(OverworldPOI poi, string newFaction, OverworldEntity captor);
 
-    /// <summary>当 Chunk 遭遇被触发时发射（用 Vector2I 坐标，侧通过 check_chunk_encounters 获取完整数据）</summary>
+    /// <summary>当 Chunk 遭遇被触发时发射</summary>
     [Signal] public delegate void ChunkEncounterTriggeredEventHandler(Vector2I worldCoord);
 
     // ========================================
-    // Core 层处理器（全图模式保留）
+    // Core 模拟引擎
     // ========================================
 
-    private readonly DailyDecisionProcessor _dailyProcessor = new();
-    private readonly MovementProcessor _movementProcessor = new();
-    private readonly BattleResolver _battleResolver = new();
-    private readonly SiegeProcessor _siegeProcessor = new();
+    /// <summary>模拟上下文 — 集中保存运行状态</summary>
+    public OverworldSimulationContext SimCtx { get; } = new();
+
+    /// <summary>模拟引擎 — 驱动每日/帧/小时 Tick</summary>
+    public OverworldSimulation Simulation { get; } = new();
+
+    /// <summary>事件调度器 — 将 Core 事件转发为 Godot 信号</summary>
+    private SimulationEventDispatcher? _eventDispatcher;
 
     // ========================================
-    // 遭遇实体生成器（Chunk 模式新增）
+    // 便捷访问（向后兼容）
     // ========================================
 
-    private readonly EncounterEntitySpawner _encounterSpawner = new();
+    public List<OverworldEntity> Entities => SimCtx.Entities;
+    public List<OverworldPOI> Pois => SimCtx.Pois;
+    public EntitySpatialIndex Spatial => SimCtx.SpatialIndex!;
+    public ArmyRegistry Armies => SimCtx.Armies;
+    public BladeHex.Strategic.Hero.HeroRegistry Heroes => SimCtx.Heroes;
+    public BladeHex.Strategic.Hero.HeroRelationMatrix Relations => SimCtx.Relations;
+    public BladeHex.Strategic.Hero.PrisonerLedger Prisoners => SimCtx.Prisoners;
+    public FamilyRegistry Families => SimCtx.Families;
+    public BladeHex.Strategic.SubParty.SubPartyRegistry SubParties => SimCtx.SubParties;
+    public WorldEventEngine WorldEngine => SimCtx.WorldEngine;
+    public EconomyEventEngine EconomyEvents => SimCtx.EconomyEvents;
+    public int CurrentDay => SimCtx.CurrentDay;
+    public float CurrentGameHour => SimCtx.GameHour;
+
+    /// <summary>
+    /// NPC 国家的 Fief 容器。
+    /// </summary>
+    public List<FiefData> NpcFiefs => SimCtx.NpcFiefs;
+
+    /// <summary>
+    /// 玩家王国(M7 引入)。null = 玩家尚未创建王国。
+    /// </summary>
+    public PlayerKingdom? PlayerKingdom
+    {
+        get => SimCtx.PlayerKingdom;
+        set => SimCtx.PlayerKingdom = value;
+    }
+
+    /// <summary>
+    /// 开国前的占领列表(M7 引入)。
+    /// </summary>
+    public List<string> PendingConquests => SimCtx.PendingConquests;
+
+    public List<NationConfig> Nations
+    {
+        get => SimCtx.Nations;
+        set => SimCtx.Nations = value;
+    }
+
+    public float CurrentGameHourVal => SimCtx.GameHour;
+
+    /// <summary>
+    /// SubParty 战败后归队事件。
+    /// </summary>
+    public event System.Action<BladeHex.Strategic.SubParty.SubParty>? SubPartyRejoined;
+
+    /// <summary>发现日志</summary>
+    public BladeHex.Strategic.Encyclopedia.DiscoveryJournal Journal { get; set; } = new();
+
+    /// <summary>当前活跃的遭遇标记</summary>
+    public List<EncounterMarkerData> ActiveEncounterMarkers { get; private set; } = new();
 
     // ========================================
-    // 成员变量
+    // 成员变量（Frontend 专属）
     // ========================================
 
-    public List<OverworldEntity> Entities = new();
-    public List<OverworldPOI> Pois = new();
+    /// <summary>同步玩家队伍的总战力到遭遇生成器</summary>
+    public float PlayerCombatPower
+    {
+        get => SimCtx.EncounterSpawner.PlayerCombatPower;
+        set => SimCtx.EncounterSpawner.PlayerCombatPower = value;
+    }
 
-    private HexOverworldGrid? _hexGrid;
-    private HexOverworldAStar? _hexAstar;
-    private ChunkManager? _chunkManager;
-    private ChunkAStar? _chunkAstar;
     private Vector2 _playerPosition = Vector2.Zero;
-    private int _currentDay = 1;
 
     private const float SIEGE_APPROACH_DIST = 600.0f;
     private const float ENCOUNTER_MARKER_DIST = 300.0f;
 
-    /// <summary>当前活跃的遭遇标记（地图上的静态标记点）</summary>
-    public List<EncounterMarkerData> ActiveEncounterMarkers { get; private set; } = new();
+    private (Vector2 pos, float range, List<OverworldEntity> result) _lastVisibleQuery = (Vector2.Zero, 0f, new List<OverworldEntity>());
 
     // ========================================
     // 生命周期
@@ -74,11 +137,40 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
     public override void _EnterTree()
     {
         EventBus.Instance?.Subscribe(EventBus.Signals.DayPassed, OnDayPassedEvent);
+
+        // 初始化 SpatialIndex（默认即可用）
+        if (SimCtx.SpatialIndex == null)
+            SimCtx.SpatialIndex = new EntitySpatialIndex(800);
+
+        // WIRE: 连接 Simulation 到 Context
+        Simulation.WireToContext(SimCtx);
+
+        // 初始化事件调度器
+        _eventDispatcher = new SimulationEventDispatcher(this, SimCtx.WorldEngine);
+
+        // 订阅子队伍归队事件
+        Simulation.SubPartyRejoined += sp =>
+        {
+            SubPartyRejoined?.Invoke(sp);
+        };
+
+        // 绑定外交求和的静态委托到事件总线
+        BladeHex.Strategic.Diplomacy.WarSystemMVP.AiProposedPeaceToPlayer = (proposer, warDays) =>
+        {
+            var data = new Godot.Collections.Dictionary
+            {
+                { "proposer", proposer },
+                { "target", "player" },
+                { "war_days", warDays }
+            };
+            EventBus.Instance?.Publish("ai_propose_peace_to_player", data);
+        };
     }
 
     public override void _ExitTree()
     {
         EventBus.Instance?.Unsubscribe(EventBus.Signals.DayPassed, OnDayPassedEvent);
+        BladeHex.Strategic.Diplomacy.WarSystemMVP.AiProposedPeaceToPlayer = null;
     }
 
     private void OnDayPassedEvent(Godot.Collections.Dictionary _) => OnDayPassed();
@@ -89,142 +181,147 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
 
     public void SetHexNavigation(HexOverworldGrid grid, HexOverworldAStar astar)
     {
-        _hexGrid = grid;
-        _hexAstar = astar;
-        _dailyProcessor.SetNavigation(grid, astar);
-        _siegeProcessor.SetNavigation(grid, astar);
+        SimCtx.HexGrid = grid;
+        SimCtx.HexAStar = astar;
+        Simulation.WireToContext(SimCtx);
     }
 
-    /// <summary>设置 Chunk 模式寻路（chunk 模式专用）</summary>
+    /// <summary>设置 Chunk 模式寻路</summary>
     public void SetChunkNavigation(ChunkManager mgr, ChunkAStar astar)
     {
-        _chunkManager = mgr;
-        _chunkAstar = astar;
-        _encounterSpawner.ChunkManagerRef = mgr;
-        _dailyProcessor.SetChunkNavigation(mgr, astar);
+        SimCtx.ChunkManager = mgr;
+        SimCtx.ChunkAStar = astar;
+        SimCtx.EncounterSpawner.ChunkManagerRef = mgr;
+        Simulation.WireToContext(SimCtx);
+    }
+
+    /// <summary>设置 POI 控制区管理器</summary>
+    public void SetZoneOfControl(ZoneOfControlManager zoc)
+    {
+        SimCtx.ZocManager = zoc;
+        Simulation.WireToContext(SimCtx);
     }
 
     public void LoadWorld(Godot.Collections.Array worldPois, Godot.Collections.Array worldEntities)
     {
-        Pois.Clear();
-        foreach (var poi in worldPois) Pois.Add((OverworldPOI)poi);
+        SimCtx.Pois.Clear();
+        foreach (var poi in worldPois) SimCtx.Pois.Add((OverworldPOI)poi);
 
-        Entities.Clear();
-        foreach (var entity in worldEntities) Entities.Add((OverworldEntity)entity);
-    }
+        SimCtx.Entities.Clear();
+        foreach (var entity in worldEntities) SimCtx.Entities.Add((OverworldEntity)entity);
 
-    public void UpdatePlayerPosition(Vector2 pos) => _playerPosition = pos;
+        if (SimCtx.SpatialIndex == null)
+            SimCtx.SpatialIndex = new EntitySpatialIndex(800);
+        SimCtx.SpatialIndex.Rebuild(SimCtx.Entities);
 
-    // ========================================
-    // 核心更新逻辑
-    // ========================================
+        SimCtx.Heroes.PopulateFromEntities(SimCtx.Entities, SimCtx.CurrentDay, SimCtx.Relations);
 
-    /// <summary>每帧更新：委托给 Core 层 MovementProcessor + 驱动遭遇实体生成器</summary>
-    public void TickMovement(float delta)
-    {
-        // 1. 生成新的敌对实体 + 更新追击 AI
-        var newSpawned = _encounterSpawner.Tick(delta, _playerPosition, Entities, PlayerLevel, _currentDay, Pois);
-        foreach (var e in newSpawned)
+        // M6: 为 NPC 主要国家自动建造 Workshop
+        if (SimCtx.NpcFiefs.Count == 0 && SimCtx.Nations.Count > 0)
         {
-            Entities.Add(e);
-            EmitSignal(SignalName.EntitySpawned, e);
-        }
-
-        // 2. 推进所有实体移动
-        _movementProcessor.TickMovement(delta, Entities, OnEntityReachedDestination);
-
-        // 3. 收容离开活跃区域的实体到不活跃池
-        DeactivateDistantEntities();
-    }
-
-    /// <summary>收容距离玩家过远的实体到不活跃池</summary>
-    private const float DEACTIVATION_DISTANCE = 2500.0f; // 约 16 格 × 156px
-
-    private void DeactivateDistantEntities()
-    {
-        var toRemove = new List<OverworldEntity>();
-
-        foreach (var entity in Entities)
-        {
-            if (!entity.IsAlive) continue;
-            // 不收容正在追击玩家的实体（避免追着追着消失）
-            if (entity.CurrentAIState == OverworldEntity.AIState.Chasing) continue;
-            // 不收容围攻中的实体
-            if (entity.CurrentAIState == OverworldEntity.AIState.Besieging) continue;
-
-            float dist = entity.Position.DistanceTo(_playerPosition);
-            if (dist > DEACTIVATION_DISTANCE)
-            {
-                _encounterSpawner.DormantPool.Store(entity, _currentDay);
-                toRemove.Add(entity);
-            }
-        }
-
-        foreach (var entity in toRemove)
-        {
-            Entities.Remove(entity);
-            EmitSignal(SignalName.EntityRemoved, entity);
+            BladeHex.Strategic.Economy.NpcWorkshopBootstrap.Bootstrap(SimCtx.Nations, SimCtx.Pois, SimCtx.NpcFiefs);
         }
     }
 
-    /// <summary>玩家等级（影响敌方等级缩放，由 OverworldScene3D 设置）</summary>
-    public int PlayerLevel { get; set; } = 1;
-
-    /// <summary>玩家种族（影响 Adventurer 同/异族判定，由 OverworldScene3D 设置）</summary>
-    public int PlayerRaceId
+    public void UpdatePlayerPosition(Vector2 pos)
     {
-        get => _encounterSpawner.PlayerRaceId;
-        set => _encounterSpawner.PlayerRaceId = value;
+        _playerPosition = pos;
+        SimCtx.PlayerPosition = pos;
     }
 
     /// <summary>
-    /// 检查玩家是否触发遭遇（有敌对实体距离玩家足够近）
-    /// 替代旧的 check_chunk_encounters 调用
+    /// 推进游戏小时数（委托给 Simulation）
     /// </summary>
-    public OverworldEntity? CheckPlayerEntityEncounter()
+    public void TickGameHour(float deltaHours)
     {
-        return _encounterSpawner.CheckEncounter(_playerPosition, Entities);
-    }
-
-    /// <summary>每日更新：委托给 Core 层处理器</summary>
-    public void OnDayPassed()
-    {
-        _currentDay++;
-
-        // 1. 更新所有 POI
-        foreach (var poi in Pois) poi.OnDayPassed();
-
-        // 2. 检测实体间交互（BattleResolver）
-        _battleResolver.ProcessEntityInteractions(Entities);
-
-        // 3. 每日决策（DailyDecisionProcessor）
-        _dailyProcessor.ProcessDailyDecisions(Entities, Pois, _currentDay);
-
-        // 4. 围攻结算（SiegeProcessor）
-        _siegeProcessor.ProcessSieges(Entities, this);
-
-        // 5. 回援检查（SiegeProcessor）
-        _siegeProcessor.ProcessReinforcementChecks(Entities, Pois, this);
-
-        // 6. 招募结算（SiegeProcessor）
-        _siegeProcessor.ProcessRecruitment(Entities);
-
-        // 7. 清理死亡实体
-        Entities.RemoveAll(e => !e.IsAlive);
-
-        // 8. 不活跃池每日维护（淘汰过期实体）
-        _encounterSpawner.DormantPool.OnDayPassed(_currentDay);
+        var events = Simulation.TickHours(deltaHours, SimCtx);
+        _eventDispatcher?.Dispatch(events);
     }
 
     // ========================================
-    // ISiegeSignals 实现 — 转发为 Godot 信号
+    // 核心更新逻辑 — 委托给 Simulation
+    // ========================================
+
+    /// <summary>每帧更新：委托给 Simulation.TickFrame()</summary>
+    public void TickMovement(float delta)
+    {
+        var events = Simulation.TickFrame(delta, SimCtx);
+        _eventDispatcher?.Dispatch(events);
+        InvalidateVisibleCache();
+    }
+
+    /// <summary>收容距离玩家过远的实体到不活跃池（移至 OverworldSimulation，此处保留兼容调用）</summary>
+    private const float DEACTIVATION_DISTANCE = 2500.0f;
+
+    private void DeactivateDistantEntities()
+    {
+        // 已迁移至 OverworldSimulation.DeactivateDistantEntities
+        // 此处保留空实现确保旧代码兼容
+    }
+
+    /// <summary>玩家等级（影响敌方等级缩放，由 OverworldScene2D 设置）</summary>
+    public int PlayerLevel
+    {
+        get => SimCtx.PlayerLevel;
+        set => SimCtx.PlayerLevel = value;
+    }
+
+    /// <summary>玩家种族（影响 Adventurer 同/异族判定）</summary>
+    public int PlayerRaceId
+    {
+        get => SimCtx.PlayerRaceId;
+        set => SimCtx.PlayerRaceId = value;
+    }
+
+    /// <summary>
+    /// 检查玩家是否触发遭遇
+    /// </summary>
+    public OverworldEntity? CheckPlayerEntityEncounter()
+    {
+        return SimCtx.EncounterSpawner.CheckEncounter(_playerPosition, Entities);
+    }
+
+    /// <summary>每日更新：委托给 Simulation.TickDay()，然后分发事件</summary>
+    public void OnDayPassed()
+    {
+        var events = Simulation.TickDay(SimCtx);
+        _eventDispatcher?.Dispatch(events);
+        InvalidateVisibleCache();
+    }
+
+    // ========================================
+    // ISiegeSignals 实现 — 保留用于与 SiegeProcessor 的直接交互
+    // （实际事件转发已通过 SimulationEventDispatcher 处理）
     // ========================================
 
     void ISiegeSignals.OnSiegeResolved(OverworldPOI target, bool attackerWon, OverworldEntity attacker)
         => EmitSignal(SignalName.SiegeResolved, target, attackerWon, attacker);
 
     void ISiegeSignals.OnPoiCaptured(OverworldPOI poi, string newFaction, OverworldEntity captor)
-        => EmitSignal(SignalName.PoiCaptured, poi, newFaction, captor);
+    {
+        EmitSignal(SignalName.PoiCaptured, poi, newFaction, captor);
+
+        // M7: 处理玩家征服
+        if (newFaction == "player")
+        {
+            if (PlayerKingdom != null)
+            {
+                if (!PlayerKingdom.ControlledPoiNames.Contains(poi.PoiName))
+                {
+                    PlayerKingdom.ControlledPoiNames.Add(poi.PoiName);
+                    GD.Print($"[PlayerKingdom] 王国新增领土: {poi.PoiName}");
+                }
+            }
+            else
+            {
+                if (!PendingConquests.Contains(poi.PoiName))
+                {
+                    PendingConquests.Add(poi.PoiName);
+                    GD.Print($"[PlayerKingdom] 新增待征服领土: {poi.PoiName}");
+                }
+            }
+        }
+    }
 
     void ISiegeSignals.OnReinforcementArrived(OverworldPOI targetPoi, OverworldEntity reinforcer)
         => EmitSignal(SignalName.ReinforcementArrived, targetPoi, reinforcer);
@@ -260,13 +357,29 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
         return closest;
     }
 
-    /// <summary>获取玩家视野内的实体</summary>
+    /// <summary>
+    /// 获取玩家视野内的实体。
+    /// 注意:为减少重复查询开销,玩家位置变化 &lt; 100px 时返回上次结果的同一引用,
+    /// 调用方不应 mutate 返回 list;若有大事件 (实体生成/销毁) 发生应主动 InvalidateVisibleCache()。
+    /// </summary>
     public List<OverworldEntity> GetVisibleEntities(Vector2 playerPos, float visionRange)
     {
-        var visible = new List<OverworldEntity>();
-        foreach (var entity in Entities)
-            if (entity.IsAlive && playerPos.DistanceTo(entity.Position) <= visionRange) visible.Add(entity);
+        if (_lastVisibleQuery.range > 0f && 
+            Mathf.Abs(_lastVisibleQuery.range - visionRange) < 0.001f && 
+            playerPos.DistanceTo(_lastVisibleQuery.pos) < 100f)
+        {
+            return _lastVisibleQuery.result;
+        }
+
+        var visible = new List<OverworldEntity>(Spatial.QueryRadius(playerPos, visionRange));
+        _lastVisibleQuery = (playerPos, visionRange, visible);
         return visible;
+    }
+
+    /// <summary>使可见实体缓存失效。在实体生成/销毁后调用,确保下一次 GetVisibleEntities 重新查询。</summary>
+    public void InvalidateVisibleCache()
+    {
+        _lastVisibleQuery = (Vector2.Zero, 0f, new List<OverworldEntity>());
     }
 
     /// <summary>获取玩家视野内的 POI</summary>
@@ -312,11 +425,66 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
 
         GD.Print($"[OverworldEntityManager] 战斗结束: {outcome.BattleType}, 攻击方胜利={outcome.AttackerWon}");
 
+        // 战后关系下调
+        if (!string.IsNullOrEmpty(outcome.AttackerEntityName))
+        {
+            var attacker = FindEntityByName(outcome.AttackerEntityName);
+            if (attacker != null)
+            {
+                string defenderFaction = "neutral";
+                if (!string.IsNullOrEmpty(outcome.PoiName))
+                {
+                    var poi = FindPOIByName(outcome.PoiName);
+                    if (poi != null) defenderFaction = poi.OwningFaction;
+                }
+                else
+                {
+                    var closestEnemy = Entities.FirstOrDefault(e => 
+                        e != attacker && 
+                        e.Faction != attacker.Faction && 
+                        e.Position.DistanceTo(attacker.Position) <= 600f);
+                    if (closestEnemy != null)
+                    {
+                        defenderFaction = closestEnemy.Faction;
+                    }
+                }
+
+                if (defenderFaction != "neutral")
+                {
+                    BladeHex.Strategic.Diplomacy.CombatResultProcessor.ProcessCombatRelations(
+                        attacker.Faction, defenderFaction, outcome.AttackerWon, WorldEngine);
+                }
+            }
+        }
+
         // 更新攻击方实体
         if (!string.IsNullOrEmpty(outcome.AttackerEntityName))
         {
             var attacker = FindEntityByName(outcome.AttackerEntityName);
-            attacker?.ApplyBattleOutcome(outcome);
+            // 找一个"胜者"用于关系传播/俘虏归属。outcome 不带防守方实体名,
+            // 战斗失败时降级为 null(EntityCombatBridge 会将其作为普通战死处理)。
+            OverworldEntity? winner = null;
+            if (attacker != null && !outcome.AttackerWon)
+            {
+                // 简化:寻找最近的敌对 LordArmy 当 winner
+                foreach (var e in Entities)
+                {
+                    if (e == attacker || !e.IsAlive) continue;
+                    if (e.Faction != attacker.Faction &&
+                        e.EntityTypeEnum == OverworldEntity.EntityType.LordArmy)
+                    {
+                        if (winner == null ||
+                            attacker.Position.DistanceTo(e.Position) <
+                            attacker.Position.DistanceTo(winner.Position))
+                        {
+                            winner = e;
+                        }
+                    }
+                }
+            }
+            EntityCombatBridge.ApplyBattleOutcome(
+                attacker!, outcome, winner,
+                WorldEngine, SimCtx.Heroes, SimCtx.Prisoners, SimCtx.Relations, Pois);
         }
 
         // 更新被围攻的POI
@@ -350,13 +518,14 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
         if (entity == null) return;
         entity.IsAlive = false;
         Entities.Remove(entity);
+        SimCtx.SpatialIndex?.Remove(entity, entity.Position);
         EmitSignal(SignalName.EntityRemoved, entity);
     }
 
     /// <summary>将实体直接存入不活跃池（用于初始化阶段收容特殊角色）</summary>
     public void StoreToDormantPool(OverworldEntity entity)
     {
-        _encounterSpawner.DormantPool.Store(entity, _currentDay);
+        SimCtx.EncounterSpawner.DormantPool.Store(entity, SimCtx.CurrentDay);
     }
 
     /// <summary>移除已卸载 chunk 的遭遇标记（兼容 stub）</summary>
@@ -383,4 +552,13 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
             return arr;
         }
     }
+
+    public Godot.Collections.Dictionary SerializeArmies() => SimCtx.Armies.Serialize();
+    public void DeserializeArmies(Godot.Collections.Dictionary data) => SimCtx.Armies.Deserialize(data, Entities);
+
+    public Godot.Collections.Dictionary SerializeHeroNetwork()
+        => Simulation.BuildSaveSnapshot(SimCtx);
+
+    public void DeserializeHeroNetwork(Godot.Collections.Dictionary data)
+        => Simulation.RestoreSaveSnapshot(data, SimCtx);
 }

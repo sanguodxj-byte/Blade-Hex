@@ -21,9 +21,9 @@ public class CommandResult
 {
     public bool Success { get; init; }
     public string? FailureReason { get; init; }
-    public Godot.Collections.Dictionary? Payload { get; init; }
+    public CommandPayload? Payload { get; init; }
 
-    public static CommandResult Ok(Godot.Collections.Dictionary? payload = null)
+    public static CommandResult Ok(CommandPayload? payload = null)
         => new() { Success = true, Payload = payload };
     public static CommandResult Fail(string reason)
         => new() { Success = false, FailureReason = reason };

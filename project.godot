@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+LanguageManager="*res://BladeHexFrontend/src/Localization/LanguageManager.cs"
 GlobalState="*res://BladeHexFrontend/src/View/Data/GlobalState.cs"
 SkillTreeManager="*res://BladeHexFrontend/src/View/SkillTreeManager.cs"
 EventBus="*res://BladeHexFrontend/src/View/Events/EventBus.cs"
@@ -28,6 +29,7 @@ DebugConsole="*res://BladeHexFrontend/src/View/Debug/DebugConsole.cs"
 UIThemeTweaker="*res://BladeHexFrontend/src/View/Debug/UIThemeTweaker.cs"
 GameMenuManager="*res://BladeHexFrontend/src/View/UI/Global/GameMenuManager.cs"
 WeatherManager="*res://BladeHexFrontend/src/View/Environment/WeatherManager.cs"
+TutorialManager="*res://BladeHexFrontend/src/View/UI/Tutorial/TutorialManager.cs"
 
 [display]
 
@@ -45,6 +47,39 @@ project/solution="BladeHex.sln"
 
 import/blender/enabled=false
 
+[importer_defaults]
+
+texture={
+"compress/channel_pack": 0,
+"compress/hdr_compression": 1,
+"compress/high_quality": false,
+"compress/lossy_quality": 0.7,
+"compress/mode": 0,
+"compress/normal_map": 0,
+"compress/rdo_quality_loss": 0.0,
+"compress/uastc_level": 0,
+"detect_3d/compress_to": 0,
+"mipmaps/generate": true,
+"mipmaps/limit": -1,
+"process/channel_remap/alpha": 3,
+"process/channel_remap/blue": 2,
+"process/channel_remap/green": 1,
+"process/channel_remap/red": 0,
+"process/fix_alpha_border": true,
+"process/hdr_as_srgb": false,
+"process/hdr_clamp_exposure": false,
+"process/normal_map_invert_y": false,
+"process/premult_alpha": false,
+"process/size_limit": 0,
+"roughness/mode": 0,
+"roughness/src_normal": ""
+}
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://translations/ui.csv")
+locale/fallback="zh_CN"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
@@ -52,6 +87,3 @@ import/blender/enabled=false
 [rendering]
 
 rendering_device/driver.windows="d3d12"
-renderer/rendering_method="mobile"
-2d/snap/snap_2d_transforms_to_pixel=true
-2d/snap/snap_2d_vertices_to_pixel=true

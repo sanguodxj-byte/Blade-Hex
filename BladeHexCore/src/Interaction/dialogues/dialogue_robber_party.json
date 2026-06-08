@@ -1,0 +1,102 @@
+{
+  "dialogue_id": "robber_party",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "“（劫匪们看着你们黑压压的人数，开始不安地骚动，甚至有人开始往后退缩）\n‘大、大哥……他们人太多了！我们根本打不过啊！要不我们先撤？’一个年轻的劫匪双腿打颤地低声道。”"
+        },
+        {
+          "condition": "relation >= 25",
+          "text": "“‘哟，是道上的熟面孔。既然大家有些交情，我们也不多为难。不过兄弟们都饿了几天了，多少给点饭钱，我们马上让路。’”"
+        },
+        {
+          "condition": "relation <= -40",
+          "text": "“（劫匪们满脸污垢，眼神中透露出野兽般的疯狂）\n‘又是你！这一次别指望我们会放过你！兄弟们，把值钱的全部扒光，连一片布料都别留下！’”"
+        },
+        {
+          "text": "“（几名面容枯槁的劫匪握着生锈的农具和柴刀，从碎石堆后跳了出来）\n‘把身上所有的金币和干粮交出来！我们快饿死了，别逼我们动手宰了你！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "既然你们急着送死，那就来吧。(开战)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "condition": "player_gold >= bribe_cost",
+          "text": "拿去买点吃的吧。(施舍 {bribe_cost} 金币)",
+          "next": "bribe_success",
+          "action": "lose_gold;add_relation",
+          "action_param": "{bribe_cost};12"
+        },
+        {
+          "condition": "player_army >= npc_army * 2",
+          "text": "滚开！否则今天就是你们的死期！(威吓)",
+          "next": "intimidate_check"
+        },
+        {
+          "text": "我投降，别伤害我！(缴械)",
+          "next": "surrender_end",
+          "action": "surrender"
+        }
+      ]
+    },
+    "bribe_success": {
+      "node_id": "bribe_success",
+      "texts": [
+        {
+          "text": "“（劫匪头子一把抢过金币，狼吞虎咽地把几块干粮塞进嘴里）\n‘算你走运！今天兄弟们有饭吃了。路在前方，快滚吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "离开。",
+          "next": "end"
+        }
+      ]
+    },
+    "intimidate_check": {
+      "node_id": "intimidate_check",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "“（在你们绝对的人数压迫下，劫匪们终于承受不住心理压力，丢下武器一哄而散）\n‘妈呀！快跑啊！这根本不是我们能惹得起的！’”"
+        },
+        {
+          "text": "“（劫匪头子咬紧牙关，眼中闪过绝望的疯狂）\n‘别被他们吓到了！我们已经没有退路了！不抢他们，我们也是饿死！兄弟们，拼了！’”"
+        }
+      ],
+      "options": [
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "哼，算你们跑得快。(安全通过)",
+          "next": "end"
+        },
+        {
+          "condition": "player_army < npc_army * 3",
+          "text": "看来只能用武力解决了。(开战)",
+          "next": "end",
+          "action": "combat"
+        }
+      ]
+    },
+    "surrender_end": {
+      "node_id": "surrender_end",
+      "texts": [
+        {
+          "text": "“‘哈哈！明智的选择！把所有的金币、物资统统交出来，当做我们的战利品吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "唉……(顺从命运)",
+          "next": "end"
+        }
+      ]
+    }
+  }
+}

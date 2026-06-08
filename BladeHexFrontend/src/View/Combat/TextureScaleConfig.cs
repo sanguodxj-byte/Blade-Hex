@@ -20,18 +20,18 @@ public static class TextureScaleConfig
 
     private static readonly Dictionary<string, float> ProjectileWorldSize = new()
     {
-        { "arrow",          40.0f },
-        { "crossbow_bolt",  35.0f },
-        { "throwing_knife", 28.0f },
-        { "throwing_axe",   36.0f },
-        { "fireball",       48.0f },
-        { "magic_bolt",     32.0f },
-        { "ice_shard",      36.0f },
-        { "lightning",      44.0f },
+        { "arrow",          64.0f },
+        { "crossbow_bolt",  56.0f },
+        { "throwing_knife", 46.0f },
+        { "throwing_axe",   58.0f },
+        { "fireball",       72.0f },
+        { "magic_bolt",     58.0f },
+        { "ice_shard",      60.0f },
+        { "lightning",      70.0f },
     };
 
     /// <summary>投射物默认世界尺寸（未配置类型的 fallback）</summary>
-    private const float DefaultProjectileWorldSize = 36.0f;
+    private const float DefaultProjectileWorldSize = 56.0f;
 
     // ========================================
     // 公共 API

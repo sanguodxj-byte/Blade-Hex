@@ -38,7 +38,7 @@ public static class BuffAttackHooks
 
     private static BladeHex.Combat.Buff.BuffInstance? FindPhantomBuff(Unit unit)
     {
-        foreach (var buff in unit.Data!.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             if (buff.Id == "phantom" || BuffModifierReader.BuffHasTruthy(buff, "phantom_ac"))
                 return buff;
@@ -51,15 +51,6 @@ public static class BuffAttackHooks
 
     private static void ConsumeOnePhantom(Unit unit, BladeHex.Combat.Buff.BuffInstance phantom)
     {
-        var countModifier = phantom.Modifiers.Find(m => m.Stat == "phantom_count");
-        if (countModifier != null)
-        {
-            countModifier.Value -= 1;
-            if (countModifier.Value <= 0)
-                unit.Data!.Runtime.ActiveBuffs.Remove(phantom);
-            return;
-        }
-
-        unit.Data!.Runtime.ActiveBuffs.Remove(phantom);
+        BladeHex.Combat.Buff.BuffSystem.ConsumeModifierStack(unit.Data!, phantom, "phantom_count");
     }
 }

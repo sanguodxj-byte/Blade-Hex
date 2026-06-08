@@ -8,9 +8,15 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BladeHex.Data;
 using BladeHex.Strategic;
 using BladeHex.View.UI.Inventory;
+using BladeHex.Strategic.WorldEvents;
+using BladeHex.Scenes.Overworld;
+using BladeHex.UI.Common;
+using BladeHex.Strategic.Economy;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.View.UI.Overworld;
 
@@ -46,6 +52,15 @@ public partial class PartyPanel : PanelContainer
     private EconomyManager? _shopEconomy;
     private int _shopProsperity = 50;
     private string _shopName = "";
+    
+    private OverworldPOI? _currentPoi;
+    private ReputationTracker? _reputation;
+    private WorldEventEngine? _worldEngine;
+    private IOverworldContext? _overworldScene;
+
+    /// <summary>实体管理器引用（由 OverworldUI 设置，用于子队委派等功能）</summary>
+    public OverworldEntityManager? EntityMgr { get; set; }
+    private OverworldEntityManager? _entityMgr => EntityMgr;
 
     private UnitData? SelectedUnit => _roster != null && _currentIndex >= 0 && _currentIndex < _roster.Members.Count
         ? _roster.Members[_currentIndex] : null;
@@ -154,13 +169,27 @@ public partial class PartyPanel : PanelContainer
         _currentIndex = 0;
         _isShopMode = false;
         _shopStock = null;
+        _currentPoi = null;
+        _reputation = null;
+        _worldEngine = null;
+        _overworldScene = null;
         Visible = true;
         _AlignToHud();
         _EnsureGridInventory();
         _RefreshAll();
     }
 
-    public void OpenShop(PartyRoster roster, PartyInventory inventory, string shopName, EconomyManager economy, List<ItemData> stock, int prosperity = 50)
+    public void OpenShop(
+        PartyRoster roster, 
+        PartyInventory inventory, 
+        string shopName, 
+        EconomyManager economy, 
+        List<ItemData> stock, 
+        int prosperity = 50,
+        OverworldPOI? poi = null,
+        ReputationTracker? reputation = null,
+        WorldEventEngine? worldEngine = null,
+        IOverworldContext? overworldScene = null)
     {
         _roster = roster;
         _inventory = inventory;
@@ -170,6 +199,10 @@ public partial class PartyPanel : PanelContainer
         _shopEconomy = economy;
         _shopProsperity = prosperity;
         _shopName = shopName;
+        _currentPoi = poi;
+        _reputation = reputation;
+        _worldEngine = worldEngine;
+        _overworldScene = overworldScene;
         Visible = true;
         _AlignToHud();
         _EnsureGridInventory();
@@ -467,7 +500,8 @@ public partial class PartyPanel : PanelContainer
             string? iconPath = ClassTitleResolver.GetIconPath(classTitle);
             if (iconPath != null)
             {
-                var iconTex = GD.Load<Texture2D>(iconPath);
+                var iconId = System.IO.Path.GetFileNameWithoutExtension(iconPath.Replace('\\', '/'));
+                var iconTex = TextureAssetResolver.LoadUiTexture(iconId, iconPath);
                 if (iconTex != null)
                 {
                     var icon = new TextureRect();
@@ -641,30 +675,14 @@ public partial class PartyPanel : PanelContainer
         hbox.AddThemeConstantOverride("separation", 6);
         hbox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 
-        // 图标占位（16x16 紧凑）
-        if (!string.IsNullOrEmpty(trait.IconId))
-        {
-            var iconTex = GD.Load<Texture2D>($"res://assets/generated_ui_icons/{trait.IconId}.png");
-            if (iconTex != null)
-            {
-                var icon = new TextureRect();
-                icon.Texture = iconTex;
-                icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-                icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-                icon.CustomMinimumSize = new Vector2(16, 16);
-                hbox.AddChild(icon);
-            }
-        }
-        else
-        {
-            var dot = new ColorRect();
-            dot.CustomMinimumSize = new Vector2(8, 8);
-            dot.Color = _GetTraitColor(trait);
-            var dotCenter = new CenterContainer();
-            dotCenter.CustomMinimumSize = new Vector2(16, 16);
-            dotCenter.AddChild(dot);
-            hbox.AddChild(dotCenter);
-        }
+        // T04: Use emoji icon (placeholder until real art assets)
+        string emoji = trait.GetIconEmoji();
+        var emojiLabel = new Label { Text = emoji };
+        emojiLabel.AddThemeFontSizeOverride("font_size", 16);
+        var emojiCenter = new CenterContainer();
+        emojiCenter.CustomMinimumSize = new Vector2(20, 20);
+        emojiCenter.AddChild(emojiLabel);
+        hbox.AddChild(emojiCenter);
 
         // 名称（带颜色）
         var nameLabel = new Label { Text = trait.TraitName };
@@ -885,6 +903,19 @@ public partial class PartyPanel : PanelContainer
         shopVbox.AddChild(shopHeader);
 
         shopHeader.AddChild(_MakeLabel(_shopName, 26, TextAccent));
+        
+        if (_currentPoi != null && _shopEconomy != null)
+        {
+            int repVal = _reputation != null ? _reputation.GetReputation(_currentPoi.OwningFaction) : 0;
+            if (repVal <= -50 || _shopEconomy.Gold >= 5000)
+            {
+                var smuggleBtn = new Button { Text = "🔒 密道走私", CustomMinimumSize = new Vector2(115, 36) };
+                smuggleBtn.AddThemeColorOverride("font_color", new Color(0.9f, 0.3f, 0.9f));
+                smuggleBtn.Pressed += _OpenSmuggleDialog;
+                shopHeader.AddChild(smuggleBtn);
+            }
+        }
+
         shopHeader.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
         if (_shopEconomy != null)
         {
@@ -916,6 +947,8 @@ public partial class PartyPanel : PanelContainer
             Name = "ShopGridView",
             Economy = _shopEconomy,
             Prosperity = _shopProsperity,
+            Poi = _currentPoi,
+            EventEngine = _entityMgr?.EconomyEvents,
             SizeFlagsHorizontal = 0, // 左对齐，不撑满
         };
         _shopView.OnGoldChanged = (gold) =>
@@ -956,7 +989,32 @@ public partial class PartyPanel : PanelContainer
             bool isLeader = _roster.IsLeader(member);
             string prefix = isLeader ? "★ " : "";
             string memberClassTitle = _GetClassTitle(member);
-            _AddMemberEntry($"{prefix}{member.UnitName}", member.Level, memberClassTitle, hp, maxHp, member.Morale);
+            _AddMemberEntry(member, $"{prefix}{member.UnitName}", member.Level, memberClassTitle, hp, maxHp);
+        }
+
+        // === 新增：渲染独立带队的 Companion (已被委派的 SubParties) ===
+        if (_entityMgr != null)
+        {
+            var activeSubParties = _entityMgr.SubParties.GetAll();
+            if (activeSubParties.Count > 0)
+            {
+                _rightCol.AddChild(new HSeparator());
+                _rightCol.AddChild(_MakeLabel("独立带队中", 28, TextAccent));
+                _rightCol.AddChild(new HSeparator());
+
+                foreach (var sp in activeSubParties)
+                {
+                    // 找到 Companion 的 UnitData
+                    var leaderUnit = sp.Members.Find(m => m.UnitName == sp.LeaderUnitName);
+                    if (leaderUnit == null) continue;
+
+                    int hp = PartyRoster.GetCurrentHp(leaderUnit);
+                    int maxHp = leaderUnit.BaseMaxHp;
+                    string memberClassTitle = _GetClassTitle(leaderUnit);
+                    
+                    _AddDelegatedMemberEntry(sp, leaderUnit, $"{sp.LeaderUnitName}", leaderUnit.Level, memberClassTitle, hp, maxHp);
+                }
+            }
         }
 
         _rightCol.AddChild(new HSeparator());
@@ -966,7 +1024,7 @@ public partial class PartyPanel : PanelContainer
             hpPct > 60 ? TextPositive : hpPct > 30 ? TextAccent : TextNegative));
     }
 
-    private void _AddMemberEntry(string name, int level, string classTitle, int hp, int maxHp, int morale)
+    private void _AddMemberEntry(UnitData member, string name, int level, string classTitle, int hp, int maxHp)
     {
         var entry = new PanelContainer();
         var entryStyle = new StyleBoxFlat { BgColor = new Color(0.08f, 0.08f, 0.10f, 0.5f) };
@@ -995,7 +1053,7 @@ public partial class PartyPanel : PanelContainer
         var hpRow = new HBoxContainer();
         hpRow.AddThemeConstantOverride("separation", 4);
         inner.AddChild(hpRow);
-        hpRow.AddChild(_MakeLabel("HP", 18, TextMuted));
+        hpRow.AddChild(_MakeLabel("生命值", 18, TextMuted));
 
         var bar = new ProgressBar
         {
@@ -1015,11 +1073,312 @@ public partial class PartyPanel : PanelContainer
         bar.AddThemeStyleboxOverride("fill", fill);
         hpRow.AddChild(bar);
 
-        if (morale > 0)
+        // === 如果不是队长，则在下方显示【委派】按钮 ===
+        bool isLeader = _roster != null && _roster.IsLeader(member);
+        if (!isLeader && _roster != null)
         {
-            var mc = morale >= 70 ? TextPositive : morale >= 40 ? TextAccent : TextNegative;
-            hpRow.AddChild(_MakeLabel($"♥{morale}", 18, mc));
+            var btnRow = new HBoxContainer();
+            btnRow.Alignment = BoxContainer.AlignmentMode.End;
+            inner.AddChild(btnRow);
+
+            var delegateBtn = new Button { Text = "委派" };
+            delegateBtn.AddThemeFontSizeOverride("font_size", 18);
+            delegateBtn.CustomMinimumSize = new Vector2(80, 26);
+            delegateBtn.Pressed += () => _OnDelegatePressed(member);
+            btnRow.AddChild(delegateBtn);
         }
+    }
+
+    private void _AddDelegatedMemberEntry(BladeHex.Strategic.SubParty.SubParty sp, UnitData leaderUnit, string name, int level, string classTitle, int hp, int maxHp)
+    {
+        var entry = new PanelContainer();
+        var entryStyle = new StyleBoxFlat { BgColor = new Color(0.05f, 0.08f, 0.12f, 0.5f) };
+        entryStyle.SetCornerRadiusAll(3);
+        entryStyle.SetContentMarginAll(6);
+        entry.AddThemeStyleboxOverride("panel", entryStyle);
+        _rightCol.AddChild(entry);
+
+        var inner = new VBoxContainer();
+        inner.AddThemeConstantOverride("separation", 3);
+        entry.AddChild(inner);
+
+        var topRow = new HBoxContainer();
+        topRow.AddThemeConstantOverride("separation", 4);
+        inner.AddChild(topRow);
+
+        string taskName = sp.Task switch
+        {
+            BladeHex.Strategic.SubParty.SubPartyTask.Idle => "归队中",
+            BladeHex.Strategic.SubParty.SubPartyTask.PatrolRegion => "巡逻中",
+            BladeHex.Strategic.SubParty.SubPartyTask.EscortCaravan => "护送中",
+            BladeHex.Strategic.SubParty.SubPartyTask.HuntBandits => "剿匪中",
+            BladeHex.Strategic.SubParty.SubPartyTask.Garrison => "驻防中",
+            _ => "带队中"
+        };
+
+        string levelStr = $"[{taskName}] {name} Lv.{level}";
+        topRow.AddChild(_MakeLabel(levelStr, 24, TextPrimary));
+        var hpStr = _MakeLabel($"{hp}/{maxHp}", 20, hp > maxHp / 2 ? TextPositive : TextNegative);
+        hpStr.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        hpStr.HorizontalAlignment = HorizontalAlignment.Right;
+        topRow.AddChild(hpStr);
+
+        var hpRow = new HBoxContainer();
+        hpRow.AddThemeConstantOverride("separation", 4);
+        inner.AddChild(hpRow);
+        hpRow.AddChild(_MakeLabel("生命值", 18, TextMuted));
+
+        var bar = new ProgressBar
+        {
+            MinValue = 0,
+            MaxValue = Math.Max(maxHp, 1),
+            Value = hp,
+            ShowPercentage = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(160, 16),
+        };
+        var hpColor = hp > maxHp * 0.6f ? TextPositive : hp > maxHp * 0.3f ? TextAccent : TextNegative;
+        var hpBg = new StyleBoxFlat { BgColor = new Color(0.04f, 0.04f, 0.05f, 0.9f) };
+        hpBg.SetCornerRadiusAll(2);
+        bar.AddThemeStyleboxOverride("background", hpBg);
+        var fill = new StyleBoxFlat { BgColor = hpColor };
+        fill.SetCornerRadiusAll(2);
+        bar.AddThemeStyleboxOverride("fill", fill);
+        hpRow.AddChild(bar);
+
+        if (sp.Task != BladeHex.Strategic.SubParty.SubPartyTask.Idle)
+        {
+            var btnRow = new HBoxContainer();
+            btnRow.Alignment = BoxContainer.AlignmentMode.End;
+            inner.AddChild(btnRow);
+
+            var recallBtn = new Button { Text = "召回" };
+            recallBtn.AddThemeFontSizeOverride("font_size", 18);
+            recallBtn.CustomMinimumSize = new Vector2(80, 26);
+            recallBtn.Pressed += () => _OnRecallPressed(sp);
+            btnRow.AddChild(recallBtn);
+        }
+    }
+
+    private void _OnDelegatePressed(UnitData companion)
+    {
+        if (_entityMgr == null || _roster == null) return;
+
+        // 创建全屏磨砂遮罩背景
+        var mask = new ColorRect
+        {
+            Color = new Color(0, 0, 0, 0.6f)
+        };
+        mask.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        AddChild(mask);
+
+        // 中心 Dialog
+        var dialog = new PanelContainer();
+        var dialogStyle = new StyleBoxFlat
+        {
+            BgColor = new Color(0.12f, 0.12f, 0.15f, 0.95f),
+            BorderColor = new Color(0.5f, 0.45f, 0.3f, 0.8f),
+        };
+        dialogStyle.SetBorderWidthAll(2);
+        dialogStyle.SetCornerRadiusAll(8);
+        dialogStyle.SetContentMarginAll(20);
+        dialog.AddThemeStyleboxOverride("panel", dialogStyle);
+        dialog.CustomMinimumSize = new Vector2(480, 420);
+        dialog.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        dialog.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        
+        var center = new CenterContainer();
+        center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        mask.AddChild(center);
+        center.AddChild(dialog);
+
+        var vbox = new VBoxContainer();
+        vbox.AddThemeConstantOverride("separation", 15);
+        dialog.AddChild(vbox);
+
+        // 标题
+        var title = _MakeLabel($"委派 {companion.UnitName} 独立带队", 28, TextAccent);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        vbox.AddChild(title);
+        vbox.AddChild(new HSeparator());
+
+        // 1. 选择任务
+        var taskHbox = new HBoxContainer();
+        taskHbox.AddChild(_MakeLabel("委派任务:", 22, TextPrimary));
+        var taskOpt = new OptionButton();
+        taskOpt.AddItem("巡逻指定区域", (int)BladeHex.Strategic.SubParty.SubPartyTask.PatrolRegion);
+        taskOpt.AddItem("主动剿灭匪徒", (int)BladeHex.Strategic.SubParty.SubPartyTask.HuntBandits);
+        taskOpt.AddItem("入驻城堡守备", (int)BladeHex.Strategic.SubParty.SubPartyTask.Garrison);
+        taskOpt.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        taskHbox.AddChild(taskOpt);
+        vbox.AddChild(taskHbox);
+
+        // 2. 选择目标 POI
+        var poiHbox = new HBoxContainer();
+        poiHbox.AddChild(_MakeLabel("目标地点:", 22, TextPrimary));
+        var poiOpt = new OptionButton();
+        poiOpt.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        
+        // 找出所有 POI
+        foreach (var p in _entityMgr.Pois)
+        {
+            poiOpt.AddItem(p.PoiName);
+        }
+        poiHbox.AddChild(poiOpt);
+        vbox.AddChild(poiHbox);
+
+        // 联动：当选择剿匪时，不需要选择目标地点，禁用目标地点
+        taskOpt.ItemSelected += (long index) => {
+            var selectedTask = (BladeHex.Strategic.SubParty.SubPartyTask)taskOpt.GetSelectedId();
+            poiOpt.Disabled = (selectedTask == BladeHex.Strategic.SubParty.SubPartyTask.HuntBandits);
+        };
+
+        // 3. 选择带走的随行兵力
+        vbox.AddChild(_MakeLabel("调拨随行兵力:", 22, TextAccent));
+        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 120), SizeFlagsVertical = SizeFlags.ExpandFill };
+        var soldiersVbox = new VBoxContainer();
+        scroll.AddChild(soldiersVbox);
+        vbox.AddChild(scroll);
+
+        // 遍历除 Companion 自己和队长之外的普通士兵
+        var checks = new List<(CheckBox cb, UnitData soldier)>();
+        foreach (var m in _roster.Members)
+        {
+            if (m == companion || _roster.IsLeader(m)) continue;
+            var cb = new CheckBox { Text = $"{m.UnitName} (Lv.{m.Level})" };
+            cb.AddThemeFontSizeOverride("font_size", 20);
+            soldiersVbox.AddChild(cb);
+            checks.Add((cb, m));
+        }
+
+        if (checks.Count == 0)
+        {
+            soldiersVbox.AddChild(_MakeLabel("没有多余的普通士兵可调拨", 18, TextMuted));
+        }
+
+        vbox.AddChild(new HSeparator());
+
+        // 按钮栏
+        var btnHbox = new HBoxContainer();
+        btnHbox.Alignment = BoxContainer.AlignmentMode.Center;
+        btnHbox.AddThemeConstantOverride("separation", 20);
+        vbox.AddChild(btnHbox);
+
+        var confirmBtn = new Button { Text = "确认委派" };
+        confirmBtn.CustomMinimumSize = new Vector2(140, 40);
+        confirmBtn.AddThemeFontSizeOverride("font_size", 22);
+        btnHbox.AddChild(confirmBtn);
+
+        var cancelBtn = new Button { Text = "取消" };
+        cancelBtn.CustomMinimumSize = new Vector2(100, 40);
+        cancelBtn.AddThemeFontSizeOverride("font_size", 22);
+        btnHbox.AddChild(cancelBtn);
+
+        cancelBtn.Pressed += () => mask.QueueFree();
+
+        confirmBtn.Pressed += () => {
+            var task = (BladeHex.Strategic.SubParty.SubPartyTask)taskOpt.GetSelectedId();
+            var targetPoi = poiOpt.Disabled ? "" : poiOpt.Text;
+
+            // 收集选中的士兵
+            var selectedSoldiers = new List<UnitData>();
+            foreach (var item in checks)
+            {
+                if (item.cb.ButtonPressed)
+                {
+                    selectedSoldiers.Add(item.soldier);
+                }
+            }
+
+            // 执行委派
+            _ExecuteDelegation(companion, task, targetPoi, selectedSoldiers);
+            
+            mask.QueueFree();
+        };
+    }
+
+    private void _ExecuteDelegation(UnitData companion, BladeHex.Strategic.SubParty.SubPartyTask task, string targetPoi, List<UnitData> soldiers)
+    {
+        if (_entityMgr == null || _roster == null) return;
+
+        Vector2 playerPos = _overworldScene?.PlayerParty?.Position ?? Vector2.Zero;
+
+        // 1. 创建 SubParty 并填充数据
+        var subParty = _entityMgr.SubParties.Create(companion.UnitName, playerPos);
+        subParty.Task = task;
+        subParty.TargetPoiName = targetPoi;
+        subParty.Position = playerPos;
+
+        // 将 Companion 本身和普通士兵的 UnitData 塞入 SubParty.Members 中
+        subParty.Members.Add(companion);
+        foreach (var s in soldiers)
+        {
+            subParty.Members.Add(s);
+        }
+
+        // 2. 从 PartyRoster 移除 Companion 和选中的士兵
+        _roster.Remove(companion);
+        foreach (var s in soldiers)
+        {
+            _roster.Remove(s);
+        }
+
+        // 3. 创建大地图实体
+        var companionEntity = new OverworldEntity
+        {
+            EntityName = companion.UnitName,
+            EntityTypeEnum = OverworldEntity.EntityType.LordArmy,
+            Faction = "player",
+            Position = playerPos,
+            MoveSpeed = 160f,
+            VisionRange = 350f,
+            IsHostileToPlayer = false,
+            IsNamedCharacter = true,
+            HeroId = companion.CharacterId >= 0 ? $"hero_player_{companion.CharacterId}" : $"hero_player_{companion.UnitName}",
+            PartySize = subParty.Members.Count,
+            PartyLevel = companion.Level,
+            CombatPower = subParty.Members.Count * companion.Level * 1.5f,
+        };
+
+        // 4. 将实体注册到大地图并同步关联
+        _entityMgr.Entities.Add(companionEntity);
+        _entityMgr.Spatial.Add(companionEntity);
+        subParty.OverworldEntityRef = companionEntity;
+        
+        _entityMgr.EmitSignal(OverworldEntityManager.SignalName.EntitySpawned, companionEntity);
+
+        // 5. 提示并刷新面板
+        var taskDesc = task switch
+        {
+            BladeHex.Strategic.SubParty.SubPartyTask.PatrolRegion => $"前往巡逻 [{targetPoi}]",
+            BladeHex.Strategic.SubParty.SubPartyTask.HuntBandits => "开始巡游剿匪",
+            BladeHex.Strategic.SubParty.SubPartyTask.Garrison => $"前往驻防 [{targetPoi}]",
+            _ => "独立带队"
+        };
+        GD.Print($"[SubParty] 委派 {companion.UnitName} 独立带队: {taskDesc}");
+        
+        _RefreshRight();
+    }
+
+    private void _OnRecallPressed(BladeHex.Strategic.SubParty.SubParty sp)
+    {
+        sp.Task = BladeHex.Strategic.SubParty.SubPartyTask.Idle;
+        GD.Print($"[SubParty] 已向 {sp.LeaderUnitName} 发送召回指令，正在赶回兵团...");
+        _RefreshRight();
+    }
+
+    private Scenes.Overworld.IOverworldContext? GetContext()
+    {
+        Node? n = GetParent();
+        while (n != null)
+        {
+            if (n is Scenes.Overworld.IOverworldContext ctx)
+            {
+                return ctx;
+            }
+            n = n.GetParent();
+        }
+        return null;
     }
 
     // ========================================
@@ -1126,5 +1485,302 @@ public partial class PartyPanel : PanelContainer
         _isShopMode = false;
         _shopStock = null;
         _shopEconomy = null;
+    }
+
+    private void _OpenSmuggleDialog()
+    {
+        if (_currentPoi == null || _shopEconomy == null) return;
+
+        // 1. 创建背景半透明遮罩防止误触
+        var mask = new ColorRect { Color = new Color(0, 0, 0, 0.7f) };
+        mask.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(mask);
+
+        // 2. 创建精美的走私面板
+        var smuggleBox = new PanelContainer();
+        var style = new StyleBoxFlat
+        {
+            BgColor = new Color(0.08f, 0.05f, 0.08f, 0.95f),
+            BorderWidthTop = 2,
+            BorderWidthBottom = 2,
+            BorderWidthLeft = 2,
+            BorderWidthRight = 2,
+            BorderColor = new Color(0.8f, 0.3f, 0.8f, 0.8f),
+            CornerRadiusTopLeft = 8,
+            CornerRadiusTopRight = 8,
+            CornerRadiusBottomLeft = 8,
+            CornerRadiusBottomRight = 8,
+            ContentMarginLeft = 20,
+            ContentMarginRight = 20,
+            ContentMarginTop = 15,
+            ContentMarginBottom = 15
+        };
+        smuggleBox.AddThemeStyleboxOverride("panel", style);
+        smuggleBox.CustomMinimumSize = new Vector2(480, 360);
+        OverlayPanelLayout.Center(smuggleBox);
+        mask.AddChild(smuggleBox);
+
+        var vbox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        vbox.AddThemeConstantOverride("separation", 12);
+        smuggleBox.AddChild(vbox);
+
+        // 标题
+        var title = _MakeLabel("🔒 密道黑市走私协议 (高风险)", 22, new Color(0.9f, 0.3f, 0.9f));
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        vbox.AddChild(title);
+
+        vbox.AddChild(new HSeparator());
+
+        // 选项网格
+        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 10);
+        grid.AddThemeConstantOverride("v_separation", 8);
+        vbox.AddChild(grid);
+
+        // 1. 选择买卖类型
+        grid.AddChild(_MakeLabel("走私类型:", 16, TextSecondary));
+        var typeSelector = new OptionButton { CustomMinimumSize = new Vector2(240, 32) };
+        typeSelector.AddItem("走私购入 (折价 80%)");
+        typeSelector.AddItem("走私售出 (溢价 110%)");
+        grid.AddChild(typeSelector);
+
+        // 2. 选择物品
+        grid.AddChild(_MakeLabel("走私商品:", 16, TextSecondary));
+        var itemSelector = new OptionButton { CustomMinimumSize = new Vector2(240, 32) };
+        grid.AddChild(itemSelector);
+
+        // 3. 选择数量
+        grid.AddChild(_MakeLabel("走私数量:", 16, TextSecondary));
+        var qtyBox = new SpinBox
+        {
+            MinValue = 1,
+            MaxValue = 99,
+            Value = 1,
+            CustomMinimumSize = new Vector2(120, 32)
+        };
+        grid.AddChild(qtyBox);
+
+        // 4. 价格与拦截风控几率提示
+        grid.AddChild(_MakeLabel("预期交易总价:", 16, TextSecondary));
+        var priceLabel = _MakeLabel("0 金币", 18, TextAccent);
+        grid.AddChild(priceLabel);
+
+        grid.AddChild(_MakeLabel("巡逻队拦截率:", 16, TextSecondary));
+        int pLevel = SelectedUnit != null ? SelectedUnit.Level : 1;
+        double chance = SmugglingService.CalculateDetectionChance(_currentPoi, pLevel);
+        var chanceLabel = _MakeLabel($"{(chance * 100):F0}%", 18, TextNegative);
+        grid.AddChild(chanceLabel);
+
+        // 动态物品选项生成函数
+        List<ItemData> currentItems = new();
+        void UpdateItemSelector()
+        {
+            itemSelector.Clear();
+            currentItems.Clear();
+            
+            if (typeSelector.Selected == 0) // 买入
+            {
+                if (_shopStock != null)
+                {
+                    // 过滤出独一无二的物品
+                    var unique = _shopStock.GroupBy(i => i.ItemId).Select(g => g.First()).ToList();
+                    foreach (var it in unique)
+                    {
+                        itemSelector.AddItem($"{it.ItemName} ({it.ItemId})");
+                        currentItems.Add(it);
+                    }
+                }
+            }
+            else // 卖出
+            {
+                if (_gridInventory != null)
+                {
+                    var unique = _gridInventory.Items.Select(i => i.Item).GroupBy(it => it.ItemId).Select(g => g.First()).ToList();
+                    foreach (var it in unique)
+                    {
+                        itemSelector.AddItem($"{it.ItemName} ({it.ItemId})");
+                        currentItems.Add(it);
+                    }
+                }
+            }
+
+            if (itemSelector.ItemCount == 0)
+            {
+                itemSelector.AddItem("-- 暂无可用物品 --");
+            }
+            UpdatePrice();
+        }
+
+        void UpdatePrice()
+        {
+            if (itemSelector.Selected < 0 || itemSelector.Selected >= currentItems.Count)
+            {
+                priceLabel.Text = "0 金币";
+                return;
+            }
+
+            var item = currentItems[itemSelector.Selected];
+            int qty = (int)qtyBox.Value;
+            
+            if (typeSelector.Selected == 0) // 买入
+            {
+                int price = (int)Math.Round(TradePricingService.GetBuyPrice(item, _currentPoi.Prosperity) * 0.8 * qty);
+                priceLabel.Text = $"{price} 金币";
+            }
+            else // 卖出
+            {
+                int price = (int)Math.Round(TradePricingService.GetSellPrice(item, _currentPoi.Prosperity) * 1.1 * qty);
+                priceLabel.Text = $"{price} 金币";
+            }
+        }
+
+        typeSelector.ItemSelected += (idx) => UpdateItemSelector();
+        itemSelector.ItemSelected += (idx) => UpdatePrice();
+        qtyBox.ValueChanged += (val) => UpdatePrice();
+
+        // 初始填充列表
+        UpdateItemSelector();
+
+        vbox.AddChild(new HSeparator());
+
+        // 确认和取消行
+        var btnHbox = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        btnHbox.AddThemeConstantOverride("separation", 20);
+        vbox.AddChild(btnHbox);
+
+        var cancelBtn = new Button { Text = "放弃协议", CustomMinimumSize = new Vector2(100, 36) };
+        cancelBtn.Pressed += () => { mask.QueueFree(); };
+        btnHbox.AddChild(cancelBtn);
+
+        var confirmBtn = new Button { Text = "📝 签定协议", CustomMinimumSize = new Vector2(120, 36) };
+        confirmBtn.AddThemeColorOverride("font_color", TextPositive);
+        confirmBtn.Pressed += () =>
+        {
+            if (_shopEconomy == null || _currentPoi == null)
+            {
+                mask.QueueFree();
+                return;
+            }
+
+            if (itemSelector.Selected < 0 || itemSelector.Selected >= currentItems.Count)
+            {
+                mask.QueueFree();
+                return;
+            }
+
+            var item = currentItems[itemSelector.Selected];
+            int qty = (int)qtyBox.Value;
+            int currentDay = _shopEconomy.DaysPassed;
+
+            if (typeSelector.Selected == 0) // 走私买入
+            {
+                var res = SmugglingService.TryBuySmuggle(item, qty, _currentPoi, pLevel, currentDay, _shopEconomy, _worldEngine, _reputation);
+                if (res.Success)
+                {
+                    // 买入成功，往网格背包自动放入
+                    if (_gridInventory != null)
+                    {
+                        _gridInventory.TryAutoPlace(item, qty);
+                        _backpackView?.Refresh();
+                    }
+                    if (_shopGoldLabel != null && _shopEconomy != null)
+                    {
+                        _shopGoldLabel.Text = $"金币: {_shopEconomy.Gold}";
+                    }
+                    mask.QueueFree();
+                    GD.Print($"[Smuggle] 成功走私买入 {qty}x {item.ItemName}！");
+                }
+                else
+                {
+                    // 被发现
+                    if (res.FailReason == "被巡逻发现")
+                    {
+                        // 没收物品（买入罚款已扣，由 TryBuySmuggle 扣除）
+                        // 弹窗警告 + 触发走私拦截伏击
+                        _TriggerSmuggleAmbush(town: _currentPoi);
+                    }
+                    mask.QueueFree();
+                }
+            }
+            else // 走私卖出
+            {
+                // 先检查背包是否确实拥有对应数量的物品
+                int currentBackpackQty = _gridInventory?.GetItemCount(item.ItemId) ?? 0;
+                if (currentBackpackQty < qty)
+                {
+                    GD.PrintErr("[Smuggle] 走私卖出失败：背包中该物品数量不足！");
+                    mask.QueueFree();
+                    return;
+                }
+
+                var res = SmugglingService.TrySellSmuggle(item, qty, _currentPoi, pLevel, currentDay, _shopEconomy, _worldEngine, _reputation);
+                if (res.Success)
+                {
+                    // 卖出成功，从玩家网格背包移除
+                    if (_gridInventory != null)
+                    {
+                        _gridInventory.TryRemove(item.ItemId, qty);
+                        _backpackView?.Refresh();
+                    }
+                    if (_shopGoldLabel != null && _shopEconomy != null)
+                    {
+                        _shopGoldLabel.Text = $"金币: {_shopEconomy.Gold}";
+                    }
+                    mask.QueueFree();
+                    GD.Print($"[Smuggle] 成功走私卖出 {qty}x {item.ItemName}！");
+                }
+                else
+                {
+                    // 被发现
+                    if (res.FailReason == "被巡逻发现")
+                    {
+                        // 没收货物：从玩家网格背包强行罚没
+                        if (_gridInventory != null)
+                        {
+                            _gridInventory.TryRemove(item.ItemId, qty);
+                            _backpackView?.Refresh();
+                        }
+                        _TriggerSmuggleAmbush(town: _currentPoi);
+                    }
+                    mask.QueueFree();
+                }
+            }
+        };
+        btnHbox.AddChild(confirmBtn);
+    }
+
+    private void _TriggerSmuggleAmbush(OverworldPOI town)
+    {
+        // 1. 创建卫兵伏击大地图战队实体
+        var ambush = new OverworldEntity
+        {
+            EntityName = $"{town.PoiName}巡逻卫队",
+            EntityTypeEnum = OverworldEntity.EntityType.LordArmy,
+            Position = town.Position,
+            Faction = "hostile",
+            IsHostileToPlayer = true,
+            IsAlive = true,
+            GarrisonSize = (int)Math.Max(10, Math.Round(town.GarrisonCurrent * 0.6)),
+            PartySize = (int)Math.Max(10, Math.Round(town.GarrisonCurrent * 0.6)),
+            PartyLevel = SelectedUnit != null ? SelectedUnit.Level : 10,
+        };
+
+        // 战力估算
+        ambush.CombatPower = ambush.PartySize * ambush.PartyLevel * 1.5f;
+
+        // 2. 写入 OverworldScene3D 状态
+        if (_overworldScene != null)
+        {
+            _overworldScene.PendingSmuggleAmbushEntity = ambush;
+        }
+
+        // 3. 强行关闭商店和 PartyPanel 面板以流转战斗
+        Visible = false;
+        _isShopMode = false;
+        _shopStock = null;
+        _shopEconomy = null;
+        EmitSignal(SignalName.PanelClosed);
+        
+        GD.PrintErr($"[Smuggle] 走私行踪暴露！城守卫队 {ambush.EntityName} (规模: {ambush.PartySize}) 正在进行围剿拦截！");
     }
 }

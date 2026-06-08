@@ -21,13 +21,11 @@ public partial class ItemPopup : FloatingPanel
     // FloatingPanel 配置
     // ============================================================================
 
-    protected override Color PanelBgColor => new(0.04f, 0.04f, 0.06f, 0.96f);
-    protected override Color PanelBorderColor => new(0.45f, 0.4f, 0.3f, 0.9f);
-    protected override int PanelCornerRadius => 4;
     protected override int PanelShadowSize => 4;
     protected override float MinPanelWidth => 280f;
     protected override bool UseTopLevel => true;
     protected override Vector2 MouseOffset => new(12, -20);
+    protected override FloatingPanelDismissMode PanelDismiss => FloatingPanelDismissMode.OnMouseExit;
 
     // ============================================================================
     // 构建内容
@@ -41,6 +39,7 @@ public partial class ItemPopup : FloatingPanel
         _text.BbcodeEnabled = true;
         _text.ScrollActive = false;
         _text.FitContent = true;
+        _text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _text.CustomMinimumSize = new Vector2(260, 0);
         _text.MouseFilter = MouseFilterEnum.Ignore;
         Content.AddChild(_text);
@@ -147,12 +146,12 @@ public partial class ItemPopup : FloatingPanel
             }
             else
             {
-                text += $"\n[color=#ddd]闪避: {(arm.BaseAcOverride >= 0 ? arm.BaseAcOverride + arm.BonusAc : 10 + arm.AcBonus + arm.BonusAc)}+敏捷[/color]";
+                text += $"\n[color=#ddd]闪避: {10 + arm.AcBonus + arm.BonusAc}+敏捷[/color]";
                 if (arm.MaxDexBonus < 99)
                     text += $"\n[color=#ddd]敏捷上限: {arm.MaxDexBonus}[/color]";
             }
 
-            text += $"\n[color=#ddd]装甲: {arm.MaxArmorPoints} | 穿透阈值: {arm.DrThreshold}[/color]";
+            text += $"\n[color=#ddd]装甲耐久: {arm.CurrentArmorPoints}/{arm.MaxArmorPoints} | 穿透阈值: {arm.DrThreshold}[/color]";
 
             var penalties = new System.Collections.Generic.List<string>();
             if (arm.MovementPenalty != 0) penalties.Add($"速度{-arm.MovementPenalty:+#;-#;+0}");

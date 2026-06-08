@@ -46,7 +46,6 @@ public class EncounterEvent
         PlayerSurprised = 1 << 1,       // 玩家被突袭（第一回合无法行动）
         TerrainNarrow = 1 << 2,         // 狭窄地形（无法展开阵型）
         TerrainHighGround = 1 << 3,     // 敌人占据高地
-        MoraleShock = 1 << 4,           // 士气冲击（初始士气-10）
         CanFlee = 1 << 5,              // 可以逃跑
         CanNegotiate = 1 << 6,         // 可以谈判
         CanBribe = 1 << 7,             // 可以贿赂
@@ -73,7 +72,6 @@ public class EncounterEvent
 
     // 机制修正值
     public int InitiativeModifier { get; set; } = 0;    // 先攻修正
-    public int MoraleModifier { get; set; } = 0;        // 士气修正
     public int FleeChancePercent { get; set; } = 50;    // 逃跑成功率
     public int BribeCost { get; set; } = 0;             // 贿赂费用
     public string TerrainOverride { get; set; } = "";   // 地形覆盖（伏击地形）
@@ -129,7 +127,6 @@ public class EncounterEvent
             {
                 evt.Effects = EffectFlags.EnemyHasInitiative | EffectFlags.EnemySurrounded | EffectFlags.CanFlee | EffectFlags.CanBribe;
                 evt.InitiativeModifier = -4;
-                evt.MoraleModifier = -5;
                 evt.FleeChancePercent = 40;
                 evt.BribeCost = partySize * 20 + level * 10;
                 evt.TerrainOverride = "forest_ambush";
@@ -138,7 +135,6 @@ public class EncounterEvent
             {
                 evt.Effects = EffectFlags.EnemyHasInitiative | EffectFlags.CanFlee;
                 evt.InitiativeModifier = -2;
-                evt.MoraleModifier = -8;
                 evt.FleeChancePercent = 30; // 骑兵难逃
                 evt.TerrainOverride = "plains_open";
             }
@@ -146,14 +142,12 @@ public class EncounterEvent
             {
                 evt.Effects = EffectFlags.CanFlee | EffectFlags.CanNegotiate | EffectFlags.ReputationAffected;
                 evt.InitiativeModifier = 0;
-                evt.MoraleModifier = -3;
                 evt.FleeChancePercent = 45;
             }
             else if (evt.Type == EncounterType.MonsterEncounter)
             {
-                evt.Effects = EffectFlags.MoraleShock | EffectFlags.CanFlee;
+                evt.Effects = EffectFlags.CanFlee;
                 evt.InitiativeModifier = -2;
-                evt.MoraleModifier = -15;
                 evt.FleeChancePercent = 60;
             }
             else if (evt.Type == EncounterType.PirateAmbush)
@@ -206,7 +200,6 @@ public class EncounterEvent
             { "threat_rating", ThreatRating },
             { "effects", (int)Effects },
             { "initiative_mod", InitiativeModifier },
-            { "morale_mod", MoraleModifier },
             { "flee_chance", FleeChancePercent },
             { "bribe_cost", BribeCost },
             { "terrain_override", TerrainOverride },

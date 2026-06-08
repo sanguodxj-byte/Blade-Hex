@@ -3,9 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using BladeHex.Combat;
+using BladeHex.Combat.Skills;
 using BladeHex.Data;
 using BladeHex.Events;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.AI;
 
@@ -20,6 +23,12 @@ public partial class AIController : Node
 
     private AIDifficultyConfig _difficultyConfig = null!;
     private readonly Dictionary<UnitData.AIStrategy, AIStrategyBase> _strategies = new();
+    private CombatManager? _combatManager;
+
+    public void SetCombatManager(CombatManager manager)
+    {
+        _combatManager = manager;
+    }
 
     // 战斗场景引用（目前假设为 Node，具体可能需要接口或基类）
     // 战斗场景适配器（类型化接口，替代 HasMethod/Call 反射）
@@ -102,6 +111,18 @@ public partial class AIController : Node
                 if (!GodotObject.IsInstanceValid(enemy) || enemy.CurrentHp <= 0) break;
                 if (enemy.CurrentAp < 1) break; // AP 不足以做任何事
 
+                // v0.8 E4: cannot_act 检查 — buff 封锁行动
+                if (enemy.Data != null)
+                {
+                    var actLock = BladeHex.Combat.Buff.BuffSystem.ResolveStatModifiers(enemy.Data, "cannot_act");
+                    if (actLock.OverrideValue.HasValue && actLock.OverrideValue.Value >= 1f)
+                        break; // 跳过本回合
+                }
+
+                // v0.8 D1: AI 职业大招决策（在 Move/Attack/Retreat 之前）
+                if (TryUseCareerSkill(enemy, playerUnits, enemyUnits))
+                    break; // 大招释放成功，本回合结束
+
                 // 检查是否还有存活的玩家单位
                 var alivePlayerUnits = playerUnits.Where(p => GodotObject.IsInstanceValid(p) && p.CurrentHp > 0).ToList();
                 if (alivePlayerUnits.Count == 0) break;
@@ -151,7 +172,8 @@ public partial class AIController : Node
             if (siegeAction != null) return siegeAction;
         }
 
-        var strategyKey = actor.Data!.aiStrategy;
+        // T07: Personality-based strategy selection
+        var strategyKey = SelectStrategyByPersonality(actor.Data!);
         if (!_strategies.TryGetValue(strategyKey, out var strategy))
         {
             strategy = _strategies[UnitData.AIStrategy.Instinct];
@@ -163,7 +185,44 @@ public partial class AIController : Node
             strategy = _strategies[UnitData.AIStrategy.Instinct];
         }
 
-        return strategy.DecideAction(actor, playerUnits, enemyUnits, hexGrid);
+        return strategy.DecideAction(actor, playerUnits, enemyUnits, hexGrid, _combatManager);
+    }
+
+    // T07: Select AI strategy based on personality scores from traits
+    private UnitData.AIStrategy SelectStrategyByPersonality(UnitData data)
+    {
+        // If no traits, use default strategy
+        if (data.CharacterTraits == null || data.CharacterTraits.Count == 0)
+            return data.aiStrategy;
+
+        var scores = data.GetAllPersonalityScores();
+
+        // Personality-based strategy adjustments
+        // calculating ≥ 1 → Tactical +50% weight
+        // valor ≥ 1 → Reckless +50% weight
+        // calculating ≤ -1 → Cautious +50% weight
+
+        float tacticalWeight = 1.0f;
+        float recklessWeight = 1.0f;
+        float cautiousWeight = 1.0f;
+
+        if (scores["calculating"] >= 1.0f)
+            tacticalWeight += 0.5f;
+        if (scores["valor"] >= 1.0f)
+            recklessWeight += 0.5f;
+        if (scores["calculating"] <= -1.0f)
+            cautiousWeight += 0.5f;
+
+        // Weighted random selection
+        float totalWeight = tacticalWeight + recklessWeight + cautiousWeight;
+        float roll = GD.Randf() * totalWeight;
+
+        if (roll < tacticalWeight)
+            return UnitData.AIStrategy.Tactical;
+        else if (roll < tacticalWeight + recklessWeight)
+            return UnitData.AIStrategy.Reckless;
+        else
+            return UnitData.AIStrategy.Cautious;
     }
 
     private async Task ExecuteAction(AIAction action, HexGrid hexGrid, Node combatUi)
@@ -212,7 +271,26 @@ public partial class AIController : Node
                 break;
 
             case AIAction.ActionType.UseSkill:
-                await ExecuteSiegeSkill(action, hexGrid);
+                if (action.SkillId == "siege_attack_gate" || action.SkillId == "siege_build_ladder")
+                {
+                    await ExecuteSiegeSkill(action, hexGrid);
+                }
+                else
+                {
+                    if (action.MovePath != null && action.MovePath.Count > 0)
+                    {
+                        await ExecuteMove(action, hexGrid, combatUi);
+                    }
+                    if (GodotObject.IsInstanceValid(actor) && actor.CurrentHp > 0)
+                    {
+                        await ExecuteIntrinsicSkillAction(action, hexGrid);
+                    }
+                }
+                actor.HasActed = true;
+                break;
+
+            case AIAction.ActionType.UseCareerSkill:
+                await ExecuteCareerSkillAction(action, hexGrid);
                 actor.HasActed = true;
                 break;
 
@@ -241,8 +319,9 @@ public partial class AIController : Node
 
         if (action.MovePath.Count == 0)
         {
-            int currentDist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, target.GridPos.X, target.GridPos.Y);
-            return currentDist <= weaponRange;
+            int currentDist = actor.DistanceTo(target);
+            return currentDist <= weaponRange
+                && !CombatAttackRules.IsMeleeElevationBlocked(actor, target, hexGrid);
         }
 
         float fullCost = hexGrid.GetPathCost(actor.GridPos, action.MovePath);
@@ -278,8 +357,8 @@ public partial class AIController : Node
 
             spent += stepCost;
             current = next;
-            int dist = HexUtils.Distance(next.X, next.Y, target.GridPos.X, target.GridPos.Y);
-            if (dist <= weaponRange)
+            int dist = UnitFootprint.DistanceTo(next, target.GridPos, target.FootprintW, target.FootprintH);
+            if (dist <= weaponRange && !CombatAttackRules.IsMeleeElevationBlocked(actor, target, hexGrid, next))
                 best = path.Take(i + 1).ToList();
         }
 
@@ -371,8 +450,13 @@ public partial class AIController : Node
         // 消耗 AP
         actor.ConsumeAp(pathCost);
 
-        // 执行移动
-        _adapter?.MoveUnitTo(actor, finalPos.X, finalPos.Y);
+        // 执行移动（传递截断后的实际路径以触发 AoO 检测）
+        var walkedPath = action.MovePath.Take(
+            action.MovePath.IndexOf(finalPos) >= 0
+                ? action.MovePath.IndexOf(finalPos) + 1
+                : action.MovePath.Count
+        ).ToList();
+        _adapter?.MoveUnitTo(actor, finalPos.X, finalPos.Y, walkedPath);
         _adapter?.LogMessage($"{actor.Data!.UnitName} 移动到 ({finalPos.X}, {finalPos.Y})");
 
         await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.3);
@@ -394,10 +478,16 @@ public partial class AIController : Node
         // 射程验证 — 移动后仍不在射程内则跳过攻击
         var weapon = actor.Model.GetMainHand() as WeaponData;
         int weaponRange = weapon?.RangeCells ?? 1;
-        int dist = HexUtils.Distance(actor.GridPos.X, actor.GridPos.Y, target.GridPos.X, target.GridPos.Y);
+        int dist = actor.DistanceTo(target);
         if (dist > weaponRange)
         {
             _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 无法攻击 {target.Data!.UnitName}（距离 {dist}，射程 {weaponRange}）[/color]");
+            return;
+        }
+
+        if (CombatAttackRules.IsMeleeElevationBlocked(actor, target, hexGrid))
+        {
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 无法攻击 {target.Data!.UnitName}（{CombatAttackRules.MeleeElevationBlockedReason}）[/color]");
             return;
         }
 
@@ -420,6 +510,13 @@ public partial class AIController : Node
             }
         }
 
+        // v1 职业被动: 万象代价 — 无法攻击时禁止
+        if (!CareerPassiveHooks.CanAttack(actor))
+        {
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 万象代价: 无法攻击[/color]");
+            return;
+        }
+
         // 消耗攻击 AP（所有硬性可攻击性检查通过后再扣除）
         actor.ConsumeAp(apCost);
 
@@ -431,8 +528,13 @@ public partial class AIController : Node
             .Where(u => GodotObject.IsInstanceValid(u) && u != actor && u.CurrentHp > 0
                      && u.IsPlayerSide == actor.IsPlayerSide)
             .ToArray();
+        var defenderAllies = (_allUnitsCache ?? new List<Unit>())
+            .Where(u => GodotObject.IsInstanceValid(u) && u != target && u.CurrentHp > 0
+                     && u.IsPlayerSide == target.IsPlayerSide)
+            .ToArray();
         var result = CombatResolver.ResolveAttack(actor, target, hexGrid, action.IsCharge,
-            attackerAllies: allies);
+            attackerAllies: allies,
+            defenderAllies: defenderAllies);
 
         if (result["hit"].AsBool())
         {
@@ -467,9 +569,6 @@ public partial class AIController : Node
                 _adapter?.PlaySfx("combat_death");
                 _adapter?.LogMessage($"[color=yellow]{target.Data!.UnitName} 被 {actor.Data!.UnitName} 击败！[/color]");
 
-                // 士气变动
-                MoraleSystem.OnUnitKilled(target, actor, _allUnitsCache ?? new List<Unit>());
-
                 _adapter?.OnUnitKilled(target, actor);
             }
         }
@@ -486,6 +585,35 @@ public partial class AIController : Node
                 missLabel: result.ContainsKey("fumble") && result["fumble"].AsBool() ? "Fumble" : "Miss");
 
             _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 的攻击未命中 {target.Data!.UnitName}。[/color]");
+        }
+
+        // 剑舞者额外攻击 VFX
+        if (result.ContainsKey("blade_dancer_extra_hit") && result["blade_dancer_extra_hit"].AsBool()
+            && result.ContainsKey("blade_dancer_extra_target"))
+        {
+            var extraTarget = result["blade_dancer_extra_target"].AsGodotObject() as Unit;
+            if (extraTarget != null && GodotObject.IsInstanceValid(extraTarget))
+            {
+                int extraDmg = result.ContainsKey("blade_dancer_extra_damage") ? result["blade_dancer_extra_damage"].AsInt32() : 0;
+                bool extraCrit = result.ContainsKey("blade_dancer_extra_crit") && result["blade_dancer_extra_crit"].AsBool();
+                bool extraHit = result["blade_dancer_extra_hit"].AsBool();
+
+                if (extraHit)
+                {
+                    // 伤害数字
+                    _adapter?.ShowDamageNumber(extraTarget, extraDmg, extraCrit);
+                    _adapter?.LogMessage($"[color=red]{actor.Data!.UnitName} 剑舞者额外命中 {extraTarget.Data!.UnitName}，造成 {extraDmg} 伤害[/color]");
+                    _adapter?.UpdateUnitInfo(extraTarget);
+
+                    // 击杀处理
+                    if (extraTarget.CurrentHp <= 0)
+                    {
+                        _adapter?.PlaySfx("combat_death");
+                        _adapter?.LogMessage($"[color=yellow]{extraTarget.Data!.UnitName} 被剑舞者额外攻击击败！[/color]");
+                        _adapter?.OnUnitKilled(extraTarget, actor);
+                    }
+                }
+            }
         }
 
         _adapter?.PlayUnitAnim(actor, "default");
@@ -538,6 +666,155 @@ public partial class AIController : Node
         await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.5);
     }
 
+    private async Task ExecuteIntrinsicSkillAction(AIAction action, HexGrid hexGrid)
+    {
+        var actor = action.Actor!;
+        var targetCell = action.TargetPosition;
+        string skillName = action.SkillId;
+
+        if (_combatManager == null) return;
+
+        _adapter?.LogMessage($"[color=yellow]{actor.Data!.UnitName} 释放天生技能 {skillName}！[/color]");
+
+        var result = _combatManager.UseSkill(actor, skillName, targetCell, hexGrid);
+
+        if (result.Success)
+        {
+            foreach (var sub in result.SubResults)
+            {
+                switch (sub)
+                {
+                    case StatusEffectApplication eff:
+                        var target = FindRuntimeUnit(eff.Target);
+                        if (GodotObject.IsInstanceValid(target) && !string.IsNullOrEmpty(eff.EffectId) && target.Data != null)
+                        {
+                            _adapter?.LogMessage($"对 {target.Data!.UnitName} 施加状态：{eff.EffectId}");
+                        }
+                        break;
+                    case DamageEvent dmg:
+                        var dmgTarget = FindRuntimeUnit(dmg.Target);
+                        if (GodotObject.IsInstanceValid(dmgTarget))
+                        {
+                            _adapter?.ShowDamageNumber(dmgTarget, dmg.Damage, dmg.IsCritical);
+                            if (dmgTarget.RenderBus != null) dmgTarget.RenderBus.NotifyHit(dmgTarget);
+                            
+                            _adapter?.LogMessage($"[color=red]{actor.Data!.UnitName} 的技能命中 {dmgTarget.Data!.UnitName}，造成 {dmg.Damage} 伤害！[/color]");
+                            _adapter?.UpdateUnitInfo(dmgTarget);
+
+                            if (dmgTarget.CurrentHp <= 0)
+                            {
+                                _adapter?.PlaySfx("combat_death");
+                                _adapter?.LogMessage($"[color=yellow]{dmgTarget.Data!.UnitName} 被击败！[/color]");
+                                _adapter?.OnUnitKilled(dmgTarget, actor);
+                            }
+                        }
+                        break;
+                    case HealEvent heal:
+                        var healTarget = FindRuntimeUnit(heal.Target);
+                        if (GodotObject.IsInstanceValid(healTarget))
+                        {
+                            _adapter?.ShowDamageNumber(healTarget, -heal.Amount, false);
+                            _adapter?.LogMessage($"[color=green]{actor.Data!.UnitName} 的技能治疗 {healTarget.Data!.UnitName}，恢复 {heal.Amount} 生命！[/color]");
+                            _adapter?.UpdateUnitInfo(healTarget);
+                        }
+                        break;
+                }
+            }
+            _adapter?.UpdateUnitInfo(actor);
+        }
+        else
+        {
+            string reason = result.FailureReason ?? "未知原因";
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 技能释放失败：{reason}[/color]");
+        }
+
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.5);
+    }
+
+    /// <summary>把技能结果中的 Core 模型映射回运行时 Unit。优先引用匹配，避免默认 CharacterId 误配。</summary>
+    private Unit? FindRuntimeUnit(BattleUnitModel targetModel)
+    {
+        var units = _allUnitsCache ?? new List<Unit>();
+        var targetData = targetModel.Data;
+        var byReference = units.FirstOrDefault(u =>
+            GodotObject.IsInstanceValid(u)
+            && (ReferenceEquals(u.Model, targetModel) || ReferenceEquals(u.Model.Data, targetData) || ReferenceEquals(u.Data, targetData)));
+        if (byReference != null) return byReference;
+
+        int characterId = targetData?.CharacterId ?? -1;
+        if (characterId >= 0)
+        {
+            return units.FirstOrDefault(u =>
+                GodotObject.IsInstanceValid(u)
+                && u.Data != null
+                && u.Data.CharacterId == characterId);
+        }
+
+        return null;
+    }
+
+    private bool CanApplyResultStatus(Unit? target, StatusEffectApplication effect)
+    {
+        if (!GodotObject.IsInstanceValid(target) || string.IsNullOrEmpty(effect.EffectId) || target.Data == null)
+            return false;
+        if (!PassiveSkillResolver.IsFearEffect(effect.EffectId))
+            return true;
+        return PassiveSkillResolver.CanApplyFearEffect(target, _allUnitsCache);
+    }
+
+    /// <summary>v0.8 D2-A: 执行职业技能</summary>
+    private async Task ExecuteCareerSkillAction(AIAction action, HexGrid hexGrid)
+    {
+        var actor = action.Actor!;
+        if (actor.Data == null) return;
+
+        _adapter?.LogMessage($"[color=cyan]{action.Description}[/color]");
+
+        var result = CareerSkillExecutor.ExecuteCareerSkill(
+            actor, action.SkillTargetCell, hexGrid,
+            _allUnitsCache ?? new List<Unit>(),
+            _allUnitsCache?.Where(u => u.IsPlayerSide).ToList() ?? new List<Unit>(),
+            _allUnitsCache?.Where(u => !u.IsPlayerSide).ToList() ?? new List<Unit>()
+        );
+
+        if (result.Success)
+        {
+            // CareerSkillExecutor 已处理 AP 消耗和 HasActed 标记
+
+            // 处理状态效果和伤害结果
+            foreach (var sub in result.SubResults)
+            {
+                switch (sub)
+                {
+                    case StatusEffectApplication eff:
+                        var target = FindRuntimeUnit(eff.Target);
+                        if (CanApplyResultStatus(target, eff))
+                        {
+                            BladeHex.Combat.Buff.BuffSystem.Apply(target!.Data!, eff.EffectId, eff.Duration, sourceUnitId: (int)actor.GetInstanceId());
+                        }
+                        break;
+                    case DamageEvent dmg:
+                        var dmgTarget = FindRuntimeUnit(dmg.Target);
+                        if (GodotObject.IsInstanceValid(dmgTarget))
+                        {
+                            _adapter?.ShowDamageNumber(dmgTarget, dmg.Damage, dmg.IsCritical);
+                            _adapter?.UpdateUnitInfo(dmgTarget);
+                        }
+                        break;
+                }
+            }
+
+            _adapter?.LogMessage($"[color=cyan]{actor.Data!.UnitName} 完成职业技能释放[/color]");
+        }
+        else
+        {
+            string reason = result.FailureReason ?? "未知原因";
+            _adapter?.LogMessage($"[color=gray]{actor.Data!.UnitName} 职业技能释放失败：{reason}[/color]");
+        }
+
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.5);
+    }
+
     private List<Unit> SortByPriority(List<Unit> enemies)
     {
         return enemies.OrderBy(e => GetStrategyPriority(e.Data!.aiStrategy)).ToList();
@@ -553,5 +830,174 @@ public partial class AIController : Node
             UnitData.AIStrategy.Instinct => 3,
             _ => 99,
         };
+    }
+
+    // ============================================================================
+    // v0.8 D1/D2/D3: AI 职业大招决策
+    // ============================================================================
+
+    /// <summary>v1.0: 尝试让 AI 单位释放职业技能。返回 true 表示释放成功，本回合结束。</summary>
+    private bool TryUseCareerSkill(Unit unit, List<Unit> playerUnits, List<Unit> enemyUnits)
+    {
+        if (!unit.CanUseCareerSkill()) return false;
+        var skill = unit.GetCareerSkill();
+        if (skill == null) return false;
+
+        // v1: 跳过被动技能（无 UI 按钮）
+        if (!skill.ShowInCombatUi || skill.IsPassive)
+            return false;
+
+        // v1: 五属性主动 — 检查是否满 AP
+        if (skill.RequiresFullAp && unit.CurrentAp < unit.GetMaxAp() - 0.01f)
+            return false;
+
+        // v1: 万象代价 — 检查是否可攻击/可行动
+        if (skill.EffectId == "paragon_all_aspects")
+        {
+            if (unit.Data?.Runtime.CareerParagonExhausted == true)
+                return false;
+        }
+
+        // v1: 判定是否应该释放 (基于 TargetType)
+        float maxHp = unit.Model.GetMaxHp();
+        float hpPct = maxHp > 0 ? (float)unit.CurrentHp / maxHp : 1f;
+        int currentRound = GetCurrentRound(enemyUnits);
+
+        bool shouldUse = skill.SkillTargetType switch
+        {
+            CareerSkillData.TargetType.Self => hpPct < 0.40f || currentRound >= 2,
+            CareerSkillData.TargetType.SingleAlly => CountAlliesInDanger(enemyUnits) >= 1,
+            CareerSkillData.TargetType.AllAllies => CountAlliesInDanger(enemyUnits) >= 1,
+            CareerSkillData.TargetType.SingleEnemy => HasLowHpEnemy(playerUnits, 0.3f) || currentRound >= 2,
+            CareerSkillData.TargetType.Ground => currentRound >= 2,
+            _ => hpPct < 0.50f || currentRound >= 2,
+        };
+
+        if (!shouldUse) return false;
+
+        // 确定目标格
+        var targetCell = ResolveCareerSkillTarget(unit, skill, playerUnits, enemyUnits);
+
+        // 释放技能
+        var allies = (_allUnitsCache ?? new List<Unit>()).Where(u => !u.IsPlayerSide).ToList();
+        var enemies2 = (_allUnitsCache ?? new List<Unit>()).Where(u => u.IsPlayerSide).ToList();
+        var result = CareerSkillExecutor.ExecuteCareerSkill(
+            unit, targetCell,
+            null, // hexGrid 暂不可用，传 null
+            _allUnitsCache ?? new List<Unit>(),
+            enemies2, allies);
+
+        bool success = result.Success;
+        if (success)
+            _adapter?.LogMessage($"[color=cyan]{unit.Data!.UnitName} 释放职业技能![/color]");
+        return success;
+    }
+
+    /// <summary>v1.0 D3: 根据 v1 CareerSkillData.TargetType 选择 AI 目标格</summary>
+    private Vector2I ResolveCareerSkillTarget(Unit unit, CareerSkillData skill, List<Unit> playerUnits, List<Unit> enemyUnits)
+    {
+        return skill.SkillTargetType switch
+        {
+            CareerSkillData.TargetType.Self or CareerSkillData.TargetType.AllAllies
+                or CareerSkillData.TargetType.AllAdjacent or CareerSkillData.TargetType.Ground
+                => unit.GridPos,
+            CareerSkillData.TargetType.SingleEnemy => FindNearestEnemy(unit, playerUnits)?.GridPos ?? unit.GridPos,
+            CareerSkillData.TargetType.SingleAlly => FindLowestHpAlly(unit, enemyUnits)?.GridPos ?? unit.GridPos,
+            CareerSkillData.TargetType.RangedSingle => FindLowestHpEnemyInLos(unit, playerUnits)?.GridPos ?? unit.GridPos,
+            CareerSkillData.TargetType.RangedAoe => FindNearestEnemy(unit, playerUnits)?.GridPos ?? unit.GridPos,
+            _ => unit.GridPos,
+        };
+    }
+
+    /// <summary>D3: 距离最近的存活敌人</summary>
+    private Unit? FindNearestEnemy(Unit unit, List<Unit> enemies)
+    {
+        Unit? best = null;
+        int bestDist = int.MaxValue;
+        foreach (var e in enemies)
+        {
+            if (!GodotObject.IsInstanceValid(e) || e.CurrentHp <= 0) continue;
+            int d = unit.DistanceTo(e);
+            if (d < bestDist) { bestDist = d; best = e; }
+        }
+        return best;
+    }
+
+    /// <summary>D3: HP 百分比最低的存活友军</summary>
+    private Unit? FindLowestHpAlly(Unit unit, List<Unit> allies)
+    {
+        Unit? best = null;
+        float bestPct = float.MaxValue;
+        foreach (var a in allies)
+        {
+            if (!GodotObject.IsInstanceValid(a) || a.CurrentHp <= 0) continue;
+            float pct = a.Model.GetMaxHp() > 0 ? (float)a.CurrentHp / a.Model.GetMaxHp() : 1f;
+            if (pct < bestPct) { bestPct = pct; best = a; }
+        }
+        return best;
+    }
+
+    /// <summary>D3: LineCharge 目标—朝最近敌人方向延伸 3 格</summary>
+    private Vector2I FindChargeDirection(Unit unit, List<Unit> enemies)
+    {
+        var nearest = FindNearestEnemy(unit, enemies);
+        if (nearest == null) return unit.GridPos;
+        int dx = nearest.GridPos.X - unit.GridPos.X;
+        int dy = nearest.GridPos.Y - unit.GridPos.Y;
+        int steps = System.Math.Max(1, System.Math.Max(System.Math.Abs(dx), System.Math.Abs(dy)));
+        int targetX = unit.GridPos.X + (int)System.Math.Round(dx * 3.0 / steps);
+        int targetY = unit.GridPos.Y + (int)System.Math.Round(dy * 3.0 / steps);
+        return new Vector2I(targetX, targetY);
+    }
+
+    /// <summary>D3: HP 最低的存活敌人（视线内）—简化为 HP 最低的敌人</summary>
+    private Unit? FindLowestHpEnemyInLos(Unit unit, List<Unit> enemies)
+    {
+        Unit? best = null;
+        float bestPct = float.MaxValue;
+        foreach (var e in enemies)
+        {
+            if (!GodotObject.IsInstanceValid(e) || e.CurrentHp <= 0) continue;
+            float pct = e.Model.GetMaxHp() > 0 ? (float)e.CurrentHp / e.Model.GetMaxHp() : 1f;
+            if (pct < bestPct) { bestPct = pct; best = e; }
+        }
+        return best;
+    }
+
+    /// <summary>D2: 当前回合数—简化估算（取 HasActed 最多的单位 AP 消耗和）</summary>
+    private int GetCurrentRound(List<Unit> units)
+    {
+        // 简单近似：如果有单位 AP 已低于初始値的 30%，认为至少第 2 回合
+        int lowApCount = 0;
+        foreach (var u in units)
+            if (GodotObject.IsInstanceValid(u) && u.CurrentHp > 0 && u.CurrentAp < u.Model.GetMaxHp() * 0.3f)
+                lowApCount++;
+        if (lowApCount >= units.Count / 2) return 3;
+        return 1;
+    }
+
+    /// <summary>D2: 敌方是否有 HP 低于阈値的存活单位</summary>
+    private bool HasLowHpEnemy(List<Unit> enemies, float threshold)
+    {
+        foreach (var e in enemies)
+        {
+            if (!GodotObject.IsInstanceValid(e) || e.CurrentHp <= 0) continue;
+            float pct = e.Model.GetMaxHp() > 0 ? (float)e.CurrentHp / e.Model.GetMaxHp() : 1f;
+            if (pct < threshold) return true;
+        }
+        return false;
+    }
+
+    /// <summary>D2: 友军中 HP 低于 30% 的存活单位数</summary>
+    private int CountAlliesInDanger(List<Unit> allies)
+    {
+        int count = 0;
+        foreach (var a in allies)
+        {
+            if (!GodotObject.IsInstanceValid(a) || a.CurrentHp <= 0) continue;
+            float pct = a.Model.GetMaxHp() > 0 ? (float)a.CurrentHp / a.Model.GetMaxHp() : 1f;
+            if (pct < 0.3f) count++;
+        }
+        return count;
     }
 }

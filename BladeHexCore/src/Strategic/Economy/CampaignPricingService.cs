@@ -91,11 +91,10 @@ public static class CampaignPricingService
         return Math.Max(25, (int)Math.Round(baseXp * multiplier));
     }
 
-    /// <summary>战役起始金币。约等于数个委托周期的可支配金币，足够应急但不足以无脑买满装备。</summary>
+    /// <summary>战役起始金币。1000 金币开局，足够初期组建队伍和购买基础装备。</summary>
     public static int GetStartingGold(EconomyPriceAnchor? anchor = null)
     {
-        anchor ??= DefaultAnchor;
-        return RoundCampaignGold(anchor.DiscretionaryGoldPerQuest * 8.0, minimum: 250);
+        return 1000;
     }
 
     private static double EstimateEquipmentBaseValue(UnitData unit, EconomyPriceAnchor anchor)

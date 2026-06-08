@@ -13,6 +13,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using BladeHex.Combat;
 using BladeHex.Events.Payloads;
 using BladeHex.Strategic;
 
@@ -51,7 +52,6 @@ public partial class EventBus : Node
         public const string StatusEffectApplied = "status_effect_applied";
         public const string StatusEffectRemoved = "status_effect_removed";
         public const string StatusEffectTicked = "status_effect_ticked";
-        public const string MoraleChanged = "morale_changed";
         public const string DayPassed = "day_passed";
         public const string GoldChanged = "gold_changed";
         public const string FoodChanged = "food_changed";
@@ -153,45 +153,68 @@ public partial class EventBus : Node
     public void PublishUnitDied(Node3D unit, bool isPlayer)
     {
         Publish(new UnitDiedEvent(unit, isPlayer));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.UnitDied, new Godot.Collections.Dictionary { { "unit", unit }, { "is_player", isPlayer } });
+#pragma warning restore CS0618
     }
 
     public void PublishUnitDamaged(Node3D unit, int damage, int remainingHp)
     {
         Publish(new UnitDamagedEvent(unit, damage, remainingHp));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.UnitDamaged, new Godot.Collections.Dictionary { { "unit", unit }, { "damage", damage }, { "remaining_hp", remainingHp } });
+#pragma warning restore CS0618
     }
 
     public void PublishSkillUsed(Node3D caster, string skillEffect, bool success)
     {
         Publish(new SkillUsedEvent(caster, skillEffect, success));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.SkillUsed, new Godot.Collections.Dictionary { { "caster", caster }, { "skill_effect", skillEffect }, { "success", success } });
+#pragma warning restore CS0618
     }
 
     public void PublishGoldChanged(int oldAmount, int newAmount, int delta)
     {
+        Publish(new GoldChangedEvent(oldAmount, newAmount, delta));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.GoldChanged, new Godot.Collections.Dictionary { { "old_amount", oldAmount }, { "new_amount", newAmount }, { "delta", delta } });
+#pragma warning restore CS0618
+    }
+
+    public void PublishFoodChanged(int oldAmount, int newAmount, int delta)
+    {
+        Publish(new FoodChangedEvent(oldAmount, newAmount, delta));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
+        Publish(Signals.FoodChanged, new Godot.Collections.Dictionary { { "old_amount", oldAmount }, { "new_amount", newAmount }, { "delta", delta } });
+#pragma warning restore CS0618
     }
 
     public void PublishCombatStarted(int playerCount, int enemyCount)
     {
         Publish(new CombatStartedEvent(playerCount, enemyCount));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.CombatStarted, new Godot.Collections.Dictionary { { "player_count", playerCount }, { "enemy_count", enemyCount } });
+#pragma warning restore CS0618
     }
 
     public void PublishTurnStarted(int state)
     {
         Publish(new TurnStartedEvent(state));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.TurnStarted, new Godot.Collections.Dictionary { { "state", state } });
+#pragma warning restore CS0618
     }
 
     public void PublishDayPassed(int daysPassed, int year, int month, int day)
     {
         Publish(new DayPassedEvent(daysPassed, year, month, day));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.DayPassed, new Godot.Collections.Dictionary
         {
             { "days_passed", daysPassed }, { "year", year }, { "month", month }, { "day", day },
         });
+#pragma warning restore CS0618
     }
 
     /// <summary>发布战斗结果 — 战略层通过此事件接收战斗结果</summary>
@@ -199,6 +222,69 @@ public partial class EventBus : Node
     {
         if (outcome == null) return;
         Publish(new CombatEndedEvent(outcome));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
         Publish(Signals.CombatEnded, outcome.Serialize());
+#pragma warning restore CS0618
+    }
+
+    // ──── 投射物事件 ────
+
+    public void PublishProjectileLaunched(ProjectileData data, Vector3 fromWorld, Vector3 toWorld, string projectileType, float travelTime)
+    {
+        Publish(new ProjectileLaunchedEvent(data, fromWorld, toWorld, projectileType, travelTime));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
+        Publish(Signals.ProjectileLaunched, new Godot.Collections.Dictionary
+        {
+            { "data", data.Serialize() },
+            { "from_world", fromWorld }, { "to_world", toWorld },
+            { "projectile_type", projectileType }, { "travel_time", travelTime },
+        });
+#pragma warning restore CS0618
+    }
+
+    public void PublishProjectileImpact(string projectileType, int damage)
+    {
+        Publish(new ProjectileImpactEvent(projectileType, damage));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
+        Publish(Signals.ProjectileImpact, new Godot.Collections.Dictionary
+        {
+            { "projectile_type", projectileType }, { "damage", damage },
+        });
+#pragma warning restore CS0618
+    }
+
+    // ──── 状态效果事件 ────
+
+    public void PublishStatusEffectApplied(Unit unit, string effectId, int duration)
+    {
+        Publish(new StatusEffectAppliedEvent(unit, effectId, duration));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
+        Publish(Signals.StatusEffectApplied, new Godot.Collections.Dictionary
+        {
+            { "unit", unit }, { "effect_id", effectId }, { "duration", duration },
+        });
+#pragma warning restore CS0618
+    }
+
+    public void PublishStatusEffectRemoved(Unit unit, string effectId)
+    {
+        Publish(new StatusEffectRemovedEvent(unit, effectId));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
+        Publish(Signals.StatusEffectRemoved, new Godot.Collections.Dictionary
+        {
+            { "unit", unit }, { "effect_id", effectId },
+        });
+#pragma warning restore CS0618
+    }
+
+    public void PublishStatusEffectTicked(Unit unit, string effectId, int damage)
+    {
+        Publish(new StatusEffectTickedEvent(unit, effectId, damage));
+#pragma warning disable CS0618 // Obsolete — dual-publish backward compat
+        Publish(Signals.StatusEffectTicked, new Godot.Collections.Dictionary
+        {
+            { "unit", unit }, { "effect_id", effectId }, { "damage", damage },
+        });
+#pragma warning restore CS0618
     }
 }

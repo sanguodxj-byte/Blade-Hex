@@ -25,6 +25,18 @@ public partial class BoneGizmoOverlay : Control
     /// <summary>当前选中的骨骼名（高亮显示）</summary>
     public string? SelectedBone { get; set; }
 
+    /// <summary>是否处于位移模式</summary>
+    public bool DisplaceMode { get; set; }
+
+    /// <summary>位移模式下的骨骼名</summary>
+    public string? DisplaceBone { get; set; }
+
+    /// <summary>是否处于旋转模式</summary>
+    public bool RotationMode { get; set; }
+
+    /// <summary>旋转模式下的骨骼名</summary>
+    public string? RotationBone { get; set; }
+
     /// <summary>3D 相机引用（用于投影计算）</summary>
     public Camera3D? Camera { get; set; }
 
@@ -122,6 +134,8 @@ public partial class BoneGizmoOverlay : Control
         {
             var color = BoneColors.GetValueOrDefault(name, new Color(0.8f, 0.8f, 0.8f));
             bool isSelected = name == SelectedBone;
+            bool isDisplace = DisplaceMode && name == DisplaceBone;
+            bool isRotate = RotationMode && name == RotationBone;
             float radius = isSelected ? SelectedRadius : JointRadius;
 
             // 外圈（深色边框）
@@ -133,6 +147,34 @@ public partial class BoneGizmoOverlay : Control
             if (isSelected)
             {
                 DrawArc(screenPos, radius + 4.0f, 0, Mathf.Tau, 24, new Color(1, 1, 1, 0.9f), 2.0f);
+            }
+
+            // 位移模式：画十字箭头
+            if (isDisplace)
+            {
+                float arrowLen = 12.0f;
+                var arrowColor = new Color(0.2f, 1.0f, 0.2f, 0.9f); // 绿色
+                DrawLine(screenPos, screenPos + new Vector2(arrowLen, 0), arrowColor, 2.0f, true);
+                DrawLine(screenPos, screenPos + new Vector2(-arrowLen, 0), arrowColor, 2.0f, true);
+                DrawLine(screenPos, screenPos + new Vector2(0, arrowLen), arrowColor, 2.0f, true);
+                DrawLine(screenPos, screenPos + new Vector2(0, -arrowLen), arrowColor, 2.0f, true);
+                // 外圈高亮
+                DrawArc(screenPos, radius + 6.0f, 0, Mathf.Tau, 24, arrowColor, 2.0f);
+            }
+
+            // 旋转模式：画旋转箭头
+            if (isRotate)
+            {
+                float arcRadius = radius + 8.0f;
+                var arcColor = new Color(1.0f, 0.5f, 0.0f, 0.9f); // 橙色
+                DrawArc(screenPos, arcRadius, 0, Mathf.Tau * 0.75f, 24, arcColor, 2.5f, true);
+                // 箭头头部
+                float arrowAngle = Mathf.Tau * 0.75f;
+                var arrowHead = screenPos + new Vector2(
+                    Mathf.Cos(arrowAngle) * arcRadius,
+                    Mathf.Sin(arrowAngle) * arcRadius
+                );
+                DrawCircle(arrowHead, 3.0f, arcColor);
             }
         }
     }

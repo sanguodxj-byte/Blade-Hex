@@ -2,6 +2,7 @@
 // 快速战斗配置面板 — 不依赖 UITheme/UIFactory，纯原生 Godot 控件
 using Godot;
 using BladeHex.Data;
+using BladeHex.Localization;
 
 namespace BladeHex.UI;
 
@@ -22,6 +23,8 @@ public partial class QuickCombatSetup : CanvasLayer
     private HSlider _levelSlider = null!;
     private Label _levelLabel = null!;
     private OptionButton _enemyTypeOption = null!;
+    private OptionButton _legendaryTypeOption = null!;
+    private Label _legendaryTypeLabel = null!;
     private OptionButton _templateOption = null!;
 
     public override void _Ready()
@@ -75,7 +78,7 @@ public partial class QuickCombatSetup : CanvasLayer
         panel.AddChild(vbox);
 
         // 标题
-        var title = new Label { Text = "快速战斗配置" };
+        var title = new Label { Text = L10n.Tr("QC_TITLE") };
         title.AddThemeFontSizeOverride("font_size", 26);
         title.AddThemeColorOverride("font_color", new Color(0.95f, 0.88f, 0.6f));
         title.HorizontalAlignment = HorizontalAlignment.Center;
@@ -92,17 +95,17 @@ public partial class QuickCombatSetup : CanvasLayer
         vbox.AddChild(grid);
 
         // 规模
-        AddLabel(grid, "战斗规模");
+        AddLabel(grid, L10n.Tr("QC_BATTLE_SIZE"));
         _sizeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        _sizeOption.AddItem("小型 (169格)", 0);
-        _sizeOption.AddItem("中型 (397格)", 1);
-        _sizeOption.AddItem("大型 (631格)", 2);
-        _sizeOption.AddItem("巨大 (973格)", 3);
+        _sizeOption.AddItem(L10n.Tr("QC_SIZE_SMALL"), 0);
+        _sizeOption.AddItem(L10n.Tr("QC_SIZE_MEDIUM"), 1);
+        _sizeOption.AddItem(L10n.Tr("QC_SIZE_LARGE"), 2);
+        _sizeOption.AddItem(L10n.Tr("QC_SIZE_HUGE"), 3);
         _sizeOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_sizeOption);
 
         // 玩家数量
-        AddLabel(grid, "玩家单位数");
+        AddLabel(grid, L10n.Tr("QC_PLAYER_UNITS"));
         var phbox = new HBoxContainer();
         phbox.AddThemeConstantOverride("separation", 10);
         _playerCountSlider = new HSlider { MinValue = 1, MaxValue = 6, Value = 2, CustomMinimumSize = new Vector2(180, 0) };
@@ -114,7 +117,7 @@ public partial class QuickCombatSetup : CanvasLayer
         grid.AddChild(phbox);
 
         // 敌方数量
-        AddLabel(grid, "敌方单位数");
+        AddLabel(grid, L10n.Tr("QC_ENEMY_UNITS"));
         var ehbox = new HBoxContainer();
         ehbox.AddThemeConstantOverride("separation", 10);
         _enemyCountSlider = new HSlider { MinValue = 1, MaxValue = 10, Value = 3, CustomMinimumSize = new Vector2(180, 0) };
@@ -126,17 +129,17 @@ public partial class QuickCombatSetup : CanvasLayer
         grid.AddChild(ehbox);
 
         // 难度
-        AddLabel(grid, "敌方难度");
+        AddLabel(grid, L10n.Tr("QC_ENEMY_DIFFICULTY"));
         _difficultyOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        _difficultyOption.AddItem("简单", 0);
-        _difficultyOption.AddItem("普通", 1);
-        _difficultyOption.AddItem("困难", 2);
+        _difficultyOption.AddItem(L10n.Tr("DIFFICULTY_EASY"), 0);
+        _difficultyOption.AddItem(L10n.Tr("DIFFICULTY_NORMAL"), 1);
+        _difficultyOption.AddItem(L10n.Tr("DIFFICULTY_HARD"), 2);
         _difficultyOption.Selected = 1;
         _difficultyOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_difficultyOption);
 
         // 等级
-        AddLabel(grid, "角色等级");
+        AddLabel(grid, L10n.Tr("QC_CHARACTER_LEVEL"));
         var lvlHbox = new HBoxContainer();
         lvlHbox.AddThemeConstantOverride("separation", 10);
         _levelSlider = new HSlider { MinValue = 1, MaxValue = 120, Value = 1, Step = 1, CustomMinimumSize = new Vector2(180, 0) };
@@ -148,42 +151,94 @@ public partial class QuickCombatSetup : CanvasLayer
         grid.AddChild(lvlHbox);
 
         // 敌方种类
-        AddLabel(grid, "敌方种类");
+        AddLabel(grid, L10n.Tr("QC_ENEMY_TYPE"));
         _enemyTypeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        _enemyTypeOption.AddItem("人形", 0);
-        _enemyTypeOption.AddItem("亡灵", 1);
-        _enemyTypeOption.AddItem("野兽", 2);
-        _enemyTypeOption.AddItem("混合", 3);
+        _enemyTypeOption.AddItem(L10n.Tr("ENEMY_HUMANOID"), 0);
+        _enemyTypeOption.AddItem(L10n.Tr("ENEMY_UNDEAD"), 1);
+        _enemyTypeOption.AddItem(L10n.Tr("ENEMY_BEAST"), 2);
+        _enemyTypeOption.AddItem(L10n.Tr("ENEMY_MIXED"), 3);
+        _enemyTypeOption.AddItem(L10n.Tr("ENEMY_LEGENDARY"), 4);
         _enemyTypeOption.Selected = 0;
         _enemyTypeOption.AddThemeFontSizeOverride("font_size", 15);
+        _enemyTypeOption.ItemSelected += OnEnemyTypeChanged;
         grid.AddChild(_enemyTypeOption);
 
+        // 传奇生物类型（默认隐藏，选择"传奇生物"后显示）
+        _legendaryTypeLabel = new Label { Text = L10n.Tr("QC_LEGENDARY_TYPE"), CustomMinimumSize = new Vector2(130, 0), Visible = false };
+        _legendaryTypeLabel.AddThemeFontSizeOverride("font_size", 16);
+        _legendaryTypeLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.82f, 0.75f));
+        grid.AddChild(_legendaryTypeLabel);
+
+        _legendaryTypeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38), Visible = false };
+        _legendaryTypeOption.AddItem(L10n.Tr("OPTION_RANDOM"), 0);
+        // 龙族
+        _legendaryTypeOption.AddItem("少年红龙 (Lv.78)", 1);
+        _legendaryTypeOption.AddItem("成年红龙 (Lv.90)", 2);
+        _legendaryTypeOption.AddItem("远古冰龙 (Lv.96)", 3);
+        _legendaryTypeOption.AddItem("陨星之龙 (Lv.120)", 4);
+        _legendaryTypeOption.AddItem("世界之蛇 (Lv.120)", 5);
+        // 亡灵
+        _legendaryTypeOption.AddItem("远古巫妖 (Lv.96)", 6);
+        _legendaryTypeOption.AddItem("死亡骑士王 (Lv.102)", 7);
+        _legendaryTypeOption.AddItem("食尸鬼之王 (Lv.84)", 8);
+        _legendaryTypeOption.AddItem("木乃伊君主 (Lv.96)", 9);
+        _legendaryTypeOption.AddItem("幽影母亲 (Lv.90)", 10);
+        _legendaryTypeOption.AddItem("死亡圣者 (Lv.96)", 11);
+        _legendaryTypeOption.AddItem("女妖之女王 (Lv.90)", 12);
+        // 魔物
+        _legendaryTypeOption.AddItem("熔岩领主 (Lv.108)", 13);
+        _legendaryTypeOption.AddItem("深渊领主 (Lv.108)", 14);
+        _legendaryTypeOption.AddItem("魔眼暴君 (Lv.96)", 15);
+        _legendaryTypeOption.AddItem("美杜莎 (Lv.78)", 16);
+        _legendaryTypeOption.AddItem("夺心魔皇 (Lv.102)", 17);
+        _legendaryTypeOption.AddItem("深坑魔王 (Lv.108)", 18);
+        _legendaryTypeOption.AddItem("刻耳柏洛斯 (Lv.90)", 19);
+        _legendaryTypeOption.AddItem("炎魔 (Lv.108)", 20);
+        // 野兽
+        _legendaryTypeOption.AddItem("九头蛇 (Lv.90)", 21);
+        _legendaryTypeOption.AddItem("奇美拉 (Lv.84)", 22);
+        _legendaryTypeOption.AddItem("克拉肯 (Lv.108)", 23);
+        _legendaryTypeOption.AddItem("狮鹫之王 (Lv.84)", 24);
+        _legendaryTypeOption.AddItem("紫色蠕虫 (Lv.90)", 25);
+        // 巨型
+        _legendaryTypeOption.AddItem("风暴巨人 (Lv.102)", 26);
+        _legendaryTypeOption.AddItem("雪人首领 (Lv.84)", 27);
+        // 构造体
+        _legendaryTypeOption.AddItem("觉醒远古机兵 (Lv.108)", 28);
+        _legendaryTypeOption.AddItem("古树长老 (Lv.96)", 29);
+        _legendaryTypeOption.AddItem("不朽巨像 (Lv.114)", 30);
+        // 人形
+        _legendaryTypeOption.AddItem("大法师 (Lv.96)", 31);
+        _legendaryTypeOption.Selected = 0;
+        _legendaryTypeOption.AddThemeFontSizeOverride("font_size", 15);
+        grid.AddChild(_legendaryTypeOption);
+
         // 地形模板
-        AddLabel(grid, "战斗地形");
+        AddLabel(grid, L10n.Tr("QC_BATTLE_TERRAIN"));
         _templateOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        _templateOption.AddItem("随机", 0);
-        _templateOption.AddItem("平原旷野", 1);
-        _templateOption.AddItem("森林伏击", 2);
-        _templateOption.AddItem("山间隘口", 3);
-        _templateOption.AddItem("沼泽遭遇", 4);
-        _templateOption.AddItem("海岸伏击", 5);
-        _templateOption.AddItem("沙漠冲突", 6);
-        _templateOption.AddItem("村庄防御", 7);
-        _templateOption.AddItem("遗迹探索", 8);
-        _templateOption.AddItem("攻城战", 9);
-        _templateOption.AddItem("守城战", 10);
+        _templateOption.AddItem(L10n.Tr("OPTION_RANDOM"), 0);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_PLAIN_FIELD"), 1);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_FOREST_AMBUSH"), 2);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_MOUNTAIN_PASS"), 3);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_SWAMP_BATTLE"), 4);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_COASTAL_AMBUSH"), 5);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_DESERT_SKIRMISH"), 6);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_VILLAGE_DEFENSE"), 7);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_RUINS_EXPLORATION"), 8);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_CASTLE_SIEGE"), 9);
+        _templateOption.AddItem(L10n.Tr("TEMPLATE_CASTLE_DEFENSE"), 10);
         _templateOption.Selected = 0;
         _templateOption.ItemSelected += OnTemplateChanged;
         _templateOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_templateOption);
 
         // 天气
-        AddLabel(grid, "天气");
+        AddLabel(grid, L10n.Tr("QC_WEATHER"));
         _weatherOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
-        _weatherOption.AddItem("晴天", 0);
-        _weatherOption.AddItem("雨天", 1);
-        _weatherOption.AddItem("雪天", 2);
-        _weatherOption.AddItem("沙尘暴", 3);
+        _weatherOption.AddItem(L10n.Tr("WEATHER_CLEAR"), 0);
+        _weatherOption.AddItem(L10n.Tr("WEATHER_RAIN"), 1);
+        _weatherOption.AddItem(L10n.Tr("WEATHER_SNOW"), 2);
+        _weatherOption.AddItem(L10n.Tr("WEATHER_SANDSTORM"), 3);
         _weatherOption.Selected = 0;
         _weatherOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_weatherOption);
@@ -197,11 +252,11 @@ public partial class QuickCombatSetup : CanvasLayer
         buttons.AddThemeConstantOverride("separation", 40);
         vbox.AddChild(buttons);
 
-        var back = MakeButton("返回", 120);
+        var back = MakeButton(L10n.Tr("MENU_BACK"), 120);
         back.Pressed += () => { HidePanel(); EmitSignal(SignalName.BackPressed); };
         buttons.AddChild(back);
 
-        var start = MakeButton("开始战斗", 160);
+        var start = MakeButton(L10n.Tr("QC_START_COMBAT"), 160);
         start.AddThemeColorOverride("font_color", new Color(0.9f, 0.8f, 0.4f));
         start.Pressed += OnStartPressed;
         buttons.AddChild(start);
@@ -221,6 +276,13 @@ public partial class QuickCombatSetup : CanvasLayer
         "castle_siege",        // 9: 攻城战（玩家攻城）
         "castle_defense",      // 10: 守城战（玩家守城）
     };
+
+    private void OnEnemyTypeChanged(long idx)
+    {
+        bool isLegendary = idx == 4;
+        _legendaryTypeLabel.Visible = isLegendary;
+        _legendaryTypeOption.Visible = isLegendary;
+    }
 
     private void OnTemplateChanged(long idx)
     {
@@ -246,6 +308,9 @@ public partial class QuickCombatSetup : CanvasLayer
         gs.QuickCombat.Difficulty = _difficultyOption.Selected;
         gs.QuickCombat.PlayerLevel = (int)_levelSlider.Value;
         gs.QuickCombat.EnemyType = _enemyTypeOption.Selected;
+        gs.QuickCombat.LegendaryType = _enemyTypeOption.Selected == 4
+            ? _legendaryTypeOption.Selected - 1  // 0="随机" → -1, 1~N → 0~N-1
+            : -1;
 
         // 地形模板
         int tplIdx = _templateOption.Selected;

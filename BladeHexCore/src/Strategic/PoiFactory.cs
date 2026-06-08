@@ -80,17 +80,12 @@ public partial class PoiFactory : RefCounted
         }
         else
         {
-            // 非城堡类型：根据类型设置合理的默认驻军
             int defaultMax = poi.PoiTypeEnum switch
             {
                 OverworldPOI.POIType.Town => 80,
-                OverworldPOI.POIType.Port => 50,
-                OverworldPOI.POIType.Outpost => 40,
                 OverworldPOI.POIType.Village => 25,
                 OverworldPOI.POIType.Mine => 20,
                 OverworldPOI.POIType.Farm => 15,
-                OverworldPOI.POIType.Tavern => 10,
-                OverworldPOI.POIType.Shrine => 8,
                 _ => 0,
             };
             poi.GarrisonMax = entry.ContainsKey("garrison_max") ? (int)entry["garrison_max"] : defaultMax;
@@ -111,6 +106,8 @@ public partial class PoiFactory : RefCounted
         "CASTLE" => OverworldPOI.POIType.Castle,
         "SETTLEMENT" => OverworldPOI.POIType.Settlement,
         "LAIR" => OverworldPOI.POIType.Lair,
+        "MINE" => OverworldPOI.POIType.Mine,
+        "FARM" => OverworldPOI.POIType.Farm,
         _ => OverworldPOI.POIType.Village
     };
 

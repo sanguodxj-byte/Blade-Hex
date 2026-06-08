@@ -25,17 +25,23 @@ public partial class UnitInspectPanel : FloatingPanel
     private Label _drLabel = null!;
     private Label _weaponLabel = null!;
     private Label _armorLabel = null!;
+    private Label _shieldLabel = null!;
+    private Label _helmetLabel = null!;
+    private Label _gauntletsLabel = null!;
+    private Label _bootsLabel = null!;
+    private Label _accessoryLabel = null!;
     private Label _moveLabel = null!;
     private Label _strategyLabel = null!;
+    private VBoxContainer _equipBox = null!;
 
     // ============================================================================
     // FloatingPanel 配置
     // ============================================================================
 
     protected override int PanelZIndex => 200;
-    protected override Color PanelBgColor => new(0.08f, 0.08f, 0.1f, 0.95f);
-    protected override Color PanelBorderColor => new(0.4f, 0.35f, 0.25f, 0.8f);
     protected override float MinPanelWidth => 220f;
+    protected override Vector2 MouseOffset => new(-15, -15);
+    protected override FloatingPanelDismissMode PanelDismiss => FloatingPanelDismissMode.OnMouseExit;
 
     // ============================================================================
     // 构建内容
@@ -76,10 +82,24 @@ public partial class UnitInspectPanel : FloatingPanel
         Content.AddChild(MakeSeparator());
 
         // 装备
+        _equipBox = new VBoxContainer();
+        _equipBox.AddThemeConstantOverride("separation", 2);
+        Content.AddChild(_equipBox);
+
         _weaponLabel = MakeLabel("", 12, new Color(0.9f, 0.8f, 0.6f));
-        Content.AddChild(_weaponLabel);
+        _equipBox.AddChild(_weaponLabel);
         _armorLabel = MakeLabel("", 12, new Color(0.6f, 0.7f, 0.9f));
-        Content.AddChild(_armorLabel);
+        _equipBox.AddChild(_armorLabel);
+        _shieldLabel = MakeLabel("", 12, new Color(0.6f, 0.7f, 0.9f));
+        _equipBox.AddChild(_shieldLabel);
+        _helmetLabel = MakeLabel("", 12, new Color(0.6f, 0.7f, 0.9f));
+        _equipBox.AddChild(_helmetLabel);
+        _gauntletsLabel = MakeLabel("", 12, new Color(0.6f, 0.7f, 0.9f));
+        _equipBox.AddChild(_gauntletsLabel);
+        _bootsLabel = MakeLabel("", 12, new Color(0.6f, 0.7f, 0.9f));
+        _equipBox.AddChild(_bootsLabel);
+        _accessoryLabel = MakeLabel("", 12, new Color(0.7f, 0.65f, 0.85f));
+        _equipBox.AddChild(_accessoryLabel);
 
         // AI 策略（仅敌方显示）
         _strategyLabel = MakeLabel("", 11, new Color(0.6f, 0.6f, 0.6f));
@@ -100,19 +120,32 @@ public partial class UnitInspectPanel : FloatingPanel
 
         // 等级 + 职业称号
         string classTitle = GetClassTitle(data);
+        string classTitleInfo = string.Empty;
+        if (string.IsNullOrEmpty(classTitle))
+        {
+            // 敌方没有 SkillTree 时，尝试从 CharacterId 或模板数据获取职业名
+            // 对于敌方，我们还可以尝试从单位名称推断职业
+            classTitleInfo = "";
+        }
+        else
+        {
+            classTitleInfo = classTitle;
+        }
+
         string sideTag = data.IsEnemy ? "[敌方]" : "[友方]";
-        _levelLabel.Text = string.IsNullOrEmpty(classTitle)
-            ? $"Lv.{data.Level}  {sideTag}"
-            : $"Lv.{data.Level} {classTitle}  {sideTag}";
+        if (!string.IsNullOrEmpty(classTitleInfo))
+            _levelLabel.Text = $"Lv.{data.Level} {classTitleInfo}  {sideTag}";
+        else
+            _levelLabel.Text = $"Lv.{data.Level}  {sideTag}";
 
         // 六维属性
         foreach (var child in _attrGrid.GetChildren()) child.QueueFree();
-        AddAttr("力", data.Str);
-        AddAttr("敏", data.Dex);
-        AddAttr("体", data.Con);
-        AddAttr("智", data.Intel);
-        AddAttr("感", data.Wis);
-        AddAttr("魅", data.Cha);
+        AddAttr("力", CombatStats.GetEffectiveStr(data));
+        AddAttr("敏", CombatStats.GetEffectiveDex(data));
+        AddAttr("体", CombatStats.GetEffectiveCon(data));
+        AddAttr("智", CombatStats.GetEffectiveInt(data));
+        AddAttr("感", CombatStats.GetEffectiveWis(data));
+        AddAttr("魅", CombatStats.GetEffectiveCha(data));
 
         // 战斗数值
         _hpLabel.Text = $"HP: {unit.CurrentHp}/{unit.GetMaxHp()}";
@@ -123,26 +156,99 @@ public partial class UnitInspectPanel : FloatingPanel
         _drLabel.Text = maxDr > 0 ? $"DR: {dr}/{maxDr}" : "DR: 无";
         _moveLabel.Text = $"移动: {unit.GetMoveRange()} 格";
 
-        // 装备
-        var weapon = unit.GetMainHand() as WeaponData;
-        _weaponLabel.Text = weapon != null
-            ? $"武器: {weapon.ItemName} ({weapon.DamageDiceCount}-{weapon.DamageDiceCount * weapon.DamageDiceSides})"
+        // 装备 — 使用 GetAllEquippedItems 确保所有装备都显示
+        var weapons = unit.GetMainHand() as WeaponData;
+        _weaponLabel.Text = weapons != null
+            ? $"武器: {weapons.ItemName} ({weapons.DamageDiceCount}d{weapons.DamageDiceSides})"
             : "武器: 徒手";
 
-        var armor = data.Armor;
-        _armorLabel.Text = armor != null
-            ? $"护甲: {armor.ItemName} (DR{armor.DrThreshold})"
+        // 检查是否有副手武器或盾牌
+        var offHand = unit.GetOffHand();
+        // 显示副手物品（武器/盾牌统一显示在这里）
+        string offHandText = "";
+        bool hasDedicatedShieldSlot = false;
+        if (offHand != null)
+        {
+            if (offHand is WeaponData offWeapon)
+                offHandText = $"副手: {offWeapon.ItemName} ({offWeapon.DamageDiceCount}d{offWeapon.DamageDiceSides})";
+            else if (offHand is ArmorData offArmor && offArmor.armorType == ArmorData.ArmorType.Shield)
+            {
+                offHandText = $"副手·盾: {offArmor.ItemName} (DR{offArmor.DrThreshold})";
+                hasDedicatedShieldSlot = true;
+            }
+            else
+                offHandText = $"副手: {offHand.GetFullName()}";
+        }
+
+        // 如果已经通过 offHand 显示了盾牌，shieldLabel 就隐藏
+        var armorData = data.Armor;
+        _armorLabel.Text = armorData != null
+            ? $"护甲: {armorData.ItemName} (DR{armorData.DrThreshold})"
             : "护甲: 无";
 
-        // AI 策略
+        // 盾牌（独立 Shield 字段 — 兼容旧数据）
+        var shield = data.Shield;
+        if (shield != null && !hasDedicatedShieldSlot)
+            _shieldLabel.Text = $"盾牌: {shield.ItemName} (DR{shield.DrThreshold})";
+        else if (!hasDedicatedShieldSlot)
+            _shieldLabel.Text = "盾牌: 无";
+        else
+            _shieldLabel.Visible = false;
+
+        // 头盔
+        var helmet = data.Helmet;
+        _helmetLabel.Text = helmet != null
+            ? $"头盔: {helmet.ItemName} (DR{helmet.DrThreshold})"
+            : "头盔: 无";
+
+        // 护手
+        var gauntlets = data.Gauntlets;
+        _gauntletsLabel.Text = gauntlets != null
+            ? $"护手: {gauntlets.ItemName} (DR{gauntlets.DrThreshold})"
+            : "护手: 无";
+
+        // 鞋子
+        var boots = data.Boots;
+        _bootsLabel.Text = boots != null
+            ? $"鞋子: {boots.ItemName} (DR{boots.DrThreshold})"
+            : "鞋子: 无";
+
+        // 饰品
+        var acc1 = data.Accessory1;
+        var acc2 = data.Accessory2;
+        string accText = "";
+        if (acc1 != null) accText += acc1.ItemName;
+        if (acc2 != null) accText += (accText.Length > 0 ? ", " : "") + acc2.ItemName;
+        _accessoryLabel.Text = accText.Length > 0
+            ? $"饰品: {accText}"
+            : "饰品: 无";
+
+        // 显示副手文本（在装备区末尾）
+        if (offHandText.Length > 0 && _weaponLabel.Text.Length > 0)
+        {
+            // 把副手文本追加到武器后面
+            _weaponLabel.Text += $"\n{offHandText}";
+        }
+
+        // AI 策略 + 行为/特质
         if (data.IsEnemy)
         {
-            _strategyLabel.Text = $"行为: {GetStrategyName(data.aiStrategy)}";
+            string strategyInfo = $"行为: {GetStrategyName(data.aiStrategy)}";
+            if (data.Traits != null && data.Traits.Length > 0)
+                strategyInfo += $"\n特质: {string.Join(", ", data.Traits)}";
+            _strategyLabel.Text = strategyInfo;
             _strategyLabel.Visible = true;
         }
         else
         {
             _strategyLabel.Visible = false;
+        }
+
+        // 将 _equipBox 中的所有标签设为可见（有装备内容的显示，没有的隐藏）
+        foreach (var child in _equipBox.GetChildren())
+        {
+            if (child is Label lbl && string.IsNullOrEmpty(lbl.Text))
+                lbl.Visible = false;
         }
 
         ShowAt(screenPos);

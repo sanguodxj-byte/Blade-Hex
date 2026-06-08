@@ -46,12 +46,19 @@ public partial class UIFactory : RefCounted
         if (minSize != Vector2.Zero)
             panel.CustomMinimumSize = minSize;
 
-        var bgColor = bg ?? Theme.BgPanel;
-        var borderColor = border ?? Theme.BorderDefault;
-        var margin = contentMargin >= 0 ? contentMargin : Theme.SpacingMd;
+        if (Theme.OverworldPanelStyle != null)
+        {
+            panel.AddThemeStyleboxOverride("panel", Theme.OverworldPanelStyle);
+        }
+        else
+        {
+            var bgColor = bg ?? Theme.BgPanel;
+            var borderColor = border ?? Theme.BorderDefault;
+            var margin = contentMargin >= 0 ? contentMargin : Theme.SpacingMd;
 
-        panel.AddThemeStyleboxOverride("panel", Theme.MakePanelStyle(
-            bgColor, borderColor, 1, Theme.RadiusMd, margin));
+            panel.AddThemeStyleboxOverride("panel", Theme.MakePanelStyle(
+                bgColor, borderColor, 1, Theme.RadiusMd, margin));
+        }
 
         AttachPanelSfx(panel);
         return panel;
@@ -82,6 +89,7 @@ public partial class UIFactory : RefCounted
     {
         var btn = new Button();
         btn.Text = text;
+        btn.FocusMode = Control.FocusModeEnum.None;
 
         if (minSize != Vector2.Zero)
             btn.CustomMinimumSize = minSize;
@@ -102,6 +110,7 @@ public partial class UIFactory : RefCounted
     {
         var btn = new Button();
         btn.Text = iconText;
+        btn.FocusMode = Control.FocusModeEnum.None;
         btn.CustomMinimumSize = new Vector2(size, size);
         Theme.ApplyButtonTheme(btn);
 
@@ -117,6 +126,7 @@ public partial class UIFactory : RefCounted
         string icon = "", Color? color = null)
     {
         var btn = new Button();
+        btn.FocusMode = Control.FocusModeEnum.None;
         var display = $"{label}\n({shortcut})";
         if (!string.IsNullOrEmpty(icon))
             display = $"{icon} {display}";
@@ -435,6 +445,12 @@ public partial class UIFactory : RefCounted
     // ============================================================================
 
     /// <summary>创建BBCode富文本</summary>
+    /// <remarks>
+    /// 默认开启 <c>AutowrapMode = WordSmart</c> 防止长文本横向溢出。
+    /// 默认 <c>FitContent = true</c>（按内容撑高，常用于 tooltip / 描述）。
+    /// 若文本受固定宽度容器约束且需滚动，调用方应把 <c>FitContent</c> 改为 <c>false</c>
+    /// 并把 <c>ScrollActive</c> 改为 <c>true</c>。
+    /// </remarks>
     public RichTextLabel CreateRichText(Vector2 minSize = default)
     {
         var rt = new RichTextLabel();
@@ -443,6 +459,7 @@ public partial class UIFactory : RefCounted
         rt.BbcodeEnabled = true;
         rt.ScrollActive = false;
         rt.FitContent = true;
+        rt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         return rt;
     }
 
@@ -520,6 +537,7 @@ public partial class UIFactory : RefCounted
         desc.BbcodeEnabled = true;
         desc.ScrollActive = false;
         desc.FitContent = true;
+        desc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         desc.HorizontalAlignment = HorizontalAlignment.Center;
         desc.AddThemeFontSizeOverride("normal_font_size", Theme.FontSizeMd);
         desc.AddThemeColorOverride("default_color", Theme.TextSecondary);

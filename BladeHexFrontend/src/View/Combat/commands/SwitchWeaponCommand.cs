@@ -24,7 +24,7 @@ public class SwitchWeaponCommand : CommandBase
         if (unit == null) return CommandResult.Fail("Unit not found");
 
         unit.SwitchWeaponSet();
-        return CommandResult.Ok(new Godot.Collections.Dictionary { { "unit_id", UnitId } });
+        return CommandResult.Ok(new SwitchWeaponResult(UnitId));
     }
 
     public override void Undo(CommandContext ctx)

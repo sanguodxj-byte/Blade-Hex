@@ -3,6 +3,9 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using BladeHex.Strategic.WorldEvents;
+using BladeHex.Strategic.Economy;
+using BladeHex.Strategic.Kingdom;
 
 namespace BladeHex.Strategic;
 
@@ -128,8 +131,8 @@ public class FiefManager
     // 每日结算
     // ============================================================================
 
-    /// <summary>每日结算所有封地（收入、建造进度、食物）</summary>
-    public FiefDailyReport ProcessAllFiefs()
+    /// <summary>每日结算所有封地（收入、建造进度、食物、作坊）</summary>
+    public FiefDailyReport ProcessAllFiefs(List<OverworldPOI>? allPois = null, IEconomyProvider? economy = null, WorldEventEngine? worldEngine = null, PlayerKingdom? playerKingdom = null)
     {
         var totalReport = new FiefDailyReport();
 
@@ -144,9 +147,34 @@ public class FiefManager
 
             // 每日收入
             var report = fief.ProcessDay();
+
+            // M7: 应用税率法律修正
+            if (playerKingdom != null && fief.OwningFaction == "player")
+            {
+                float taxMult = KingdomLawEffects.GetIncomeMultiplier(playerKingdom.Laws.TaxRate);
+                report.GoldEarned = (int)(report.GoldEarned * taxMult);
+            }
+
             totalReport.GoldEarned += report.GoldEarned;
             totalReport.FoodProduced += report.FoodProduced;
             totalReport.FoodConsumed += report.FoodConsumed;
+
+            // 每日作坊生产与运输
+            if (allPois != null && economy != null)
+            {
+                foreach (var b in fief.Buildings)
+                {
+                    if (b.IsUnderConstruction) continue;
+
+                    var recipe = WorkshopRecipeRegistry.GetRecipe(b.Type);
+                    if (recipe != null)
+                    {
+                        WorkshopProductionService.ProcessDaily(fief, recipe, economy.DaysPassed);
+                        int workshopIncome = WorkshopProductionService.TryShipToNearestFriendly(fief, allPois, economy, worldEngine);
+                        totalReport.WorkshopIncome += workshopIncome;
+                    }
+                }
+            }
 
             // 声望缓慢增长
             _reputation.AddReputation(fief.OwningFaction, 0); // 不增加，仅触发日志（未来可改为+0.1/天）

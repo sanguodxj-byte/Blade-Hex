@@ -32,8 +32,12 @@ public partial class ProjectilePool : Node
 
     public int ActiveCount => _activeViews.Count;
 
+    public static bool DebugLogging { get; set; } = false;
+
     public override void _Ready()
     {
+        if (DebugLogging) GD.Print($"[ProjectilePool] _Ready: EventBus.Instance={EventBus.Instance != null}");
+
         // 为每种类型创建 NodePool
         foreach (var kv in _prewarmCounts)
         {
@@ -43,7 +47,14 @@ public partial class ProjectilePool : Node
 
         // 订阅发射事件 — 由 Pool 统一路由给空闲 View
         if (EventBus.Instance != null)
+        {
             EventBus.Instance.Subscribe(EventBus.Signals.ProjectileLaunched, OnProjectileLaunched);
+            if (DebugLogging) GD.Print("[ProjectilePool] Subscribed to EventBus ProjectileLaunched");
+        }
+        else
+        {
+            GD.PrintErr("[ProjectilePool] EventBus.Instance is NULL! Cannot subscribe!");
+        }
     }
 
     public override void _ExitTree()
@@ -107,13 +118,16 @@ public partial class ProjectilePool : Node
     /// </summary>
     private void OnProjectileLaunched(Godot.Collections.Dictionary eventData)
     {
+        if (DebugLogging) GD.Print($"[ProjectilePool] OnProjectileLaunched called! has_data={eventData.ContainsKey("data")}");
         if (!eventData.ContainsKey("data")) return;
 
         var data = ProjectileData.Deserialize(eventData["data"].AsGodotDictionary());
         float travelTime = eventData.ContainsKey("travel_time") ? eventData["travel_time"].AsSingle() : 0.3f;
 
+        if (DebugLogging) GD.Print($"[ProjectilePool] Deserialized: type={data.ProjectileType}, pools_available={_pools.ContainsKey(data.ProjectileType)}");
         // 从池中取出一个对应类型的 View
         var view = Get(data.ProjectileType);
+        if (DebugLogging) GD.Print($"[ProjectilePool] Got view={view != null}");
         if (view != null)
             view.Play(data, travelTime);
     }

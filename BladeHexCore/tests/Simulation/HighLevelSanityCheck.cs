@@ -6,6 +6,7 @@
 //   90+   : weapons tier >= 3, body armor in plate family
 // Also catches the "lvl 120 enemy unnamed / 180 HP" regression.
 using System.Collections.Generic;
+using Godot;
 using BladeHex.Combat;
 using BladeHex.Data;
 
@@ -46,6 +47,9 @@ public static class HighLevelSanityCheck
         // Skill tree integration
         yield return ("SkillTreeAllocator_AppliesPoints",     SkillTreeAllocator_AppliesPoints);
         yield return ("SkillTreeAllocator_HpBonusOnSquad",    SkillTreeAllocator_HpBonusOnSquad);
+        yield return ("ChargeRule_Melee_ChargesProperly",      ChargeRule_Melee_ChargesProperly);
+        yield return ("ChargeRule_Ranged_NoCharge",           ChargeRule_Ranged_NoCharge);
+        yield return ("ChargeRule_Catalyst_NoCharge",         ChargeRule_Catalyst_NoCharge);
     }
 
     // ========================================================================
@@ -208,8 +212,9 @@ public static class HighLevelSanityCheck
 
     private static (bool, string) SkillTreeAllocator_AppliesPoints()
     {
-        // Lvl 10 unit gets 14 skill points -> at least the start node + several
-        // STR-direction nodes if STR is the highest stat.
+        // Lvl 10 unit gets 14 skill points. The star-chart layout now charges
+        // by occupied tile count, so completed node count is intentionally much
+        // lower than raw point count.
         using var _ = CombatRandom.Use(new SeededRandomSource(20251008));
         var data = new UnitData
         {
@@ -220,10 +225,10 @@ public static class HighLevelSanityCheck
         };
         var tree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(data);
         if (tree == null) return (false, "AllocateForUnit returned null");
-        // start node + 5+(level-1)=14 points -> ~14 activated nodes.
-        // Allow some slop because AI may cap on prerequisites.
-        if (tree.GetActivatedCount() < 5)
-            return (false, $"only {tree.GetActivatedCount()} nodes activated, expected >=5");
+        if (tree.AvailableAttributePoints >= 14)
+            return (false, $"allocator spent no points, remaining {tree.AvailableAttributePoints}");
+        if (tree.GetActivatedCount() < 3)
+            return (false, $"only {tree.GetActivatedCount()} nodes activated, expected >=3 under tile-cost layout");
         return (true, "");
     }
 
@@ -249,6 +254,140 @@ public static class HighLevelSanityCheck
         // Tree might or might not include max_hp nodes -- we just assert it's >= base.
         if (totalHp < baseHp)
             return (false, $"current HP {totalHp} < base {baseHp}");
+        return (true, "");
+    }
+
+    // ========================================================================
+    // Charge rules tests
+    // ========================================================================
+
+    private static (bool, string) ChargeRule_Melee_ChargesProperly()
+    {
+        using var _ = CombatRandom.Use(new SeededRandomSource(12345));
+        var player = new BladeHex.Combat.Headless.BattleSquad("player", true);
+        var enemy = new BladeHex.Combat.Headless.BattleSquad("enemy", false);
+
+        var pData = MakeUnit(level: 5);
+        var meleeWpn = new WeaponData
+        {
+            ItemId = "test_melee",
+            ItemName = "测试近战武装",
+            Class = WeaponData.WeaponClass.Melee,
+            Subtype = WeaponData.WeaponSubtype.ArmingSword,
+            RangeCells = 1
+        };
+        pData.PrimaryMainHand = meleeWpn;
+        var pModel = new BattleUnitModel(pData);
+        player.AddUnit(pModel, new Vector2I(0, 0));
+
+        var eData = MakeUnit(level: 5);
+        var eModel = new BattleUnitModel(eData);
+        enemy.AddUnit(eModel, new Vector2I(0, 4));
+
+        bool observedCharge = false;
+        BladeHex.Combat.Headless.HeadlessCombatLoop.AttackTraceSink = trace =>
+        {
+            if (trace.AttackerIsPlayer && trace.HasAdvantage) observedCharge = true;
+        };
+
+        try
+        {
+            BladeHex.Combat.Headless.HeadlessCombatLoop.Run(player, enemy, maxRounds: 1);
+        }
+        finally
+        {
+            BladeHex.Combat.Headless.HeadlessCombatLoop.AttackTraceSink = null;
+        }
+
+        if (!observedCharge)
+            return (false, "近战单位走3格发起攻击没有触发优势冲锋");
+        return (true, "");
+    }
+
+    private static (bool, string) ChargeRule_Ranged_NoCharge()
+    {
+        using var _ = CombatRandom.Use(new SeededRandomSource(12345));
+        var player = new BladeHex.Combat.Headless.BattleSquad("player", true);
+        var enemy = new BladeHex.Combat.Headless.BattleSquad("enemy", false);
+
+        var pData = MakeUnit(level: 5);
+        var rangedWpn = new WeaponData
+        {
+            ItemId = "test_ranged",
+            ItemName = "测试远程长弓",
+            Class = WeaponData.WeaponClass.Ranged,
+            Subtype = WeaponData.WeaponSubtype.Longbow,
+            RangeCells = 6
+        };
+        pData.PrimaryMainHand = rangedWpn;
+        var pModel = new BattleUnitModel(pData);
+        player.AddUnit(pModel, new Vector2I(0, 0));
+
+        var eData = MakeUnit(level: 5);
+        var eModel = new BattleUnitModel(eData);
+        enemy.AddUnit(eModel, new Vector2I(0, 9));
+
+        bool observedCharge = false;
+        BladeHex.Combat.Headless.HeadlessCombatLoop.AttackTraceSink = trace =>
+        {
+            if (trace.AttackerIsPlayer && trace.HasAdvantage) observedCharge = true;
+        };
+
+        try
+        {
+            BladeHex.Combat.Headless.HeadlessCombatLoop.Run(player, enemy, maxRounds: 1);
+        }
+        finally
+        {
+            BladeHex.Combat.Headless.HeadlessCombatLoop.AttackTraceSink = null;
+        }
+
+        if (observedCharge)
+            return (false, "远程单位在移动 3 格后发起攻击竟然触发了冲锋优势");
+        return (true, "");
+    }
+
+    private static (bool, string) ChargeRule_Catalyst_NoCharge()
+    {
+        using var _ = CombatRandom.Use(new SeededRandomSource(12345));
+        var player = new BladeHex.Combat.Headless.BattleSquad("player", true);
+        var enemy = new BladeHex.Combat.Headless.BattleSquad("enemy", false);
+
+        var pData = MakeUnit(level: 5);
+        var catalystWpn = new WeaponData
+        {
+            ItemId = "test_catalyst",
+            ItemName = "测试触媒魔杖",
+            Class = WeaponData.WeaponClass.Melee,
+            Subtype = WeaponData.WeaponSubtype.Wand,
+            RangeCells = 9
+        };
+        catalystWpn.Traits = catalystWpn.Traits.With(WeaponTraits.Catalyst);
+        pData.PrimaryMainHand = catalystWpn;
+        var pModel = new BattleUnitModel(pData);
+        player.AddUnit(pModel, new Vector2I(0, 0));
+
+        var eData = MakeUnit(level: 5);
+        var eModel = new BattleUnitModel(eData);
+        enemy.AddUnit(eModel, new Vector2I(0, 12));
+
+        bool observedCharge = false;
+        BladeHex.Combat.Headless.HeadlessCombatLoop.AttackTraceSink = trace =>
+        {
+            if (trace.AttackerIsPlayer && trace.HasAdvantage) observedCharge = true;
+        };
+
+        try
+        {
+            BladeHex.Combat.Headless.HeadlessCombatLoop.Run(player, enemy, maxRounds: 1);
+        }
+        finally
+        {
+            BladeHex.Combat.Headless.HeadlessCombatLoop.AttackTraceSink = null;
+        }
+
+        if (observedCharge)
+            return (false, "Catalyst触媒单位在移动 3 格后发起攻击竟然触发了冲锋优势");
         return (true, "");
     }
 

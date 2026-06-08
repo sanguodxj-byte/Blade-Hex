@@ -14,6 +14,14 @@ public static class BuffTurnApplier
 
         var tick = BladeHex.Combat.Buff.BuffTurnHooks.TickTurnStart(unit.Data);
         ApplyHpDelta(unit, tick.NetHpDelta);
+        int bloodOathLoss = BladeHex.Strategic.SkillTreeKeystoneResolver.ApplyBloodOathTurnStartLoss(unit.Data);
+        if (bloodOathLoss > 0)
+        {
+            unit.CurrentHp = unit.Data.Runtime.CurrentHp;
+            unit.Model.CurrentHp = unit.CurrentHp;
+            BladeHex.Events.EventBus.Instance?.PublishUnitDamaged(unit, bloodOathLoss, unit.CurrentHp);
+            unit.UpdateHpBar();
+        }
         BladeHex.Combat.Buff.BuffSystem.FireTriggers(unit.Data, BladeHex.Combat.Buff.TriggerEvent.OnTurnStart);
         CharacterRenderBus.Instance?.NotifyStatusEffects(unit, new Godot.Collections.Array());
     }

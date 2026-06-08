@@ -1,4 +1,4 @@
-﻿// TerritoryUI.cs
+﻿﻿// TerritoryUI.cs
 // Territory management UI - Manage castles, taxes, construction, faction relations
 // Corresponds to design doc 04-StrategicLayer.md - Territory management
 // Corresponds to design doc 11-ArmySystem.md - Recruit & maintain
@@ -12,7 +12,7 @@ namespace BladeHex.View.UI.Overworld;
 public partial class TerritoryUI : PanelContainer
 {
     // ============================================================================
-    // 淇″彿
+    // 信号
     // ============================================================================
     [Signal]
     public delegate void CloseRequestedEventHandler();
@@ -39,7 +39,7 @@ public partial class TerritoryUI : PanelContainer
     
 
     // ============================================================================
-    // 涓婚甯搁噺
+    // 主题常量
     // ============================================================================
     private static readonly Color BgPrimary = new(0.08f, 0.08f, 0.10f, 0.85f);
     private static readonly Color BgSecondary = new(0.12f, 0.12f, 0.14f, 0.80f);
@@ -75,7 +75,7 @@ public partial class TerritoryUI : PanelContainer
     private const int ButtonHeightLg = 45;
 
     // ============================================================================
-    // 鍩庡牎淇℃伅锛堝搴旂瓥鍒掓04-鎴樼暐灞傜郴缁?md锛?
+    // 城堡信息（对应策划案 04-战略层系统.md）
     // ============================================================================
     private static readonly Dictionary<CastleLevel, Dictionary> CastleInfo = new()
     {
@@ -85,7 +85,7 @@ public partial class TerritoryUI : PanelContainer
     };
 
     // ============================================================================
-    // 寤虹瓚绫诲瀷
+    // 建筑类型
     // ============================================================================
     private static readonly Dictionary<string, Dictionary> Buildings = new()
     {
@@ -101,7 +101,7 @@ public partial class TerritoryUI : PanelContainer
     };
 
     // ============================================================================
-    // 瀛楁
+    // 字段
     // ============================================================================
     private CastleLevel _castleLevel = CastleLevel.WoodFence;
     private Label _territoryNameLabel = null!;
@@ -113,7 +113,7 @@ public partial class TerritoryUI : PanelContainer
     private VBoxContainer _factionContainer = null!;
 
     // ============================================================================
-    // 鐢熷懡鍛ㄦ湡
+    // 生命周期
     // ============================================================================
 
     public override void _Ready()
@@ -123,7 +123,7 @@ public partial class TerritoryUI : PanelContainer
     }
 
     // ============================================================================
-    // UI鏋勫缓
+    // UI 构建
     // ============================================================================
 
     private void _Setup()
@@ -142,7 +142,7 @@ public partial class TerritoryUI : PanelContainer
         mainVbox.AddThemeConstantOverride("separation", SpacingMd);
         rootMargin.AddChild(mainVbox);
 
-        // 鈹€鈹€鈹€ 椤堕儴 鈹€鈹€鈹€
+        // —— 顶部 ——
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", SpacingMd);
         mainVbox.AddChild(header);
@@ -157,13 +157,13 @@ public partial class TerritoryUI : PanelContainer
 
         mainVbox.AddChild(CreateSeparator());
 
-        // 鈹€鈹€鈹€ 涓讳綋锛氫笁鏍?鈹€鈹€鈹€
+        // —— 主体：三栏 ——
         var body = new HBoxContainer();
         body.AddThemeConstantOverride("separation", SpacingLg);
         body.SizeFlagsVertical = Control.SizeFlags.Expand | Control.SizeFlags.Fill;
         mainVbox.AddChild(body);
 
-        // 鈹€鈹€鈹€ 宸︽爮锛氬煄鍫?鏀跺叆/鏀嚭 鈹€鈹€鈹€
+        // —— 左栏：城堡 收入/支出 ——
         var leftCol = new VBoxContainer();
         leftCol.CustomMinimumSize = new Vector2(280, 0);
         leftCol.AddThemeConstantOverride("separation", SpacingMd);
@@ -209,7 +209,7 @@ public partial class TerritoryUI : PanelContainer
         leftCol.AddChild(totalExpense);
         _expenseLabels["total_expense"] = totalExpense;
 
-        // 鈹€鈹€鈹€ 涓爮锛氬缓璁?鈹€鈹€鈹€
+        // —— 中栏：建设 ——
         var centerCol = new VBoxContainer();
         centerCol.CustomMinimumSize = new Vector2(300, 0);
         centerCol.AddThemeConstantOverride("separation", SpacingMd);
@@ -226,7 +226,7 @@ public partial class TerritoryUI : PanelContainer
 
         _PopulateBuildings();
 
-        // 鈹€鈹€鈹€ 鍙虫爮锛氬娍鍔涘叧绯?鈹€鈹€鈹€
+        // —— 右栏：势力关系 ——
         var rightCol = new VBoxContainer();
         rightCol.SizeFlagsHorizontal = Control.SizeFlags.Expand | Control.SizeFlags.Fill;
         rightCol.AddThemeConstantOverride("separation", SpacingMd);
@@ -262,7 +262,7 @@ public partial class TerritoryUI : PanelContainer
     }
 
     // ============================================================================
-    // 杈呭姪鍒涘缓
+    // 辅助创建
     // ============================================================================
 
     private void _CreateIncomeEntry(Control parent, string key, string name, string defaultValue)
@@ -315,11 +315,11 @@ public partial class TerritoryUI : PanelContainer
     }
 
     // ============================================================================
-    // 鍏紑鎺ュ彛
+    // 公开接口
     // ============================================================================
 
     /// <summary>
-    /// 鎵撳紑棰嗗湴绠＄悊
+    /// 打开领地管理
     /// </summary>
     public void OpenTerritory(string territoryName = "\u6211\u7684\u9886\u5730", CastleLevel castleLevel = CastleLevel.WoodFence)
     {
@@ -330,7 +330,7 @@ public partial class TerritoryUI : PanelContainer
     }
 
     /// <summary>
-    /// 鍏抽棴
+    /// 关闭
     /// </summary>
     public void CloseTerritory()
     {
@@ -364,7 +364,7 @@ public partial class TerritoryUI : PanelContainer
     }
 
     // ============================================================================
-    // UI 缁勪欢宸ュ巶
+    // UI 组件工厂
     // ============================================================================
 
     private static StyleBoxFlat MakePanelStyle(Color bg, Color border, int borderWidth = 1, int radius = 8, int margin = 8)
@@ -436,6 +436,7 @@ public partial class TerritoryUI : PanelContainer
         rt.BbcodeEnabled = true;
         rt.ScrollActive = false;
         rt.FitContent = true;
+        rt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         return rt;
     }
 

@@ -23,11 +23,12 @@ public static class DamageNumberPopup
     /// </summary>
     /// <param name="parent">挂载父节点(战斗场景根)</param>
     /// <param name="worldPos">起始位置(通常单位头顶)</param>
-    /// <param name="amount">数值;>0 显示为伤害(红/黄),≤0 显示为治疗(绿)</param>
+    /// <param name="amount">显示数值</param>
     /// <param name="isCritical">是否暴击 — 字号更大、加 ! 标记</param>
-    /// <param name="missLabel">非空时显示该字符串(如 "Miss" / "Block"),amount 被忽略</param>
+    /// <param name="missLabel">非空时显示该字符串(如 "Miss"),amount 被忽略</param>
+    /// <param name="showGray">为 true 时金额显示为灰色(护甲伤害/吸收)</param>
     public static void Spawn(Node3D parent, Vector3 worldPos, int amount,
-        bool isCritical = false, string? missLabel = null)
+        bool isCritical = false, string? missLabel = null, bool showGray = false)
     {
         if (parent == null || !GodotObject.IsInstanceValid(parent)) return;
 
@@ -46,6 +47,11 @@ public static class DamageNumberPopup
             label.Text = missLabel;
             label.Modulate = new Color(0.7f, 0.7f, 0.7f);
         }
+        else if (showGray)
+        {
+            label.Text = amount.ToString();
+            label.Modulate = new Color(0.7f, 0.7f, 0.7f); // 护甲伤害:灰
+        }
         else if (amount > 0)
         {
             label.Text = isCritical ? $"{amount}!" : amount.ToString();
@@ -53,10 +59,15 @@ public static class DamageNumberPopup
                 ? new Color(1.0f, 0.85f, 0.25f)  // 暴击:金黄
                 : new Color(1.0f, 0.4f, 0.3f);   // 普通:红
         }
-        else
+        else if (amount < 0)
         {
             label.Text = $"+{-amount}";
             label.Modulate = new Color(0.4f, 1.0f, 0.4f); // 治疗:绿
+        }
+        else
+        {
+            label.Text = "0";
+            label.Modulate = new Color(0.7f, 0.7f, 0.7f); // 被护甲完全吸收:灰
         }
 
         label.Position = worldPos;
@@ -80,9 +91,9 @@ public static class DamageNumberPopup
 
     /// <summary>便捷重载:从 Unit 上方弹出</summary>
     public static void SpawnAtUnit(Node3D parent, Node3D unit, int amount,
-        bool isCritical = false, string? missLabel = null)
+        bool isCritical = false, string? missLabel = null, bool showGray = false)
     {
         if (unit == null || !GodotObject.IsInstanceValid(unit)) return;
-        Spawn(parent, unit.GlobalPosition + Vector3.Up * 90f, amount, isCritical, missLabel);
+        Spawn(parent, unit.GlobalPosition + Vector3.Up * 90f, amount, isCritical, missLabel, showGray);
     }
 }

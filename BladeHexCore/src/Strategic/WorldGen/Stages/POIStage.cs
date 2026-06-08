@@ -33,21 +33,101 @@ public sealed class POIStage : IWorldStage
         {
             if (!ctx.Territories.TryGetValue(nation.Id, out var territory)) continue;
 
-            int poiCount = Math.Max(1, (int)(territory.TotalTiles * nation.PoiDensityPer1000Tiles / 1000.0f));
+            var cores = new List<OverworldPOI>();
 
+            // 1. 首都 (Town)
             var capital = PlaceCapital(nation, territory, ctx.Chunks, rng, usedPositions);
-            if (capital != null) { ApplyFootprint(capital, ctx.Chunks, usedPositions); ctx.Pois.Add(capital); }
-
-            for (int i = 0; i < poiCount - 1; i++)
+            if (capital != null)
             {
-                var poi = PlaceNationPOI(nation, territory, ctx, rng, usedPositions, i);
-                if (poi != null) { ApplyFootprint(poi, ctx.Chunks, usedPositions); ctx.Pois.Add(poi); }
+                var capHex = HexOverworldTile.PixelToAxial(capital.Position.X, capital.Position.Y);
+                if (IsNearLargeOcean(capHex, ctx.Chunks))
+                {
+                    capital.IsPortCity = true;
+                    capital.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.City, "Coast") + "港";
+                }
+                ApplyFootprint(capital, ctx.Chunks, usedPositions);
+                ctx.Pois.Add(capital);
+                cores.Add(capital);
+            }
+
+            // 2. 额外核心 POI (Town / Castle)
+            int extraTowns = 1;
+            int castles = 1;
+            if (territory.TotalTiles > 300) extraTowns += 1;
+            if (territory.TotalTiles > 500) castles += 1;
+            if (territory.TotalTiles > 800) extraTowns += 1;
+
+            // 生成 Town
+            for (int i = 0; i < extraTowns; i++)
+            {
+                var town = PlaceCorePOI(nation, territory, ctx.Chunks, rng, usedPositions, OverworldPOI.POIType.Town, cores);
+                if (town != null)
+                {
+                    ApplyFootprint(town, ctx.Chunks, usedPositions);
+                    ctx.Pois.Add(town);
+                    cores.Add(town);
+                }
+            }
+
+            // 生成 Castle
+            for (int i = 0; i < castles; i++)
+            {
+                var castle = PlaceCorePOI(nation, territory, ctx.Chunks, rng, usedPositions, OverworldPOI.POIType.Castle, cores);
+                if (castle != null)
+                {
+                    ApplyFootprint(castle, ctx.Chunks, usedPositions);
+                    ctx.Pois.Add(castle);
+                    cores.Add(castle);
+                }
+            }
+
+            // 3. 生成每个核心 POI 的附属子 POI (Village, Mine, Farm)
+            foreach (var core in cores)
+            {
+                int numVillages = core.PoiTypeEnum == OverworldPOI.POIType.Town
+                    ? rng.Next(3, 7) // 3-6
+                    : rng.Next(1, 4); // 1-3
+
+                int numMines = core.PoiTypeEnum == OverworldPOI.POIType.Town ? rng.Next(1, 3) : 0; // 1-2
+                int numFarms = core.PoiTypeEnum == OverworldPOI.POIType.Town ? rng.Next(1, 3) : 0; // 1-2
+
+                // 生成 Village
+                for (int j = 0; j < numVillages; j++)
+                {
+                    var village = PlaceSubPOI(nation, territory, ctx.Chunks, rng, usedPositions, OverworldPOI.POIType.Village, core, cores);
+                    if (village != null)
+                    {
+                        ApplyFootprint(village, ctx.Chunks, usedPositions);
+                        ctx.Pois.Add(village);
+                    }
+                }
+
+                // 生成 Mine
+                for (int j = 0; j < numMines; j++)
+                {
+                    var mine = PlaceSubPOI(nation, territory, ctx.Chunks, rng, usedPositions, OverworldPOI.POIType.Mine, core, cores);
+                    if (mine != null)
+                    {
+                        ApplyFootprint(mine, ctx.Chunks, usedPositions);
+                        ctx.Pois.Add(mine);
+                    }
+                }
+
+                // 生成 Farm
+                for (int j = 0; j < numFarms; j++)
+                {
+                    var farm = PlaceSubPOI(nation, territory, ctx.Chunks, rng, usedPositions, OverworldPOI.POIType.Farm, core, cores);
+                    if (farm != null)
+                    {
+                        ApplyFootprint(farm, ctx.Chunks, usedPositions);
+                        ctx.Pois.Add(farm);
+                    }
+                }
             }
         }
 
         PlaceWildPOIs(ctx.Chunks, ctx.Zones, ctx.Territories, ctx.Pois, rng, usedPositions);
 
-        // 野外 POI 在 PlaceWildPOIs 内已加入 ctx.Pois，逐个 footprint
         for (int i = 0; i < ctx.Pois.Count; i++)
         {
             if (ctx.Pois[i].OccupiedHexes.Length == 0)
@@ -57,15 +137,11 @@ public sealed class POIStage : IWorldStage
         GD.Print($"[POIStage] {ctx.Pois.Count} 个 POI");
     }
 
-    /// <summary>
-    /// 根据 POI 类型查 preset，用 TryFit 给 POI 应用 footprint；失败时回退到 solo。
-    /// </summary>
     private static void ApplyFootprint(
         OverworldPOI poi,
         Dictionary<Vector2I, ChunkData> chunks,
         HashSet<Vector2I> usedPositions)
     {
-        // 通过 chunks 查 tile
         HexOverworldTile? GetTile(Vector2I hex)
         {
             var chunkCoord = ChunkData.WorldToChunk(hex.X, hex.Y);
@@ -75,10 +151,6 @@ public sealed class POIStage : IWorldStage
 
         POIFootprintApplier.Apply(poi, GetTile, usedPositions);
     }
-
-    // ========================================
-    // 首都
-    // ========================================
 
     private static OverworldPOI? PlaceCapital(
         NationConfig nation,
@@ -107,48 +179,36 @@ public sealed class POIStage : IWorldStage
         return poi;
     }
 
-    // ========================================
-    // 国家 POI
-    // ========================================
-
-    private static OverworldPOI? PlaceNationPOI(
+    private static OverworldPOI? PlaceCorePOI(
         NationConfig nation,
         NationTerritory territory,
-        WorldBuildContext ctx,
+        Dictionary<Vector2I, ChunkData> chunks,
         Random rng,
         HashSet<Vector2I> usedPositions,
-        int index)
+        OverworldPOI.POIType type,
+        List<OverworldPOI> existingCores)
     {
         var tileList = territory.AllTiles.ToList();
+        if (tileList.Count == 0) return null;
 
-        // 把 anchor 偏向已有 POI 附近，制造"聚落带"
-        // 50% 概率随机均匀，50% 概率从已落点附近偏移 ±15 hex
-        Vector2I center;
-        if (usedPositions.Count > 0 && rng.NextDouble() < 0.5)
+        Vector2I center = tileList[rng.Next(tileList.Count)];
+        if (existingCores.Count > 0 && rng.NextDouble() < 0.5)
         {
-            var seedPositions = new List<Vector2I>(usedPositions);
-            var anchor = seedPositions[rng.Next(seedPositions.Count)];
-            // 在 anchor 附近 ±15 hex 范围内找一个属于本国领土的 tile
+            var anchor = existingCores[rng.Next(existingCores.Count)];
+            var anchorHex = HexOverworldTile.PixelToAxial(anchor.Position.X, anchor.Position.Y);
             for (int tries = 0; tries < 10; tries++)
             {
-                var c = new Vector2I(anchor.X + rng.Next(-15, 16), anchor.Y + rng.Next(-15, 16));
+                var c = new Vector2I(anchorHex.X + rng.Next(-15, 16), anchorHex.Y + rng.Next(-15, 16));
                 if (territory.AllTiles.Contains(c))
                 {
                     center = c;
-                    goto FOUND;
+                    break;
                 }
             }
-            center = tileList[rng.Next(tileList.Count)];
-        FOUND:;
-        }
-        else
-        {
-            center = tileList[rng.Next(tileList.Count)];
         }
 
-        // 不同 POI 类型用不同最小间距：城堡/城镇间距大，小设施间距小
-        int minDist = index < 2 ? 25 : (index < 5 ? 18 : 12);
-        var pos = FindValidPosition(center, territory.AllTiles, ctx.Chunks, rng, usedPositions, minDist);
+        int minDist = type == OverworldPOI.POIType.Town ? 18 : 15;
+        var pos = FindValidPosition(center, territory.AllTiles, chunks, rng, usedPositions, minDist);
         if (pos == null) return null;
 
         usedPositions.Add(pos.Value);
@@ -158,28 +218,20 @@ public sealed class POIStage : IWorldStage
         poi.OwningFaction = nation.Id;
         poi.HasQuestBoard = true;
 
-        var terrainKey = GetTerrainKeyForPosition(pos.Value, ctx.Chunks);
-        var terrainType = GetTerrainTypeAtPosition(pos.Value, ctx.Chunks);
+        var terrainKey = GetTerrainKeyForPosition(pos.Value, chunks);
 
-        // 沿海位置 → 强制港口（每国一个）
-        if (IsCoastalTile(pos.Value, ctx.Chunks) && !ctx.PortsPlaced.Contains(nation.Id))
+        if (type == OverworldPOI.POIType.Town)
         {
-            poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.City, "Coast") + "港";
-            poi.PoiTypeEnum = OverworldPOI.POIType.Port;
-            poi.HasTavern = true;
-            poi.HasShop = true;
-            poi.FerryCost = 40 + rng.Next(30);
-            poi.GarrisonMax = 50;
-            poi.GarrisonCurrent = 40 + rng.Next(10);
-            poi.Prosperity = 50 + rng.Next(30);
-            ctx.PortsPlaced.Add(nation.Id);
-            return poi;
-        }
-
-        if (index < 1)
-        {
-            poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.City, terrainKey);
             poi.PoiTypeEnum = OverworldPOI.POIType.Town;
+            if (IsNearLargeOcean(pos.Value, chunks))
+            {
+                poi.IsPortCity = true;
+                poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.City, "Coast") + "港";
+            }
+            else
+            {
+                poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.City, terrainKey);
+            }
             poi.HasTavern = true;
             poi.HasShop = true;
             poi.HasBlacksmith = true;
@@ -187,10 +239,10 @@ public sealed class POIStage : IWorldStage
             poi.GarrisonCurrent = 60 + rng.Next(30);
             poi.Prosperity = 60 + rng.Next(20);
         }
-        else if (index < 2)
+        else
         {
-            poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Fortress);
             poi.PoiTypeEnum = OverworldPOI.POIType.Castle;
+            poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Fortress);
             poi.HasBarracks = true;
             poi.HasBlacksmith = true;
             poi.GarrisonMax = 100 + rng.Next(50);
@@ -198,87 +250,158 @@ public sealed class POIStage : IWorldStage
             poi.CastleDefenseLevel = 1 + rng.Next(2);
             poi.Prosperity = 40 + rng.Next(20);
         }
-        else if (index < 5)
+
+        return poi;
+    }
+
+    private static OverworldPOI? PlaceSubPOI(
+        NationConfig nation,
+        NationTerritory territory,
+        Dictionary<Vector2I, ChunkData> chunks,
+        Random rng,
+        HashSet<Vector2I> usedPositions,
+        OverworldPOI.POIType type,
+        OverworldPOI parent,
+        List<OverworldPOI> existingCores)
+    {
+        var parentHex = HexOverworldTile.PixelToAxial(parent.Position.X, parent.Position.Y);
+        
+        Vector2I? finalPos = null;
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            int radius = rng.Next(5, 15);
+            int dir = rng.Next(6);
+            var offset = HexOverworldTile.GetNeighbor(0, 0, dir) * radius;
+            var candidate = parentHex + offset;
+
+            if (!territory.AllTiles.Contains(candidate)) continue;
+            if (usedPositions.Contains(candidate)) continue;
+
+            var chunkCoord = ChunkData.WorldToChunk(candidate.X, candidate.Y);
+            if (!chunks.TryGetValue(chunkCoord, out var chunk)) continue;
+            var tile = chunk.GetTile(candidate.X, candidate.Y);
+            if (tile == null || !tile.IsPassable) continue;
+            if (tile.Terrain == HexOverworldTile.TerrainType.ShallowWater ||
+                tile.Terrain == HexOverworldTile.TerrainType.DeepWater ||
+                tile.Terrain == HexOverworldTile.TerrainType.River ||
+                tile.Terrain == HexOverworldTile.TerrainType.Ice) continue;
+
+            bool tooClose = false;
+            foreach (var pos in usedPositions)
+            {
+                if (candidate.DistanceTo(pos) < 2)
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (tooClose) continue;
+
+            var candidatePixel = HexOverworldTile.AxialToPixel(candidate.X, candidate.Y);
+            float distToParent = candidatePixel.DistanceTo(parent.Position);
+            bool parentIsClosest = true;
+            foreach (var core in existingCores)
+            {
+                if (core == parent) continue;
+                if (candidatePixel.DistanceTo(core.Position) <= distToParent)
+                {
+                    parentIsClosest = false;
+                    break;
+                }
+            }
+
+            if (parentIsClosest)
+            {
+                finalPos = candidate;
+                break;
+            }
+        }
+
+        if (finalPos == null) return null;
+
+        usedPositions.Add(finalPos.Value);
+
+        var poi = new OverworldPOI();
+        poi.Position = HexOverworldTile.AxialToPixel(finalPos.Value.X, finalPos.Value.Y);
+        poi.OwningFaction = nation.Id;
+        poi.ParentPoiName = parent.PoiName;
+        poi.PoiTypeEnum = type;
+
+        var terrainKey = GetTerrainKeyForPosition(finalPos.Value, chunks);
+
+        if (type == OverworldPOI.POIType.Village)
         {
             poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Village, terrainKey);
-            poi.PoiTypeEnum = OverworldPOI.POIType.Village;
             poi.HasTavern = rng.Next(2) == 0;
             poi.GarrisonMax = 25 + rng.Next(10);
             poi.GarrisonCurrent = 20 + rng.Next(10);
             poi.Prosperity = 30 + rng.Next(30);
         }
-        else
+        else if (type == OverworldPOI.POIType.Mine)
         {
-            var facilityType = ChooseFacilityByTerrain(terrainType, rng);
-            switch (facilityType)
-            {
-                case "tavern":
-                    poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Tavern);
-                    poi.PoiTypeEnum = OverworldPOI.POIType.Tavern;
-                    poi.HasTavern = true;
-                    poi.HasShop = true;
-                    poi.GarrisonMax = 10;
-                    poi.GarrisonCurrent = 8 + rng.Next(3);
-                    poi.Prosperity = 30 + rng.Next(20);
-                    break;
-                case "outpost":
-                    poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Fortress);
-                    poi.PoiTypeEnum = OverworldPOI.POIType.Outpost;
-                    poi.HasBarracks = true;
-                    poi.GarrisonMax = 40 + rng.Next(15);
-                    poi.GarrisonCurrent = 30 + rng.Next(15);
-                    poi.Prosperity = 20;
-                    break;
-                case "mine":
-                    poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Village, terrainKey) + "矿场";
-                    poi.PoiTypeEnum = OverworldPOI.POIType.Mine;
-                    poi.GarrisonMax = 20;
-                    poi.GarrisonCurrent = 15 + rng.Next(5);
-                    poi.Prosperity = 40 + rng.Next(20);
-                    break;
-                case "farm":
-                    poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Village, "Plain") + "农庄";
-                    poi.PoiTypeEnum = OverworldPOI.POIType.Farm;
-                    poi.GarrisonMax = 15;
-                    poi.GarrisonCurrent = 10 + rng.Next(5);
-                    poi.Prosperity = 35 + rng.Next(15);
-                    break;
-                case "shrine":
-                    poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Monastery);
-                    poi.PoiTypeEnum = OverworldPOI.POIType.Shrine;
-                    poi.GarrisonMax = 8;
-                    poi.GarrisonCurrent = 6 + rng.Next(3);
-                    poi.Prosperity = 25;
-                    break;
-            }
+            poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Village, terrainKey) + "矿场";
+            poi.GarrisonMax = 20;
+            poi.GarrisonCurrent = 15 + rng.Next(5);
+            poi.Prosperity = 40 + rng.Next(20);
+        }
+        else if (type == OverworldPOI.POIType.Farm)
+        {
+            poi.PoiName = POINameGenerator.GeneratePOIName(POINameGenerator.POIType.Village, "Plain") + "农庄";
+            poi.GarrisonMax = 15;
+            poi.GarrisonCurrent = 10 + rng.Next(5);
+            poi.Prosperity = 35 + rng.Next(15);
         }
 
         return poi;
     }
 
-    private static string ChooseFacilityByTerrain(HexOverworldTile.TerrainType terrain, Random rng)
+    private static bool IsNearLargeOcean(Vector2I coord, Dictionary<Vector2I, ChunkData> chunks, int oceanSizeThreshold = 30)
     {
-        return terrain switch
+        Vector2I? waterNeighbor = null;
+        for (int dir = 0; dir < 6; dir++)
         {
-            HexOverworldTile.TerrainType.Hills or
-            HexOverworldTile.TerrainType.Rocky => rng.Next(2) == 0 ? "mine" : "outpost",
+            var nb = HexOverworldTile.GetNeighbor(coord.X, coord.Y, dir);
+            var chunkCoord = ChunkData.WorldToChunk(nb.X, nb.Y);
+            if (!chunks.TryGetValue(chunkCoord, out var chunk)) continue;
+            var tile = chunk.GetTile(nb.X, nb.Y);
+            if (tile != null && (tile.Terrain == HexOverworldTile.TerrainType.DeepWater || tile.Terrain == HexOverworldTile.TerrainType.ShallowWater))
+            {
+                waterNeighbor = nb;
+                break;
+            }
+        }
 
-            HexOverworldTile.TerrainType.Plains or
-            HexOverworldTile.TerrainType.Grassland => rng.Next(2) == 0 ? "farm" : "tavern",
+        if (waterNeighbor == null) return false;
 
-            HexOverworldTile.TerrainType.Forest or
-            HexOverworldTile.TerrainType.DenseForest or
-            HexOverworldTile.TerrainType.Taiga => rng.Next(2) == 0 ? "tavern" : "shrine",
+        var queue = new Queue<Vector2I>();
+        var visited = new HashSet<Vector2I>();
+        queue.Enqueue(waterNeighbor.Value);
+        visited.Add(waterNeighbor.Value);
 
-            HexOverworldTile.TerrainType.Swamp or
-            HexOverworldTile.TerrainType.Bog or
-            HexOverworldTile.TerrainType.Wasteland => "outpost",
+        int count = 0;
+        while (queue.Count > 0 && count < oceanSizeThreshold)
+        {
+            var curr = queue.Dequeue();
+            count++;
 
-            HexOverworldTile.TerrainType.Sand or
-            HexOverworldTile.TerrainType.Savanna => "tavern",
+            for (int dir = 0; dir < 6; dir++)
+            {
+                var nb = HexOverworldTile.GetNeighbor(curr.X, curr.Y, dir);
+                if (visited.Contains(nb)) continue;
 
-            _ => new[] { "tavern", "farm", "outpost", "mine", "shrine" }[rng.Next(5)],
-        };
+                var chunkCoord = ChunkData.WorldToChunk(nb.X, nb.Y);
+                if (!chunks.TryGetValue(chunkCoord, out var chunk)) continue;
+                var tile = chunk.GetTile(nb.X, nb.Y);
+
+                if (tile != null && (tile.Terrain == HexOverworldTile.TerrainType.DeepWater || tile.Terrain == HexOverworldTile.TerrainType.ShallowWater))
+                {
+                    visited.Add(nb);
+                    queue.Enqueue(nb);
+                }
+            }
+        }
+
+        return count >= oceanSizeThreshold;
     }
 
     private static string GetTerrainKeyForPosition(Vector2I coord, Dictionary<Vector2I, ChunkData> chunks)

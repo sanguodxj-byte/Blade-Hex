@@ -53,21 +53,21 @@ public partial class CombatSceneBackdrop : Node3D
             BackgroundMode = Godot.Environment.BGMode.Sky,
             Sky = skyRes,
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            AmbientLightSkyContribution = 0.6f,
-            AmbientLightEnergy = 0.8f,
+            AmbientLightSkyContribution = 0.35f, // 下调:让阴影暗部更沉,配合太阳强光拉开对比
+            AmbientLightEnergy = 0.26f,          // 再下调:加深暗部,拉开与太阳直射的对比(八方旅人式)
             TonemapMode = Godot.Environment.ToneMapper.Filmic,
 
             // === SSAO(屏幕空间环境光遮蔽)— 让凹陷/角落自然变暗 ===
             SsaoEnabled = true,
-            SsaoRadius = 2.0f,          // 遮蔽半径(世界单位)
-            SsaoIntensity = 2.0f,       // 遮蔽强度
-            SsaoPower = 1.5f,           // 衰减曲线
-            SsaoLightAffect = 0.3f,     // 对直接光的影响(0=只影响环境光)
+            SsaoRadius = 3.0f,
+            SsaoIntensity = 1.65f,
+            SsaoPower = 1.6f,
+            SsaoLightAffect = 0.3f,
 
             // === SSIL(屏幕空间间接光)— 让亮面反弹光到暗面 ===
             SsilEnabled = true,
             SsilRadius = 5.0f,
-            SsilIntensity = 1.0f,
+            SsilIntensity = 0.55f,
             SsilNormalRejection = 1.0f,
 
             // === Glow(泛光)— 让高亮物体(魔法阵/伤害数字)产生光晕 ===
@@ -79,7 +79,18 @@ public partial class CombatSceneBackdrop : Node3D
             GlowHdrThreshold = 0.9f,
 
             // === 色调映射 ===
-            TonemapExposure = 0.9f,     // 略微压暗整体(配合 SSAO 更有层次)
+            TonemapExposure = 0.9f,
+
+            // === 距离雾(大气透视)— 正交投影丢失透视收敛，用远端压灰补偿纵深 ===
+            FogEnabled = true,
+            FogMode = Godot.Environment.FogModeEnum.Depth,
+            FogLightColor = new Color(0.62f, 0.66f, 0.74f), // 冷灰蓝，与天空地平线呼应
+            FogLightEnergy = 1.0f,
+            FogDensity = 0.0f,        // 关闭指数密度，仅用深度区间线性雾，避免近处单位发灰
+            FogDepthBegin = 1600.0f,  // 战场范围内基本无雾
+            FogDepthEnd = 4200.0f,    // 远景背景地面渐隐入雾
+            FogDepthCurve = 1.0f,
+            FogSkyAffect = 0.0f,      // 不影响天空盒
         };
 
         _worldEnv = new WorldEnvironment { Environment = env, Name = "BackdropEnvironment" };

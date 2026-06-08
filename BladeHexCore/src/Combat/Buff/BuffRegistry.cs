@@ -201,5 +201,8 @@ public static class BuffRegistry
                 },
             },
         });
+
+        // ====== 职业大招 buff (v0.8) — 已拆分到 CareerBuffRegistry.cs ======
+        CareerBuffRegistry.RegisterAll();
     }
 }

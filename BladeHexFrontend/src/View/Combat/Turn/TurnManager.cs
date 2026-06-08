@@ -118,8 +118,12 @@ public class TurnManager
             if (unit.Data == null) continue;
 
             long id = (long)unit.GetInstanceId();
-            int dexMod = CombatStats.GetStatModifier(unit.Data.Dex);
-            int baseInit = unit.Data.BaseInitiative;
+            int dexMod = CombatStats.GetStatModifier(CombatStats.GetEffectiveDex(unit.Data));
+            // v0.7: 技能盘 initiative 节点（dex 系多个）和饰品 initiative 都要进 baseInit。
+            // 之前漏了 SkillTree.GetInitiativeBonus，导致 dex_s01/s02/s14/s13/s16/s17 等节点完全不生效。
+            int baseInit = unit.Data.BaseInitiative
+                + (unit.SkillTree?.GetInitiativeBonus() ?? 0)
+                + unit.Data.AccessoryInitiativeBonus;
             bool isPlayer = unit.IsPlayerSide;
 
             unitData.Add((id, dexMod, baseInit, isPlayer));

@@ -6,6 +6,8 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
+using BladeHex.Combat.Buff;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat;
 
@@ -24,6 +26,46 @@ public static class CombatStats
     public static int GetStatModifier(int score) =>
         RPGRuleEngine.GetStatModifier(score);
 
+    public static int GetEffectiveStr(UnitData? data) =>
+        (data?.Str ?? 10) + (data?.Runtime?.SkillTree?.GetStrBonus() ?? 0);
+
+    public static int GetEffectiveDex(UnitData? data) =>
+        (data?.Dex ?? 10) + (data?.Runtime?.SkillTree?.GetDexBonus() ?? 0);
+
+    public static int GetEffectiveCon(UnitData? data) =>
+        (data?.Con ?? 10) + (data?.Runtime?.SkillTree?.GetConBonus() ?? 0);
+
+    public static int GetEffectiveInt(UnitData? data) =>
+        (data?.Intel ?? 10) + (data?.Runtime?.SkillTree?.GetIntBonus() ?? 0);
+
+    public static int GetEffectiveWis(UnitData? data) =>
+        (data?.Wis ?? 10) + (data?.Runtime?.SkillTree?.GetWisBonus() ?? 0);
+
+    public static int GetEffectiveCha(UnitData? data) =>
+        (data?.Cha ?? 10) + (data?.Runtime?.SkillTree?.GetChaBonus() ?? 0);
+
+    public static int GetSaveBonus(UnitData? data)
+    {
+        if (data == null) return 0;
+
+        int bonus = data.Runtime?.SkillTree?.GetAllSaveBonus() ?? 0;
+        bonus += SkillTreeKeystoneResolver.GetRoyalPresenceSaveBonus(data);
+        bonus += GetBuffStatBonus(data, "save_bonus");
+
+        if (data.Runtime?.ActiveStatusEffects != null)
+        {
+            foreach (var effect in data.Runtime.ActiveStatusEffects)
+            {
+                if (effect.StatModifiers.ContainsKey("save_bonus"))
+                    bonus += (int)effect.StatModifiers["save_bonus"];
+                if (effect.StatModifiers.ContainsKey("save_bonus_dice"))
+                    bonus += (int)effect.StatModifiers["save_bonus_dice"];
+            }
+        }
+
+        return bonus;
+    }
+
     // ========================================
     // HP 计算
     // ========================================
@@ -34,16 +76,22 @@ public static class CombatStats
     public static int GetMaxHp(UnitData data)
     {
         if (data == null) return 1;
-        int hp = RPGRuleEngine.CalculateMaxHp(data.BaseMaxHp, data.Con, data.Level);
+        int hp = RPGRuleEngine.CalculateMaxHp(data.BaseMaxHp, GetEffectiveCon(data), data.Level);
         hp += data.GetEquipmentHpBonus();
         hp += data.AccessoryHpBonus;
+
+        // 矮人韧性：生命值 + 20%
+        if (data.Race != null && Array.IndexOf(data.Race.RacialTraits, "dwarven_resilience") >= 0)
+        {
+            hp = (int)(hp * 1.20f);
+        }
 
         // 装备能力组件：HP 百分比加成（如 extra_hp_percent）
         float hpMultBonus = BladeHex.Combat.Abilities.UnitAbilities.GetTotalMaxHpMultiplierBonus(data);
         if (hpMultBonus > 0f)
             hp = (int)(hp * (1f + hpMultBonus));
 
-        return Math.Max(1, hp);
+        return SkillTreeKeystoneResolver.ApplyMaxHp(data, Math.Max(1, hp));
     }
 
     // ========================================
@@ -67,7 +115,7 @@ public static class CombatStats
     public static int GetMaxAp(UnitData data)
     {
         if (data == null) return 12;
-        int maxAp = RPGRuleEngine.CalculateMaxAp(data.BaseAp, data.Dex, data.Con);
+        int maxAp = RPGRuleEngine.CalculateMaxAp(data.BaseAp, GetEffectiveDex(data), GetEffectiveCon(data));
         return Math.Max(1, maxAp - GetArmorApPenalty(data));
     }
 
@@ -90,9 +138,11 @@ public static class CombatStats
     public static int GetMaxMana(UnitData data)
     {
         if (data == null) return 0;
-        int baseMana = 10 + data.Intel + data.Level / 2 + data.Wis / 4;
+        int intel = GetEffectiveInt(data);
+        int wis = GetEffectiveWis(data);
+        int baseMana = 10 + intel + data.Level / 2 + wis / 4;
         int nodeMana = data.Runtime?.SkillTree?.GetManaMaxBonus() ?? 0;
-        return Math.Max(0, baseMana + nodeMana);
+        return SkillTreeKeystoneResolver.ApplyMaxMana(data, Math.Max(0, baseMana + nodeMana));
     }
 
     /// <summary>
@@ -104,7 +154,7 @@ public static class CombatStats
     {
         if (data == null) return 0;
         int nodeRegen = data.Runtime?.SkillTree?.GetManaRegenBonus() ?? 0;
-        return data.Wis / 8 + data.Intel / 12 + nodeRegen;
+        return GetEffectiveWis(data) / 8 + GetEffectiveInt(data) / 12 + nodeRegen;
     }
 
     /// <summary>
@@ -132,13 +182,19 @@ public static class CombatStats
 
     /// <summary>
     /// 暴击阈值 (v0.6): WISCritTier = floor(sqrt(max(0, WIS-14) / 4))
-    /// CritThreshold = 20 - WISCritTier
+    /// CritThreshold = 20 - WISCritTier + buff（负值=暴击阈值降低，正值=更难暴击）
     /// </summary>
     public static int GetCritThreshold(UnitData data)
     {
         if (data == null) return 20;
-        int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, data.Wis - 14) / 4.0));
-        return Math.Max(14, 20 - wisCritTier);
+        int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, GetEffectiveWis(data) - 14) / 4.0));
+        int currentValue = 20 - wisCritTier;
+        // v0.8 E1: buff 修正暴击阈值（支持 Override + FlatBonus）
+        var critMod = Buff.BuffSystem.ResolveStatModifiers(data, "crit_threshold");
+        if (critMod.OverrideValue.HasValue)
+            return Math.Clamp((int)critMod.OverrideValue.Value, 2, 20);
+        int critResult = currentValue + (int)critMod.FlatBonus;
+        return Math.Clamp(critResult, 2, 20);
     }
 
     /// <summary>
@@ -148,15 +204,15 @@ public static class CombatStats
     public static float GetCritMultiplier(UnitData data)
     {
         if (data == null) return 2.0f;
-        int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, data.Wis - 14) / 4.0));
+        int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, GetEffectiveWis(data) - 14) / 4.0));
         float baseMultiplier = 2.0f + wisCritTier * 0.1f;
 
-        // v0.6 6.9 重型武器 Lv.5+ → ×1.2
+        // v0.7 重型武器 Lv.7+ → ×1.2（原 Lv.5 阈值按比例上调）
         var weapon = GetMainHand(data, data.Runtime.UsingPrimaryWeapon) as WeaponData;
         if (weapon != null && weapon.Weight == WeaponData.WeightCategory.Heavy)
         {
             int masteryLevel = data.WeaponMastery.GetLevelBySubtype(weapon.Subtype);
-            if (masteryLevel >= 5) baseMultiplier *= 1.2f;
+            if (masteryLevel >= 7) baseMultiplier *= 1.2f;
         }
         return baseMultiplier;
     }
@@ -165,7 +221,7 @@ public static class CombatStats
     public static float GetCritDamageTakenMultiplier(UnitData data)
     {
         if (data == null) return 1.0f;
-        int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, data.Wis - 14) / 4.0));
+        int wisCritTier = (int)Math.Floor(Math.Sqrt(Math.Max(0, GetEffectiveWis(data) - 14) / 4.0));
         return Math.Max(0.2f, 1.0f - wisCritTier * 0.1f);
     }
 
@@ -183,35 +239,52 @@ public static class CombatStats
         int ac = data.BaseAc;
 
         // DEX 修正（受护甲 MaxDexBonus 限制）
-        int dexAc = GetStatModifier(data.Dex);
+        int dexAc = GetStatModifier(GetEffectiveDex(data));
         if (data.Armor != null && data.Armor.MaxDexBonus < 99 && data.Armor.CurrentArmorPoints > 0)
             dexAc = Math.Min(dexAc, data.Armor.MaxDexBonus);
 
         // 护甲 AC = floor(sqrt(ArmorDR))（装甲损毁后失效）
         int armorDrAc = 0;
+        int armorAcBonus = 0;
         if (data.Armor != null && data.Armor.CurrentArmorPoints > 0)
+        {
             armorDrAc = (int)Mathf.Floor(Mathf.Sqrt(data.Armor.DrThreshold));
+            armorAcBonus = data.Armor.GetTotalAcBonus();
+        }
 
         // 盾牌 AC = floor(sqrt(ShieldDR))（盾牌损毁后失效）
+        // v0.7: 盾牌存在独立字段 data.Shield，不在副手武器槽（PrimaryOffHand）。
+        // 历史 bug: 之前用 GetOffHand 读，导致 GetAc / GetMaxDr 漏算盾牌。
         int shieldDrAc = 0;
-        var offHand = GetOffHand(data, usingPrimaryWeapon);
-        if (offHand is ArmorData shield && shield.armorType == ArmorData.ArmorType.Shield
-            && shield.CurrentArmorPoints > 0)
-            shieldDrAc = (int)Mathf.Floor(Mathf.Sqrt(shield.DrThreshold));
+        int shieldAcBonus = 0;
+        if (data.Shield != null && data.Shield.armorType == ArmorData.ArmorType.Shield
+            && data.Shield.CurrentArmorPoints > 0)
+        {
+            shieldDrAc = (int)Mathf.Floor(Mathf.Sqrt(data.Shield.DrThreshold));
+            shieldAcBonus = data.Shield.GetTotalAcBonus();
+        }
 
-        return ac + dexAc + armorDrAc + shieldDrAc + GetBuffStatBonus(data, "ac");
+        int totalAc = ac + dexAc + armorDrAc + shieldDrAc + armorAcBonus + shieldAcBonus
+            + GetBuffStatBonus(data, "ac") + GetBuffStatBonus(data, "ac_bonus");
+
+        // 矮人韧性：AC + 1
+        if (data.Race != null && Array.IndexOf(data.Race.RacialTraits, "dwarven_resilience") >= 0)
+        {
+            totalAc += 1;
+        }
+
+        return SkillTreeKeystoneResolver.ApplyAc(data, totalAc);
     }
 
     /// <summary>
-    /// 有效 AC = 基础 AC + 被动技能加成 + 防御姿态加值 + 士气 AC 修正
-    /// passiveAcBonus 和 moraleAcModifier 由调用方从 Frontend 提取传入
+    /// 有效 AC = 基础 AC + 被动技能加成 + 防御姿态加值
+    /// passiveAcBonus 由调用方从 Frontend 提取传入
     /// </summary>
-    public static int GetEffectiveAc(UnitData data, bool usingPrimaryWeapon, bool isDefending, int passiveAcBonus, int moraleAcModifier)
+    public static int GetEffectiveAc(UnitData data, bool usingPrimaryWeapon, bool isDefending, int passiveAcBonus)
     {
         int ac = GetAc(data, usingPrimaryWeapon);
         ac += passiveAcBonus;
         if (isDefending) ac += 2;
-        ac += moraleAcModifier;
         return ac;
     }
 
@@ -229,14 +302,19 @@ public static class CombatStats
     public static int GetDr(UnitData data) =>
         data != null ? Math.Max(0, data.CurrentDr) : 0;
 
-    /// <summary>DR 穿透阈值 = max(armorDrThreshold, naturalDrThreshold)</summary>
+    /// <summary>DR 穿透阈值 = max(armorDrThreshold, naturalDrThreshold) + buff</summary>
     public static int GetDrThreshold(UnitData data)
     {
         if (data == null || data.CurrentDr <= 0) return 0;
         int threshold = 0;
         if (data.Armor != null) threshold = Math.Max(threshold, data.Armor.DrThreshold);
         if (data.NaturalDrThreshold > 0) threshold = Math.Max(threshold, data.NaturalDrThreshold);
-        return threshold;
+        // v0.8 E1: buff 修正 DR 阈值（支持 Override + FlatBonus）
+        var drMod = Buff.BuffSystem.ResolveStatModifiers(data, "dr_threshold");
+        if (drMod.OverrideValue.HasValue)
+            return Math.Max(0, (int)drMod.OverrideValue.Value);
+        int drResult = threshold + (int)drMod.FlatBonus;
+        return Math.Max(0, drResult);
     }
 
     /// <summary>最大 DR = NaturalDr + ArmorDr + ShieldDr</summary>
@@ -246,9 +324,9 @@ public static class CombatStats
         int dr = data.NaturalDr;
         if (data.Armor != null) dr += data.Armor.DrThreshold;
 
-        var offHand = GetOffHand(data, usingPrimaryWeapon);
-        if (offHand is ArmorData shield && shield.armorType == ArmorData.ArmorType.Shield)
-            dr += shield.DrThreshold;
+        // v0.7: 盾牌从独立字段 data.Shield 读，不走副手武器槽。
+        if (data.Shield != null && data.Shield.armorType == ArmorData.ArmorType.Shield)
+            dr += data.Shield.DrThreshold;
 
         return dr;
     }
@@ -290,23 +368,36 @@ public static class CombatStats
 
     /// <summary>
     /// 攻击加值 = 武器精通命中加成 + 武器命中修正 (v0.6 4.1，不再使用等级专精加值)
-    /// + Lv.5+ 轻型武器 +1 命中 (v0.6 6.9)
+    /// + 轻型武器 Lv.7+ +1 命中 (v0.7 武器精通 15 级体系，原 Lv.5 阈值按比例上调)
     /// </summary>
     public static int GetAttackBonus(UnitData data, bool usingPrimaryWeapon)
     {
         if (data == null) return 0;
         var weapon = GetMainHand(data, usingPrimaryWeapon) as WeaponData;
 
-        // 武器精通命中加成 = floor(MasteryLevel / 3)
+        // 武器精通命中加成 = floor(MasteryLevel / 2)（v0.7 15 级体系）
+        // Lv.2→+1, Lv.4→+2, Lv.6→+3, ..., Lv.14→+7, Lv.15→+7
         int masteryHitBonus = 0;
-        int lightLv5Bonus = 0;
+        int lightLv7Bonus = 0;
+        int elfWeaponBonus = 0;
         if (weapon != null)
         {
             int masteryLevel = data.WeaponMastery.GetLevelBySubtype(weapon.Subtype);
-            masteryHitBonus = masteryLevel / 3;
-            // v0.6 6.9 轻型武器 Lv.5+ 命中 +1（仅命中，不影响暴击阈值）
-            if (masteryLevel >= 5 && weapon.Weight == WeaponData.WeightCategory.Light)
-                lightLv5Bonus = 1;
+            masteryHitBonus = masteryLevel / 2;
+            // v0.7 轻型武器 Lv.7+ 命中 +1（仅命中，不影响暴击阈值）
+            if (masteryLevel >= 7 && weapon.Weight == WeaponData.WeightCategory.Light)
+                lightLv7Bonus = 1;
+
+            // 精灵技艺：剑类和弓类命中 +1
+            if (data.Race != null && Array.IndexOf(data.Race.RacialTraits, "elf_weapon_proficiency") >= 0)
+            {
+                if (weapon.Subtype == WeaponData.WeaponSubtype.ArmingSword 
+                    || weapon.Subtype == WeaponData.WeaponSubtype.Greatsword 
+                    || weapon.IsBow)
+                {
+                    elfWeaponBonus = 1;
+                }
+            }
         }
 
         // 武器自身命中修正
@@ -314,7 +405,7 @@ public static class CombatStats
         if (weapon?.Subtype != null)
             weaponHitBonus = WeaponRegistry.GetConfig(weapon.Subtype).HitBonus;
 
-        return masteryHitBonus + weaponHitBonus + lightLv5Bonus + GetBuffStatBonus(data, "attack_bonus");
+        return masteryHitBonus + weaponHitBonus + lightLv7Bonus + elfWeaponBonus + GetBuffStatBonus(data, "attack_bonus");
     }
 
     /// <summary>
@@ -342,14 +433,26 @@ public static class CombatStats
         }
         else
         {
-            // 徒手攻击：1d3（拳头），不是1d20
-            dmgDice = GD.RandRange(1, 3);
-            dText = "徒手(1-3)";
+            // 徒手/天生武器攻击：非类人怪物根据等级决定基础天生武器骰
+            if (data != null && data.enemyType != UnitData.EnemyType.Humanoid)
+            {
+                // 天生武器伤害骰 = 1 + 等级/8。比如 8级是 2d6，24级是 4d6，48级是 7d6。
+                int diceCount = 1 + data.Level / 8;
+                int diceSides = 6;
+                dmgDice = 0;
+                for (int i = 0; i < diceCount; i++) dmgDice += GD.RandRange(1, diceSides);
+                dText = $"{diceCount}d{diceSides}";
+            }
+            else
+            {
+                dmgDice = GD.RandRange(1, 3);
+                dText = "徒手(1-3)";
+            }
         }
 
         // 百分比乘法加成体系
         // STR加成: floor(sqrt(STR)) × 10%
-        int strMod = data != null ? (int)Mathf.Floor(Mathf.Sqrt(data.Str)) : 0;
+        int strMod = data != null ? (int)Mathf.Floor(Mathf.Sqrt(GetEffectiveStr(data))) : 0;
         float strBonus = strMod * 0.1f;
 
         // 武器精通加成: 精通等级 × 10%
@@ -359,7 +462,32 @@ public static class CombatStats
         float masteryBonus = masteryLevel * 0.1f;
 
         float multiplier = 1.0f + strBonus + masteryBonus;
+
+        // 精灵技艺：剑类和弓类伤害修正 x1.1
+        if (data != null && Array.IndexOf(data.Race?.RacialTraits ?? Array.Empty<string>(), "elf_weapon_proficiency") >= 0)
+        {
+            if (weapon != null && (weapon.Subtype == WeaponData.WeaponSubtype.ArmingSword 
+                || weapon.Subtype == WeaponData.WeaponSubtype.Greatsword 
+                || weapon.IsBow))
+            {
+                multiplier *= 1.1f;
+            }
+        }
+
+        // 半兽人狂暴：血量低于 50% 时伤害加 20%
+        if (data != null && Array.IndexOf(data.Race?.RacialTraits ?? Array.Empty<string>(), "rage") >= 0)
+        {
+            int maxHp = GetMaxHp(data);
+            if (maxHp > 0 && data.Runtime.CurrentHp * 2 < maxHp)
+            {
+                multiplier *= 1.2f;
+            }
+        }
+
         int totalDmg = Math.Max(1, (int)(dmgDice * multiplier));
+
+        // v0.8: buff damage 平加（来自职业技能大招的临时伤害加成）
+        totalDmg += GetBuffStatBonus(data, "damage");
 
         return new Godot.Collections.Dictionary
         {
@@ -386,14 +514,14 @@ public static class CombatStats
     public static int GetInitiativeModifier(UnitData data)
     {
         if (data == null) return 0;
-        return GetStatModifier(data.Dex) + data.BaseInitiative;
+        return GetStatModifier(GetEffectiveDex(data)) + data.BaseInitiative;
     }
 
     // ========================================
     // 移动
     // ========================================
 
-    /// <summary>移动范围 = 基础 + 装备加成 + 饰品加成 + 坐骑加成</summary>
+    /// <summary>移动范围 = 基础 + 装备加成 + 饰品加成 + 坐骑加成 + 技能盘 speed 节点 + buff</summary>
     public static int GetMoveRange(UnitData data)
     {
         if (data == null) return 4;
@@ -402,7 +530,7 @@ public static class CombatStats
         move += data.AccessoryMoveBonus;
         if (data.Mount != null) move += data.Mount.SpeedBonus;
         move += GetBuffStatBonus(data, "speed");
-        return Math.Max(1, move);
+        return SkillTreeKeystoneResolver.ApplyMoveRange(data, move);
     }
 
     // ============================================================
@@ -412,14 +540,18 @@ public static class CombatStats
     /// <summary>
     /// 从 BuffSystem 查询指定属性的 Base 层加值(整数)。
     /// 用于 GetAc / GetAttackBonus / GetMoveRange 等简单加法属性。
-    /// 对于需要完整多乘区的属性(如 damage),应直接用 DamageCalcPipeline。
+    /// 对于需要完整多乘区的属性(如 damage)，平加部分仍走这里，
+    /// 百分比乘区(Increased/More/FinalMult)由伤害管线末端的
+    /// BuffSystem.ResolveMultiplier 折算进 DamageInput.FinalMultiplier。
     /// </summary>
     private static int GetBuffStatBonus(UnitData? data, string stat)
     {
         if (data == null) return 0;
         var result = Buff.BuffSystem.ResolveStatModifiers(data, stat);
-        // 对于 AC/攻击/移动这类"基础+加值"属性,只取 FlatBonus(Base 层)
-        // Increased/More/FinalMult 对这些属性无意义(它们是伤害专用乘区)
+        // 只取 FlatBonus(Base 层平加值)。
+        // 百分比乘区(Increased/More/FinalMult)在伤害管线末端折算(见 CombatResolver
+        // 的 DamageInput.FinalMultiplier 调用 BuffSystem.ResolveMultiplier)，不在此处计入，
+        // 避免把"+25% 伤害"错误地当成"+0.25 平伤"。
         return (int)result.FlatBonus;
     }
 }

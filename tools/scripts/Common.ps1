@@ -51,6 +51,7 @@ function Resolve-GodotExe {
         return (Resolve-Path $env:GODOT).Path
     }
 
+    # 1. 尝试从 PATH 中寻找
     $candidates = @(
         'godot_console.exe',
         'godot.exe',
@@ -61,6 +62,17 @@ function Resolve-GodotExe {
     foreach ($name in $candidates) {
         $cmd = Get-Command $name -ErrorAction SilentlyContinue
         if ($cmd) { return $cmd.Source }
+    }
+
+    # 2. 尝试从桌面或常用开发路径中寻找，提高免配置运行的成功率
+    $customPaths = @(
+        "$env:USERPROFILE\Desktop\Godot_v4.6.2-stable_mono_win64_console.exe",
+        "$env:USERPROFILE\Desktop\Godot_v4.6.2-stable_mono_win64.exe",
+        "d:\123\Godot_v4.6.2-stable_mono_win64_console.exe",
+        "d:\123\Godot_v4.6.2-stable_mono_win64.exe"
+    )
+    foreach ($p in $customPaths) {
+        if (Test-Path $p) { return (Resolve-Path $p).Path }
     }
 
     throw "Godot executable not found. Set `$env:GODOT or pass -GodotExe explicitly (godot_console.exe is recommended on Windows for headless stdout)."
@@ -126,7 +138,9 @@ function Invoke-Godot {
         }
     }
 
+    $oldEap = $ErrorActionPreference
     try {
+        $ErrorActionPreference = 'Continue'
         Write-Step "godot $($Arguments -join ' ')"
         # Run in a sub-shell so we can capture stderr without it polluting our
         # return value. Godot writes its banner ("Godot Engine v4.6.2...") to
@@ -135,6 +149,7 @@ function Invoke-Godot {
         return [int]$LASTEXITCODE
     }
     finally {
+        $ErrorActionPreference = $oldEap
         foreach ($k in $oldEnv.Keys) {
             [Environment]::SetEnvironmentVariable($k, $oldEnv[$k])
         }

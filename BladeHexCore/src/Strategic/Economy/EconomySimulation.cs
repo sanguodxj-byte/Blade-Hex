@@ -27,9 +27,10 @@ public sealed class EconomySimProfile
 
     /// <summary>
     /// 是否在跨日结算时再扣一整天口粮。
-    /// 保留这个开关是为了显式模拟并暴露当前“双扣粮”行为。
+    /// 已修复：游戏已移除每日双重扣粮，口粮统一按行军小时消耗。
+    /// 保留此开关用于历史对比（设为 true 可复现已修复的双扣行为）。
     /// </summary>
-    public bool IncludeDailyFoodSettlement = true;
+    public bool IncludeDailyFoodSettlement = false;
 
     public int QuestEveryDays = 3;
     public int AverageQuestReward = 90;
@@ -97,7 +98,7 @@ public static class EconomySimulation
                 FoodUnitPrice = foodUnitPrice,
                 EnableFoodResupply = false,
                 IncludeHourlyTravelFood = true,
-                IncludeDailyFoodSettlement = true,
+                IncludeDailyFoodSettlement = false,
             },
             new()
             {
@@ -107,17 +108,17 @@ public static class EconomySimulation
                 FoodUnitPrice = foodUnitPrice,
                 EnableFoodResupply = true,
                 IncludeHourlyTravelFood = true,
-                IncludeDailyFoodSettlement = true,
+                IncludeDailyFoodSettlement = false,
             },
             new()
             {
-                Name = "修正口粮/只按小时扣粮",
+                Name = "历史对比/双扣粮(已修复)",
                 Days = days,
                 AverageQuestReward = averageQuestReward,
                 FoodUnitPrice = foodUnitPrice,
                 EnableFoodResupply = true,
                 IncludeHourlyTravelFood = true,
-                IncludeDailyFoodSettlement = false,
+                IncludeDailyFoodSettlement = true,
             },
             new()
             {
@@ -127,7 +128,7 @@ public static class EconomySimulation
                 FoodUnitPrice = foodUnitPrice,
                 EnableFoodResupply = true,
                 IncludeHourlyTravelFood = true,
-                IncludeDailyFoodSettlement = true,
+                IncludeDailyFoodSettlement = false,
                 RecruitEveryDays = 10,
                 RecruitCost = 70,
                 FacilityEveryDays = 3,
@@ -335,7 +336,6 @@ public static class EconomySimulation
             UnitName = name,
             Level = level,
             BaseMaxHp = 10,
-            Morale = 50,
         };
         PartyRoster.SetCurrentHp(unit, unit.BaseMaxHp);
         return unit;

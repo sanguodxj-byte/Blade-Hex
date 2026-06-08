@@ -18,7 +18,7 @@ public sealed class FerryRouteStage : IWorldStage
 
     public void Execute(WorldBuildContext ctx)
     {
-        var ports = ctx.Pois.Where(p => p.PoiTypeEnum == OverworldPOI.POIType.Port).ToList();
+        var ports = ctx.Pois.Where(p => p.PoiTypeEnum == OverworldPOI.POIType.Town && p.IsPortCity).ToList();
         if (ports.Count < 2)
         {
             GD.Print($"[FerryRouteStage] 0 条航线（港口数量 {ports.Count}）");

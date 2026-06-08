@@ -32,7 +32,7 @@ public static class FacilityServiceTests
         yield return Run(nameof(SmithySharpenAndReinforce_ModifyLeaderEquipment), SmithySharpenAndReinforce_ModifyLeaderEquipment);
         yield return Run(nameof(HealingHealToRatio_OnlyRaisesBelowTarget), HealingHealToRatio_OnlyRaisesBelowTarget);
         yield return Run(nameof(HealingPurifyAll_RemovesOnlyNegativeEffects), HealingPurifyAll_RemovesOnlyNegativeEffects);
-        yield return Run(nameof(RestShortAndLongRest_RestoreManaHpAndChargeGold), RestShortAndLongRest_RestoreManaHpAndChargeGold);
+        yield return Run(nameof(RestTimeBasedRecovery_RateMultiplier), RestTimeBasedRecovery_RateMultiplier);
         yield return Run(nameof(MarketStockService_ClampsProsperityAndSortsStock), MarketStockService_ClampsProsperityAndSortsStock);
         yield return Run(nameof(PortService_RentShipAssignsShipAndAtSea), PortService_RentShipAssignsShipAndAtSea);
         yield return Run(nameof(PortService_RentShipFailsWithoutGold), PortService_RentShipFailsWithoutGold);
@@ -59,11 +59,12 @@ public static class FacilityServiceTests
         roster.Leader!.Armor = armor;
         roster.Leader.Shield = shield;
 
-        int gold = 100;
+        // 修理费用依赖 FacilityPricingService 动态定价（经济锚定模型），给足金币
+        int gold = 200;
         var result = SmithyService.RepairAll(roster, cost => Spend(ref gold, cost));
 
         if (!result.Success) return (false, result.Message);
-        int expectedGold = 100 - result.GoldSpent;
+        int expectedGold = 200 - result.GoldSpent;
         if (gold != expectedGold) return (false, $"expected gold {expectedGold}, got {gold}");
         if (armor.CurrentArmorPoints != 100 || shield.CurrentArmorPoints != 60)
             return (false, $"armor not fully repaired: armor={armor.CurrentArmorPoints}, shield={shield.CurrentArmorPoints}");
@@ -129,7 +130,7 @@ public static class FacilityServiceTests
         var result = HealingService.PurifyAll(roster, cost => Spend(ref gold, cost));
 
         if (!result.Success) return (false, result.Message);
-        if (gold != 40) return (false, $"expected gold 40, got {gold}");
+        if (gold != 100 - result.GoldSpent) return (false, $"expected gold {100 - result.GoldSpent}, got {gold}");
         if (result.AmountChanged != 2) return (false, $"expected 2 removed effects, got {result.AmountChanged}");
         if (leader.Runtime.ActiveStatusEffects.Count != 1 || leader.Runtime.ActiveStatusEffects[0].Id != "bless")
             return (false, "positive status effect was removed or negative remained");
@@ -138,7 +139,7 @@ public static class FacilityServiceTests
         return (true, "");
     }
 
-    private static (bool, string) RestShortAndLongRest_RestoreManaHpAndChargeGold()
+    private static (bool, string) RestTimeBasedRecovery_RateMultiplier()
     {
         var roster = MakeRoster();
         var leader = roster.Leader!;
@@ -150,19 +151,34 @@ public static class FacilityServiceTests
         leader.CurrentMana = 0;
         PartyRoster.SetCurrentHp(leader, 1);
 
-        int maxMana = BladeHex.Combat.CombatStats.GetMaxMana(leader);
-        var shortRest = RestService.ShortRest(roster);
-        if (!shortRest.Success) return (false, shortRest.Message);
-        if (leader.CurrentMana != (int)Math.Ceiling(maxMana * 0.5f))
-            return (false, $"expected half mana, got {leader.CurrentMana}/{maxMana}");
+        // 8h at 1x
+        var (hp1x, mana1x) = RestService.TimeBasedRecovery(roster, 8.0f, canRestore: true, rateMultiplier: 1.0f);
+        if (hp1x <= 0 || mana1x <= 0)
+            return (false, $"expected positive 8h 1x recovery, got hp={hp1x}, mana={mana1x}");
 
-        int gold = 20;
-        var longRest = RestService.LongRest(roster, cost => Spend(ref gold, cost));
-        if (!longRest.Success) return (false, longRest.Message);
-        if (gold != 20 - longRest.GoldSpent) return (false, $"expected gold {20 - longRest.GoldSpent}, got {gold}");
-        if (leader.CurrentMana != maxMana) return (false, $"expected full mana {maxMana}, got {leader.CurrentMana}");
-        if (PartyRoster.GetCurrentHp(leader) != BladeHex.Combat.CombatStats.GetMaxHp(leader))
-            return (false, "HP was not fully restored");
+        // 8h at 2x (camp): should recover more than 1x
+        PartyRoster.SetCurrentHp(leader, 1);
+        leader.CurrentMana = 0;
+        var (hp2x, mana2x) = RestService.TimeBasedRecovery(roster, 8.0f, canRestore: true, rateMultiplier: 2.0f);
+        if (hp2x <= hp1x || mana2x <= mana1x)
+            return (false, $"expected 2x > 1x recovery, got 1x=({hp1x},{mana1x}) vs 2x=({hp2x},{mana2x})");
+
+        // 8h at 4x (town): should recover more than 2x
+        PartyRoster.SetCurrentHp(leader, 1);
+        leader.CurrentMana = 0;
+        var (hp4x, mana4x) = RestService.TimeBasedRecovery(roster, 8.0f, canRestore: true, rateMultiplier: 4.0f);
+        if (hp4x <= hp2x || mana4x <= mana2x)
+            return (false, $"expected 4x > 2x recovery, got 2x=({hp2x},{mana2x}) vs 4x=({hp4x},{mana4x})");
+
+        // canRestore = false with 4x: still no recovery
+        PartyRoster.SetCurrentHp(leader, 1);
+        leader.CurrentMana = 0;
+        (hp4x, mana4x) = RestService.TimeBasedRecovery(roster, 8.0f, canRestore: false, rateMultiplier: 4.0f);
+        if (hp4x != 0 || mana4x != 0)
+            return (false, $"expected zero recovery when blocked with 4x, got hp={hp4x}, mana={mana4x}");
+        if (PartyRoster.GetCurrentHp(leader) != 1)
+            return (false, "HP changed when recovery was blocked");
+
         return (true, "");
     }
 

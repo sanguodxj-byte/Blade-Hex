@@ -5,6 +5,7 @@ using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.Localization;
 
 namespace BladeHex.UI;
 
@@ -59,7 +60,7 @@ public partial class QuestLog : Control
         // 标题
         var title = new Label();
         title.Name = "Title";
-        title.Text = "📜 任务日志";
+        title.Text = L10n.Tr("QUEST_LOG_TITLE");
         title.HorizontalAlignment = HorizontalAlignment.Center;
         vbox.AddChild(title);
 
@@ -71,7 +72,7 @@ public partial class QuestLog : Control
 
         // 进行中 tab
         var activeTab = new VBoxContainer();
-        activeTab.Name = "进行中";
+        activeTab.Name = L10n.Tr("QUEST_TAB_ACTIVE");
         _tabContainer.AddChild(activeTab);
 
         _activeList = new ItemList();
@@ -82,7 +83,7 @@ public partial class QuestLog : Control
 
         // 已完成 tab
         var completedTab = new VBoxContainer();
-        completedTab.Name = "已完成";
+        completedTab.Name = L10n.Tr("QUEST_TAB_COMPLETED");
         _tabContainer.AddChild(completedTab);
 
         _completedList = new ItemList();
@@ -105,20 +106,23 @@ public partial class QuestLog : Control
         _detailLabel = new RichTextLabel();
         _detailLabel.Name = "QuestDetail";
         _detailLabel.BbcodeEnabled = true;
+        _detailLabel.ScrollActive = true;
+        _detailLabel.FitContent = false;
+        _detailLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _detailLabel.SizeFlagsVertical = SizeFlags.ExpandFill;
-        _detailLabel.Text = "[center][color=gray]请选择一个任务查看详情[/color][/center]";
+        _detailLabel.Text = L10n.Tr("QUEST_LOG_SELECT_PROMPT");
         detailVbox.AddChild(_detailLabel);
 
         _abandonBtn = new Button();
         _abandonBtn.Name = "AbandonButton";
-        _abandonBtn.Text = "放弃任务";
+        _abandonBtn.Text = L10n.Tr("QUEST_ABANDON");
         _abandonBtn.Visible = false;
         detailVbox.AddChild(_abandonBtn);
 
         // 关闭按钮
         var closeBtn = new Button();
         closeBtn.Name = "CloseButton";
-        closeBtn.Text = "关闭";
+        closeBtn.Text = L10n.Tr("QUEST_CLOSE");
         closeBtn.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
         vbox.AddChild(closeBtn);
 
@@ -195,21 +199,22 @@ public partial class QuestLog : Control
     {
         if (_selectedQuest == null)
         {
-            _detailLabel.Text = "[center][color=gray]请选择一个任务查看详情[/color][/center]";
+            _detailLabel.Text = L10n.Tr("QUEST_LOG_SELECT_PROMPT");
             _abandonBtn.Visible = false;
             return;
         }
 
         string d = $"[b][size={Theme.FontSizeLg}]{_selectedQuest.Title}[/size][/b]\n";
-        d += $"[color=gray]类型: {_selectedQuest.Type} | 推荐等级: {_selectedQuest.RecommendedLevel}[/color]\n\n";
+        d += $"[color=gray]{L10n.Tr("QUEST_DETAIL_META", _selectedQuest.Type, _selectedQuest.RecommendedLevel)}[/color]\n\n";
         d += $"{_selectedQuest.Description}\n\n";
 
-        d += "[b]任务目标:[/b]\n";
+        d += L10n.Tr("QUEST_OBJECTIVES_HEADER") + "\n";
         d += $"{_selectedQuest.Objectives}\n";
 
-        d += $"\n[b]奖励:[/b]\n💰 金币: {_selectedQuest.RewardGold} | ✨ 经验: {_selectedQuest.RewardReputation}\n";
+        d += "\n" + L10n.Tr("QUEST_REWARD_HEADER") + "\n";
+        d += L10n.Tr("QUEST_REWARD_GOLD_EXP", _selectedQuest.RewardGold, _selectedQuest.RewardReputation) + "\n";
         if (_selectedQuest.RewardReputation != 0)
-            d += $"🤝 声望: {_selectedQuest.RewardReputation}\n";
+            d += L10n.Tr("QUEST_REWARD_REPUTATION", _selectedQuest.RewardReputation) + "\n";
 
         _detailLabel.Text = d;
         _abandonBtn.Visible = _manager?.ActiveQuests.Contains(_selectedQuest) ?? false;

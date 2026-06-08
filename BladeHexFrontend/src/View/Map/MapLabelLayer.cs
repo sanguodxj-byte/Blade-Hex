@@ -243,11 +243,11 @@ public partial class MapLabelLayer : Node2D
             if (poi.PoiTypeEnum != OverworldPOI.POIType.Town &&
                 poi.PoiTypeEnum != OverworldPOI.POIType.Village &&
                 poi.PoiTypeEnum != OverworldPOI.POIType.Castle &&
-                poi.PoiTypeEnum != OverworldPOI.POIType.Port &&
-                poi.PoiTypeEnum != OverworldPOI.POIType.Outpost)
+                poi.PoiTypeEnum != OverworldPOI.POIType.Mine &&
+                poi.PoiTypeEnum != OverworldPOI.POIType.Farm)
                 continue;
 
-            // 确定层级：城堡和港口作为地标更早显示
+            // 确定层级：城堡和港口城市作为地标更早显示
             LabelTier tier;
             Color color;
             int fontSize;
@@ -263,24 +263,28 @@ public partial class MapLabelLayer : Node2D
                     break;
 
                 case OverworldPOI.POIType.Town:
-                    tier = LabelTier.Town;
-                    color = new Color(1.0f, 0.95f, 0.8f); // 暖白
-                    fontSize = 36;
-                    scale = 1.0f;
+                    if (poi.IsPortCity)
+                    {
+                        tier = LabelTier.Landmark;
+                        color = new Color(0.6f, 0.85f, 0.95f); // 浅蓝
+                        fontSize = 36;
+                        scale = 1.0f;
+                    }
+                    else
+                    {
+                        tier = LabelTier.Town;
+                        color = new Color(1.0f, 0.95f, 0.8f); // 暖白
+                        fontSize = 36;
+                        scale = 1.0f;
+                    }
                     break;
 
-                case OverworldPOI.POIType.Port:
-                    tier = LabelTier.Landmark;
-                    color = new Color(0.6f, 0.85f, 0.95f); // 浅蓝
-                    fontSize = 36;
-                    scale = 1.0f;
-                    break;
-
-                case OverworldPOI.POIType.Outpost:
-                    tier = LabelTier.Town;
-                    color = new Color(0.85f, 0.75f, 0.55f); // 土黄
-                    fontSize = 30;
-                    scale = 0.9f;
+                case OverworldPOI.POIType.Mine:
+                case OverworldPOI.POIType.Farm:
+                    tier = LabelTier.Village;
+                    color = new Color(0.75f, 0.75f, 0.75f); // 灰白，代表附属点
+                    fontSize = 22;
+                    scale = 0.7f;
                     break;
 
                 case OverworldPOI.POIType.Village:

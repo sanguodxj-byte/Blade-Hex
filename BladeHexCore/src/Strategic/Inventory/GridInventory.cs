@@ -341,6 +341,35 @@ public partial class GridInventory : Resource
     }
 
     /// <summary>
+    /// 按 itemId 查询背包持有数量(跨多个堆叠求和)。
+    /// </summary>
+    public int GetItemCount(string itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return 0;
+        return Items.Where(i => i.Item != null && i.Item.ItemId == itemId).Sum(i => i.Quantity);
+    }
+
+    /// <summary>
+    /// 按 itemId 移除指定数量,跨多个堆叠;数量不足时全部清光并返回 false。
+    /// </summary>
+    public bool TryRemove(string itemId, int quantity)
+    {
+        if (string.IsNullOrEmpty(itemId) || quantity <= 0) return false;
+
+        int remaining = quantity;
+        // 拷贝列表避免迭代时修改
+        var matching = Items.Where(i => i.Item != null && i.Item.ItemId == itemId).ToList();
+        foreach (var gi in matching)
+        {
+            if (remaining <= 0) break;
+            int take = System.Math.Min(remaining, gi.Quantity);
+            RemoveQuantity(gi, take);
+            remaining -= take;
+        }
+        return remaining == 0;
+    }
+
+    /// <summary>
     /// 获取指定格子上的物品
     /// </summary>
     public GridItem? GetItemAt(int x, int y)

@@ -1,761 +1,473 @@
 // CareerSkillRegistry.cs
-// 职业专属技能注册表 — 63 个职业技能的配置数据
-// 数据来源: docs/职业专精技能.md
+// 职业专属技能注册表 — v1.0 分阶职业技能 (63 个)
+//
+// v1.0 设计宪法:
+//   1. 一至四属性 = 常驻被动 (Passive)
+//   2. 五属性 = 主动(OncePerBattle), 满AP才能用, 消耗最大AP
+//   3. 六属性(万象) = 主动(OncePerTurn), 代价型
+//   4. 数据权威源: 本文件内联注册, 不再读取 career_skill_configs.json
+//
+// v0.8 旧版 JSON 配置保留在 career_skill_configs.json 仅供历史参考,不参与 v1 职业技能。
 using Godot;
 using System.Collections.Generic;
 
 namespace BladeHex.Strategic;
 
 /// <summary>
-/// 职业专属技能注册表 — 职业称号 flags → CareerSkillData 映射
+/// 职业专属技能注册表 — 职业称号 flags → CareerSkillData 映射 (v1.0)
 /// </summary>
 public static class CareerSkillRegistry
 {
+    // ============================================================================
+    // 标志位 (与 ClassTitleResolver 保持一致)
+    // ============================================================================
+    private const int F_STR = 1;
+    private const int F_DEX = 2;
+    private const int F_CON = 4;
+    private const int F_INT = 8;
+    private const int F_WIS = 16;
+    private const int F_CHA = 32;
+
     private static Dictionary<int, CareerSkillData>? _registry;
     private static Dictionary<string, CareerSkillData>? _byEffectId;
+    private static bool _loaded;
 
     public static Dictionary<int, CareerSkillData> Registry
     {
-        get
-        {
-            EnsureBuilt();
-            return _registry!;
-        }
+        get { EnsureLoaded(); return _registry!; }
     }
 
     public static Dictionary<string, CareerSkillData> ByEffectId
     {
-        get
-        {
-            EnsureBuilt();
-            return _byEffectId!;
-        }
+        get { EnsureLoaded(); return _byEffectId!; }
     }
 
-    private static void EnsureBuilt()
+    private static void EnsureLoaded()
     {
-        if (_registry != null) return;
+        if (_loaded) return;
+        _loaded = true;
         _registry = new Dictionary<int, CareerSkillData>();
         _byEffectId = new Dictionary<string, CareerSkillData>();
-        BuildAll();
-        foreach (var kvp in _registry)
-            _byEffectId[kvp.Value.EffectId] = kvp.Value;
+        RegisterAllSkills();
     }
 
     public static CareerSkillData? GetByTitleFlags(int flags)
     {
-        EnsureBuilt();
+        EnsureLoaded();
         return _registry!.GetValueOrDefault(flags);
     }
 
     public static CareerSkillData? GetByEffectId(string effectId)
     {
-        EnsureBuilt();
+        EnsureLoaded();
         return _byEffectId!.GetValueOrDefault(effectId);
     }
 
     public static bool HasCareerSkill(int titleFlags) => GetByTitleFlags(titleFlags) != null;
 
-    // ================================================================
-    //  构建所有 63 个职业技能
-    // ================================================================
-
-    private static void BuildAll()
+    /// <summary>计算给定 flags 的属性数 (popcount on 6-bit flag)</summary>
+    public static int CountAttributes(int flags)
     {
-        // ---- 单属性 (6) ----
-        Add(CF.Str, "warrior_armor_break", "碎甲打击", "Armor Break",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "dr_threshold_reduction", 5 },
-                { "ac_reduction", 1 },
-                { "duration", 2 }
-            },
-            desc: "近战攻击命中后：目标装甲阈值-5持续2回合；若目标无装甲则闪避-1持续2回合");
-
-        Add(CF.Dex, "ranger_evade_volley", "散射回避", "Evade Volley",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "trigger_limit_per_turn", 1 }
-            },
-            desc: "被远程命中后可位移1格重新计算命中，每回合1次");
-
-        Add(CF.Con, "guardian_living_wall", "铜墙铁壁", "Living Wall",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "control_range", 6 },
-                { "duration", 1 }
-            },
-            desc: "控制区扩展至周围6格，站在通道中敌方不可穿越控制区");
-
-        Add(CF.Int, "mage_arcane_overload", "以太过载", "Arcane Overload",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "dc_per_mana", 1 },
-                { "dice_per_mana", 1 },
-                { "range_bonus_mana_threshold", 5 },
-                { "range_bonus", 1 }
-            },
-            desc: "消耗剩余法力，下个法术强度+法力×1，伤害骰+法力，≥5法力范围+1");
-
-        Add(CF.Wis, "assassin_expose_weakness", "弱点暴露", "Expose Weakness",
-            CareerSkillData.SkillType.Active, 3, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "crit_threshold_reduction", 3 },
-                { "crit_threshold_extra_below_full_hp", 2 },
-                { "duration", 2 },
-                { "max_targets", 1 }
-            },
-            desc: "标记目标2回合，被友军攻击时暴击阈值-3，HP<100%时再-2");
-
-        Add(CF.Cha, "bard_battle_hymn", "战歌切换", "Battle Hymn",
-            CareerSkillData.SkillType.Active, 2, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "aura_range", 3 },
-                { "march_ap_reduction", 1 },
-                { "bulwark_ac_bonus", 1 },
-                { "fury_damage_bonus", 0.1f }
-            },
-            desc: "在进军号/铁壁颂/嗜血曲三种战歌间切换，对周围3格友军生效");
-
-        // ---- 双属性 (15) ----
-        Add(CF.Str | CF.Dex, "bladedancer_whirling_strike", "连旋斩", "Whirling Strike",
-            CareerSkillData.SkillType.Active, 6, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "fan_range", 3 },
-                { "damage_multiplier", 0.7f }
-            },
-            desc: "对正面3格扇形范围敌人各攻击一次，每次命中后旋转位移1格");
-
-        Add(CF.Str | CF.Con, "juggernaut_unstoppable", "不可阻挡", "Unstoppable",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "temp_hp_con_multiplier", 3 }
-            },
-            desc: "冲锋破障推友不中断，冲锋后获得临时HP=CON修正×3");
-
-        Add(CF.Str | CF.Int, "spellsword_rune_imbue", "符文武器", "Rune Imbue",
-            CareerSkillData.SkillType.Active, 3, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "fire_dice_count", 1 },
-                { "fire_dice_sides", 6 },
-                { "burn_duration", 1 },
-                { "burn_dice", 1 },
-                { "burn_sides", 6 },
-                { "imbue_duration", 3 },
-                { "cooldown", 3 }
-            },
-            desc: "为武器注入符文3回合，下次命中额外1d6火焰+目标燃烧1回合");
-
-        Add(CF.Str | CF.Wis, "executioner_death_sentence", "终结宣告", "Death Sentence",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "target_hp_threshold", 0.3f },
-                { "crit_threshold_reduction", 3 },
-                { "crit_damage_bonus", 0.5f },
-                { "dot_extra_reduction", 1 }
-            },
-            desc: "攻击HP≤30%目标时暴击阈值-3，暴击倍率+0.5x，流血/中毒目标再-1");
-
-        Add(CF.Str | CF.Cha, "warlord_lead_from_front", "身先士卒", "Lead from Front",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "ally_range", 1 },
-                { "max_allies", 99 }
-            },
-            desc: "冲锋时终点相邻友军免费向同方向移动1格");
-
-        Add(CF.Dex | CF.Con, "duelist_riposte", "以伤换伤", "Riposte",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "counter_damage_multiplier", 1.0f },
-                { "crit_ap_recovery", 2 },
-                { "trigger_limit_per_turn", 1 }
-            },
-            desc: "被近战命中后100%伤害反击，暴击回2AP，每回合1次");
-
-        Add(CF.Dex | CF.Int, "arcanearcher_homing_shot", "魔矢追踪", "Homing Shot",
-            CareerSkillData.SkillType.Active, 6, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range_bonus", 3 },
-                { "arcane_dice_count", 1 },
-                { "arcane_dice_sides", 8 },
-                { "ignore_cover", true },
-                { "cooldown", 2 }
-            },
-            desc: "追踪箭矢，无视掩体，射程+3，命中额外1d8奥术伤害");
-
-        Add(CF.Dex | CF.Wis, "falconer_hawks_mark", "鹰眼锁定", "Hawk's Mark",
-            CareerSkillData.SkillType.Active, 3, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "duration", 3 },
-                { "range_bonus_attacker", 1 },
-                { "max_targets", 1 }
-            },
-            desc: "标记目标3回合，失去地形AC和掩护，远程射程视为+1");
-
-        Add(CF.Dex | CF.Cha, "rogue_misdirection", "声东击西", "Misdirection",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "stealth_duration", 99 },
-                { "target_disadvantage_duration", 1 },
-                { "cooldown", 2 }
-            },
-            desc: "强制敌方转向，自身潜行，该目标下回合首次攻击劣势");
-
-        Add(CF.Con | CF.Int, "battlemage_mana_shield", "法力护盾", "Mana Shield",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "damage_reduction_per_mana", 2 },
-                { "mana_cost_per_trigger", 1 },
-                { "min_reduction", 1 }
-            },
-            desc: "受伤时消耗1法力减伤INT修正×2点，无限次触发");
-
-        Add(CF.Con | CF.Wis, "veteran_old_timer", "临危不乱", "Old Timer",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "hp_threshold", 0.5f },
-                { "ac_bonus", 3 },
-                { "counter_damage_multiplier", 1.5f }
-            },
-            desc: "HP首次降至50%以下时AC+3，反击范围扩展至6格，反击伤害×1.5");
-
-        Add(CF.Con | CF.Cha, "ironcommander_hold_the_line", "坚守阵线", "Hold the Line",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range", 2 },
-                { "ac_bonus", 2 },
-                { "dr_bonus_if_defending", 3 },
-                { "duration", 1 }
-            },
-            desc: "周围2格友军不可移动但AC+2免疫恐惧，防御模式额外伤害减免3");
-
-        Add(CF.Int | CF.Wis, "sage_forewarning", "预知回避", "Forewarning",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "mana_cost", 1 },
-                { "trigger_limit_per_turn", 1 }
-            },
-            desc: "每回合首次被攻击时可消耗1法力使攻击获得劣势");
-
-        Add(CF.Int | CF.Cha, "sorcerer_blood_resonance", "血脉共鸣", "Blood Resonance",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "hp_cost_percent", 0.1f },
-                { "hp_cost_min", 5 },
-                { "mana_recover_multiplier", 2 },
-                { "low_hp_multiplier", 3 },
-                { "low_hp_threshold", 0.3f }
-            },
-            desc: "消耗10%HP恢复HP×2法力，HP<30%时免费且恢复×3");
-
-        Add(CF.Wis | CF.Cha, "prophet_fate_intervention", "命运干涉", "Fate Intervention",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "reflect_damage_percent", 0.25f }
-            },
-            desc: "友军将被打死时可强制重掷伤害骰取低值，仍致死则受25%反射");
-
-        BuildThreeAttribute();
-        BuildFourAttribute();
-        BuildFiveAttribute();
-        BuildSixAttribute();
+        int count = 0;
+        for (int i = 0; i < 6; i++)
+            if ((flags & (1 << i)) != 0) count++;
+        return count;
     }
 
-    // ================================================================
-    //  构建第二部分：三属性 (20)
-    // ================================================================
+    // ============================================================================
+    // v1.0 全部 63 个职业技能注册
+    // ============================================================================
 
-    private static void BuildThreeAttribute()
+    private static void RegisterAllSkills()
     {
-        // ---- 三属性 (20) ----
-        Add(CF.Str | CF.Dex | CF.Con, "bruiser_iron_rush", "铁壁冲锋", "Iron Rush",
-            CareerSkillData.SkillType.Active, 7, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "charge_range", 3 },
-                { "ac_bonus", 3 },
-                { "push_allies", true }
-            },
-            desc: "冲锋3格期间AC+3，命中敌人后AC+3持续到回合结束");
+        // ---- 单属性 Passive (6) ----
 
-        Add(CF.Str | CF.Dex | CF.Int, "spellweaver_instant_glyph", "瞬发符印", "Instant Glyph",
-            CareerSkillData.SkillType.Active, 3, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "heal_dice", "1d4" },
-                { "damage_dice", "1d4" },
-                { "duration", 3 },
-                { "max_glyphs", 2 }
-            },
-            desc: "放置符印3回合，友军经过恢复1d4，敌军经过受1d4奥术伤害");
+        AddPassive(F_STR, "warrior_melee_damage", "战士", "Warrior",
+            "近战武器伤害 ×1.2", new Godot.Collections.Dictionary
+            { { "melee_damage_multiplier", 1.2f } });
 
-        Add(CF.Str | CF.Dex | CF.Wis, "hawkeye_kill_shot", "致命弹道", "Kill Shot",
-            CareerSkillData.SkillType.Active, 8, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "crit_threshold_reduction", 4 },
-                { "crit_damage_extra", 1.0f },
-                { "ap_refund_on_miss", 4 },
-                { "cooldown", 3 }
-            },
-            desc: "远程攻击，暴击阈值-4且暴击+1.0x倍率，未命中返还4AP");
+        AddPassive(F_DEX, "ranger_ranged_cover_half", "游侠", "Ranger",
+            "远程攻击无视一半障碍物命中减益", new Godot.Collections.Dictionary
+            { { "cover_penalty_reduction", 0.5f } });
 
-        Add(CF.Str | CF.Dex | CF.Cha, "champion_war_cry_charge", "战吼冲锋", "War Cry Charge",
-            CareerSkillData.SkillType.Active, 7, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "morale_bonus", 8 },
-                { "advantage_range", 3 },
-                { "cooldown", 3 }
-            },
-            desc: "冲锋攻击，终点周围3格友军士气+8且下回合首次攻击获得优势");
+        AddPassive(F_CON, "guardian_first_hit_reduction", "守卫", "Guardian",
+            "每回合首次受到的伤害 -30%", new Godot.Collections.Dictionary
+            { { "first_hit_damage_reduction", 0.3f } });
 
-        Add(CF.Str | CF.Con | CF.Int, "ironweaver_rune_barricade", "符文壁垒", "Rune Barricade",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "hp_per_con", 5 },
-                { "destroy_aoe_dice", "1d6" },
-                { "duration", 3 }
-            },
-            desc: "相邻格召唤符文屏障HP=CON修正×5，被毁时周围1格敌人受1d6奥术");
+        AddPassive(F_INT, "mage_spell_damage", "法师", "Mage",
+            "法术伤害 +15%", new Godot.Collections.Dictionary
+            { { "spell_damage_bonus", 0.15f } });
 
-        Add(CF.Str | CF.Con | CF.Wis, "skullcrusher_crush_weakpoint", "弱点粉碎", "Crush the Weak Point",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "dr_penetration_bonus", 3 }
-            },
-            desc: "攻击HP<100%目标额外+已损HP%÷10伤害，DR穿透+3");
+        AddPassive(F_WIS, "assassin_backstab_double", "刺客", "Assassin",
+            "背面攻击伤害 ×2", new Godot.Collections.Dictionary
+            { { "backstab_damage_multiplier", 2.0f } });
 
-        Add(CF.Str | CF.Con | CF.Cha, "conqueror_subjugate", "镇压", "Subjugate",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "morale_damage", 15 },
-                { "fear_duration", 1 },
-                { "save_dc_base", 10 },
-                { "cooldown", 2 }
-            },
-            desc: "近战命中后目标士气-15且下回合被恐惧，WIS豁免可抵抗");
+        AddPassive(F_CHA, "bard_ally_damage_aura", "诗人", "Bard",
+            "周围 2 格内友军伤害 +5%", new Godot.Collections.Dictionary
+            { { "ally_damage_bonus", 0.05f }, { "ally_aura_range", 2 } });
 
-        Add(CF.Str | CF.Int | CF.Wis, "doomknight_gaze_of_ruin", "毁灭凝视", "Gaze of Ruin",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "crit_threshold_override", 13 },
-                { "base_duration", 1 },
-                { "debuff_extra_duration", 2 }
-            },
-            desc: "凝视目标1-2回合，被友军攻击命中时暴击阈值视为13");
+        // ---- 双属性 Passive (15) ----
 
-        Add(CF.Str | CF.Int | CF.Cha, "overlord_aura_of_dread", "恐惧光环", "Aura of Dread",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range", 2 },
-                { "morale_drain_per_turn", 3 },
-                { "morale_threshold_for_disadvantage", -40 }
-            },
-            desc: "周围2格敌方每回合士气-3，士气≤-40时攻击霸主获得劣势");
+        AddPassive(F_STR | F_DEX, "blade_dancer_extra_attack", "剑舞者", "Blade Dancer",
+            "近战命中后, 强制对另一个相邻敌方发动一次额外攻击(不会再次触发旋斩)",
+            new Godot.Collections.Dictionary { { "whirlwind_extra_target", true } });
 
-        Add(CF.Str | CF.Wis | CF.Cha, "crusader_arcane_charge", "奥术冲锋", "Arcane Charge",
-            CareerSkillData.SkillType.Active, 7, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "heal_dice", "1d4" },
-                { "trail_duration", 2 },
-                { "cooldown", 3 }
-            },
-            desc: "冲锋无视地形惩罚，路径留奥术痕迹2回合，友军经过恢复1d4");
+        AddPassive(F_STR | F_CON, "juggernaut_charge_damage", "重战士", "Juggernaut",
+            "移动至少 3 格后发动的近战攻击, 伤害 ×1.5",
+            new Godot.Collections.Dictionary { { "min_move_for_bonus", 3 }, { "charge_damage_multiplier", 1.5f } });
 
-        Add(CF.Dex | CF.Con | CF.Int, "shadowmage_shadow_swap", "暗影置换", "Shadow Swap",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "max_memory_positions", 3 },
-                { "stealth_duration", 1 }
-            },
-            desc: "与记忆的法术落点交换位置，获得1回合潜行");
+        AddPassive(F_STR | F_INT, "spellsword_mana_burn", "魔剑士", "Spellsword",
+            "近战攻击时, 消耗当前法力 5%, 命中造成等额额外伤害; 法力为 0 时无效",
+            new Godot.Collections.Dictionary { { "mana_cost_pct", 0.05f }, { "convert_ratio", 1.0f } });
 
-        Add(CF.Dex | CF.Con | CF.Wis, "nightstalker_death_mark", "暗杀标记", "Death Mark",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "duration", 2 },
-                { "ignore_dr", true },
-                { "ap_recovery_on_kill", 3 },
-                { "cooldown", 3 }
-            },
-            desc: "标记目标2回合，对该目标攻击无视DR且获得优势，击杀恢复3AP");
+        AddPassive(F_STR | F_WIS, "executioner_low_hp_damage", "处刑人", "Executioner",
+            "对 HP ≤ 30% 的敌人伤害 +50%",
+            new Godot.Collections.Dictionary { { "hp_threshold", 0.3f }, { "damage_bonus", 0.5f } });
 
-        Add(CF.Dex | CF.Con | CF.Cha, "faceless_identity_theft", "身份窃取", "Identity Theft",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "duration", 1 },
-                { "cooldown", 4 }
-            },
-            desc: "模仿敌方单位外观，AI本回合不主动攻击千面客，攻击时解除");
+        AddPassive(F_STR | F_CHA, "warlord_ally_per_ally_damage", "征讨者", "Warlord",
+            "周围 2 格内每有一个友军(含自身), 所有受影响友军造成的伤害 +5%(最多 +20%)",
+            new Godot.Collections.Dictionary { { "per_ally_bonus", 0.05f }, { "max_bonus", 0.20f }, { "range", 2 } });
 
-        Add(CF.Dex | CF.Int | CF.Wis, "stargazer_star_map", "星图定位", "Star Map",
-            CareerSkillData.SkillType.Active, 3, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "max_memory_positions", 99 }, // = Mod(INT)
-                { "teleport_delay", 1 }  // 下回合开始时传送
-            },
-            desc: "标记位置，下回合开始时免费传送至该位置，每场可用Mod(INT)次");
+        AddPassive(F_DEX | F_CON, "duelist_riposte_counter", "决斗者", "Duelist",
+            "被近战攻击后, 立即对攻击者发动一次近战攻击(需命中判定), 每回合 1 次",
+            new Godot.Collections.Dictionary { { "counter_on_melee_hit", true }, { "counter_per_turn", 1 } });
 
-        Add(CF.Dex | CF.Int | CF.Cha, "illusionist_mirror_image", "镜像分身", "Mirror Image",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "phantom_ac", 12 },
-                { "phantom_hp", 1 },
-                { "redirect_chance", 0.5f },
-                { "max_phantoms", 2 }
-            },
-            desc: "生成幻影分身，被攻击时50%概率打到分身上，最多2个");
+        AddPassive(F_DEX | F_INT, "arcane_archer_sniper_stack", "秘射手", "Arcane Archer",
+            "对同一目标连续远程攻击时, 每次命中后下一次伤害 +10%(最多 +30%, 切换目标重置)",
+            new Godot.Collections.Dictionary { { "stack_damage_bonus", 0.10f }, { "max_stacks", 3 } });
 
-        Add(CF.Dex | CF.Wis | CF.Cha, "windwalker_tailwind", "顺风传递", "Tailwind",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "teleport_range", 2 },
-                { "move_ap_reduction", 1 },
-                { "cooldown", 2 }
-            },
-            desc: "传送视野内友军至自身周围2格，双方本回合移动消耗-1AP/格");
+        AddPassive(F_DEX | F_WIS, "falconer_injured_accuracy", "狩猎者", "Falconer",
+            "攻击已受伤的敌人时, 命中 +30%",
+            new Godot.Collections.Dictionary { { "injured_accuracy_bonus", 0.30f } });
 
-        Add(CF.Con | CF.Int | CF.Wis, "arcanewarden_bulwark_of_lore", "知识壁垒", "Bulwark of Lore",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "dc_reduction", 5 }
-            },
-            desc: "受法术伤害时智力检定≥法术强度-5则伤害减半");
+        AddPassive(F_DEX | F_CHA, "rogue_miss_ap_refund", "游荡者", "Rogue",
+            "近战攻击未命中时, 返还 1 AP(不限次数)",
+            new Godot.Collections.Dictionary { { "miss_ap_refund", 1 } });
 
-        Add(CF.Con | CF.Int | CF.Cha, "ironsovereign_iron_law", "铁律", "Iron Law",
-            CareerSkillData.SkillType.Active, 6, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range", 3 },
-                { "duration", 2 },
-                { "morale_change_divisor", 2 },
-                { "cooldown", 4 }
-            },
-            desc: "周围3格禁止冲锋/潜行，士气变化÷2，持续2回合");
+        AddPassive(F_CON | F_INT, "battlemage_mana_shield", "战法师", "Battlemage",
+            "受到伤害时, 自动消耗 1 法力抵消 1 点伤害; 法力为 0 时不触发",
+            new Godot.Collections.Dictionary { { "mana_to_damage_ratio", 1 }, { "mana_per_trigger", 1 } });
 
-        Add(CF.Con | CF.Wis | CF.Cha, "ironbulwark_martyrs_guard", "殉道守护", "Martyr's Guard",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "damage_share_percent", 0.5f },
-                { "range", 1 },
-                { "min_triggers", 1 },
-                { "hp_threshold_disable", 0.25f }
-            },
-            desc: "周围1格友军将致死时代替承受50%伤害，每场触发WIS修正次");
+        AddPassive(F_CON | F_WIS, "veteran_low_hp_crit", "苦修者", "Veteran",
+            "HP 低于 80% 时, 暴击率 +5%",
+            new Godot.Collections.Dictionary { { "hp_threshold", 0.8f }, { "crit_rate_bonus", 0.05f } });
 
-        Add(CF.Int | CF.Wis | CF.Cha, "chosenone_twist_of_fate", "命运转折", "Twist of Fate",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "disadvantage_duration", 1 }
-            },
-            desc: "强制将一次d20结果改为自然20或1，使用后下回合所有检定劣势");
+        AddPassive(F_CON | F_CHA, "iron_commander_adjacent_ac", "守御者", "Iron Commander",
+            "自身和相邻友军 AC +2; 若友军本回合未移动, 则该友军受到的近战伤害 -20%",
+            new Godot.Collections.Dictionary { { "ac_bonus", 2 }, { "stationary_damage_reduction", 0.20f } });
+
+        AddPassive(F_INT | F_WIS, "sage_mana_threshold_damage", "大贤者", "Sage",
+            "法力值为 100% 时法术伤害 +50%; 法力值 >50% 且 <100% 时法术伤害 +30%",
+            new Godot.Collections.Dictionary { { "full_mana_bonus", 0.50f }, { "high_mana_bonus", 0.30f }, { "high_mana_threshold", 0.50f } });
+
+        AddPassive(F_INT | F_CHA, "sorcerer_ac_curse", "指引者", "Sorcerer",
+            "法术伤害使目标 AC -25%(向下取整), 持续 3 回合",
+            new Godot.Collections.Dictionary { { "ac_reduction_pct", 0.25f }, { "duration", 3 } });
+
+        AddPassive(F_WIS | F_CHA, "prophet_fatal_ally_protect", "预言者", "Prophet",
+            "周围 2 格内友军受到致命伤害时, 该次伤害 -20%",
+            new Godot.Collections.Dictionary { { "fatal_damage_reduction", 0.20f }, { "range", 2 } });
+
+        // ---- 三属性 Passive (20) ----
+
+        AddPassive(F_STR | F_DEX | F_CON, "grandmaster_stacking_damage", "大宗师", "Grandmaster",
+            "近战命中后, 自身近战伤害 +5%(最多 +50%)",
+            new Godot.Collections.Dictionary { { "per_hit_bonus", 0.05f }, { "max_bonus", 0.50f } });
+
+        AddPassive(F_STR | F_DEX | F_INT, "spellweaver_melee_spell_cycle", "魔武者", "Spellweaver",
+            "近战命中后, 下一次法术伤害 +8%; 施法命中后, 下一次近战伤害 +8%(各最多 3 层)",
+            new Godot.Collections.Dictionary { { "melee_to_spell_bonus", 0.08f }, { "spell_to_melee_bonus", 0.08f }, { "max_stacks", 3 } });
+
+        AddPassive(F_STR | F_DEX | F_WIS, "hawkeye_full_ap_crit", "审判官", "Hawkeye",
+            "自身 AP 为最大值时, 该次攻击暴击率 +20%",
+            new Godot.Collections.Dictionary { { "full_ap_crit_rate_bonus", 0.20f } });
+
+        AddPassive(F_STR | F_DEX | F_CHA, "champion_move_3_boost_ally", "战誓者", "Champion",
+            "自身移动 3 格后, 本回合下一次近战攻击命中 +2; 若命中, 相邻友军本回合下一次攻击伤害 +15%",
+            new Godot.Collections.Dictionary { { "min_move", 3 }, { "self_hit_bonus", 2 }, { "ally_damage_bonus", 0.15f } });
+
+        AddPassive(F_STR | F_CON | F_INT, "ironweaver_stationary_spell_immune", "述法者", "Ironweaver",
+            "自身未移动并结束回合时, 消耗 50% 最大法力值, 周围 1 格内友军本回合免疫法术伤害",
+            new Godot.Collections.Dictionary { { "mana_cost_pct", 0.50f }, { "ally_range", 1 } });
+
+        AddPassive(F_STR | F_CON | F_WIS, "skullcrusher_armor_pierce_double", "惩罚者", "Skullcrusher",
+            "近战攻击穿透护甲时, 不对护甲造成伤害, 转而造成 200% 伤害直接作用于血量",
+            new Godot.Collections.Dictionary { { "armor_pierce_to_hp_multiplier", 2.0f } });
+
+        AddPassive(F_STR | F_CON | F_CHA, "conqueror_move_5_aoe_melee", "征服者", "Conqueror",
+            "移动至少 5 格后, 下次近战攻击对所有相邻敌方单位各发动一次攻击",
+            new Godot.Collections.Dictionary { { "min_move", 5 }, { "aoe_melee_on_next", true } });
+
+        AddPassive(F_STR | F_INT | F_WIS, "doom_knight_kill_free_spell", "毁灭者", "Doom Knight",
+            "击杀敌人后, 可立即免费释放一次法术(不消耗 AP 和法力)",
+            new Godot.Collections.Dictionary { { "free_spell_on_kill", true } });
+
+        AddPassive(F_STR | F_INT | F_CHA, "overlord_enemy_accuracy_debuff", "支配者", "Overlord",
+            "周围 2 格内敌方命中 -10%; 已受伤的敌方命中 -20%",
+            new Godot.Collections.Dictionary { { "base_penalty", 0.10f }, { "injured_penalty", 0.20f }, { "range", 2 } });
+
+        AddPassive(F_STR | F_WIS | F_CHA, "crusader_move_ally_damage", "十字军", "Crusader",
+            "自身移动后, 周围 1 格内友军下一次攻击伤害 +10%",
+            new Godot.Collections.Dictionary { { "ally_range", 1 }, { "ally_next_damage_bonus", 0.10f } });
+
+        AddPassive(F_DEX | F_CON | F_INT, "shadow_shroud_cover_cloak", "影缄者", "Shadow Shroud",
+            "回合结束时若位于掩体地形, 获得 1 回合影幕: 远程命中-2 对自身; 自身下次远程命中+2 伤害+15%; 全掩体再无视一半障碍物命中减益",
+            new Godot.Collections.Dictionary { { "cloak_duration", 1 }, { "defense_hit_penalty", -2 },
+                { "offense_hit_bonus", 2 }, { "offense_damage_bonus", 0.15f }, { "full_cover_ignore_half", true } });
+
+        AddPassive(F_DEX | F_CON | F_WIS, "hawkeye_guard_cover_ignore", "鹰眼卫", "Hawkeye Guard",
+            "远程攻击无视掩体和障碍物的命中减益",
+            new Godot.Collections.Dictionary { { "ignore_all_cover", true } });
+
+        AddPassive(F_DEX | F_CON | F_CHA, "outrider_benxi", "游骑兵", "Outrider",
+            "自身移动 5 格后, 回合结束时范围 1 格内友军获得奔袭: 下次行动可免费移动 5 格(不触发借机攻击)",
+            new Godot.Collections.Dictionary { { "min_move", 5 }, { "free_move_cells", 5 }, { "ally_range", 1 }, { "no_aoo", true } });
+
+        AddPassive(F_DEX | F_INT | F_WIS, "starcaller_height_spell", "唤星者", "Starcaller",
+            "自身本回合第一次法术射程改为: 所有比自身所处高度更低的地图格; 每低 1 高度伤害 +20%",
+            new Godot.Collections.Dictionary { { "height_damage_per_step", 0.20f }, { "downward_only", true } });
+
+        AddPassive(F_DEX | F_INT | F_CHA, "illusionist_phantom_ac", "幻术师", "Illusionist",
+            "自身释放法术后获得 1 层幻影, 每层 AC +1(最多 10 层); 被攻击后失去 1 层",
+            new Godot.Collections.Dictionary { { "ac_per_stack", 1 }, { "max_stacks", 10 }, { "lose_on_hit", true } });
+
+        AddPassive(F_DEX | F_WIS | F_CHA, "windwalker_fixed_move_crit", "风语者", "Windwalker",
+            "自身移动消耗固定为 1; 每移动 1 格, 本场战斗暴击率 +1%(最多 +50%)",
+            new Godot.Collections.Dictionary { { "fixed_move_cost", 1 }, { "crit_per_cell", 0.01f }, { "max_crit_bonus", 0.50f } });
+
+        AddPassive(F_CON | F_INT | F_WIS, "antimage_full_ap_mana_immune", "敌法师", "Antimage",
+            "若自身以 AP 和法力均为最大值的状态结束回合, 则消耗所有法力, 本场战斗免疫法术伤害",
+            new Godot.Collections.Dictionary { { "requires_full_ap_and_mana", true }, { "consume_all_mana", true } });
+
+        AddPassive(F_CON | F_INT | F_CHA, "iron_sovereign_aura_ac_pct", "铁幕领主", "Iron Sovereign",
+            "相邻友军和自身 AC +20%(向上取整)",
+            new Godot.Collections.Dictionary { { "ac_bonus_pct", 0.20f }, { "affects_self", true }, { "affects_adjacent_allies", true } });
+
+        AddPassive(F_CON | F_WIS | F_CHA, "oathshield_adjacent_crit_negate", "誓盾卫", "Oathshield",
+            "相邻友军受到暴击时, 免除该次伤害",
+            new Godot.Collections.Dictionary { { "negate_adjacent_crit", true } });
+
+        AddPassive(F_INT | F_WIS | F_CHA, "chosen_one_spell_can_crit", "天选者", "Chosen One",
+            "自身法术可以暴击",
+            new Godot.Collections.Dictionary { { "spell_can_crit", true } });
+
+        // ---- 四属性 Passive (15) ----
+
+        AddPassive(F_CON | F_INT | F_WIS | F_CHA, "archsage_ally_spell_damage", "秘院贤师", "Archsage",
+            "自身和相邻友军法术伤害 +30%; 自身每回合第一次法术不消耗法力",
+            new Godot.Collections.Dictionary { { "spell_damage_bonus", 0.30f }, { "first_spell_free_mana", true }, { "ally_range", 1 } });
+
+        AddPassive(F_DEX | F_INT | F_WIS | F_CHA, "zephyr_master_move_spell", "灵风秘庭", "Zephyr Master",
+            "自身移动消耗固定为 1; 每移动 1 格, 本回合下一次法术伤害 +10%(最多 +50%); 达到 +50% 时受击单位下回合无法移动",
+            new Godot.Collections.Dictionary { { "fixed_move_cost", 1 }, { "spell_damage_per_cell", 0.10f },
+                { "max_spell_bonus", 0.50f }, { "immobilize_on_max", true } });
+
+        AddPassive(F_DEX | F_CON | F_WIS | F_CHA, "warchief_same_height_charge", "荒原之心", "Warchief",
+            "连续在同一高度进行移动时不受借机攻击影响; 本场战斗累计移动超过 10 格后, 获得 3 回合伤害 +50%(不可叠加)",
+            new Godot.Collections.Dictionary { { "same_height_no_aoo", true }, { "accumulate_move_threshold", 10 },
+                { "rage_damage_bonus", 0.50f }, { "rage_duration", 3 } });
+
+        AddPassive(F_DEX | F_CON | F_INT | F_CHA, "blood_pact_hp_mana_exchange", "血契之环", "Blood Pact",
+            "自身消耗法力时等额恢复生命; 自身受到血量伤害时等额恢复法力; 不超出上限",
+            new Godot.Collections.Dictionary { { "mana_to_hp_ratio", 1.0f }, { "hp_to_mana_ratio", 1.0f } });
+
+        AddPassive(F_DEX | F_CON | F_INT | F_WIS, "silent_edge_adjacent_silence", "静默之刃", "Silent Edge",
+            "相邻敌方单位无法施法",
+            new Godot.Collections.Dictionary { { "adjacent_silence", true } });
+
+        AddPassive(F_STR | F_INT | F_WIS | F_CHA, "crown_of_ruin_low_hp_spell", "毁灭王冠", "Crown of Ruin",
+            "法术伤害 +40%; 每损失 10% 最大生命, 法术伤害再 +5%(最多额外 +30%)",
+            new Godot.Collections.Dictionary { { "base_spell_damage_bonus", 0.40f },
+                { "per_lost_10pct_bonus", 0.05f }, { "max_extra_bonus", 0.30f } });
+
+        AddPassive(F_STR | F_CON | F_WIS | F_CHA, "stone_saint_melee_reduction", "磐石守护", "Stone Saint",
+            "自身和相邻友军受到近战伤害 -30%; HP < 50% 时提高到 -50%",
+            new Godot.Collections.Dictionary { { "base_reduction", 0.30f }, { "low_hp_reduction", 0.50f },
+                { "low_hp_threshold", 0.50f }, { "ally_range", 1 } });
+
+        AddPassive(F_STR | F_CON | F_INT | F_CHA, "ironbound_lord_melee_ac", "铁铸领主", "Ironbound Lord",
+            "自身和相邻友军近战伤害 +30%、AC +2",
+            new Godot.Collections.Dictionary { { "melee_damage_bonus", 0.30f }, { "ac_bonus", 2 }, { "ally_range", 1 } });
+
+        AddPassive(F_STR | F_CON | F_INT | F_WIS, "void_knight_extra_ap_damage", "渊狱骑士", "Void Knight",
+            "自身攻击命中后, 额外消耗剩余 AP, 对目标和目标范围 1 格内敌人造成 消耗 AP × 10% 额外伤害",
+            new Godot.Collections.Dictionary { { "extra_damage_per_ap", 0.10f }, { "aoe_range", 1 } });
+
+        AddPassive(F_STR | F_DEX | F_WIS | F_CHA, "storm_banner_move_5_crit", "战争之风", "Storm Banner",
+            "自身移动 5 格后, 本回合下一次攻击必定暴击; 若击杀目标, 恢复该次攻击消耗的 AP",
+            new Godot.Collections.Dictionary { { "min_move", 5 }, { "guaranteed_crit", true }, { "refund_ap_on_kill", true } });
+
+        AddPassive(F_STR | F_DEX | F_INT | F_CHA, "tempest_wrath_spell_chain", "焰风之怒", "Tempest Wrath",
+            "自身每次成功释放法术后, 本回合后续法术伤害 +30%, 可叠加",
+            new Godot.Collections.Dictionary { { "per_spell_bonus", 0.30f }, { "reset_on_turn_end", true } });
+
+        AddPassive(F_STR | F_DEX | F_INT | F_WIS, "lone_blade_isolated_buff", "孤刃之誓", "Lone Blade",
+            "周围 2 格内无友军时, 攻击命中 +3、伤害 +40%; 若本回合未受到伤害, 下一次攻击暴击率 +15%",
+            new Godot.Collections.Dictionary { { "solo_range", 2 }, { "solo_hit_bonus", 3 },
+                { "solo_damage_bonus", 0.40f }, { "unharmed_crit_rate", 0.15f } });
+
+        AddPassive(F_STR | F_DEX | F_CON | F_CHA, "war_king_melee_leader", "战争领主", "War King",
+            "自身和相邻友军近战攻击命中 +2、伤害 +30%; 自身击杀后, 相邻友军恢复 2 AP",
+            new Godot.Collections.Dictionary { { "hit_bonus", 2 }, { "damage_bonus", 0.30f },
+                { "kill_ap_refund", 2 }, { "ally_range", 1 } });
+
+        AddPassive(F_STR | F_DEX | F_CON | F_WIS, "steelstring_knight_switch_free", "钢弦骑士", "Steelstring Knight",
+            "自身近战攻击后, 下次切换武器和远程攻击不消耗 AP(每回合 1 次)",
+            new Godot.Collections.Dictionary { { "free_switch_and_ranged", true }, { "per_turn", 1 } });
+
+        AddPassive(F_STR | F_DEX | F_CON | F_INT, "arcane_war_knight_cycle", "鏖战骑士", "Arcane War Knight",
+            "自身近战命中后, 本回合下一次法术不消耗 AP; 自身释放法术后, 本回合下一次近战攻击伤害 +40%",
+            new Godot.Collections.Dictionary { { "melee_to_free_spell", true }, { "spell_to_damage_bonus", 0.40f } });
+
+        // ---- 五属性 Active (6) ----
+
+        AddActive5(F_DEX | F_CON | F_INT | F_WIS | F_CHA,
+            "emissary_pact_seal", "万灵之约印", "Emissary",
+            "目标友军: 回满 HP、法力、AP; 目标因 AP 满可继续被选中行动(不插入先攻队列)",
+            CareerSkillData.TargetType.SingleAlly, 6,
+            new Godot.Collections.Dictionary { { "restore_hp_pct", 1.0f }, { "restore_mana_pct", 1.0f },
+                { "restore_ap", true }, { "no_initiative_insert", true } });
+
+        AddActive5(F_STR | F_CON | F_INT | F_WIS | F_CHA,
+            "mountain_throne", "山岳之王座", "Mountain Lord",
+            "自身: 3 回合不可移动、伤害 -60%、近战伤害 +60%、相邻敌人移动每格 +1 AP",
+            CareerSkillData.TargetType.Self, 0,
+            new Godot.Collections.Dictionary { { "duration", 3 }, { "no_move", true },
+                { "incoming_damage_reduction", 0.60f }, { "melee_damage_bonus", 0.60f },
+                { "adjacent_enemy_move_ap_penalty", 1 } });
+
+        AddActive5(F_STR | F_DEX | F_INT | F_WIS | F_CHA,
+            "astral_rift", "星界之裂隙", "Astral Walker",
+            "目标地图格: 沿直线跳跃到目标格, 对路径上所有敌人各进行一次攻击",
+            CareerSkillData.TargetType.Ground, 8,
+            new Godot.Collections.Dictionary { { "line_charge", true }, { "attack_all_in_path", true } });
+
+        AddActive5(F_STR | F_DEX | F_CON | F_WIS | F_CHA,
+            "waste_avatar", "荒芜之化身", "Wrath Avatar",
+            "自身: 本场战斗剩余时间内, 紧邻的敌人护甲 100% 被穿透",
+            CareerSkillData.TargetType.Self, 0,
+            new Godot.Collections.Dictionary { { "armor_pierce_pct", 1.0f }, { "adjacent_only", true },
+                { "combat_duration", true } });
+
+        AddActive5(F_STR | F_DEX | F_CON | F_INT | F_CHA,
+            "iron_blood_edict", "铁血之律令", "Iron Tyrant",
+            "全体友军获得 1 次铁血: 下一次未命中的攻击转为暴击",
+            CareerSkillData.TargetType.AllAllies, 0,
+            new Godot.Collections.Dictionary { { "miss_to_crit", true }, { "charges", 1 } });
+
+        AddActive5(F_STR | F_DEX | F_CON | F_INT | F_WIS,
+            "lone_star_shadow", "孤星之刃影", "Lone Shadow",
+            "紧邻敌人: 仅当自身周围 6 格内只有 1 个敌方时可用; 对该目标必中必暴, 目标不能离开控制区",
+            CareerSkillData.TargetType.SingleEnemy, 1,
+            new Godot.Collections.Dictionary { { "require_solo_enemy", true }, { "solo_range", 6 },
+                { "guaranteed_hit", true }, { "guaranteed_crit", true }, { "immobilize_target", true } });
+
+        // ---- 全属性 Active (1) ----
+
+        AddActive6(F_STR | F_DEX | F_CON | F_INT | F_WIS | F_CHA,
+            "paragon_all_aspects", "万象", "Paragon",
+            "自身: 随机抽取无法移动/无法施法/无法攻击之一(不重复); 恢复 HP/法力/AP; 三个代价后本场不可再用",
+            new Godot.Collections.Dictionary { { "costs", new Godot.Collections.Array { "no_move", "no_spell", "no_attack" } },
+                { "restore_hp", true }, { "restore_mana", true }, { "restore_ap", true } });
+
+        GD.Print($"[CareerSkillRegistry] Registered {_registry?.Count ?? 0} v1 career skills");
     }
 
-    private static void BuildFourAttribute()
-    {
-        // ---- 四属性 (15) ----
-        Add(CF.Con | CF.Int | CF.Wis | CF.Cha, "archsage_omnibus", "万卷通鉴", "Omnibus",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "advice_ap_cost", 2 },
-                { "advice_hit_bonus", 1 },
-                { "range", 3 }
-            },
-            desc: "战斗开始揭示敌方最低豁免，每回合可花2AP给友军攻击+1");
+    // ============================================================================
+    // 辅助注册方法
+    // ============================================================================
 
-        Add(CF.Dex | CF.Int | CF.Wis | CF.Cha, "zephyrmaster_wind_favor", "风之眷顾", "Wind's Favor",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "move_threshold", 3 },
-                { "max_stacks", 3 },
-                { "range_per_stack", 1 }
-            },
-            desc: "每回合移动≥3格获得风痕(最多3层)，每层远程射程+1，被近战命中清零");
-
-        Add(CF.Dex | CF.Con | CF.Wis | CF.Cha, "warchief_feral_instinct", "野性直觉", "Feral Instinct",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "move_ap_reduction", 1 },
-                { "beast_advantage", true }
-            },
-            desc: "在野外地形移动力+1，自动感知潜行单位，对野兽攻击优势");
-
-        Add(CF.Dex | CF.Con | CF.Int | CF.Cha, "shadowlord_puppet_master", "幕后操纵", "Puppet Master",
-            CareerSkillData.SkillType.Active, 6, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range", 2 },
-                { "morale_threshold", -40 },
-                { "forced_move_range", 2 },
-                { "forced_damage_multiplier", 0.5f },
-                { "cooldown", 3 }
-            },
-            desc: "控制士气≤-40的敌方移动2格并攻击最近单位(伤害×0.5)");
-
-        Add(CF.Dex | CF.Con | CF.Int | CF.Wis, "silentdeath_silent_strike", "无声击", "Silent Strike",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "stealth_attack_damage_multiplier", 0.5f }
-            },
-            desc: "从潜行攻击时可不解除潜行(伤害×0.5)，每场可用DEX修正次");
-
-        Add(CF.Str | CF.Int | CF.Wis | CF.Cha, "lordofruin_harbinger", "毁灭预兆", "Harbinger of Ruin",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "dc_per_hp_percent", 10 },
-                { "max_dc_bonus", 5 },
-                { "fixed_ac", 10 }
-            },
-            desc: "每失去10%HP法术强度+1(最多+5)，代价闪避永远固定为10");
-
-        Add(CF.Str | CF.Con | CF.Wis | CF.Cha, "stonesaint_stone_body", "石化之躯", "Stone Body",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "duration", 2 },
-                { "dr_threshold_bonus", 3 },
-                { "aoe_damage_dice", "1d6" },
-                { "aoe_range", 1 }
-            },
-            desc: "石化2回合不可动/攻击/施法，装甲阈值+3免疫负面，恢复时周围受1d6");
-
-        Add(CF.Str | CF.Con | CF.Int | CF.Cha, "dreadgeneral_iron_grip", "铁腕统御", "Iron Grip",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range", 2 },
-                { "morale_floor", -40 }
-            },
-            desc: "周围2格友军免疫恐惧/溃逃且士气不低于-40，但不可主动撤退");
-
-        Add(CF.Str | CF.Con | CF.Int | CF.Wis, "voidknight_chains_of_deep", "深渊锁链", "Chains of the Deep",
-            CareerSkillData.SkillType.Active, 5, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "duration", 1 },
-                { "escape_dc", 15 },
-                { "cooldown", 2 }
-            },
-            desc: "近战命中后目标下回合不可移动且不可防御，力量检定≥15可挣脱");
-
-        Add(CF.Str | CF.Dex | CF.Wis | CF.Cha, "stormbanner_lightning_raid", "闪电突击", "Lightning Raid",
-            CareerSkillData.SkillType.Active, 7, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "max_allies", 2 },
-                { "move_range", 2 },
-                { "cooldown", 3 }
-            },
-            desc: "自身和周围1格最多2友军同时移动2格后各攻击一次");
-
-        Add(CF.Str | CF.Dex | CF.Int | CF.Cha, "tempestlord_inferno_surge", "烈焰喷涌", "Inferno Surge",
-            CareerSkillData.SkillType.Active, 6, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "range", 2 },
-                { "fire_dice", "2d6" },
-                { "burning_fire_dice", "3d6" },
-                { "mana_per_hit", 1 },
-                { "cooldown", 3 }
-            },
-            desc: "周围2格敌方受2d6火焰，每命中1个恢复1法力，燃烧时3d6");
-
-        Add(CF.Str | CF.Dex | CF.Con | CF.Wis, "ironwall_hunter", "铁壁猎手", "Ironwall Hunter",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "track_range", 3 },
-                { "damage_bonus", 2 }
-            },
-            desc: "追踪最近受伤目标，攻击受伤目标额外+2伤害");
-
-        Add(CF.Str | CF.Dex | CF.Con | CF.Int, "myriad_battle mage", "万象魔战", "Myriad Battlemage",
-            CareerSkillData.SkillType.Active, 6, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "melee_damage_bonus", 3 },
-                { "spell_dc_bonus", 2 },
-                { "cooldown", 3 }
-            },
-            desc: "近战攻击额外+3伤害且法术强度+2，持续到回合结束");
-
-        Add(CF.Str | CF.Dex | CF.Con | CF.Cha, "warking_domination", "战争之王", "War King Domination",
-            CareerSkillData.SkillType.Active, 7, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "morale_bonus", 10 },
-                { "range", 3 },
-                { "cooldown", 3 }
-            },
-            desc: "怒吼使周围3格友军士气+10，敌方士气-10");
-
-        Add(CF.Str | CF.Dex | CF.Int | CF.Wis, "lone_saint", "独行圣者", "Lone Saint",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "solo_ac_bonus", 2 },
-                { "solo_damage_bonus", 2 }
-            },
-            desc: "周围2格内无友军时AC+2、伤害+2");
-    }
-
-    private static void BuildFiveAttribute()
-    {
-        // ---- 五属性 (6) ----
-        Add(CF.Dex | CF.Con | CF.Int | CF.Wis | CF.Cha, "emissary_jack_of_all_trades", "万法通识", "Jack of All Trades",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "bonus_percent", 0.05f }
-            },
-            desc: "所有大节点数值效果+5%（不适用于Keystone）");
-
-        Add(CF.Str | CF.Con | CF.Int | CF.Wis | CF.Cha, "mountainlord_mountain_stance", "磐石姿态", "Mountain Stance",
-            CareerSkillData.SkillType.Active, 4, CareerSkillData.UsageLimit.OncePerBattle,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "dr_threshold_bonus", 3 },
-                { "next_turn_ac_penalty", 2 }
-            },
-            desc: "不可移动，装甲阈值+3免疫负面，下回合闪避-2");
-
-        Add(CF.Str | CF.Dex | CF.Int | CF.Wis | CF.Cha, "twilight_walker_stride", "暮光步", "Twilight Stride",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "first_move_no_aoo", true },
-                { "can_cross_enemies", true },
-                { "heal_dice", "1d4" },
-                { "heal_hp_threshold", 0.5f }
-            },
-            desc: "每回合首次移动不触发借机攻击且可穿越敌方格，HP<50%恢复1d4");
-
-        Add(CF.Str | CF.Dex | CF.Con | CF.Int | CF.Cha, "irontyrant_wrath", "暴君之怒", "Tyrant's Wrath",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "fixed_crit_threshold", 20 }
-            },
-            desc: "伤害永不因debuff降低，代价暴击阈值固定为20");
-
-        Add(CF.Str | CF.Dex | CF.Con | CF.Int | CF.Wis, "loneshadow_lone_operative", "独行术", "Lone Operative",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "solo_range", 2 },
-                { "ally_ac_penalty", 1 },
-                { "min_ac", 8 },
-                { "solo_ac_bonus", 2 },
-                { "solo_move_ap_reduction", 1 },
-                { "combat_start_stealth", true }
-            },
-            desc: "周围2格内每有1友军AC-1，无友军时AC+2移动-1AP/格，战斗开始潜行");
-
-        Add(CF.Str | CF.Dex | CF.Con | CF.Wis | CF.Cha, "wrathavatar_savage_instinct", "野蛮直觉", "Savage Instinct",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.Unlimited,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "auto_target_lowest_hp", true },
-                { "execute_hp_threshold", 0.2f }
-            },
-            desc: "自动攻击范围内HP最低的敌人，目标HP≤20%自动获得优势");
-    }
-
-    private static void BuildSixAttribute()
-    {
-        // ---- 全属性 (1) ----
-        Add(CF.Str | CF.Dex | CF.Con | CF.Int | CF.Wis | CF.Cha,
-            "paragon_hand_of_all", "万能之手", "Hand of All",
-            CareerSkillData.SkillType.Passive, 0, CareerSkillData.UsageLimit.PerBattleCount,
-            effectParams: new Godot.Collections.Dictionary
-            {
-                { "max_uses_per_battle", 3 },
-                { "effect_multiplier", 0.5f },
-                { "duration_reduction", 1 },
-                { "min_duration", 1 }
-            },
-            desc: "每回合可选一种已解锁职业技能临时使用(效果×0.5)，每场最多3次");
-    }
-
-    // ================================================================
-    //  辅助
-    // ================================================================
-
-    private static void Add(
-        int titleFlags, string effectId, string displayName, string englishName,
-        CareerSkillData.SkillType type, int apCost, CareerSkillData.UsageLimit limitType,
-        Godot.Collections.Dictionary effectParams, string desc,
-        int cooldown = 0, int maxUses = 1)
+    /// <summary>注册常驻被动 (1-4 属性)</summary>
+    private static void AddPassive(int flags, string effectId, string displayName,
+        string englishName, string description, Godot.Collections.Dictionary effectParams)
     {
         var skill = new CareerSkillData
         {
             SkillId = effectId,
             DisplayName = displayName,
             EnglishName = englishName,
-            RequiredTitleFlags = titleFlags,
-            Type = type,
-            ApCost = apCost,
-            LimitType = limitType,
-            MaxUses = maxUses,
-            Cooldown = cooldown,
+            RequiredTitleFlags = flags,
+            Type = CareerSkillData.SkillType.Passive,
+            ApCost = 0,
+            LimitType = CareerSkillData.UsageLimit.Unlimited,
+            MaxUses = 0,
+            Cooldown = 0,
+            RequiresFullAp = false,
+            ConsumesMaxAp = false,
+            ShowInCombatUi = false,
+            AttributeCount = CountAttributes(flags),
+            SkillTargetType = CareerSkillData.TargetType.Self,
+            Range = 0,
             EffectId = effectId,
-            Description = desc,
-            EffectParams = effectParams
+            Description = description,
+            EffectParams = effectParams,
         };
-        _registry![titleFlags] = skill;
+        _registry![flags] = skill;
+        _byEffectId![effectId] = skill;
     }
 
-    /// <summary>属性 flags 常量（与 ClassTitleResolver 一致）</summary>
-    private static class CF
+    /// <summary>注册五属性主动 (OncePerBattle, 满AP, 消耗最大AP)</summary>
+    private static void AddActive5(int flags, string effectId, string displayName,
+        string englishName, string description, CareerSkillData.TargetType targetType, int range,
+        Godot.Collections.Dictionary effectParams)
     {
-        public const int Str = 1;
-        public const int Dex = 2;
-        public const int Con = 4;
-        public const int Int = 8;
-        public const int Wis = 16;
-        public const int Cha = 32;
+        effectParams["target_type"] = targetType.ToString();
+        effectParams["range"] = range;
+
+        var skill = new CareerSkillData
+        {
+            SkillId = effectId,
+            DisplayName = displayName,
+            EnglishName = englishName,
+            RequiredTitleFlags = flags,
+            Type = CareerSkillData.SkillType.Active,
+            ApCost = 0,
+            LimitType = CareerSkillData.UsageLimit.OncePerBattle,
+            MaxUses = 1,
+            Cooldown = 0,
+            RequiresFullAp = true,
+            ConsumesMaxAp = true,
+            ShowInCombatUi = true,
+            AttributeCount = 5,
+            SkillTargetType = targetType,
+            Range = range,
+            EffectId = effectId,
+            Description = description,
+            EffectParams = effectParams,
+        };
+        _registry![flags] = skill;
+        _byEffectId![effectId] = skill;
+    }
+
+    /// <summary>注册六属性主动 (OncePerTurn, 代价型)</summary>
+    private static void AddActive6(int flags, string effectId, string displayName,
+        string englishName, string description, Godot.Collections.Dictionary effectParams)
+    {
+        effectParams["target_type"] = CareerSkillData.TargetType.Self.ToString();
+        effectParams["range"] = 0;
+
+        var skill = new CareerSkillData
+        {
+            SkillId = effectId,
+            DisplayName = displayName,
+            EnglishName = englishName,
+            RequiredTitleFlags = flags,
+            Type = CareerSkillData.SkillType.Active,
+            ApCost = 0,
+            LimitType = CareerSkillData.UsageLimit.OncePerTurn,
+            MaxUses = 1,
+            Cooldown = 0,
+            RequiresFullAp = false,
+            ConsumesMaxAp = false,
+            ShowInCombatUi = true,
+            AttributeCount = 6,
+            SkillTargetType = CareerSkillData.TargetType.Self,
+            Range = 0,
+            EffectId = effectId,
+            Description = description,
+            EffectParams = effectParams,
+        };
+        _registry![flags] = skill;
+        _byEffectId![effectId] = skill;
     }
 }

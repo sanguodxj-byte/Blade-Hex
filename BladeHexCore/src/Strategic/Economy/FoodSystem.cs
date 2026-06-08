@@ -4,7 +4,7 @@ using Godot;
 using System;
 using BladeHex.Data;
 
-namespace BladeHex.Strategic;
+namespace BladeHex.Strategic.Economy;
 
 /// <summary>
 /// 食物系统 — 骑砍式补给压力
@@ -44,14 +44,9 @@ public class FoodSystem
             result.Starving = true;
             result.StarveDays = ConsecutiveStarveDays;
 
-            // 断粮惩罚：每天士气 -5，HP 不恢复（由 RestoreHp 检查）
-            foreach (var m in roster.Members)
-            {
-                m.Morale = Math.Max(-100, m.Morale - 5);
-            }
-
+            // 断粮惩罚：HP 不恢复（由 RestoreHp 检查）
             if (ConsecutiveStarveDays >= 3)
-                GD.Print($"[FoodSystem] 断粮 {ConsecutiveStarveDays} 天！全员士气持续下降");
+                GD.Print($"[FoodSystem] 断粮 {ConsecutiveStarveDays} 天！");
         }
 
         result.FoodAfter = currentFood;
@@ -66,6 +61,18 @@ public class FoodSystem
     public void SetConsecutiveStarveDays(int days)
     {
         ConsecutiveStarveDays = days;
+    }
+
+    /// <summary>断粮时调用：递增连续断粮天数</summary>
+    public void IncrementStarveDays()
+    {
+        ConsecutiveStarveDays++;
+    }
+
+    /// <summary>有粮时调用：重置连续断粮天数</summary>
+    public void ResetStarveDays()
+    {
+        ConsecutiveStarveDays = 0;
     }
 
     /// <summary>序列化</summary>

@@ -68,7 +68,6 @@ public class UnitSaveData
     public int Wis { get; set; }
     public int Cha { get; set; }
     public int BaseMaxHp { get; set; }
-    public int Morale { get; set; }
     public int CurrentMana { get; set; }
 
     // 装备 ID
@@ -96,15 +95,35 @@ public class UnitSaveData
 
     // 技能盘强类型数据
     public SkillTreeSaveData SkillTree { get; set; } = new();
+
+    // v0.7: 已装备技能（最多 10 个 SkillEffect ID，空字符串=空槽）
+    public List<string> EquippedSkills { get; set; } = new();
 }
 
 public class SpellSaveData
 {
     public string SpellId { get; set; } = "";
     public string SpellName { get; set; } = "";
+    public string Description { get; set; } = "";
     public int School { get; set; }
     public int Tier { get; set; }
+    public int TargetAffinity { get; set; }
     public int ManaCost { get; set; }
+    public int CooldownTurns { get; set; }
+    public int CastingTime { get; set; }
+    public int RangeCells { get; set; }
+    public int Shape { get; set; }
+    public int ShapeSize { get; set; }
+    public int ResolutionType { get; set; }
+    public int SaveType { get; set; }
+    public int DamageDiceCount { get; set; }
+    public int DamageDiceSides { get; set; }
+    public string DamageType { get; set; } = "";
+    public int HealDiceCount { get; set; }
+    public int HealDiceSides { get; set; }
+    public int HealBonus { get; set; }
+    public string AppliedStatusEffect { get; set; } = "";
+    public int StatusDuration { get; set; }
 }
 
 public class MasterySaveData
@@ -136,6 +155,103 @@ public class EntitySaveData
     public float PosY { get; set; }
     public string Faction { get; set; } = "";
     public bool IsAlive { get; set; } = true;
+    public bool? IsHostileToPlayer { get; set; }
+    
+    // ========================================
+    // Phase 4: 扩展行为状态
+    // ========================================
+    
+    /// <summary>AI 状态枚举值（OverworldEntity.AIState 的 int 值）</summary>
+    public int AiState { get; set; }
+    
+    /// <summary>AI 策略枚举值</summary>
+    public int AiStrategy { get; set; }
+    
+    /// <summary>目标位置 X</summary>
+    public float TargetPosX { get; set; }
+    
+    /// <summary>目标位置 Y</summary>
+    public float TargetPosY { get; set; }
+    
+    /// <summary>基地位置 X</summary>
+    public float HomePosX { get; set; }
+    
+    /// <summary>基地位置 Y</summary>
+    public float HomePosY { get; set; }
+    
+    /// <summary>领地中心 X</summary>
+    public float TerritoryCenterX { get; set; }
+    
+    /// <summary>领地中心 Y</summary>
+    public float TerritoryCenterY { get; set; }
+    
+    /// <summary>领地半径</summary>
+    public float TerritoryRadius { get; set; }
+    
+    /// <summary>移动速度</summary>
+    public float MoveSpeed { get; set; }
+    
+    /// <summary>队伍人数</summary>
+    public int PartySize { get; set; }
+    
+    /// <summary>队伍等级</summary>
+    public int PartyLevel { get; set; }
+    
+    /// <summary>综合战力</summary>
+    public float CombatPower { get; set; }
+    
+    /// <summary>存活天数</summary>
+    public int DaysAlive { get; set; }
+    
+    /// <summary>所属军团 ID</summary>
+    public string? ArmyId { get; set; }
+    
+    /// <summary>是否元帅</summary>
+    public bool IsMarshal { get; set; }
+    
+    /// <summary>指派的战争目标 POI 名</summary>
+    public string? AssignedWarTargetPoiName { get; set; }
+    
+    /// <summary>战争目标指派天数</summary>
+    public int WarTargetAssignedDay { get; set; }
+    
+    /// <summary>交战开始小时数</summary>
+    public float EngagedSinceHour { get; set; } = -1f;
+    
+    /// <summary>战斗持续小时数</summary>
+    public int CombatDurationHours { get; set; }
+    
+    /// <summary>围攻目标 POI 名（持久化引用）</summary>
+    public string? SiegeTargetPoiName { get; set; }
+    
+    /// <summary>回援目标 POI 名</summary>
+    public string? ReinforceTargetPoiName { get; set; }
+    
+    /// <summary>追击目标实体名</summary>
+    public string? ChaseTargetEntityName { get; set; }
+    public string? ChaseTargetHeroId { get; set; }
+    public string? ChaseTargetEntityType { get; set; }
+    public string? ChaseTargetFaction { get; set; }
+    public float? ChaseTargetPosX { get; set; }
+    public float? ChaseTargetPosY { get; set; }
+    
+    /// <summary>巡逻半径</summary>
+    public float PatrolRadius { get; set; }
+    
+    /// <summary>视野范围</summary>
+    public float VisionRange { get; set; }
+    
+    /// <summary>领主性格</summary>
+    public int LordPersonality { get; set; }
+    
+    /// <summary>守军数量</summary>
+    public int GarrisonSize { get; set; }
+    
+    /// <summary>守卫 POI 名</summary>
+    public string? GuardedPoiName { get; set; }
+    
+    /// <summary>英雄 ID</summary>
+    public string? HeroId { get; set; }
 }
 
 public class PoiSaveData
@@ -152,6 +268,8 @@ public class SkillTreeSaveData
 {
     public List<string> ActivatedNodes { get; set; } = new();
     public int AvailableSkillPoints { get; set; }
+    public int AvailableAttributePoints { get; set; }
+    public Dictionary<string, int> NodeTileProgress { get; set; } = new();
     public int TotalJumps { get; set; }
     public int UsedJumps { get; set; }
     public int CharacterLevel { get; set; } = 1;
@@ -175,7 +293,6 @@ public static class SaveDataConverter
             Wis = unit.Wis,
             Cha = unit.Cha,
             BaseMaxHp = unit.BaseMaxHp,
-            Morale = unit.Morale,
             CurrentMana = unit.CurrentMana,
             IsLeader = isLeader,
 
@@ -199,9 +316,26 @@ public static class SaveDataConverter
                 {
                     SpellId = spell.SpellId,
                     SpellName = spell.SpellName,
+                    Description = spell.Description,
                     School = (int)spell.spellSchool,
                     Tier = (int)spell.tier,
+                    TargetAffinity = (int)spell.targetAffinity,
                     ManaCost = spell.ManaCost,
+                    CooldownTurns = spell.CooldownTurns,
+                    CastingTime = (int)spell.castingTime,
+                    RangeCells = spell.RangeCells,
+                    Shape = (int)spell.shape,
+                    ShapeSize = spell.ShapeSize,
+                    ResolutionType = (int)spell.resolutionType,
+                    SaveType = (int)spell.saveType,
+                    DamageDiceCount = spell.DamageDiceCount,
+                    DamageDiceSides = spell.DamageDiceSides,
+                    DamageType = spell.DamageType,
+                    HealDiceCount = spell.HealDiceCount,
+                    HealDiceSides = spell.HealDiceSides,
+                    HealBonus = spell.HealBonus,
+                    AppliedStatusEffect = spell.AppliedStatusEffect,
+                    StatusDuration = spell.StatusDuration,
                 });
             }
         }
@@ -247,6 +381,15 @@ public static class SaveDataConverter
                     skillSave.ActivatedNodes.Add(item.AsString());
             }
             skillSave.AvailableSkillPoints = st.ContainsKey("available_skill_points") ? st["available_skill_points"].AsInt32() : 0;
+            skillSave.AvailableAttributePoints = st.ContainsKey("available_attribute_points")
+                ? st["available_attribute_points"].AsInt32()
+                : skillSave.AvailableSkillPoints;
+            if (st.ContainsKey("node_tile_progress"))
+            {
+                var progress = st["node_tile_progress"].AsGodotDictionary();
+                foreach (var key in progress.Keys)
+                    skillSave.NodeTileProgress[key.ToString()!] = progress[key].AsInt32();
+            }
             skillSave.TotalJumps = st.ContainsKey("total_jumps") ? st["total_jumps"].AsInt32() : 0;
             skillSave.UsedJumps = st.ContainsKey("used_jumps") ? st["used_jumps"].AsInt32() : 0;
             skillSave.CharacterLevel = st.ContainsKey("character_level") ? st["character_level"].AsInt32() : 1;
@@ -261,6 +404,14 @@ public static class SaveDataConverter
             data.SkillTree = skillSave;
         }
 
+        // v0.7: 已装备技能槽位
+        if (unit.EquippedSkills != null)
+        {
+            data.EquippedSkills.Clear();
+            for (int i = 0; i < unit.EquippedSkills.Count; i++)
+                data.EquippedSkills.Add(unit.EquippedSkills[i] ?? "");
+        }
+
         return data;
     }
 
@@ -271,6 +422,16 @@ public static class SaveDataConverter
         var st = new Godot.Collections.Dictionary();
         st["activated_nodes"] = new Godot.Collections.Array<string>(data.SkillTree.ActivatedNodes.ToArray());
         st["available_skill_points"] = data.SkillTree.AvailableSkillPoints;
+        st["available_attribute_points"] = data.SkillTree.AvailableAttributePoints != 0
+            ? data.SkillTree.AvailableAttributePoints
+            : data.SkillTree.AvailableSkillPoints;
+        var tileProgress = new Godot.Collections.Dictionary();
+        if (data.SkillTree.NodeTileProgress != null)
+        {
+            foreach (var kvp in data.SkillTree.NodeTileProgress)
+                tileProgress[kvp.Key] = kvp.Value;
+        }
+        st["node_tile_progress"] = tileProgress;
         st["total_jumps"] = data.SkillTree.TotalJumps;
         st["used_jumps"] = data.SkillTree.UsedJumps;
         st["character_level"] = data.SkillTree.CharacterLevel;
@@ -298,7 +459,6 @@ public static class SaveDataConverter
         unit.Wis = data.Wis;
         unit.Cha = data.Cha;
         unit.BaseMaxHp = data.BaseMaxHp;
-        unit.Morale = data.Morale;
         unit.CurrentMana = data.CurrentMana;
 
         // 1. 还原装备 ID
@@ -333,9 +493,26 @@ public static class SaveDataConverter
                 {
                     SpellId = sp.SpellId,
                     SpellName = sp.SpellName,
+                    Description = sp.Description,
                     spellSchool = (SpellData.SpellSchool)sp.School,
                     tier = (SpellData.SpellTier)sp.Tier,
-                    ManaCost = sp.ManaCost
+                    targetAffinity = (SpellData.SpellTargetAffinity)sp.TargetAffinity,
+                    ManaCost = sp.ManaCost,
+                    CooldownTurns = sp.CooldownTurns,
+                    castingTime = (SpellData.CastingTime)sp.CastingTime,
+                    RangeCells = sp.RangeCells,
+                    shape = (SpellData.SpellShape)sp.Shape,
+                    ShapeSize = sp.ShapeSize,
+                    resolutionType = (SpellData.ResolutionType)sp.ResolutionType,
+                    saveType = (SpellData.SaveType)sp.SaveType,
+                    DamageDiceCount = sp.DamageDiceCount,
+                    DamageDiceSides = sp.DamageDiceSides,
+                    DamageType = sp.DamageType,
+                    HealDiceCount = sp.HealDiceCount,
+                    HealDiceSides = sp.HealDiceSides,
+                    HealBonus = sp.HealBonus,
+                    AppliedStatusEffect = sp.AppliedStatusEffect,
+                    StatusDuration = sp.StatusDuration,
                 });
             }
         }
@@ -371,5 +548,19 @@ public static class SaveDataConverter
 
         // 6. 还原技能树
         RestoreUnitSkillTree(unit, data);
+
+        // 7. v0.7: 还原已装备技能槽位
+        unit.EquippedSkills.Clear();
+        if (data.EquippedSkills != null)
+        {
+            foreach (var s in data.EquippedSkills)
+            {
+                string effect = s ?? "";
+                unit.EquippedSkills.Add(effect.StartsWith("spell_slot_", System.StringComparison.Ordinal) ? "" : effect);
+            }
+        }
+        // 扩容到 10 槽（向后兼容旧存档）
+        while (unit.EquippedSkills.Count < UnitData.MaxEquippedSkills)
+            unit.EquippedSkills.Add("");
     }
 }

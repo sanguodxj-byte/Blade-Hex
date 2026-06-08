@@ -73,6 +73,10 @@ public partial class WaterStripRenderer : Node3D
                 var nb = HexUtils.GetNeighbor(coord.X, coord.Y, dir);
                 if (!waterCells.TryGetValue(nb, out var nbCell)) continue;
 
+                // 只在同高度水域之间连条带：高差水域若连一条斜带，会从高格顶面斜搭到低格顶面、
+                // 沿崖面垂下形成"高地 hex 侧面蓝色三角"。高差处不连，两格各自按孤立水域出平圆盘。
+                if (cell.Elevation != nbCell.Elevation) continue;
+
                 var edgeKey = coord.X <= nb.X || (coord.X == nb.X && coord.Y <= nb.Y)
                     ? (coord.X, coord.Y, nb.X, nb.Y)
                     : (nb.X, nb.Y, coord.X, coord.Y);

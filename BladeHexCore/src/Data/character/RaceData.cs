@@ -38,10 +38,16 @@ public partial class RaceData : Resource
     [Export] public int ChaMod;
 
     [Export] public string[] RacialTraits = [];
-    [Export] public string TraitsDescription { get; set; } = "";
-    [Export] public float RecruitmentDifficulty { get; set; } = 1.0f;
-    [Export] public Godot.Collections.Dictionary StartingFavor = new();
-    [Export] public string[] SuitableTendencies = [];
+
+    // ========================================
+    // 以下字段为设计预留 — 当前游戏机制未消费这些数据。
+    // 保留以避免破坏 mod 友好度（races.json 中已存在这些键），
+    // 但运行时无任何效果。引入对应系统前不要依赖。
+    // ========================================
+    [Export] public string TraitsDescription { get; set; } = "";          // TODO: 引入种族详情面板时显示
+    [Export] public float RecruitmentDifficulty { get; set; } = 1.0f;     // TODO: 招募系统价格修正
+    [Export] public Godot.Collections.Dictionary StartingFavor = new();   // TODO: 派系声望系统初始关系
+    [Export] public string[] SuitableTendencies = [];                     // TODO: 角色生成倾向引导
 
     // ========================================
     // JSON 驱动加载

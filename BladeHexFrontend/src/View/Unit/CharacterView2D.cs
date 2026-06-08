@@ -178,6 +178,7 @@ public partial class CharacterView2D : Node2D
 
     private void ApplySlot(AnimatedSprite2D sprite, SlotRenderConfig cfg, CharacterSlotResolution slotData)
     {
+        sprite.Scale = Vector2.One;
         // 复用既有 SpriteFrames（避免 GC 压力）
         SpriteFrames frames;
         if (slotData.Frames != null)

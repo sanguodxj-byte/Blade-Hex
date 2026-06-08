@@ -12,6 +12,7 @@ public partial class CareerSkillData : RefCounted
 {
     public enum SkillType { Active, Passive }
     public enum UsageLimit { Unlimited, OncePerBattle, OncePerTurn, PerBattleCount }
+    public enum TargetType { Self, SingleEnemy, SingleAlly, AllAllies, AllAdjacent, Ground, RangedSingle, RangedAoe }
 
     // ========================================
     // 标识
@@ -47,6 +48,24 @@ public partial class CareerSkillData : RefCounted
     /// <summary>冷却回合数（0=无冷却）</summary>
     public int Cooldown = 0;
 
+    /// <summary>是否要求当前 AP 等于最大 AP 才能使用</summary>
+    public bool RequiresFullAp = false;
+
+    /// <summary>是否使用时消耗最大 AP；用于五属性主动技能</summary>
+    public bool ConsumesMaxAp = false;
+
+    /// <summary>是否在战斗主动技能 UI 中显示</summary>
+    public bool ShowInCombatUi = true;
+
+    /// <summary>属性数量（1-6），对应职业分阶</summary>
+    public int AttributeCount = 1;
+
+    /// <summary>目标类型</summary>
+    public TargetType SkillTargetType = TargetType.Self;
+
+    /// <summary>技能范围（格数，0=自身）</summary>
+    public int Range = 0;
+
     // ========================================
     // 效果描述
     // ========================================
@@ -67,4 +86,7 @@ public partial class CareerSkillData : RefCounted
     public bool IsActive => Type == SkillType.Active;
     public bool IsPassive => Type == SkillType.Passive;
     public bool IsOncePerBattle => LimitType == UsageLimit.OncePerBattle;
+    public bool IsOncePerTurn => LimitType == UsageLimit.OncePerTurn;
+    public bool IsFiveAttribute => AttributeCount == 5;
+    public bool IsSixAttribute => AttributeCount == 6;
 }

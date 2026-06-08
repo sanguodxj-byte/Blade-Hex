@@ -82,7 +82,7 @@ public abstract partial class MinimapPanelBase : PanelContainer
 
 			if (Collapsible)
 			{
-				_toggleBtn = new Button { Text = "▼", CustomMinimumSize = new Vector2(24, 20) };
+				_toggleBtn = new Button { Text = "▼", CustomMinimumSize = new Vector2(24, 20), FocusMode = FocusModeEnum.None };
 				_toggleBtn.AddThemeFontSizeOverride("font_size", 10);
 				_toggleBtn.Pressed += ToggleCollapse;
 				header.AddChild(_toggleBtn);

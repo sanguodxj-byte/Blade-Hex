@@ -4,12 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
 using BladeHex.Events;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat;
 
 /// <summary>
 /// 状态效果管理器 — 强类型 StatusEffectInstance
-/// 唯一数据源：unit.Data.Runtime.ActiveStatusEffects
+/// 数据通过 unit.Model API 间接访问 Core
 /// </summary>
 public partial class StatusEffectManager : Node
 {
@@ -28,11 +29,21 @@ public partial class StatusEffectManager : Node
 
         // 检查免疫
         if (unit.Data.Immunities.Contains(effectId)) return false;
+        if (PassiveSkillResolver.IsFearEffect(effectId)
+            && !PassiveSkillResolver.CanApplyFearEffect(unit, unit.CombatManager?.AllUnits))
+            return false;
 
-        var effects = unit.Data.Runtime.ActiveStatusEffects;
+        var effectEnumVal = EffectNameToEnum(effectId);
+        if ((int)effectEnumVal < 0) return false;
+
+        var effectData = StatusEffectData.CreateEffect(effectEnumVal);
+        if (effectData == null) return false;
+
+        if (!CanApplyKeystoneRules(unit, effectId, effectData))
+            return false;
 
         // 检查是否已存在同名效果
-        var existingInst = effects.FirstOrDefault(e => e.Id == effectId);
+        var existingInst = unit.Model.FindStatusEffect(effectId);
         if (existingInst != null)
         {
             if (duration > 0)
@@ -42,13 +53,6 @@ public partial class StatusEffectManager : Node
 
         // 检查交互
         CheckInteractions(unit, effectId);
-
-        // 获取默认数据
-        var effectEnumVal = EffectNameToEnum(effectId);
-        if ((int)effectEnumVal < 0) return false;
-
-        var effectData = StatusEffectData.CreateEffect(effectEnumVal);
-        if (effectData == null) return false;
 
         // 确定持续时间
         int actualDuration = duration > 0 ? duration : effectData.DefaultDuration;
@@ -81,12 +85,9 @@ public partial class StatusEffectManager : Node
             inst.StatModifiers[key.AsString()] = fVal;
         }
 
-        effects.Add(inst);
+        unit.Model.AddStatusEffect(inst);
 
-        EventBus.Instance?.Publish(EventBus.Signals.StatusEffectApplied, new Godot.Collections.Dictionary
-        {
-            { "unit", unit }, { "effect_id", effectId },
-        });
+        EventBus.Instance?.PublishStatusEffectApplied(unit, effectId, actualDuration);
         EmitSignal(SignalName.EffectApplied, unit, effectId);
         return true;
     }
@@ -98,13 +99,10 @@ public partial class StatusEffectManager : Node
     public void RemoveEffect(Unit unit, string effectId)
     {
         if (unit.Data == null) return;
-        int removed = unit.Data.Runtime.ActiveStatusEffects.RemoveAll(e => e.Id == effectId);
-        if (removed > 0)
+        bool removed = unit.Model.RemoveStatusEffect(effectId);
+        if (removed)
         {
-            EventBus.Instance?.Publish(EventBus.Signals.StatusEffectRemoved, new Godot.Collections.Dictionary
-            {
-                { "unit", unit }, { "effect_id", effectId },
-            });
+            EventBus.Instance?.PublishStatusEffectRemoved(unit, effectId);
             EmitSignal(SignalName.EffectRemoved, unit, effectId);
         }
     }
@@ -112,7 +110,7 @@ public partial class StatusEffectManager : Node
     public void RemoveAllNegative(Unit unit)
     {
         if (unit.Data == null) return;
-        var toRemove = unit.Data.Runtime.ActiveStatusEffects
+        var toRemove = unit.Model.ActiveStatusEffects
             .Where(e => e.IsNegative).Select(e => e.Id).ToList();
         foreach (var eid in toRemove) RemoveEffect(unit, eid);
     }
@@ -120,7 +118,7 @@ public partial class StatusEffectManager : Node
     public void OnUnitAttacked(Unit unit)
     {
         if (unit.Data == null) return;
-        var toRemove = unit.Data.Runtime.ActiveStatusEffects
+        var toRemove = unit.Model.ActiveStatusEffects
             .Where(e => e.BreaksOnAttack).Select(e => e.Id).ToList();
         foreach (var eid in toRemove) RemoveEffect(unit, eid);
     }
@@ -132,8 +130,7 @@ public partial class StatusEffectManager : Node
     public void TickEffects(Unit unit)
     {
         if (unit.Data == null) return;
-        var effects = unit.Data.Runtime.ActiveStatusEffects;
-        var effectsCopy = effects.ToList();
+        var effectsCopy = unit.Model.ActiveStatusEffects.ToList();
         var toRemove = new List<string>();
 
         foreach (var inst in effectsCopy)
@@ -150,10 +147,7 @@ public partial class StatusEffectManager : Node
                 {
                     int dmg = RPGRuleEngine.RollDice(inst.TickDamageCount, inst.TickDamageSides);
                     unit.TakeDamage(dmg);
-                    EventBus.Instance?.Publish(EventBus.Signals.StatusEffectTicked, new Godot.Collections.Dictionary
-                    {
-                        { "unit", unit }, { "effect_id", inst.Id }, { "damage", dmg },
-                    });
+                    EventBus.Instance?.PublishStatusEffectTicked(unit, inst.Id, dmg);
                     EmitSignal(SignalName.EffectTicked, unit, inst.Id, dmg);
                 }
             }
@@ -182,8 +176,8 @@ public partial class StatusEffectManager : Node
     public bool HasEffect(Unit unit, string effectId)
     {
         if (unit.Data == null) return false;
-        return unit.Data.Runtime.ActiveStatusEffects.Any(e => e.Id == effectId)
-            || unit.Data.Runtime.ActiveBuffs.Any(b => b.Id == effectId);
+        return unit.Model.ActiveStatusEffects.Any(e => e.Id == effectId)
+            || unit.Model.ActiveBuffs.Any(b => b.Id == effectId);
     }
 
     public Godot.Collections.Array GetActiveEffects(Unit unit)
@@ -193,11 +187,11 @@ public partial class StatusEffectManager : Node
 
         // 迁移期兼容：旧状态仍先输出，保证既有 UI/逻辑顺序尽量不变；
         // 新 Buff 追加到同一个展示列表，让 ActiveBuffs 不再是“隐形状态”。
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
             arr.Add(inst.ToGodotDict());
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
-            if (unit.Data.Runtime.ActiveStatusEffects.Any(e => e.Id == buff.Id)) continue;
+            if (unit.Model.ActiveStatusEffects.Any(e => e.Id == buff.Id)) continue;
             arr.Add(buff.ToGodotDict());
         }
         return arr;
@@ -207,7 +201,7 @@ public partial class StatusEffectManager : Node
     {
         var mods = new Godot.Collections.Dictionary();
         if (unit.Data == null) return mods;
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
         {
             foreach (var kv in inst.StatModifiers)
             {
@@ -217,7 +211,7 @@ public partial class StatusEffectManager : Node
                     mods[kv.Key] = kv.Value;
             }
         }
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             foreach (var modifier in buff.Modifiers)
             {
@@ -235,12 +229,12 @@ public partial class StatusEffectManager : Node
     public bool CanAct(Unit unit)
     {
         if (unit.Data == null) return true;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             if (BuffHasModifier(buff, "cannot_act") || BuffHasModifier(buff, "action_restricted")) return false;
             if (buff.Id == "freeze" || buff.Id == "frozen" || buff.Id == "stun") return false;
         }
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("cannot_act", out float val) && val != 0) return false;
             if (inst.Id == "freeze" || inst.Id == "stun") return false;
@@ -251,12 +245,12 @@ public partial class StatusEffectManager : Node
     public bool CanMove(Unit unit)
     {
         if (unit.Data == null) return true;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             if (BuffHasModifier(buff, "cannot_move") || BuffHasModifier(buff, "immobilized")) return false;
             if (buff.Id == "root" || buff.Id == "freeze" || buff.Id == "frozen") return false;
         }
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("cannot_move", out float val) && val != 0) return false;
             if (inst.Id == "root" || inst.Id == "freeze") return false;
@@ -267,12 +261,12 @@ public partial class StatusEffectManager : Node
     public bool CanCast(Unit unit)
     {
         if (unit.Data == null) return true;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             if (BuffHasModifier(buff, "cannot_cast") || BuffHasModifier(buff, "no_cast")) return false;
             if (buff.Id == "silence") return false;
         }
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("cannot_cast", out float val) && val != 0) return false;
             if (inst.Id == "silence") return false;
@@ -283,9 +277,9 @@ public partial class StatusEffectManager : Node
     public bool HasMeleeDisadvantage(Unit unit)
     {
         if (unit.Data == null) return false;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
             if (BuffHasModifier(buff, "melee_disadvantage") || BuffHasModifier(buff, "attack_disadvantage")) return true;
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("melee_disadvantage", out float val) && val != 0) return true;
         }
@@ -295,10 +289,10 @@ public partial class StatusEffectManager : Node
     public int GetRangedRangeOverride(Unit unit)
     {
         if (unit.Data == null) return -1;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
             if (TryGetBuffModifierValue(buff, "ranged_range_override", out float buffVal)) return (int)buffVal;
 
-        foreach (var inst in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var inst in unit.Model.ActiveStatusEffects)
         {
             if (inst.StatModifiers.TryGetValue("ranged_range_override", out float val)) return (int)val;
         }
@@ -321,11 +315,11 @@ public partial class StatusEffectManager : Node
         return found;
     }
 
-    /// <summary>获取单位的强类型效果列表（直接访问 Runtime）</summary>
+    /// <summary>获取单位的强类型效果列表副本</summary>
     public List<StatusEffectInstance> GetTypedEffects(Unit unit)
     {
         if (unit.Data == null) return new List<StatusEffectInstance>();
-        return unit.Data.Runtime.ActiveStatusEffects;
+        return unit.Model.ActiveStatusEffects.ToList();
     }
 
     public float GetHealingMultiplier(Unit unit) => 1.0f;
@@ -349,7 +343,7 @@ public partial class StatusEffectManager : Node
         }
 
         if (unit.Data == null) return;
-        var effectsCopy = unit.Data.Runtime.ActiveStatusEffects.ToList();
+        var effectsCopy = unit.Model.ActiveStatusEffects.ToList();
         foreach (var existing in effectsCopy)
         {
             var interaction = StatusEffectData.GetInteraction(newEffectId, existing.Id);
@@ -367,6 +361,25 @@ public partial class StatusEffectManager : Node
         }
     }
 
+    private static bool CanApplyKeystoneRules(Unit unit, string effectId, StatusEffectData effectData)
+    {
+        if (unit.Data == null) return false;
+
+        if (!effectData.IsNegative && !SkillTreeKeystoneResolver.CanReceivePositiveBuff(unit.Data))
+            return false;
+
+        if (effectData.IsNegative && SkillTreeKeystoneResolver.IsImmuneToNegative(unit.Data))
+            return false;
+
+        if (IsMindEffect(effectId) && SkillTreeKeystoneResolver.IsImmuneToMind(unit.Data))
+            return false;
+
+        return true;
+    }
+
+    private static bool IsMindEffect(string effectId)
+        => effectId is "charmed" or "confused";
+
     private bool AttemptSave(Unit unit, StatusEffectInstance inst)
     {
         if (unit.Data == null) return false;
@@ -376,13 +389,14 @@ public partial class StatusEffectManager : Node
         int abilityScore = 10;
         switch (saveType)
         {
-            case "fortitude": abilityScore = unit.Data.Con; break;
-            case "reflex": abilityScore = unit.Data.Dex; break;
-            case "will": abilityScore = unit.Data.Wis; break;
+            case "fortitude": abilityScore = CombatStats.GetEffectiveCon(unit.Data); break;
+            case "reflex": abilityScore = CombatStats.GetEffectiveDex(unit.Data); break;
+            case "will": abilityScore = CombatStats.GetEffectiveWis(unit.Data); break;
         }
 
-        int prof = RPGRuleEngine.GetProficiencyBonus(unit.Data.Level);
-        var result = RPGRuleEngine.MakeSave(abilityScore, prof, false, dc);
+        int bonus = CombatStats.GetSaveBonus(unit.Data)
+            + PassiveSkillResolver.GetRoyalPresenceAuraSaveBonus(unit, unit.CombatManager?.AllUnits);
+        var result = RPGRuleEngine.MakeSave(abilityScore, bonus, false, dc);
         return result.ContainsKey("success") && result["success"].AsBool();
     }
 

@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Data;
 
@@ -27,6 +28,48 @@ public partial class SaveManager : Node
     // ========================================
     // 存档路径解析（按 saveId 隔离）
     // ========================================
+
+    private static OverworldEntity? FindChaseTarget(EntitySaveData data, List<OverworldEntity> allEntities, OverworldEntity self)
+    {
+        if (!string.IsNullOrEmpty(data.ChaseTargetHeroId))
+        {
+            foreach (var candidate in allEntities)
+            {
+                if (ReferenceEquals(candidate, self) || !candidate.IsAlive) continue;
+                if (candidate.HeroId == data.ChaseTargetHeroId)
+                    return candidate;
+            }
+        }
+
+        if (string.IsNullOrEmpty(data.ChaseTargetEntityName))
+            return null;
+
+        bool hasSavedType = Enum.TryParse<OverworldEntity.EntityType>(data.ChaseTargetEntityType, out var savedType);
+        bool hasSavedFaction = !string.IsNullOrEmpty(data.ChaseTargetFaction);
+        bool hasSavedPosition = data.ChaseTargetPosX.HasValue && data.ChaseTargetPosY.HasValue;
+        var savedPos = hasSavedPosition
+            ? new Vector2(data.ChaseTargetPosX!.Value, data.ChaseTargetPosY!.Value)
+            : Vector2.Zero;
+
+        OverworldEntity? fallback = null;
+        int fallbackCount = 0;
+
+        foreach (var candidate in allEntities)
+        {
+            if (ReferenceEquals(candidate, self) || !candidate.IsAlive) continue;
+            if (candidate.EntityName != data.ChaseTargetEntityName) continue;
+            if (hasSavedType && candidate.EntityTypeEnum != savedType) continue;
+            if (hasSavedFaction && candidate.Faction != data.ChaseTargetFaction) continue;
+
+            fallback ??= candidate;
+            fallbackCount++;
+
+            if (hasSavedPosition && candidate.Position.DistanceTo(savedPos) < 1.0f)
+                return candidate;
+        }
+
+        return fallbackCount == 1 ? fallback : null;
+    }
 
     /// <summary>
     /// 根据 saveId 获取玩家角色存档路径。
@@ -251,7 +294,7 @@ public partial class SaveManager : Node
         save.Party.Units.Add(SaveDataConverter.BuildUnitSaveData(playerUnit, isLeader: true));
 
         // 背包
-        foreach (var item in economy.PlayerInventory)
+        foreach (var item in economy.GetAllItems())
         {
             save.Inventory.Add(new InventoryItemSaveData
             {
@@ -285,7 +328,7 @@ public partial class SaveManager : Node
 
             foreach (var entity in entityMgr.Entities)
             {
-                save.World.Entities.Add(new EntitySaveData
+                var saveEntity = new EntitySaveData
                 {
                     EntityName = entity.EntityName,
                     EntityType = entity.EntityTypeEnum.ToString(),
@@ -293,7 +336,45 @@ public partial class SaveManager : Node
                     PosY = entity.Position.Y,
                     Faction = entity.Faction,
                     IsAlive = entity.IsAlive,
-                });
+                    IsHostileToPlayer = entity.IsHostileToPlayer,
+                    
+                    // Phase 4: 行为状态
+                    AiState = (int)entity.CurrentAIState,
+                    AiStrategy = (int)entity.AIStrategy,
+                    TargetPosX = entity.TargetPosition.X,
+                    TargetPosY = entity.TargetPosition.Y,
+                    HomePosX = entity.HomePosition.X,
+                    HomePosY = entity.HomePosition.Y,
+                    TerritoryCenterX = entity.TerritoryCenter.X,
+                    TerritoryCenterY = entity.TerritoryCenter.Y,
+                    TerritoryRadius = entity.TerritoryRadius,
+                    MoveSpeed = entity.MoveSpeed,
+                    PartySize = entity.PartySize,
+                    PartyLevel = entity.PartyLevel,
+                    CombatPower = entity.CombatPower,
+                    DaysAlive = entity.DaysAlive,
+                    ArmyId = string.IsNullOrEmpty(entity.ArmyId) ? null : entity.ArmyId,
+                    IsMarshal = entity.IsMarshal,
+                    AssignedWarTargetPoiName = string.IsNullOrEmpty(entity.AssignedWarTargetPoiName) ? null : entity.AssignedWarTargetPoiName,
+                    WarTargetAssignedDay = entity.WarTargetAssignedDay,
+                    EngagedSinceHour = entity.EngagedSinceHour,
+                    CombatDurationHours = entity.CombatDurationHours,
+                    SiegeTargetPoiName = entity.SiegeTarget?.PoiName,
+                    ReinforceTargetPoiName = entity.ReinforceTarget?.PoiName,
+                    ChaseTargetEntityName = entity.ChaseTarget?.EntityName,
+                    ChaseTargetHeroId = string.IsNullOrEmpty(entity.ChaseTarget?.HeroId) ? null : entity.ChaseTarget.HeroId,
+                    ChaseTargetEntityType = entity.ChaseTarget?.EntityTypeEnum.ToString(),
+                    ChaseTargetFaction = entity.ChaseTarget?.Faction,
+                    ChaseTargetPosX = entity.ChaseTarget != null ? entity.ChaseTarget.Position.X : (float?)null,
+                    ChaseTargetPosY = entity.ChaseTarget != null ? entity.ChaseTarget.Position.Y : (float?)null,
+                    PatrolRadius = entity.PatrolRadius,
+                    VisionRange = entity.VisionRange,
+                    LordPersonality = (int)entity.LordPersonalityValue,
+                    GarrisonSize = entity.GarrisonSize,
+                    GuardedPoiName = entity.GuardedPOI?.PoiName,
+                    HeroId = string.IsNullOrEmpty(entity.HeroId) ? null : entity.HeroId,
+                };
+                save.World.Entities.Add(saveEntity);
             }
         }
 
@@ -303,6 +384,82 @@ public partial class SaveManager : Node
     // ========================================
     // 读档还原 — 将存档数据还原至 EconomyManager
     // ========================================
+    
+    /// <summary>
+    /// 将 EntitySaveData 中的行为状态 100% 还原至 OverworldEntity。
+    /// 旧存档（字段缺失）降级为 Idle。
+    /// </summary>
+    public static void RestoreEntityState(OverworldEntity entity, EntitySaveData data, List<OverworldPOI> pois, List<OverworldEntity> allEntities)
+    {
+        // 位置
+        entity.EntityName = data.EntityName;
+        if (Enum.TryParse<OverworldEntity.EntityType>(data.EntityType, out var savedEntityType))
+            entity.EntityTypeEnum = savedEntityType;
+        entity.Faction = data.Faction;
+        entity.IsAlive = data.IsAlive;
+        entity.Position = new Vector2(data.PosX, data.PosY);
+        
+        // AI 状态
+        entity.CurrentAIState = (OverworldEntity.AIState)data.AiState;
+        if (data.IsHostileToPlayer.HasValue)
+            entity.IsHostileToPlayer = data.IsHostileToPlayer.Value;
+        entity.AIStrategy = (AIStrategyEnum)data.AiStrategy;
+        entity.TargetPosition = new Vector2(data.TargetPosX, data.TargetPosY);
+        
+        // 领地/基地
+        entity.HomePosition = new Vector2(data.HomePosX, data.HomePosY);
+        entity.TerritoryCenter = new Vector2(data.TerritoryCenterX, data.TerritoryCenterY);
+        entity.TerritoryRadius = data.TerritoryRadius;
+        
+        // 战斗属性
+        entity.MoveSpeed = data.MoveSpeed > 0 ? data.MoveSpeed : entity.MoveSpeed;
+        entity.PartySize = data.PartySize > 0 ? data.PartySize : entity.PartySize;
+        entity.PartyLevel = data.PartyLevel > 0 ? data.PartyLevel : entity.PartyLevel;
+        entity.CombatPower = data.CombatPower > 0 ? data.CombatPower : entity.CombatPower;
+        entity.DaysAlive = data.DaysAlive;
+        entity.GarrisonSize = data.GarrisonSize > 0 ? data.GarrisonSize : entity.GarrisonSize;
+        entity.PatrolRadius = data.PatrolRadius > 0 ? data.PatrolRadius : entity.PatrolRadius;
+        entity.VisionRange = data.VisionRange > 0 ? data.VisionRange : entity.VisionRange;
+        entity.LordPersonalityValue = (OverworldPOI.LordPersonality)data.LordPersonality;
+        
+        // 军团
+        entity.ArmyId = data.ArmyId ?? "";
+        entity.IsMarshal = data.IsMarshal;
+        entity.AssignedWarTargetPoiName = data.AssignedWarTargetPoiName ?? "";
+        entity.WarTargetAssignedDay = data.WarTargetAssignedDay;
+        
+        // 交战
+        entity.EngagedSinceHour = data.EngagedSinceHour;
+        entity.CombatDurationHours = data.CombatDurationHours;
+        
+        // 英雄
+        entity.HeroId = data.HeroId ?? "";
+        
+        // ── 对象引用恢复（按名称查找） ──
+        // SiegeTarget
+        if (!string.IsNullOrEmpty(data.SiegeTargetPoiName))
+            entity.SiegeTarget = pois.Find(p => p.PoiName == data.SiegeTargetPoiName);
+        
+        // ReinforceTarget
+        if (!string.IsNullOrEmpty(data.ReinforceTargetPoiName))
+            entity.ReinforceTarget = pois.Find(p => p.PoiName == data.ReinforceTargetPoiName);
+        
+        // ChaseTarget
+        entity.ChaseTarget = FindChaseTarget(data, allEntities, entity);
+        
+        // GuardedPOI
+        if (!string.IsNullOrEmpty(data.GuardedPoiName))
+            entity.GuardedPOI = pois.Find(p => p.PoiName == data.GuardedPoiName);
+        
+        // 围攻关联恢复
+        if (entity.CurrentAIState == OverworldEntity.AIState.Besieging && entity.SiegeTarget != null)
+        {
+            if (!entity.SiegeTarget.IsUnderSiege)
+                entity.SiegeTarget.BeginSiege(entity);
+        }
+        
+        GD.Print($"[SaveV2] 实体 {entity.EntityName} 行为状态已恢复: AIState={entity.CurrentAIState}");
+    }
 
     /// <summary>
     /// 将 EconomySaveData 中的数据 100% 还原至 EconomyManager 实例。
@@ -373,7 +530,6 @@ public partial class SaveManager : Node
                 Wis = ch.ContainsKey("wis") ? ch["wis"].AsInt32() : 10,
                 Cha = ch.ContainsKey("cha") ? ch["cha"].AsInt32() : 10,
                 BaseMaxHp = ch.ContainsKey("base_hp") ? ch["base_hp"].AsInt32() : 10,
-                Morale = ch.ContainsKey("morale") ? ch["morale"].AsInt32() : 50,
                 CurrentMana = ch.ContainsKey("current_mana") ? ch["current_mana"].AsInt32() : 0,
             };
             save.Party.PlayerRaceId = ch.ContainsKey("race_id") ? ch["race_id"].AsInt32() : 0;

@@ -10,9 +10,12 @@ using Godot;
 using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
+using BladeHex.Localization;
 using BladeHex.Data.Origin;
 using BladeHex.Strategic;
 using BladeHex.UI.Loading;
+using BladeHex.View.AssetSystem;
+using BladeHex.View.Unit;
 
 namespace BladeHex.UI;
 
@@ -38,13 +41,20 @@ public partial class OriginSelect : CanvasLayer
     private Control _phase2 = null!;
     private TextureRect _phase1Illust = null!;
     private TextureRect _phase2Illust = null!;
+    private TextureRect _avatarPreview = null!;
+    private Label _headValueLabel = null!;
+    private Label _hairValueLabel = null!;
+    private Label _decorationValueLabel = null!;
     private Label _questionText = null!;
     private VBoxContainer _choicesArea = null!;
     private Label _attrLabel = null!;
     private Label _itemLabel = null!;
+    private Label _traitDescLabel = null!;
     private readonly List<string> _items = new();
     private readonly List<string> _itemIds = new();
     private readonly List<string> _itemTypes = new();
+    private AvatarData _avatarData = new();
+    private int _decorationIndex = 0;
 
     private record AnswerRecord(string Question, string Choice, Dictionary<string, int> Mods);
 
@@ -71,6 +81,7 @@ public partial class OriginSelect : CanvasLayer
         _SetupUI();
         _ShowPhase1();
         _PreloadWorldTextures();
+        _UpdateRaceTraitDesc();
     }
 
     /// <summary>注册各种族的BGM到AudioManager（Event场景的不同variant）</summary>
@@ -79,14 +90,14 @@ public partial class OriginSelect : CanvasLayer
         var audio = BladeHex.Audio.AudioManager.Instance;
         if (audio == null) return;
 
-        // 路径约定: res://src/assets/audio/bgm/race_{race}.ogg
+        // 路径约定: res://BladeHexFrontend/src/assets/audio/bgm/race_{race}.ogg
         var bgms = new (RaceData.Race race, string variant, string path)[]
         {
-            (RaceData.Race.Human,   "race_human",   "res://src/assets/audio/bgm/race_human.ogg"),
-            (RaceData.Race.Elf,     "race_elf",     "res://src/assets/audio/bgm/race_elf.ogg"),
-            (RaceData.Race.Dwarf,   "race_dwarf",   "res://src/assets/audio/bgm/race_dwarf.ogg"),
-            (RaceData.Race.HalfOrc, "race_halforc", "res://src/assets/audio/bgm/race_halforc.ogg"),
-            (RaceData.Race.HalfElf, "race_halfelf", "res://src/assets/audio/bgm/race_halfelf.ogg"),
+            (RaceData.Race.Human,   "race_human",   "res://BladeHexFrontend/src/assets/audio/bgm/race_human.ogg"),
+            (RaceData.Race.Elf,     "race_elf",     "res://BladeHexFrontend/src/assets/audio/bgm/race_elf.ogg"),
+            (RaceData.Race.Dwarf,   "race_dwarf",   "res://BladeHexFrontend/src/assets/audio/bgm/race_dwarf.ogg"),
+            (RaceData.Race.HalfOrc, "race_halforc", "res://BladeHexFrontend/src/assets/audio/bgm/race_halforc.ogg"),
+            (RaceData.Race.HalfElf, "race_halfelf", "res://BladeHexFrontend/src/assets/audio/bgm/race_halfelf.ogg"),
         };
         foreach (var (_, variant, path) in bgms)
         {
@@ -101,7 +112,7 @@ public partial class OriginSelect : CanvasLayer
     private void _SetupUI()
     {
         // 背景
-        var bgTex = GD.Load<Texture2D>("res://assets/generated_ui_main/selected/MainMenu_Background.png");
+        var bgTex = TextureAssetResolver.LoadUiTexture("res://assets/generated_ui_main/selected/MainMenu_Background.png");
         if (bgTex != null)
         {
             var bg = new TextureRect { Texture = bgTex, Modulate = new Color(0.45f, 0.45f, 0.45f) };
@@ -166,9 +177,13 @@ public partial class OriginSelect : CanvasLayer
         margin.AddChild(vbox);
 
         // 标题
-        var title = _Lbl("你是谁？", 36, new Color(0.9f, 0.8f, 0.5f));
+        var title = _Lbl(L10n.Tr("ORIGIN_WHO_ARE_YOU"), 36, new Color(0.9f, 0.8f, 0.5f));
         title.HorizontalAlignment = HorizontalAlignment.Center;
         vbox.AddChild(title);
+
+        var avatarEditor = _BuildAvatarEditor();
+        avatarEditor.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        vbox.AddChild(avatarEditor);
 
         // 主体：左插图 + 右内容
         var body = new HBoxContainer();
@@ -200,11 +215,20 @@ public partial class OriginSelect : CanvasLayer
         // 顶部弹性空间，让表单居中偏上
         rightVbox.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
 
-        // 种族
-        rightVbox.AddChild(_Lbl("选择血脉", 22, new Color(0.85f, 0.78f, 0.55f)));
+        // 种族与特性的水平布局
+        var raceAndTraitRow = new HBoxContainer();
+        raceAndTraitRow.AddThemeConstantOverride("separation", 20);
+        rightVbox.AddChild(raceAndTraitRow);
+
+        // 左侧：选择种族 VBox
+        var raceLeftVbox = new VBoxContainer();
+        raceLeftVbox.AddThemeConstantOverride("separation", 10);
+        raceAndTraitRow.AddChild(raceLeftVbox);
+
+        raceLeftVbox.AddChild(_Lbl(L10n.Tr("ORIGIN_SELECT_BLOODLINE"), 22, new Color(0.85f, 0.78f, 0.55f)));
         var raceRow = new HBoxContainer();
         raceRow.AddThemeConstantOverride("separation", 10);
-        rightVbox.AddChild(raceRow);
+        raceLeftVbox.AddChild(raceRow);
 
         var raceGroup = new ButtonGroup();
         foreach (var race in _allRaces)
@@ -218,6 +242,7 @@ public partial class OriginSelect : CanvasLayer
             {
                 _selectedRace = captured;
                 _UpdateRaceIllust();
+                _UpdateRaceTraitDesc();
                 // 播放种族专属 BGM
                 var audio = BladeHex.Data.Globals.AudioOrNull;
                 audio?.PlayRaceBgm(_GetRaceId(captured), 1.5f);
@@ -226,24 +251,45 @@ public partial class OriginSelect : CanvasLayer
             raceRow.AddChild(btn);
         }
 
+        // 中间：划分线
+        var divider = new ColorRect();
+        divider.Color = new Color(0.35f, 0.3f, 0.22f, 0.5f);
+        divider.CustomMinimumSize = new Vector2(1, 60);
+        divider.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        raceAndTraitRow.AddChild(divider);
+
+        // 右侧：种族特性显示 VBox
+        var traitRightVbox = new VBoxContainer();
+        traitRightVbox.AddThemeConstantOverride("separation", 4);
+        traitRightVbox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        raceAndTraitRow.AddChild(traitRightVbox);
+
+        var traitTitle = _Lbl(L10n.Tr("ORIGIN_BLOODLINE_TRAITS"), 16, new Color(0.6f, 0.55f, 0.45f));
+        traitRightVbox.AddChild(traitTitle);
+
+        _traitDescLabel = _Lbl("", 16, new Color(0.85f, 0.8f, 0.7f));
+        _traitDescLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _traitDescLabel.CustomMinimumSize = new Vector2(250, 0);
+        traitRightVbox.AddChild(_traitDescLabel);
+
         // 名字
-        rightVbox.AddChild(_Lbl("你的名字", 22, new Color(0.85f, 0.78f, 0.55f)));
-        _nameInput = new LineEdit { PlaceholderText = "输入名字...", CustomMinimumSize = new Vector2(0, 42) };
+        rightVbox.AddChild(_Lbl(L10n.Tr("ORIGIN_YOUR_NAME"), 22, new Color(0.85f, 0.78f, 0.55f)));
+        _nameInput = new LineEdit { PlaceholderText = L10n.Tr("ORIGIN_NAME_PLACEHOLDER"), CustomMinimumSize = new Vector2(0, 42) };
         _nameInput.AddThemeFontSizeOverride("font_size", 20);
         rightVbox.AddChild(_nameInput);
 
         // 性别
-        rightVbox.AddChild(_Lbl("性别", 22, new Color(0.85f, 0.78f, 0.55f)));
+        rightVbox.AddChild(_Lbl(L10n.Tr("ORIGIN_GENDER"), 22, new Color(0.85f, 0.78f, 0.55f)));
         var genderRow = new HBoxContainer();
         genderRow.AddThemeConstantOverride("separation", 12);
         rightVbox.AddChild(genderRow);
         _genderGroup = new ButtonGroup();
-        var maleBtn = new Button { Text = "男", CustomMinimumSize = new Vector2(80, 42), ToggleMode = true, ButtonPressed = true };
+        var maleBtn = new Button { Text = L10n.Tr("GENDER_MALE"), CustomMinimumSize = new Vector2(80, 42), ToggleMode = true, ButtonPressed = true };
         maleBtn.AddThemeFontSizeOverride("font_size", 18);
         maleBtn.ButtonGroup = _genderGroup;
         maleBtn.Pressed += _UpdateRaceIllust;
         _AttachSfx(maleBtn);
-        var femaleBtn = new Button { Text = "女", CustomMinimumSize = new Vector2(80, 42), ToggleMode = true };
+        var femaleBtn = new Button { Text = L10n.Tr("GENDER_FEMALE"), CustomMinimumSize = new Vector2(80, 42), ToggleMode = true };
         femaleBtn.AddThemeFontSizeOverride("font_size", 18);
         femaleBtn.ButtonGroup = _genderGroup;
         femaleBtn.Pressed += _UpdateRaceIllust;
@@ -252,7 +298,7 @@ public partial class OriginSelect : CanvasLayer
         genderRow.AddChild(femaleBtn);
 
         // 世界大小
-        rightVbox.AddChild(_Lbl("世界规模", 22, new Color(0.85f, 0.78f, 0.55f)));
+        rightVbox.AddChild(_Lbl(L10n.Tr("ORIGIN_WORLD_SIZE"), 22, new Color(0.85f, 0.78f, 0.55f)));
         var sizeRow = new HBoxContainer();
         sizeRow.AddThemeConstantOverride("separation", 8);
         rightVbox.AddChild(sizeRow);
@@ -298,15 +344,15 @@ public partial class OriginSelect : CanvasLayer
         var btnRow = new HBoxContainer();
         rightVbox.AddChild(btnRow);
 
-        var backBtn = new Button { Text = "← 返回", CustomMinimumSize = new Vector2(140, 44) };
+        var backBtn = new Button { Text = L10n.Tr("ORIGIN_BACK"), CustomMinimumSize = new Vector2(140, 44) };
         backBtn.AddThemeFontSizeOverride("font_size", 18);
-        backBtn.Pressed += () => BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/main_menu.tscn");
+        backBtn.Pressed += () => BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
         _AttachSfx(backBtn);
         btnRow.AddChild(backBtn);
 
         btnRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
 
-        var nextBtn = new Button { Text = "继续 →", CustomMinimumSize = new Vector2(160, 44) };
+        var nextBtn = new Button { Text = L10n.Tr("ORIGIN_CONTINUE"), CustomMinimumSize = new Vector2(160, 44) };
         nextBtn.AddThemeFontSizeOverride("font_size", 20);
         nextBtn.AddThemeColorOverride("font_color", new Color(0.9f, 0.8f, 0.5f));
         nextBtn.Pressed += _ShowPhase2;
@@ -314,14 +360,168 @@ public partial class OriginSelect : CanvasLayer
         btnRow.AddChild(nextBtn);
     }
 
+    private PanelContainer _BuildAvatarEditor()
+    {
+        var panel = new PanelContainer();
+        panel.CustomMinimumSize = new Vector2(460, 174);
+        var ps = new StyleBoxFlat { BgColor = new Color(0.05f, 0.05f, 0.07f, 0.9f) };
+        ps.SetBorderWidthAll(1);
+        ps.BorderColor = new Color(0.35f, 0.3f, 0.22f, 0.7f);
+        ps.SetCornerRadiusAll(6);
+        ps.SetContentMarginAll(12);
+        panel.AddThemeStyleboxOverride("panel", ps);
+
+        var root = new HBoxContainer();
+        root.AddThemeConstantOverride("separation", 14);
+        panel.AddChild(root);
+
+        _avatarPreview = new TextureRect
+        {
+            CustomMinimumSize = new Vector2(136, 136),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+        };
+        root.AddChild(_avatarPreview);
+
+        var controls = new VBoxContainer();
+        controls.AddThemeConstantOverride("separation", 8);
+        controls.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        root.AddChild(controls);
+
+        var title = _Lbl(L10n.Tr("ORIGIN_AVATAR_TITLE"), 18, new Color(0.9f, 0.8f, 0.5f));
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        controls.AddChild(title);
+
+        controls.AddChild(_BuildAvatarStepRow(L10n.Tr("ORIGIN_FACE"), out _headValueLabel, delta =>
+        {
+            _avatarData.HeadIndex = _StepPartIndex("head", _avatarData.HeadIndex, delta, allowZero: false);
+            _RefreshAvatarPreview();
+        }));
+        controls.AddChild(_BuildAvatarStepRow(L10n.Tr("ORIGIN_HAIR"), out _hairValueLabel, delta =>
+        {
+            _avatarData.HairIndex = _StepPartIndex("hair", _avatarData.HairIndex, delta, allowZero: true);
+            _RefreshAvatarPreview();
+        }));
+        controls.AddChild(_BuildAvatarStepRow(L10n.Tr("ORIGIN_DECORATION"), out _decorationValueLabel, delta =>
+        {
+            _decorationIndex = _StepPartIndex("decoration", _decorationIndex, delta, allowZero: true);
+            _avatarData.DecorationId = _decorationIndex > 0 ? $"decoration_{_decorationIndex}" : "";
+            _RefreshAvatarPreview();
+        }));
+
+        _RefreshAvatarPreview();
+        return panel;
+    }
+
+    private HBoxContainer _BuildAvatarStepRow(string labelText, out Label valueLabel, System.Action<int> onStep)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+
+        var label = _Lbl(labelText, 15, new Color(0.72f, 0.68f, 0.58f));
+        label.CustomMinimumSize = new Vector2(56, 0);
+        row.AddChild(label);
+
+        var prev = new Button { Text = "<", CustomMinimumSize = new Vector2(34, 30) };
+        prev.AddThemeFontSizeOverride("font_size", 16);
+        prev.Pressed += () => onStep(-1);
+        _AttachSfx(prev);
+        row.AddChild(prev);
+
+        valueLabel = _Lbl("0", 15, new Color(0.9f, 0.86f, 0.72f));
+        valueLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        valueLabel.CustomMinimumSize = new Vector2(64, 0);
+        row.AddChild(valueLabel);
+
+        var next = new Button { Text = ">", CustomMinimumSize = new Vector2(34, 30) };
+        next.AddThemeFontSizeOverride("font_size", 16);
+        next.Pressed += () => onStep(1);
+        _AttachSfx(next);
+        row.AddChild(next);
+
+        return row;
+    }
+
+    private void _RefreshAvatarPreview()
+    {
+        _SyncAvatarRaceAndGender();
+
+        if (_avatarPreview != null)
+            _avatarPreview.Texture = AvatarRenderer.RenderToSquare(_avatarData, 128);
+
+        if (_headValueLabel != null)
+            _headValueLabel.Text = _avatarData.HeadIndex.ToString();
+        if (_hairValueLabel != null)
+            _hairValueLabel.Text = _avatarData.HairIndex.ToString();
+        if (_decorationValueLabel != null)
+            _decorationValueLabel.Text = _decorationIndex.ToString();
+    }
+
+    private void _SyncAvatarRaceAndGender()
+    {
+        if (_selectedRace != null)
+            _avatarData.RaceId = _selectedRace.raceId;
+        _avatarData.Gender = _GetSelectedGender();
+
+        if (!_IsAvailablePartIndex("head", _avatarData.HeadIndex, allowZero: false))
+            _avatarData.HeadIndex = _StepPartIndex("head", 0, 1, allowZero: false);
+        if (_avatarData.HairIndex > 0 && !_IsAvailablePartIndex("hair", _avatarData.HairIndex, allowZero: true))
+            _avatarData.HairIndex = 0;
+        if (_decorationIndex > 0 && !_IsAvailablePartIndex("decoration", _decorationIndex, allowZero: true))
+            _decorationIndex = 0;
+
+        _avatarData.DecorationId = _decorationIndex > 0 ? $"decoration_{_decorationIndex}" : "";
+    }
+
+    private int _StepPartIndex(string partType, int currentIndex, int delta, bool allowZero)
+    {
+        const int maxIndex = 9;
+        int minIndex = allowZero ? 0 : 1;
+        int span = maxIndex - minIndex + 1;
+        int current = Mathf.Clamp(currentIndex, minIndex, maxIndex);
+
+        for (int step = 1; step <= span; step++)
+        {
+            int offset = current - minIndex + delta * step;
+            int candidate = minIndex + ((offset % span) + span) % span;
+            if (_IsAvailablePartIndex(partType, candidate, allowZero))
+                return candidate;
+        }
+
+        return allowZero ? 0 : 1;
+    }
+
+    private bool _IsAvailablePartIndex(string partType, int index, bool allowZero)
+    {
+        if (allowZero && index == 0)
+            return true;
+        if (index <= 0)
+            return false;
+
+        string race = _avatarData.RaceString;
+        string gender = _avatarData.Gender;
+        return partType switch
+        {
+            "head" => AvatarRenderer.LoadPartTexture("face", race, gender, index) != null
+                || AvatarRenderer.LoadPartTexture("head", race, gender, index) != null,
+            _ => AvatarRenderer.LoadPartTexture(partType, race, gender, index) != null,
+        };
+    }
+
+    private string _GetSelectedGender()
+    {
+        return _genderGroup?.GetPressedButton()?.GetIndex() == 1 ? "female" : "male";
+    }
+
     private void _UpdateRaceIllust()
     {
         if (_selectedRace == null || _phase1Illust == null) return;
         string key = RaceIllust.TryGetValue(_selectedRace.RaceName, out var id) ? id : "chaos_default";
         // 根据性别切换：race_human / race_human_f
-        bool isFemale = (_genderGroup.GetPressedButton() as Button)?.Text == "女";
-        if (isFemale) key += "_f";
-        _ShowIllust(_phase1Illust, key);
+        bool isFemale = _GetSelectedGender() == "female";
+        string finalKey = isFemale ? key + "_f" : key;
+        _ShowIllust(_phase1Illust, finalKey, isFemale ? key : "");
+        _RefreshAvatarPreview();
 
         // 切换种族BGM
         _UpdateRaceBgm();
@@ -365,7 +565,7 @@ public partial class OriginSelect : CanvasLayer
         margin.AddChild(vbox);
 
         // 标题（与阶段1对齐高度）
-        var title = _Lbl("书写你的过往", 36, new Color(0.9f, 0.8f, 0.5f));
+        var title = _Lbl(L10n.Tr("ORIGIN_WRITE_PAST"), 36, new Color(0.9f, 0.8f, 0.5f));
         title.HorizontalAlignment = HorizontalAlignment.Center;
         vbox.AddChild(title);
 
@@ -414,7 +614,7 @@ public partial class OriginSelect : CanvasLayer
         attrVbox.AddThemeConstantOverride("separation", 4);
         attrPanel.AddChild(attrVbox);
 
-        var attrTitle = _Lbl("属性", 14, new Color(0.6f, 0.55f, 0.45f));
+        var attrTitle = _Lbl(L10n.Tr("ORIGIN_ATTRIBUTES"), 14, new Color(0.6f, 0.55f, 0.45f));
         attrTitle.AutowrapMode = TextServer.AutowrapMode.Off;
         attrVbox.AddChild(attrTitle);
 
@@ -437,11 +637,11 @@ public partial class OriginSelect : CanvasLayer
         itemVbox.AddThemeConstantOverride("separation", 4);
         itemPanel.AddChild(itemVbox);
 
-        var itemTitle = _Lbl("行囊", 14, new Color(0.6f, 0.55f, 0.45f));
+        var itemTitle = _Lbl(L10n.Tr("ORIGIN_BAG"), 14, new Color(0.6f, 0.55f, 0.45f));
         itemTitle.AutowrapMode = TextServer.AutowrapMode.Off;
         itemVbox.AddChild(itemTitle);
 
-        _itemLabel = _Lbl("（空）", 14, new Color(0.65f, 0.62f, 0.55f));
+        _itemLabel = _Lbl(L10n.Tr("ORIGIN_EMPTY"), 14, new Color(0.65f, 0.62f, 0.55f));
         _itemLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         itemVbox.AddChild(_itemLabel);
 
@@ -465,7 +665,7 @@ public partial class OriginSelect : CanvasLayer
         var btnRow = new HBoxContainer();
         rightVbox.AddChild(btnRow);
 
-        var backBtn = new Button { Text = "← 重新选择", CustomMinimumSize = new Vector2(140, 44) };
+        var backBtn = new Button { Text = L10n.Tr("ORIGIN_RESELECT"), CustomMinimumSize = new Vector2(140, 44) };
         backBtn.AddThemeFontSizeOverride("font_size", 18);
         backBtn.Pressed += _ShowPhase1;
         _AttachSfx(backBtn);
@@ -473,7 +673,7 @@ public partial class OriginSelect : CanvasLayer
 
         btnRow.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
 
-        var confirmBtn = new Button { Text = "踏上旅途 →", CustomMinimumSize = new Vector2(180, 44) };
+        var confirmBtn = new Button { Text = L10n.Tr("ORIGIN_BEGIN_JOURNEY"), CustomMinimumSize = new Vector2(180, 44) };
         confirmBtn.AddThemeFontSizeOverride("font_size", 20);
         confirmBtn.AddThemeColorOverride("font_color", new Color(0.9f, 0.8f, 0.5f));
         confirmBtn.Pressed += _OnConfirm;
@@ -491,7 +691,7 @@ public partial class OriginSelect : CanvasLayer
 
         if (_currentQuestion >= _questions.Count)
         {
-            _questionText.Text = "你的过往已经书写完毕。\n准备好踏上旅途了吗？";
+            _questionText.Text = L10n.Tr("ORIGIN_COMPLETE_PROMPT");
             return;
         }
 
@@ -516,14 +716,14 @@ public partial class OriginSelect : CanvasLayer
     private void _RefreshAttr()
     {
         if (_attrLabel != null)
-            _attrLabel.Text = $"力{_attrs["str"]} 敏{_attrs["dex"]} 体{_attrs["con"]} 智{_attrs["intel"]} 感{_attrs["wis"]} 魅{_attrs["cha"]}";
+            _attrLabel.Text = L10n.Tr("ORIGIN_ATTR_SUMMARY", _attrs["str"], _attrs["dex"], _attrs["con"], _attrs["intel"], _attrs["wis"], _attrs["cha"]);
         _RefreshItems();
     }
 
     private void _RefreshItems()
     {
         if (_itemLabel == null) return;
-        _itemLabel.Text = _items.Count == 0 ? "（空）" : string.Join("\n", _items);
+        _itemLabel.Text = _items.Count == 0 ? L10n.Tr("ORIGIN_EMPTY") : string.Join("\n", _items);
     }
 
     private void _OnChoiceSelected(OriginChoice choice)
@@ -569,19 +769,18 @@ public partial class OriginSelect : CanvasLayer
                 id = raceGirlId;
         }
 
-        bool isFemale = (_genderGroup.GetPressedButton() as Button)?.Text == "女";
+        bool isFemale = _GetSelectedGender() == "female";
         string finalId = isFemale ? id + "_f" : id;
         // 如果女性版本不存在，回退到通用版本
-        string path = $"{IllustBase}{finalId}.png";
-        if (!ResourceLoader.Exists(path)) finalId = id;
-        _ShowIllust(_phase2Illust, finalId);
+        _ShowIllust(_phase2Illust, finalId, isFemale ? id : "");
     }
 
-    private void _ShowIllust(TextureRect rect, string id)
+    private void _ShowIllust(TextureRect rect, string id, string fallbackId = "")
     {
         if (rect == null) return;
         string path = $"{IllustBase}{id}.png";
-        rect.Texture = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+        string fallbackPath = string.IsNullOrEmpty(fallbackId) ? "" : $"{IllustBase}{fallbackId}.png";
+        rect.Texture = TextureAssetResolver.LoadOriginIllustration(path, fallbackPath);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -590,11 +789,17 @@ public partial class OriginSelect : CanvasLayer
     private void _OnConfirm()
     {
         var unit = new UnitData();
-        unit.UnitName = string.IsNullOrEmpty(_nameInput.Text) ? "无名旅人" : _nameInput.Text;
+        unit.UnitName = string.IsNullOrEmpty(_nameInput.Text) ? L10n.Tr("ORIGIN_UNNAMED_TRAVELER") : _nameInput.Text;
         unit.Race = _selectedRace;
         unit.Level = 1;
         unit.Str = _attrs["str"]; unit.Dex = _attrs["dex"]; unit.Con = _attrs["con"];
         unit.Intel = _attrs["intel"]; unit.Wis = _attrs["wis"]; unit.Cha = _attrs["cha"];
+        _SyncAvatarRaceAndGender();
+        var selectedAvatar = _avatarData.Clone();
+        unit.Avatar = selectedAvatar;
+        unit.GenderCustom = selectedAvatar.Gender;
+        unit.FaceIndex = selectedAvatar.HeadIndex;
+        unit.HairIndex = selectedAvatar.HairIndex;
 
         var gs = BladeHex.Data.Globals.State;
         gs.Save.IsLoadingSave = false;
@@ -603,13 +808,14 @@ public partial class OriginSelect : CanvasLayer
         {
             { "race", _selectedRace! },
             { "unit_data", unit },
-            { "gender", (_genderGroup.GetPressedButton() as Button)?.Text == "女" ? "female" : "male" },
+            { "avatar", selectedAvatar },
+            { "gender", selectedAvatar.Gender },
             { "companion", _companionChoice },
             { "items", _items.ToArray() },
             { "itemIds", _itemIds.ToArray() },
             { "itemTypes", _itemTypes.ToArray() },
         };
-        LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.NewWorld);
+        LoadingScreen.LoadScene("res://BladeHexFrontend/src/scenes/overworld/overworld_scene_2d.tscn", LoadingScreen.PhaseType.NewWorld);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -707,21 +913,24 @@ public partial class OriginSelect : CanvasLayer
     }
 
     // ════════════════════════════════════════════════════════════════
-    // 预加载
+    // 预加载（仅引用实际存在的资产）
     // ════════════════════════════════════════════════════════════════
     private static readonly string[] PreloadPaths = {
-        "res://src/assets/tiles/overworld/plains_0.png",
-        "res://src/assets/tiles/overworld/grassland_0.png",
-        "res://src/assets/tiles/overworld/forest_0.png",
-        "res://src/assets/tiles/overworld/hills_0.png",
-        "res://src/assets/tiles/overworld/mountain_0.png",
-        "res://src/assets/tiles/overworld/deep_water_0.png",
-        "res://src/scenes/overworld/overworld_scene_3d.tscn",
+        // 大地图羊皮纸底色（HexOverworldRenderer2D 使用）
+        "res://BladeHexFrontend/src/assets/tiles/tileable/parchment_tile.png",
+        // 大地图主场景
+        "res://BladeHexFrontend/src/scenes/overworld/overworld_scene_2d.tscn",
     };
     private void _PreloadWorldTextures()
     {
         foreach (var p in PreloadPaths)
             if (ResourceLoader.Exists(p))
                 ResourceLoader.LoadThreadedRequest(p);
+    }
+
+    private void _UpdateRaceTraitDesc()
+    {
+        if (_selectedRace == null || _traitDescLabel == null) return;
+        _traitDescLabel.Text = _selectedRace.TraitsDescription;
     }
 }

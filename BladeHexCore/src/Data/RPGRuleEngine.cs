@@ -40,7 +40,7 @@ public static class RPGRuleEngine
     public const int BaseAttrTotal = 30;
     public const int AttrPerLevel = 1;
     public const int AttrMin = 5;
-    public const int AttrMax = 40;
+    public const int AttrMax = 999; // 上限已取消，设大值作为占位
 
     /// <summary>六维属性键名列表</summary>
     public static readonly string[] AttrKeys = ["str", "dex", "con", "intel", "wis", "cha"];
@@ -93,18 +93,6 @@ public static class RPGRuleEngine
         if (currentLevel >= MaxLevel) return 0;
         return GetXpForLevel(currentLevel + 1) - currentXp;
     }
-
-    // ========================================
-    // 专精加值表（适配120级）
-    // ========================================
-
-    /// <summary>
-    /// 专精加值 = floor(sqrt(level)) + 1
-    /// 比纯 sqrt 更宽裕，弥补去除属性修正后的命中压力
-    /// 示例: Lv.1=+2, Lv.4=+3, Lv.9=+4, Lv.16=+5, Lv.25=+6, Lv.49=+8
-    /// </summary>
-    public static int GetProficiencyBonus(int level) =>
-        (int)Mathf.Floor(Mathf.Sqrt(Mathf.Max(1, level))) + 1;
 
     // ========================================
     // 属性修正公式 (全系统统一使用)
@@ -322,13 +310,12 @@ public static class RPGRuleEngine
     /// 返回 {success, roll, modifier, total, dc}
     /// </summary>
     public static Godot.Collections.Dictionary MakeSave(
-        int abilityScore, int proficiencyBonus, bool isProficient, int dc,
+        int abilityScore, int extraBonus, bool unused, int dc,
         bool hasAdvantage = false, bool hasDisadvantage = false)
     {
         if (hasAdvantage && hasDisadvantage) { hasAdvantage = false; hasDisadvantage = false; }
 
-        int modifier = GetStatModifier(abilityScore);
-        if (isProficient) modifier += proficiencyBonus;
+        int modifier = GetStatModifier(abilityScore) + extraBonus;
 
         int roll;
         if (hasAdvantage) roll = (int)RollWithAdvantage()["result"];
@@ -354,11 +341,8 @@ public static class RPGRuleEngine
 
     // ========================================
     // 法术DC计算
-    // DC = 8 + 施法属性修正 + 专精加值
+    // DC = 8 + 施法属性修正
     // ========================================
-
-    public static int CalculateSpellDc(int castingAbilityScore, int proficiencyBonus) =>
-        8 + GetStatModifier(castingAbilityScore) + proficiencyBonus;
 
     // ========================================
     // 伤势惩罚

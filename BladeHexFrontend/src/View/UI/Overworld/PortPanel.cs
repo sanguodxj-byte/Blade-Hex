@@ -41,6 +41,7 @@ public partial class PortPanel : POIPanelBase
     // 字段
     // ============================================================================
     private ColorRect _illustRect = null!;
+    private TextureRect? _illustTexture;
     private Label _titleLabel = null!;
     private Label _infoLabel = null!;
     private RichTextLabel _descLabel = null!;
@@ -60,6 +61,16 @@ public partial class PortPanel : POIPanelBase
         _titleLabel.Text = port.PoiName;
         _infoLabel.Text = $"港口 · 繁荣: {port.Prosperity} · 渡船费: {port.FerryCost}金";
         _descLabel.Text = GetPortDescription(port);
+
+        // 加载港口插图
+        var tex = POIIllustrationResolver.LoadPanelIllustration("port");
+        if (tex != null && _illustTexture != null)
+        {
+            _illustTexture.Texture = tex;
+            _illustTexture.Visible = true;
+            _illustRect.Visible = false;
+        }
+
         PopulateActions(port);
         PopulateFerryDestinations(port);
         Root.Visible = true;
@@ -126,7 +137,15 @@ public partial class PortPanel : POIPanelBase
         _illustRect.Color = BgIllust;
         illustPanel.AddChild(_illustRect);
 
-        // 港口图标文字（占位）
+        // 真实插图（初始隐藏，ShowPort 时按需加载）
+        _illustTexture = new TextureRect();
+        _illustTexture.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _illustTexture.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        _illustTexture.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+        _illustTexture.Visible = false;
+        illustPanel.AddChild(_illustTexture);
+
+        // 港口图标文字（占位，当无插图时显示）
         var iconLabel = new Label();
         iconLabel.Text = "[ 港口 ]";
         iconLabel.AddThemeFontSizeOverride("font_size", 20);
@@ -164,6 +183,7 @@ public partial class PortPanel : POIPanelBase
         _descLabel.BbcodeEnabled = true;
         _descLabel.ScrollActive = false;
         _descLabel.FitContent = true;
+        _descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _descLabel.CustomMinimumSize = new Vector2(0, 40);
         _descLabel.AddThemeFontSizeOverride("normal_font_size", FontSizeMd);
         _descLabel.AddThemeColorOverride("default_color", ThemeTextSecondary);

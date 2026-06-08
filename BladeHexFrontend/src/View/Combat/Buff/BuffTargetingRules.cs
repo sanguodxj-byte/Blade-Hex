@@ -27,7 +27,7 @@ public static class BuffTargetingRules
     {
         if (actor.Data == null) return null;
 
-        foreach (var buff in actor.Data.Runtime.ActiveBuffs)
+        foreach (var buff in actor.Model.ActiveBuffs)
         {
             foreach (var modifier in buff.Modifiers)
             {
@@ -46,7 +46,7 @@ public static class BuffTargetingRules
     public static bool HasTruthyModifier(Unit unit, string stat)
     {
         if (unit.Data == null) return false;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             foreach (var modifier in buff.Modifiers)
             {
@@ -62,7 +62,7 @@ public static class BuffTargetingRules
         value = 0f;
         if (unit.Data == null) return false;
         bool found = false;
-        foreach (var buff in unit.Data.Runtime.ActiveBuffs)
+        foreach (var buff in unit.Model.ActiveBuffs)
         {
             foreach (var modifier in buff.Modifiers)
             {

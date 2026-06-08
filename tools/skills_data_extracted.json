@@ -1,0 +1,4474 @@
+[
+  {
+    "id": "str_s01",
+    "name": "强健体魄",
+    "type": "Small",
+    "depth": 1,
+    "prerequisites": [
+      "start"
+    ],
+    "bonuses": {
+      "max_hp": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 0,
+    "neighbors": [
+      "start",
+      "str_s02",
+      "str_s10"
+    ]
+  },
+  {
+    "id": "str_s02",
+    "name": "近战训练",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "str_s01"
+    ],
+    "bonuses": {
+      "melee_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": 0,
+    "neighbors": [
+      "str_s01",
+      "str_s10",
+      "str_s03",
+      "str_s06"
+    ]
+  },
+  {
+    "id": "str_s10",
+    "name": "战斗直觉",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "str_s01"
+    ],
+    "bonuses": {
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": -1,
+    "neighbors": [
+      "str_s02",
+      "str_s01",
+      "str_s06",
+      "str_s11"
+    ]
+  },
+  {
+    "id": "str_s03",
+    "name": "战斗节奏",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "str_s02"
+    ],
+    "bonuses": {
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": 0,
+    "neighbors": [
+      "str_s02",
+      "str_s06",
+      "str_s15",
+      "str_b01"
+    ]
+  },
+  {
+    "id": "str_s06",
+    "name": "武器掌握",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "str_s10"
+    ],
+    "bonuses": {
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": -1,
+    "neighbors": [
+      "str_s03",
+      "str_s02",
+      "str_s10",
+      "str_s11",
+      "str_b01",
+      "str_b02"
+    ]
+  },
+  {
+    "id": "str_s11",
+    "name": "铁壁防御",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "str_s10"
+    ],
+    "bonuses": {
+      "all_save": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": -2,
+    "neighbors": [
+      "str_s06",
+      "str_s10",
+      "str_b02",
+      "str_s08"
+    ]
+  },
+  {
+    "id": "str_s15",
+    "name": "盾墙",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "str_s03"
+    ],
+    "bonuses": {
+      "all_save": 2,
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": 0,
+    "neighbors": [
+      "str_s04",
+      "str_s05",
+      "str_s03",
+      "str_b01",
+      "trans_sd01"
+    ]
+  },
+  {
+    "id": "str_s08",
+    "name": "战斗韧性",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "str_s11"
+    ],
+    "bonuses": {
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -3,
+    "neighbors": [
+      "str_s12",
+      "str_s14",
+      "str_b02",
+      "str_s11"
+    ]
+  },
+  {
+    "id": "str_s04",
+    "name": "迅猛之力",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "str_s15"
+    ],
+    "bonuses": {
+      "melee_damage": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": 0,
+    "neighbors": [
+      "str_s15",
+      "str_s05",
+      "str_b03",
+      "trans_sd01",
+      "trans_sd02",
+      "trans_cs02"
+    ]
+  },
+  {
+    "id": "str_s05",
+    "name": "狂战士之怒",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "str_b01"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05,
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -1,
+    "neighbors": [
+      "str_s15",
+      "str_b01",
+      "str_s04",
+      "str_s07",
+      "str_b03",
+      "str_s09"
+    ]
+  },
+  {
+    "id": "str_s07",
+    "name": "致命精准",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "str_b02"
+    ],
+    "bonuses": {
+      "critical_rate": 0.03
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -2,
+    "neighbors": [
+      "str_b01",
+      "str_b02",
+      "str_s05",
+      "str_s12",
+      "str_s09",
+      "str_s13"
+    ]
+  },
+  {
+    "id": "str_s12",
+    "name": "战意高昂",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "str_b02"
+    ],
+    "bonuses": {
+      "melee_damage": 2,
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -3,
+    "neighbors": [
+      "str_b02",
+      "str_s08",
+      "str_s07",
+      "str_s14",
+      "str_s13",
+      "str_b04"
+    ]
+  },
+  {
+    "id": "str_s14",
+    "name": "战场怒吼",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "str_s08"
+    ],
+    "bonuses": {
+      "morale": 1,
+      "melee_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -4,
+    "neighbors": [
+      "str_s08",
+      "str_s12",
+      "str_b04",
+      "trans_cs01"
+    ]
+  },
+  {
+    "id": "str_s09",
+    "name": "巨力挥击",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "str_s07"
+    ],
+    "bonuses": {
+      "melee_damage": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -2,
+    "neighbors": [
+      "str_b06",
+      "str_b05",
+      "str_b03",
+      "str_s05",
+      "str_s07",
+      "str_s13"
+    ]
+  },
+  {
+    "id": "str_s13",
+    "name": "武器大师",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "str_s12"
+    ],
+    "bonuses": {
+      "melee_hit": 2,
+      "melee_damage": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -3,
+    "neighbors": [
+      "str_b05",
+      "str_s18",
+      "str_s09",
+      "str_s07",
+      "str_s12",
+      "str_b04"
+    ]
+  },
+  {
+    "id": "str_s16",
+    "name": "无畏冲锋",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "str_b03"
+    ],
+    "bonuses": {
+      "melee_damage": 2,
+      "speed": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 7,
+    "y": -1,
+    "neighbors": [
+      "str_b03",
+      "str_b06",
+      "str_s17",
+      "trans_cs02"
+    ]
+  },
+  {
+    "id": "str_s18",
+    "name": "战场本能",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "str_b04"
+    ],
+    "bonuses": {
+      "max_hp": 5,
+      "melee_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 7,
+    "y": -4,
+    "neighbors": [
+      "str_s13",
+      "str_b04",
+      "str_b05",
+      "str_s20"
+    ]
+  },
+  {
+    "id": "str_s17",
+    "name": "不屈意志",
+    "type": "Small",
+    "depth": 8,
+    "prerequisites": [
+      "str_b06"
+    ],
+    "bonuses": {
+      "max_hp": 8,
+      "all_save": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 8,
+    "y": -2,
+    "neighbors": [
+      "str_s16",
+      "str_b06",
+      "str_b07",
+      "str_s19"
+    ]
+  },
+  {
+    "id": "str_s20",
+    "name": "战争践踏",
+    "type": "Small",
+    "depth": 8,
+    "prerequisites": [
+      "str_s18"
+    ],
+    "bonuses": {
+      "melee_damage": 2,
+      "all_save": -1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 8,
+    "y": -4,
+    "neighbors": [
+      "str_b07",
+      "str_b05",
+      "str_s18",
+      "str_b08",
+      "str_s21"
+    ]
+  },
+  {
+    "id": "str_s19",
+    "name": "血性狂热",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "str_b07"
+    ],
+    "bonuses": {
+      "melee_damage": 2,
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 9,
+    "y": -3,
+    "neighbors": [
+      "str_ks01",
+      "str_s17",
+      "str_b07",
+      "str_b08"
+    ]
+  },
+  {
+    "id": "str_s21",
+    "name": "杀戮本能",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "str_s20"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05,
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 9,
+    "y": -5,
+    "neighbors": [
+      "str_b08",
+      "str_s20"
+    ]
+  },
+  {
+    "id": "dex_s01",
+    "name": "轻灵步伐",
+    "type": "Small",
+    "depth": 1,
+    "prerequisites": [
+      "start"
+    ],
+    "bonuses": {
+      "initiative": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 1,
+    "neighbors": [
+      "start",
+      "dex_s02",
+      "dex_s14"
+    ]
+  },
+  {
+    "id": "dex_s02",
+    "name": "迅捷反应",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "dex_s01"
+    ],
+    "bonuses": {
+      "initiative": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 2,
+    "neighbors": [
+      "dex_s01",
+      "dex_s14",
+      "dex_b01",
+      "dex_s03"
+    ]
+  },
+  {
+    "id": "dex_s14",
+    "name": "灵活身姿",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "dex_s01"
+    ],
+    "bonuses": {
+      "initiative": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 1,
+    "neighbors": [
+      "dex_s02",
+      "dex_s01",
+      "dex_s03",
+      "dex_s06"
+    ]
+  },
+  {
+    "id": "dex_s03",
+    "name": "瞄准训练",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "dex_b01"
+    ],
+    "bonuses": {
+      "ranged_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 2,
+    "neighbors": [
+      "dex_b01",
+      "dex_s02",
+      "dex_s14",
+      "dex_s06",
+      "dex_s12",
+      "dex_b05"
+    ]
+  },
+  {
+    "id": "dex_s06",
+    "name": "穿透之力",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "dex_s14"
+    ],
+    "bonuses": {
+      "ranged_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": 1,
+    "neighbors": [
+      "dex_s03",
+      "dex_s14",
+      "dex_b05",
+      "dex_s08"
+    ]
+  },
+  {
+    "id": "dex_s12",
+    "name": "精准本能",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "dex_s03"
+    ],
+    "bonuses": {
+      "ranged_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 3,
+    "neighbors": [
+      "dex_b02",
+      "dex_b01",
+      "dex_s03",
+      "dex_b05",
+      "dex_s13",
+      "dex_s07"
+    ]
+  },
+  {
+    "id": "dex_s08",
+    "name": "暗影步伐",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "dex_s06"
+    ],
+    "bonuses": {
+      "critical_rate": 0.02
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": 1,
+    "neighbors": [
+      "dex_b05",
+      "dex_s06",
+      "dex_b07",
+      "trans_sd01"
+    ]
+  },
+  {
+    "id": "dex_s04",
+    "name": "速射技巧",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "dex_b02"
+    ],
+    "bonuses": {
+      "ranged_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 5,
+    "neighbors": [
+      "dex_b02",
+      "dex_s13",
+      "dex_b03",
+      "dex_s05",
+      "trans_dc02",
+      "trans_sd03"
+    ]
+  },
+  {
+    "id": "dex_s13",
+    "name": "游侠之道",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "dex_b02"
+    ],
+    "bonuses": {
+      "initiative": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 4,
+    "neighbors": [
+      "dex_s04",
+      "dex_b02",
+      "dex_s12",
+      "dex_s07",
+      "dex_s05",
+      "dex_b06"
+    ]
+  },
+  {
+    "id": "dex_s07",
+    "name": "长距瞄准",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "dex_b05"
+    ],
+    "bonuses": {
+      "range_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": 3,
+    "neighbors": [
+      "dex_s13",
+      "dex_s12",
+      "dex_b05",
+      "dex_b07",
+      "dex_b06",
+      "dex_s09"
+    ]
+  },
+  {
+    "id": "dex_s05",
+    "name": "鹰眼",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "dex_b03"
+    ],
+    "bonuses": {
+      "ranged_hit": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 5,
+    "neighbors": [
+      "dex_b03",
+      "dex_s04",
+      "dex_s13",
+      "dex_b06",
+      "dex_s16",
+      "dex_s15"
+    ]
+  },
+  {
+    "id": "dex_s09",
+    "name": "毒蛇之牙",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "dex_b07"
+    ],
+    "bonuses": {
+      "critical_rate": 0.03,
+      "ranged_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": 3,
+    "neighbors": [
+      "dex_b06",
+      "dex_s07",
+      "dex_b07",
+      "dex_b11",
+      "dex_s10",
+      "dex_b08"
+    ]
+  },
+  {
+    "id": "dex_s16",
+    "name": "疾风步",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "dex_b11"
+    ],
+    "bonuses": {
+      "speed": 2,
+      "initiative": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 6,
+    "neighbors": [
+      "dex_b12",
+      "dex_b04",
+      "dex_b03",
+      "dex_s05",
+      "dex_s15"
+    ]
+  },
+  {
+    "id": "dex_s15",
+    "name": "暗影之舞",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "dex_s09"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05,
+      "ranged_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": 5,
+    "neighbors": [
+      "dex_s16",
+      "dex_s05",
+      "dex_b06",
+      "dex_s10"
+    ]
+  },
+  {
+    "id": "dex_s10",
+    "name": "致命毒药",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "dex_b08"
+    ],
+    "bonuses": {
+      "ranged_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": 4,
+    "neighbors": [
+      "dex_s15",
+      "dex_b06",
+      "dex_s09",
+      "dex_b08"
+    ]
+  },
+  {
+    "id": "dex_s11",
+    "name": "幽灵之触",
+    "type": "Small",
+    "depth": 8,
+    "prerequisites": [
+      "dex_b09"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": 3,
+    "neighbors": [
+      "dex_b09",
+      "dex_ks01"
+    ]
+  },
+  {
+    "id": "dex_s18",
+    "name": "射手之道",
+    "type": "Small",
+    "depth": 8,
+    "prerequisites": [
+      "dex_b04"
+    ],
+    "bonuses": {
+      "ranged_hit": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 8,
+    "neighbors": [
+      "dex_b04",
+      "dex_b13"
+    ]
+  },
+  {
+    "id": "dex_s17",
+    "name": "幻影连步",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "dex_b12"
+    ],
+    "bonuses": {
+      "initiative": 3,
+      "speed": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 8,
+    "neighbors": [
+      "dex_b12"
+    ]
+  },
+  {
+    "id": "dex_s19",
+    "name": "元素共鸣",
+    "type": "Small",
+    "depth": 10,
+    "prerequisites": [
+      "dex_b13"
+    ],
+    "bonuses": {
+      "ranged_hit": 2,
+      "ranged_damage": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 10,
+    "neighbors": [
+      "dex_b13"
+    ]
+  },
+  {
+    "id": "con_s01",
+    "name": "强韧体质",
+    "type": "Small",
+    "depth": 1,
+    "prerequisites": [
+      "start"
+    ],
+    "bonuses": {
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 1,
+    "neighbors": [
+      "start",
+      "con_s02",
+      "con_s08"
+    ]
+  },
+  {
+    "id": "con_s02",
+    "name": "坚固体格",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "con_s01"
+    ],
+    "bonuses": {
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": 2,
+    "neighbors": [
+      "con_s01",
+      "con_s08",
+      "con_b01",
+      "con_s03"
+    ]
+  },
+  {
+    "id": "con_s08",
+    "name": "铁壁之心",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "con_s01"
+    ],
+    "bonuses": {
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 2,
+    "neighbors": [
+      "con_s02",
+      "con_s01",
+      "con_s03",
+      "con_s06"
+    ]
+  },
+  {
+    "id": "con_s03",
+    "name": "厚甲训练",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "con_b01"
+    ],
+    "bonuses": {
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": 3,
+    "neighbors": [
+      "con_b01",
+      "con_s02",
+      "con_s08",
+      "con_s06",
+      "con_s09",
+      "con_b05"
+    ]
+  },
+  {
+    "id": "con_s06",
+    "name": "格挡本能",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "con_s08"
+    ],
+    "bonuses": {
+      "all_save": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 3,
+    "neighbors": [
+      "con_s03",
+      "con_s08",
+      "con_b05",
+      "trans_dc01"
+    ]
+  },
+  {
+    "id": "con_s09",
+    "name": "体力充沛",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "con_b02"
+    ],
+    "bonuses": {
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": 4,
+    "neighbors": [
+      "con_b02",
+      "con_b01",
+      "con_s03",
+      "con_b05",
+      "con_s05",
+      "con_s10"
+    ]
+  },
+  {
+    "id": "con_s04",
+    "name": "生命之泉",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "con_b02"
+    ],
+    "bonuses": {
+      "max_hp": 8
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 5,
+    "neighbors": [
+      "con_b02",
+      "con_s05",
+      "con_b03",
+      "con_b04"
+    ]
+  },
+  {
+    "id": "con_s05",
+    "name": "再生之力",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "con_b05"
+    ],
+    "bonuses": {
+      "max_hp": 5,
+      "heal_amount": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 5,
+    "neighbors": [
+      "con_s04",
+      "con_b02",
+      "con_s09",
+      "con_s10",
+      "con_b04",
+      "con_s11"
+    ]
+  },
+  {
+    "id": "con_s10",
+    "name": "不灭意志",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "con_s05"
+    ],
+    "bonuses": {
+      "all_save": 2,
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": 5,
+    "neighbors": [
+      "con_s07",
+      "con_s05",
+      "con_s09",
+      "con_b05",
+      "con_s11",
+      "con_ks01"
+    ]
+  },
+  {
+    "id": "con_s07",
+    "name": "元素抗性",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "con_s10"
+    ],
+    "bonuses": {
+      "all_save": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": 5,
+    "neighbors": [
+      "con_s10",
+      "con_b05",
+      "con_ks01",
+      "trans_dc01",
+      "trans_dc02"
+    ]
+  },
+  {
+    "id": "con_s11",
+    "name": "铁血战士",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "con_b04"
+    ],
+    "bonuses": {
+      "max_hp": 10,
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 6,
+    "neighbors": [
+      "con_b08",
+      "con_b04",
+      "con_s05",
+      "con_s10",
+      "con_ks01"
+    ]
+  },
+  {
+    "id": "con_s12",
+    "name": "活力涌动",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "con_b03"
+    ],
+    "bonuses": {
+      "max_hp": 10,
+      "heal_amount": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -7,
+    "y": 7,
+    "neighbors": [
+      "con_b03",
+      "con_s14",
+      "con_b07"
+    ]
+  },
+  {
+    "id": "con_s14",
+    "name": "厚皮",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "con_s06"
+    ],
+    "bonuses": {
+      "max_hp": 8
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -6,
+    "y": 7,
+    "neighbors": [
+      "con_b04",
+      "con_s12",
+      "con_b08"
+    ]
+  },
+  {
+    "id": "con_s15",
+    "name": "山岳之躯",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "con_b08"
+    ],
+    "bonuses": {
+      "max_hp": 20
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 7,
+    "neighbors": [
+      "con_ks01",
+      "con_b08",
+      "con_b09"
+    ]
+  },
+  {
+    "id": "con_s13",
+    "name": "坚不可摧",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "con_b07"
+    ],
+    "bonuses": {
+      "max_hp": 10,
+      "all_save": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -9,
+    "y": 9,
+    "neighbors": [
+      "con_b07"
+    ]
+  },
+  {
+    "id": "int_s01",
+    "name": "魔力觉醒",
+    "type": "Small",
+    "depth": 1,
+    "prerequisites": [
+      "start"
+    ],
+    "bonuses": {
+      "mana_max": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 0,
+    "neighbors": [
+      "start",
+      "int_s02",
+      "int_s15"
+    ]
+  },
+  {
+    "id": "int_s02",
+    "name": "奥术基础",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "int_s01"
+    ],
+    "bonuses": {
+      "mana_max": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": 0,
+    "neighbors": [
+      "int_s01",
+      "int_s15",
+      "int_b01",
+      "int_s03"
+    ]
+  },
+  {
+    "id": "int_s15",
+    "name": "元素亲和",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "int_s01"
+    ],
+    "bonuses": {
+      "spell_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": 1,
+    "neighbors": [
+      "int_s02",
+      "int_s01",
+      "int_s03",
+      "int_s06"
+    ]
+  },
+  {
+    "id": "int_s03",
+    "name": "魔力涌流",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "int_b01"
+    ],
+    "bonuses": {
+      "mana_max": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": 1,
+    "neighbors": [
+      "int_b01",
+      "int_s02",
+      "int_s15",
+      "int_s06",
+      "int_s13",
+      "int_b08"
+    ]
+  },
+  {
+    "id": "int_s06",
+    "name": "法力护盾",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "int_s15"
+    ],
+    "bonuses": {
+      "mana_max": 4
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": 2,
+    "neighbors": [
+      "int_s03",
+      "int_s15",
+      "int_b08",
+      "trans_ci01"
+    ]
+  },
+  {
+    "id": "int_s13",
+    "name": "魔力回涌",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "int_b01"
+    ],
+    "bonuses": {
+      "mana_max": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 1,
+    "neighbors": [
+      "int_b02",
+      "int_b01",
+      "int_s03",
+      "int_b08",
+      "int_s08",
+      "int_s07"
+    ]
+  },
+  {
+    "id": "int_s04",
+    "name": "法术穿透",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "int_b02"
+    ],
+    "bonuses": {
+      "spell_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 0,
+    "neighbors": [
+      "int_b02",
+      "int_s08",
+      "int_b03",
+      "int_b04"
+    ]
+  },
+  {
+    "id": "int_s08",
+    "name": "奥术护盾",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "int_b02"
+    ],
+    "bonuses": {
+      "mana_max": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 1,
+    "neighbors": [
+      "int_s04",
+      "int_b02",
+      "int_s13",
+      "int_s07",
+      "int_b04",
+      "int_s14"
+    ]
+  },
+  {
+    "id": "int_s07",
+    "name": "元素精通",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "int_b08"
+    ],
+    "bonuses": {
+      "spell_damage": 1,
+      "mana_max": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 2,
+    "neighbors": [
+      "int_b09",
+      "int_s08",
+      "int_s13",
+      "int_b08",
+      "int_s14",
+      "trans_ci02"
+    ]
+  },
+  {
+    "id": "int_s14",
+    "name": "奥术精通",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "int_b04"
+    ],
+    "bonuses": {
+      "spell_damage": 1,
+      "mana_max": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -6,
+    "y": 2,
+    "neighbors": [
+      "int_s18",
+      "int_b04",
+      "int_s08",
+      "int_s07",
+      "int_b09"
+    ]
+  },
+  {
+    "id": "int_s09",
+    "name": "法术大师",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "int_b03"
+    ],
+    "bonuses": {
+      "spell_hit": 2,
+      "spell_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -7,
+    "y": 0,
+    "neighbors": [
+      "int_b03",
+      "int_s16",
+      "int_b05"
+    ]
+  },
+  {
+    "id": "int_s16",
+    "name": "学者智慧",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "int_b04"
+    ],
+    "bonuses": {
+      "mana_max": 5,
+      "all_save": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -7,
+    "y": 1,
+    "neighbors": [
+      "int_b04",
+      "int_s09",
+      "int_s18",
+      "int_b10"
+    ]
+  },
+  {
+    "id": "int_s18",
+    "name": "奥术回响",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "int_s14"
+    ],
+    "bonuses": {
+      "mana_max": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -7,
+    "y": 2,
+    "neighbors": [
+      "int_s14",
+      "int_s16",
+      "int_s12",
+      "int_b11"
+    ]
+  },
+  {
+    "id": "int_s12",
+    "name": "专注之心",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "int_b09"
+    ],
+    "bonuses": {
+      "spell_damage": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -7,
+    "y": 3,
+    "neighbors": [
+      "int_b09",
+      "int_s18",
+      "int_s19",
+      "int_ks01"
+    ]
+  },
+  {
+    "id": "int_s19",
+    "name": "预知未来",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "int_b09"
+    ],
+    "bonuses": {
+      "all_save": 2,
+      "initiative": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -7,
+    "y": 4,
+    "neighbors": [
+      "int_b09",
+      "int_s12",
+      "int_b12"
+    ]
+  },
+  {
+    "id": "int_s17",
+    "name": "护盾强化",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "int_b10"
+    ],
+    "bonuses": {
+      "mana_max": 7
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -9,
+    "y": 1,
+    "neighbors": [
+      "int_b10"
+    ]
+  },
+  {
+    "id": "int_s20",
+    "name": "时空裂隙",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "int_b12"
+    ],
+    "bonuses": {
+      "mana_max": 10,
+      "speed": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -9,
+    "y": 4,
+    "neighbors": [
+      "int_b12"
+    ]
+  },
+  {
+    "id": "wis_s01",
+    "name": "暴击直觉",
+    "type": "Small",
+    "depth": 1,
+    "prerequisites": [
+      "start"
+    ],
+    "bonuses": {
+      "critical_rate": 0.02
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -1,
+    "neighbors": [
+      "start",
+      "wis_s02",
+      "wis_s09"
+    ]
+  },
+  {
+    "id": "wis_s02",
+    "name": "法力觉醒",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "wis_s01"
+    ],
+    "bonuses": {
+      "mana_max": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -2,
+    "neighbors": [
+      "wis_s01",
+      "wis_s09",
+      "wis_b01",
+      "wis_s03"
+    ]
+  },
+  {
+    "id": "wis_s09",
+    "name": "致命专注",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "wis_s01"
+    ],
+    "bonuses": {
+      "critical_rate": 0.04
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -1,
+    "neighbors": [
+      "wis_s02",
+      "wis_s01",
+      "wis_s03",
+      "wis_s06"
+    ]
+  },
+  {
+    "id": "wis_s03",
+    "name": "影刃训练",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "wis_b01"
+    ],
+    "bonuses": {
+      "critical_rate": 0.03
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -2,
+    "neighbors": [
+      "wis_b01",
+      "wis_s02",
+      "wis_s09",
+      "wis_s06",
+      "wis_b04",
+      "wis_s08"
+    ]
+  },
+  {
+    "id": "wis_s06",
+    "name": "心灵专注",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "wis_s09"
+    ],
+    "bonuses": {
+      "mana_max": 3,
+      "mana_regen": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": -1,
+    "neighbors": [
+      "wis_s03",
+      "wis_s09",
+      "wis_s08",
+      "trans_iw01"
+    ]
+  },
+  {
+    "id": "wis_s08",
+    "name": "暴击精通",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "wis_s06"
+    ],
+    "bonuses": {
+      "critical_rate": 0.03
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": -2,
+    "neighbors": [
+      "wis_b04",
+      "wis_s03",
+      "wis_s06",
+      "wis_b06",
+      "trans_iw01"
+    ]
+  },
+  {
+    "id": "wis_s04",
+    "name": "暴击专精",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "wis_b02"
+    ],
+    "bonuses": {
+      "critical_rate": 0.04
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -5,
+    "neighbors": [
+      "wis_b02",
+      "wis_s07",
+      "wis_b03",
+      "wis_b05",
+      "trans_iw02",
+      "trans_wc02"
+    ]
+  },
+  {
+    "id": "wis_s07",
+    "name": "法力洪流",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "wis_b04"
+    ],
+    "bonuses": {
+      "mana_max": 5,
+      "mana_regen": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -4,
+    "neighbors": [
+      "wis_s04",
+      "wis_b02",
+      "wis_b04",
+      "wis_b06",
+      "wis_b05",
+      "wis_s10"
+    ]
+  },
+  {
+    "id": "wis_s10",
+    "name": "致命之眼",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "wis_b05"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": -4,
+    "neighbors": [
+      "wis_b05",
+      "wis_s07",
+      "wis_b06",
+      "wis_s14",
+      "wis_s13",
+      "trans_wc03"
+    ]
+  },
+  {
+    "id": "wis_s05",
+    "name": "影刃大师",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "wis_b03"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05,
+      "mana_max": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -7,
+    "neighbors": [
+      "wis_s11",
+      "wis_b03",
+      "wis_ks01"
+    ]
+  },
+  {
+    "id": "wis_s14",
+    "name": "暴击本能",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "wis_b08"
+    ],
+    "bonuses": {
+      "critical_rate": 0.03
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": -5,
+    "neighbors": [
+      "wis_b09",
+      "wis_ks01",
+      "wis_b05",
+      "wis_s10",
+      "wis_s13"
+    ]
+  },
+  {
+    "id": "wis_s13",
+    "name": "致命爆击",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "wis_s10"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": -4,
+    "neighbors": [
+      "wis_b08",
+      "wis_s14",
+      "wis_s10",
+      "trans_wc03"
+    ]
+  },
+  {
+    "id": "wis_s11",
+    "name": "智慧之眼",
+    "type": "Small",
+    "depth": 8,
+    "prerequisites": [
+      "wis_ks01"
+    ],
+    "bonuses": {
+      "critical_rate": 0.06
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -7,
+    "neighbors": [
+      "wis_s05",
+      "wis_ks01",
+      "wis_b07"
+    ]
+  },
+  {
+    "id": "wis_s12",
+    "name": "完美专注",
+    "type": "Small",
+    "depth": 10,
+    "prerequisites": [
+      "wis_b07"
+    ],
+    "bonuses": {
+      "critical_rate": 0.05,
+      "mana_regen": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -9,
+    "neighbors": [
+      "wis_b07"
+    ]
+  },
+  {
+    "id": "cha_s01",
+    "name": "鼓舞士气",
+    "type": "Small",
+    "depth": 1,
+    "prerequisites": [
+      "start"
+    ],
+    "bonuses": {
+      "morale": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": -1,
+    "neighbors": [
+      "start",
+      "cha_s02",
+      "cha_s09"
+    ]
+  },
+  {
+    "id": "cha_s02",
+    "name": "领袖气质",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "cha_s01"
+    ],
+    "bonuses": {
+      "morale": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": -2,
+    "neighbors": [
+      "cha_s01",
+      "cha_s09",
+      "cha_b01",
+      "cha_s03"
+    ]
+  },
+  {
+    "id": "cha_s09",
+    "name": "交际手腕",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "cha_s01"
+    ],
+    "bonuses": {
+      "morale": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": -2,
+    "neighbors": [
+      "cha_s02",
+      "cha_s01",
+      "cha_s03",
+      "cha_s06"
+    ]
+  },
+  {
+    "id": "cha_s03",
+    "name": "威压",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "cha_b01"
+    ],
+    "bonuses": {
+      "morale": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": -3,
+    "neighbors": [
+      "cha_b01",
+      "cha_s02",
+      "cha_s09",
+      "cha_s06",
+      "cha_s10",
+      "cha_b04"
+    ]
+  },
+  {
+    "id": "cha_s06",
+    "name": "团结之力",
+    "type": "Small",
+    "depth": 3,
+    "prerequisites": [
+      "cha_s09"
+    ],
+    "bonuses": {
+      "ally_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": -3,
+    "neighbors": [
+      "cha_s03",
+      "cha_s09",
+      "cha_b04",
+      "trans_wc01"
+    ]
+  },
+  {
+    "id": "cha_s10",
+    "name": "声东击西",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "cha_s06"
+    ],
+    "bonuses": {
+      "morale": 1,
+      "initiative": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": -4,
+    "neighbors": [
+      "cha_b02",
+      "cha_b01",
+      "cha_s03",
+      "cha_b04",
+      "cha_b06",
+      "cha_s07"
+    ]
+  },
+  {
+    "id": "cha_s04",
+    "name": "统率之力",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "cha_b02"
+    ],
+    "bonuses": {
+      "ally_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -5,
+    "neighbors": [
+      "cha_b02",
+      "cha_b06",
+      "cha_b03",
+      "cha_b05",
+      "trans_cs01"
+    ]
+  },
+  {
+    "id": "cha_s07",
+    "name": "鼓舞之歌",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "cha_b06"
+    ],
+    "bonuses": {
+      "morale": 2,
+      "ally_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": -5,
+    "neighbors": [
+      "cha_b06",
+      "cha_s10",
+      "cha_b04",
+      "cha_s14",
+      "cha_s11",
+      "cha_s12"
+    ]
+  },
+  {
+    "id": "cha_s14",
+    "name": "商业嗅觉",
+    "type": "Small",
+    "depth": 5,
+    "prerequisites": [
+      "cha_b04"
+    ],
+    "bonuses": {
+      "morale": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": -5,
+    "neighbors": [
+      "cha_s07",
+      "cha_b04",
+      "cha_s12",
+      "cha_b11",
+      "trans_wc01",
+      "trans_iw02"
+    ]
+  },
+  {
+    "id": "cha_s11",
+    "name": "王者风范",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "cha_b03"
+    ],
+    "bonuses": {
+      "ally_bonus": 1,
+      "morale": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -6,
+    "neighbors": [
+      "cha_b10",
+      "cha_b05",
+      "cha_b06",
+      "cha_s07",
+      "cha_s12"
+    ]
+  },
+  {
+    "id": "cha_s12",
+    "name": "领袖魅力",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "cha_s11"
+    ],
+    "bonuses": {
+      "morale": 2,
+      "ally_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": -6,
+    "neighbors": [
+      "cha_s13",
+      "cha_s11",
+      "cha_s07",
+      "cha_s14",
+      "cha_b11"
+    ]
+  },
+  {
+    "id": "cha_s15",
+    "name": "仇恨刻印",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "cha_s08"
+    ],
+    "bonuses": {
+      "morale": 2,
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 7,
+    "y": -7,
+    "neighbors": [
+      "cha_b03",
+      "cha_s08",
+      "cha_b12"
+    ]
+  },
+  {
+    "id": "cha_s08",
+    "name": "王者之心",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "cha_b05"
+    ],
+    "bonuses": {
+      "ally_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -7,
+    "neighbors": [
+      "cha_b05",
+      "cha_s15",
+      "cha_b10",
+      "cha_ks01"
+    ]
+  },
+  {
+    "id": "cha_s13",
+    "name": "传奇号召",
+    "type": "Small",
+    "depth": 7,
+    "prerequisites": [
+      "cha_b10"
+    ],
+    "bonuses": {
+      "morale": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -7,
+    "neighbors": [
+      "cha_s12",
+      "cha_b10"
+    ]
+  },
+  {
+    "id": "cha_s16",
+    "name": "血债血偿",
+    "type": "Small",
+    "depth": 9,
+    "prerequisites": [
+      "cha_b12"
+    ],
+    "bonuses": {
+      "morale": 2,
+      "ally_bonus": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 9,
+    "y": -9,
+    "neighbors": [
+      "cha_b12"
+    ]
+  },
+  {
+    "id": "trans_sd01",
+    "name": "战斗技巧",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "str_s01",
+      "dex_s01"
+    ],
+    "bonuses": {
+      "melee_hit": 1,
+      "critical_rate": 0.02
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": 1,
+    "neighbors": [
+      "dex_b11",
+      "dex_b07",
+      "dex_s08",
+      "str_s15",
+      "str_s04",
+      "trans_sd02"
+    ]
+  },
+  {
+    "id": "trans_dc01",
+    "name": "战场机动",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "dex_s01",
+      "con_s01"
+    ],
+    "bonuses": {
+      "initiative": 3,
+      "max_hp": 5
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 4,
+    "neighbors": [
+      "dex_b02",
+      "con_s07",
+      "con_b05",
+      "con_s06",
+      "dex_b01",
+      "trans_dc02"
+    ]
+  },
+  {
+    "id": "trans_ci01",
+    "name": "战斗法师",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "con_s01",
+      "int_s01"
+    ],
+    "bonuses": {
+      "spell_damage": 1,
+      "max_hp": 3
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 3,
+    "neighbors": [
+      "con_b01",
+      "con_b02",
+      "int_b08",
+      "int_s06",
+      "trans_ci02"
+    ]
+  },
+  {
+    "id": "trans_iw01",
+    "name": "神秘学",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "int_s01",
+      "wis_s01"
+    ],
+    "bonuses": {
+      "mana_max": 2,
+      "all_save": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": -1,
+    "neighbors": [
+      "wis_s06",
+      "int_b01",
+      "int_b02",
+      "wis_s08"
+    ]
+  },
+  {
+    "id": "trans_wc01",
+    "name": "精神领袖",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "wis_s01",
+      "cha_s01"
+    ],
+    "bonuses": {
+      "heal_amount": 1,
+      "morale": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": -4,
+    "neighbors": [
+      "cha_b04",
+      "cha_s06",
+      "wis_b01",
+      "wis_b02",
+      "cha_s14",
+      "trans_iw02"
+    ]
+  },
+  {
+    "id": "trans_cs01",
+    "name": "鼓舞战意",
+    "type": "Small",
+    "depth": 2,
+    "prerequisites": [
+      "cha_s01",
+      "str_s01"
+    ],
+    "bonuses": {
+      "morale": 1,
+      "melee_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -5,
+    "neighbors": [
+      "str_b04",
+      "str_s14",
+      "cha_s04",
+      "cha_b03"
+    ]
+  },
+  {
+    "id": "trans_sd02",
+    "name": "武器大师",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "str_b01",
+      "dex_b01"
+    ],
+    "bonuses": {
+      "melee_hit": 1,
+      "ranged_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": 1,
+    "neighbors": [
+      "dex_b10",
+      "dex_b09",
+      "dex_b11",
+      "trans_sd01",
+      "str_s04",
+      "trans_cs02"
+    ]
+  },
+  {
+    "id": "trans_dc02",
+    "name": "陷阱守卫",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "dex_b01",
+      "con_b01"
+    ],
+    "bonuses": {
+      "max_hp": 8
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 5,
+    "neighbors": [
+      "dex_s04",
+      "con_s07",
+      "trans_dc01",
+      "dex_b02",
+      "trans_sd03"
+    ]
+  },
+  {
+    "id": "trans_ci02",
+    "name": "战斗法师",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "con_b01",
+      "int_b01"
+    ],
+    "bonuses": {
+      "max_hp": 3,
+      "spell_hit": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 3,
+    "neighbors": [
+      "trans_ci01",
+      "int_b09",
+      "int_s07",
+      "int_b08"
+    ]
+  },
+  {
+    "id": "trans_iw02",
+    "name": "古代智慧",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "int_b01",
+      "wis_b01"
+    ],
+    "bonuses": {
+      "spell_damage": 1,
+      "heal_amount": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": -5,
+    "neighbors": [
+      "cha_s14",
+      "trans_wc01",
+      "wis_b02",
+      "wis_s04",
+      "cha_b11",
+      "trans_wc02"
+    ]
+  },
+  {
+    "id": "trans_wc02",
+    "name": "净化光辉",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "wis_b01",
+      "cha_b01"
+    ],
+    "bonuses": {
+      "heal_amount": 1,
+      "ally_bonus": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": -6,
+    "neighbors": [
+      "cha_b11",
+      "trans_iw02",
+      "wis_s04",
+      "wis_b03"
+    ]
+  },
+  {
+    "id": "trans_cs02",
+    "name": "战神信仰",
+    "type": "Small",
+    "depth": 4,
+    "prerequisites": [
+      "cha_b01",
+      "str_b01"
+    ],
+    "bonuses": {
+      "morale": 1,
+      "melee_damage": 1
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": 0,
+    "neighbors": [
+      "dex_b10",
+      "trans_sd02",
+      "str_s04",
+      "str_b03",
+      "str_s16"
+    ]
+  },
+  {
+    "id": "trans_sd03",
+    "name": "剑弓合一",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "str_b03",
+      "dex_b03"
+    ],
+    "bonuses": {
+      "melee_damage": 1,
+      "ranged_damage": 1,
+      "critical_rate": 0.02
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": 6,
+    "neighbors": [
+      "dex_b03",
+      "trans_dc02",
+      "dex_s04"
+    ]
+  },
+  {
+    "id": "trans_wc03",
+    "name": "圣武辉光",
+    "type": "Small",
+    "depth": 6,
+    "prerequisites": [
+      "wis_b03",
+      "cha_b03"
+    ],
+    "bonuses": {
+      "ally_bonus": 1,
+      "morale": 2
+    },
+    "effect": "",
+    "isActive": false,
+    "description": "",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": -3,
+    "neighbors": [
+      "wis_b06",
+      "wis_s13",
+      "wis_s10"
+    ]
+  },
+  {
+    "id": "str_b01",
+    "name": "基础剑术",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "str_s03"
+    ],
+    "bonuses": {},
+    "effect": "melee_hit_plus_1",
+    "isActive": false,
+    "description": "被动: 近战命中+1",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -1,
+    "neighbors": [
+      "str_s05",
+      "str_s07",
+      "str_s15",
+      "str_s03",
+      "str_s06",
+      "str_b02"
+    ]
+  },
+  {
+    "id": "str_b02",
+    "name": "连击",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "str_s06"
+    ],
+    "bonuses": {},
+    "effect": "double_attack",
+    "isActive": true,
+    "description": "主动: 攻击2次, 第二次-3命中",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -2,
+    "neighbors": [
+      "str_s07",
+      "str_s12",
+      "str_b01",
+      "str_s06",
+      "str_s11",
+      "str_s08"
+    ]
+  },
+  {
+    "id": "str_b03",
+    "name": "旋风斩",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "str_s05"
+    ],
+    "bonuses": {},
+    "effect": "whirlwind",
+    "isActive": true,
+    "description": "主动: 攻击周围所有敌人",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -1,
+    "neighbors": [
+      "str_s16",
+      "str_b06",
+      "str_s04",
+      "str_s05",
+      "str_s09",
+      "trans_cs02"
+    ]
+  },
+  {
+    "id": "str_b04",
+    "name": "重甲精通",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "str_s14"
+    ],
+    "bonuses": {},
+    "effect": "heavy_armor",
+    "isActive": false,
+    "description": "被动: 护甲+3, 速度-1",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -4,
+    "neighbors": [
+      "str_s18",
+      "str_s13",
+      "str_s12",
+      "str_s14",
+      "trans_cs01"
+    ]
+  },
+  {
+    "id": "str_b06",
+    "name": "嗜血",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "str_s09"
+    ],
+    "bonuses": {},
+    "effect": "bloodthirst",
+    "isActive": true,
+    "description": "主动: 近战击杀敌人后立即获得额外行动",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 7,
+    "y": -2,
+    "neighbors": [
+      "str_b03",
+      "str_s09",
+      "str_s16",
+      "str_b05",
+      "str_s17",
+      "str_b07"
+    ]
+  },
+  {
+    "id": "str_b05",
+    "name": "暴击大师",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "str_s13"
+    ],
+    "bonuses": {},
+    "effect": "critical_master",
+    "isActive": false,
+    "description": "被动: 暴击伤害×3",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 7,
+    "y": -3,
+    "neighbors": [
+      "str_s09",
+      "str_s13",
+      "str_b06",
+      "str_s18",
+      "str_b07",
+      "str_s20"
+    ]
+  },
+  {
+    "id": "str_b07",
+    "name": "战斗怒吼",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "str_b05"
+    ],
+    "bonuses": {},
+    "effect": "battle_cry",
+    "isActive": true,
+    "description": "主动: 怒吼震慑周围敌人使其下回合攻击-2, 同时友军士气+3",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 8,
+    "y": -3,
+    "neighbors": [
+      "str_s17",
+      "str_b06",
+      "str_b05",
+      "str_s20",
+      "str_s19",
+      "str_b08"
+    ]
+  },
+  {
+    "id": "str_b08",
+    "name": "血腥漩涡",
+    "type": "Big",
+    "depth": 9,
+    "prerequisites": [
+      "str_b07"
+    ],
+    "bonuses": {},
+    "effect": "blood_vortex",
+    "isActive": true,
+    "description": "主动: 横扫周围所有敌人, 每命中1个敌人恢复自身1d6HP",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 9,
+    "y": -4,
+    "neighbors": [
+      "str_ks01",
+      "str_s19",
+      "str_b07",
+      "str_s20",
+      "str_s21"
+    ]
+  },
+  {
+    "id": "dex_b01",
+    "name": "基础射击",
+    "type": "Big",
+    "depth": 3,
+    "prerequisites": [
+      "dex_s02"
+    ],
+    "bonuses": {},
+    "effect": "ranged_hit_plus_1",
+    "isActive": false,
+    "description": "被动: 远程命中+1",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 3,
+    "neighbors": [
+      "dex_s02",
+      "dex_s03",
+      "dex_b02",
+      "dex_s12",
+      "trans_dc01"
+    ]
+  },
+  {
+    "id": "dex_b02",
+    "name": "精准射击",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "dex_s03"
+    ],
+    "bonuses": {},
+    "effect": "aimed_shot",
+    "isActive": true,
+    "description": "主动: 瞄准后射击优势+伤害x2",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 4,
+    "neighbors": [
+      "dex_b01",
+      "dex_s12",
+      "dex_s04",
+      "dex_s13",
+      "trans_dc01",
+      "trans_dc02"
+    ]
+  },
+  {
+    "id": "dex_b05",
+    "name": "穿透射击",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "dex_s06"
+    ],
+    "bonuses": {},
+    "effect": "piercing_shot",
+    "isActive": false,
+    "description": "被动: 箭矢穿透击中后方1个敌人",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": 2,
+    "neighbors": [
+      "dex_s12",
+      "dex_s03",
+      "dex_s06",
+      "dex_s08",
+      "dex_s07",
+      "dex_b07"
+    ]
+  },
+  {
+    "id": "dex_b07",
+    "name": "隐匿",
+    "type": "Big",
+    "depth": 5,
+    "prerequisites": [
+      "dex_s08"
+    ],
+    "bonuses": {},
+    "effect": "stealth",
+    "isActive": true,
+    "description": "主动: 进入潜行状态",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": 2,
+    "neighbors": [
+      "dex_s07",
+      "dex_b05",
+      "dex_s08",
+      "dex_s09",
+      "dex_b11",
+      "trans_sd01"
+    ]
+  },
+  {
+    "id": "dex_b03",
+    "name": "连珠箭",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "dex_s04"
+    ],
+    "bonuses": {},
+    "effect": "multi_shot",
+    "isActive": true,
+    "description": "主动: 连射3支箭, 每支-2命中",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 6,
+    "neighbors": [
+      "dex_s04",
+      "dex_s05",
+      "dex_b04",
+      "dex_s16",
+      "trans_sd03"
+    ]
+  },
+  {
+    "id": "dex_b06",
+    "name": "致盲箭",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "dex_s07"
+    ],
+    "bonuses": {},
+    "effect": "blind_arrow",
+    "isActive": true,
+    "description": "主动: 命中后目标-4命中(2回合)",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": 4,
+    "neighbors": [
+      "dex_s05",
+      "dex_s13",
+      "dex_s07",
+      "dex_s09",
+      "dex_s15",
+      "dex_s10"
+    ]
+  },
+  {
+    "id": "dex_b11",
+    "name": "陷阱大师",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "dex_s13"
+    ],
+    "bonuses": {},
+    "effect": "trap_master",
+    "isActive": true,
+    "description": "主动: 放置陷阱, 触发的敌人停止移动并受1d8伤害",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": 2,
+    "neighbors": [
+      "dex_s09",
+      "dex_b07",
+      "dex_b08",
+      "dex_b09",
+      "trans_sd01",
+      "trans_sd02"
+    ]
+  },
+  {
+    "id": "dex_b04",
+    "name": "剑舞",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "dex_s05"
+    ],
+    "bonuses": {},
+    "effect": "sword_dance",
+    "isActive": true,
+    "description": "主动: 对周围所有敌人进行近战攻击",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 7,
+    "neighbors": [
+      "dex_s18",
+      "dex_b03",
+      "dex_s16"
+    ]
+  },
+  {
+    "id": "dex_b08",
+    "name": "暗影突袭",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "dex_s15"
+    ],
+    "bonuses": {},
+    "effect": "shadow_strike",
+    "isActive": true,
+    "description": "主动: 潜行状态下突袭伤害翻倍",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": 3,
+    "neighbors": [
+      "dex_s10",
+      "dex_s09",
+      "dex_b11",
+      "dex_b09"
+    ]
+  },
+  {
+    "id": "dex_b09",
+    "name": "致命一击",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "dex_s10"
+    ],
+    "bonuses": {},
+    "effect": "deadly_blow",
+    "isActive": false,
+    "description": "被动: 偷袭伤害+3d6",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": 2,
+    "neighbors": [
+      "dex_b10",
+      "dex_s11",
+      "dex_b08",
+      "dex_b11",
+      "trans_sd02"
+    ]
+  },
+  {
+    "id": "dex_b10",
+    "name": "毒刃",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "dex_s10"
+    ],
+    "bonuses": {},
+    "effect": "poison_blade",
+    "isActive": true,
+    "description": "主动: 攻击附带中毒(每回合1d4, 3回合)",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": 1,
+    "neighbors": [
+      "dex_b09",
+      "dex_ks01",
+      "trans_sd02",
+      "trans_cs02"
+    ]
+  },
+  {
+    "id": "dex_b12",
+    "name": "闪电反射",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "dex_s16"
+    ],
+    "bonuses": {},
+    "effect": "lightning_reflex",
+    "isActive": false,
+    "description": "被动: 先攻+5, 每场战斗第一次攻击优势",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 1,
+    "y": 7,
+    "neighbors": [
+      "dex_s16",
+      "dex_s17"
+    ]
+  },
+  {
+    "id": "dex_b13",
+    "name": "流星箭雨",
+    "type": "Big",
+    "depth": 9,
+    "prerequisites": [
+      "dex_s18"
+    ],
+    "bonuses": {},
+    "effect": "meteor_shower",
+    "isActive": true,
+    "description": "主动: 向区域倾泻箭雨, 所有目标受2d8伤害",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 9,
+    "neighbors": [
+      "dex_s18",
+      "dex_s19"
+    ]
+  },
+  {
+    "id": "con_b01",
+    "name": "盾击",
+    "type": "Big",
+    "depth": 3,
+    "prerequisites": [
+      "con_s02"
+    ],
+    "bonuses": {},
+    "effect": "shield_bash",
+    "isActive": true,
+    "description": "主动: 攻击+推开目标1格",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": 3,
+    "neighbors": [
+      "con_s02",
+      "con_s03",
+      "con_b02",
+      "con_s09",
+      "trans_ci01"
+    ]
+  },
+  {
+    "id": "con_b02",
+    "name": "坚壁清野",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "con_s03"
+    ],
+    "bonuses": {},
+    "effect": "fortify",
+    "isActive": false,
+    "description": "被动: 受到伤害时AC+2(1回合)",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 4,
+    "neighbors": [
+      "con_b01",
+      "con_s09",
+      "con_s04",
+      "con_s05",
+      "trans_ci01"
+    ]
+  },
+  {
+    "id": "con_b05",
+    "name": "铁壁",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "con_s06"
+    ],
+    "bonuses": {},
+    "effect": "iron_wall",
+    "isActive": false,
+    "description": "被动: 受到物理伤害-3",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": 4,
+    "neighbors": [
+      "con_s09",
+      "con_s03",
+      "con_s06",
+      "con_s10",
+      "con_s07",
+      "trans_dc01"
+    ]
+  },
+  {
+    "id": "con_b03",
+    "name": "不屈",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "con_s04"
+    ],
+    "bonuses": {},
+    "effect": "unyielding",
+    "isActive": false,
+    "description": "机制: HP低于25%时伤害减半",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -6,
+    "y": 6,
+    "neighbors": [
+      "con_s12",
+      "con_s04",
+      "con_b04"
+    ]
+  },
+  {
+    "id": "con_b04",
+    "name": "生命之盾",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "con_s09"
+    ],
+    "bonuses": {},
+    "effect": "life_shield",
+    "isActive": true,
+    "description": "主动: 获得等于最大HP30%的临时护盾(3回合)",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 6,
+    "neighbors": [
+      "con_s14",
+      "con_b03",
+      "con_s04",
+      "con_s05",
+      "con_s11"
+    ]
+  },
+  {
+    "id": "con_b08",
+    "name": "巨人之力",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "con_s14"
+    ],
+    "bonuses": {},
+    "effect": "giant_strength",
+    "isActive": false,
+    "description": "被动: 近战伤害+3, 可使用双手武器单手",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 7,
+    "neighbors": [
+      "con_s11",
+      "con_s14",
+      "con_s15"
+    ]
+  },
+  {
+    "id": "con_b07",
+    "name": "生命之环",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "con_s12"
+    ],
+    "bonuses": {},
+    "effect": "life_circle",
+    "isActive": true,
+    "description": "主动: 治疗周围所有友军2d10+体质修正HP",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -8,
+    "y": 8,
+    "neighbors": [
+      "con_s12",
+      "con_s13"
+    ]
+  },
+  {
+    "id": "con_b09",
+    "name": "最后阵地",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "con_s15"
+    ],
+    "bonuses": {},
+    "effect": "last_stand",
+    "isActive": false,
+    "description": "机制: HP低于25%时自动获得AC+5和伤害+50%, 直到HP恢复至25%以上",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -5,
+    "y": 8,
+    "neighbors": [
+      "con_s15"
+    ]
+  },
+  {
+    "id": "int_b01",
+    "name": "法术强化",
+    "type": "Big",
+    "depth": 3,
+    "prerequisites": [
+      "int_s02"
+    ],
+    "bonuses": {},
+    "effect": "spell_hit_plus_1",
+    "isActive": false,
+    "description": "被动: 法术命中+1",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": 0,
+    "neighbors": [
+      "int_s02",
+      "int_s03",
+      "int_b02",
+      "int_s13",
+      "trans_iw01"
+    ]
+  },
+  {
+    "id": "int_b02",
+    "name": "法术研习·1环",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "int_s03"
+    ],
+    "bonuses": {},
+    "effect": "spell_slot_1",
+    "isActive": true,
+    "description": "主动: 激活时选 1 系，获得 1 环法术（毁灭/幻术/附魔/防护/生命）",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 0,
+    "neighbors": [
+      "int_b01",
+      "int_s13",
+      "int_s04",
+      "int_s08",
+      "trans_iw01"
+    ]
+  },
+  {
+    "id": "int_b08",
+    "name": "魔力汲取",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "int_s06"
+    ],
+    "bonuses": {},
+    "effect": "mana_drain",
+    "isActive": true,
+    "description": "主动: 汲取目标法力恢复自身",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -4,
+    "y": 2,
+    "neighbors": [
+      "int_s13",
+      "int_s03",
+      "int_s06",
+      "int_s07",
+      "trans_ci01",
+      "trans_ci02"
+    ]
+  },
+  {
+    "id": "int_b03",
+    "name": "法术研习·2环",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "int_s04"
+    ],
+    "bonuses": {},
+    "effect": "spell_slot_2",
+    "isActive": true,
+    "description": "主动: 激活时选 1 系，获得 2 环法术",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -6,
+    "y": 0,
+    "neighbors": [
+      "int_s09",
+      "int_s04",
+      "int_b04"
+    ]
+  },
+  {
+    "id": "int_b04",
+    "name": "法术反射",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "int_s08"
+    ],
+    "bonuses": {},
+    "effect": "spell_reflect",
+    "isActive": false,
+    "description": "被动: 1次/回合反射敌方法术",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -6,
+    "y": 1,
+    "neighbors": [
+      "int_s16",
+      "int_b03",
+      "int_s04",
+      "int_s08",
+      "int_s14"
+    ]
+  },
+  {
+    "id": "int_b09",
+    "name": "法术研习·4环",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "int_s14"
+    ],
+    "bonuses": {},
+    "effect": "spell_slot_4",
+    "isActive": true,
+    "description": "主动: 激活时选 1 系，获得 4 环法术（前置 3 环）",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -6,
+    "y": 3,
+    "neighbors": [
+      "int_s07",
+      "int_s12",
+      "int_s19",
+      "int_s14",
+      "trans_ci02"
+    ]
+  },
+  {
+    "id": "int_b05",
+    "name": "法术研习·3环",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "int_s09"
+    ],
+    "bonuses": {},
+    "effect": "spell_slot_3",
+    "isActive": true,
+    "description": "主动: 激活时选 1 系，获得 3 环法术（前置 2 环）",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -8,
+    "y": 0,
+    "neighbors": [
+      "int_s09"
+    ]
+  },
+  {
+    "id": "int_b10",
+    "name": "知识就是力量",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "int_s16"
+    ],
+    "bonuses": {},
+    "effect": "knowledge_power",
+    "isActive": false,
+    "description": "被动: 法术伤害额外+智力修正",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -8,
+    "y": 1,
+    "neighbors": [
+      "int_s16",
+      "int_s17"
+    ]
+  },
+  {
+    "id": "int_b11",
+    "name": "法术研习·5环",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "int_s18"
+    ],
+    "bonuses": {},
+    "effect": "spell_slot_5",
+    "isActive": true,
+    "description": "主动: 激活时选 1 系，获得 5 环法术（前置 4 环）",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -8,
+    "y": 2,
+    "neighbors": [
+      "int_s18"
+    ]
+  },
+  {
+    "id": "int_b12",
+    "name": "命运之眼",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "int_s19"
+    ],
+    "bonuses": {},
+    "effect": "fate_eye",
+    "isActive": false,
+    "description": "机制: 每场战斗重掷1次失败的豁免",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -8,
+    "y": 4,
+    "neighbors": [
+      "int_s19",
+      "int_s20"
+    ]
+  },
+  {
+    "id": "wis_b01",
+    "name": "法力涌动",
+    "type": "Big",
+    "depth": 3,
+    "prerequisites": [
+      "wis_s02"
+    ],
+    "bonuses": {},
+    "effect": "mana_surge",
+    "isActive": true,
+    "description": "主动: AP 4，每场战斗 1 次。立即将自身 Mana 恢复至上限。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -3,
+    "neighbors": [
+      "wis_s02",
+      "wis_s03",
+      "wis_b02",
+      "wis_b04",
+      "trans_wc01"
+    ]
+  },
+  {
+    "id": "wis_b02",
+    "name": "爆头突袭",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "wis_s03"
+    ],
+    "bonuses": {},
+    "effect": "head_shot",
+    "isActive": true,
+    "description": "主动: AP 8，下一次近战或远程武器攻击必定暴击且伤害 ×1.5；不可与精准射击/暗杀同回合使用。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -4,
+    "neighbors": [
+      "wis_b01",
+      "wis_b04",
+      "wis_s04",
+      "wis_s07",
+      "trans_wc01",
+      "trans_iw02"
+    ]
+  },
+  {
+    "id": "wis_b04",
+    "name": "致命猎杀",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "wis_s06"
+    ],
+    "bonuses": {},
+    "effect": "lethal_focus",
+    "isActive": false,
+    "description": "被动: 对当前 HP 低于 30% 的敌人，攻击命中 +2、暴击率 +10%（不影响法术）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -3,
+    "neighbors": [
+      "wis_b02",
+      "wis_b01",
+      "wis_s03",
+      "wis_s08",
+      "wis_s07",
+      "wis_b06"
+    ]
+  },
+  {
+    "id": "wis_b06",
+    "name": "影刃涂毒",
+    "type": "Big",
+    "depth": 5,
+    "prerequisites": [
+      "wis_s08"
+    ],
+    "bonuses": {},
+    "effect": "poison_blade",
+    "isActive": true,
+    "description": "主动: AP 3，下次武器攻击附加 1d4×3 回合中毒（复用 DEX 系 poison_blade handler）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": -3,
+    "neighbors": [
+      "wis_s07",
+      "wis_b04",
+      "wis_s08",
+      "wis_s10",
+      "trans_wc03"
+    ]
+  },
+  {
+    "id": "wis_b03",
+    "name": "守护祝福",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "wis_s04"
+    ],
+    "bonuses": {},
+    "effect": "ward_blessing",
+    "isActive": true,
+    "description": "主动: 给周围友军赋予 +AC/豁免增益（INT+WIS 贤者跨界用；尚未完整实装）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": -6,
+    "neighbors": [
+      "wis_s04",
+      "wis_b05",
+      "wis_s05",
+      "wis_ks01",
+      "trans_wc02"
+    ]
+  },
+  {
+    "id": "wis_b05",
+    "name": "净化领域",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "wis_s07"
+    ],
+    "bonuses": {},
+    "effect": "purify_field",
+    "isActive": true,
+    "description": "主动: 周围友军移除负面状态并恢复少量 HP（INT+WIS 贤者跨界用；尚未完整实装）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -5,
+    "neighbors": [
+      "wis_b03",
+      "wis_s04",
+      "wis_s07",
+      "wis_s10",
+      "wis_ks01",
+      "wis_s14"
+    ]
+  },
+  {
+    "id": "wis_b09",
+    "name": "死灵之锋",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "wis_s14"
+    ],
+    "bonuses": {},
+    "effect": "deathblow_focus",
+    "isActive": false,
+    "description": "被动: 击杀任意敌人后，下一次攻击暴击率 +10%、伤害 +20%（持续 1 回合或直至触发）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -2,
+    "y": -6,
+    "neighbors": [
+      "wis_s14",
+      "wis_b08"
+    ]
+  },
+  {
+    "id": "wis_b08",
+    "name": "影遁",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "wis_s13"
+    ],
+    "bonuses": {},
+    "effect": "stealth",
+    "isActive": true,
+    "description": "主动: AP 4，进入潜行状态（复用 DEX 系 stealth handler；潜行+暴头突袭/暗杀爆发）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -3,
+    "y": -5,
+    "neighbors": [
+      "wis_s13",
+      "wis_b09"
+    ]
+  },
+  {
+    "id": "wis_b07",
+    "name": "暗杀",
+    "type": "Big",
+    "depth": 9,
+    "prerequisites": [
+      "wis_s11"
+    ],
+    "bonuses": {},
+    "effect": "assassinate",
+    "isActive": true,
+    "description": "主动: AP 8，每场战斗 1 次。指定 HP 低于 30% 的敌方单位直接斩杀（豁免无效，无视 AC/DR；boss 改为造成 50% 当前 HP 真伤）。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -8,
+    "neighbors": [
+      "wis_s11",
+      "wis_s12"
+    ]
+  },
+  {
+    "id": "cha_b01",
+    "name": "指挥",
+    "type": "Big",
+    "depth": 3,
+    "prerequisites": [
+      "cha_s02"
+    ],
+    "bonuses": {},
+    "effect": "command",
+    "isActive": true,
+    "description": "主动: 指令1名友军立即行动",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 3,
+    "y": -3,
+    "neighbors": [
+      "cha_s02",
+      "cha_s03",
+      "cha_b02",
+      "cha_s10"
+    ]
+  },
+  {
+    "id": "cha_b02",
+    "name": "集结号令",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "cha_s03"
+    ],
+    "bonuses": {},
+    "effect": "rally",
+    "isActive": true,
+    "description": "主动: 所有友军下回合攻击+2",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -4,
+    "neighbors": [
+      "cha_b01",
+      "cha_s10",
+      "cha_s04",
+      "cha_b06"
+    ]
+  },
+  {
+    "id": "cha_b04",
+    "name": "外交官",
+    "type": "Big",
+    "depth": 4,
+    "prerequisites": [
+      "cha_s06"
+    ],
+    "bonuses": {},
+    "effect": "diplomat",
+    "isActive": false,
+    "description": "被动: 商店价格-15%",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": -4,
+    "neighbors": [
+      "cha_s10",
+      "cha_s03",
+      "cha_s06",
+      "cha_s07",
+      "cha_s14",
+      "trans_wc01"
+    ]
+  },
+  {
+    "id": "cha_b06",
+    "name": "暗影交易",
+    "type": "Big",
+    "depth": 5,
+    "prerequisites": [
+      "cha_s10"
+    ],
+    "bonuses": {},
+    "effect": "shadow_deal",
+    "isActive": true,
+    "description": "主动: 贿赂敌人使其1回合不攻击",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 4,
+    "y": -5,
+    "neighbors": [
+      "cha_s04",
+      "cha_b02",
+      "cha_s10",
+      "cha_s07",
+      "cha_b05",
+      "cha_s11"
+    ]
+  },
+  {
+    "id": "cha_b03",
+    "name": "统帅光环",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "cha_s04"
+    ],
+    "bonuses": {},
+    "effect": "command_aura",
+    "isActive": false,
+    "description": "被动: 周围友军攻击+1 AC+1",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 6,
+    "y": -6,
+    "neighbors": [
+      "cha_s15",
+      "cha_s04",
+      "cha_b05",
+      "trans_cs01"
+    ]
+  },
+  {
+    "id": "cha_b05",
+    "name": "威压",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "cha_s07"
+    ],
+    "bonuses": {},
+    "effect": "intimidate",
+    "isActive": true,
+    "description": "主动: 敌人攻击检定-2(3回合), WIS豁免",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -6,
+    "neighbors": [
+      "cha_s08",
+      "cha_b03",
+      "cha_s04",
+      "cha_b06",
+      "cha_s11"
+    ]
+  },
+  {
+    "id": "cha_b11",
+    "name": "商业帝国",
+    "type": "Big",
+    "depth": 6,
+    "prerequisites": [
+      "cha_s14"
+    ],
+    "bonuses": {},
+    "effect": "merchant_empire",
+    "isActive": false,
+    "description": "机制: 每次战斗结束额外获得敌人等级x5金币, 商店出现稀有物品概率+15%",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 2,
+    "y": -6,
+    "neighbors": [
+      "cha_s12",
+      "cha_s14",
+      "trans_iw02",
+      "trans_wc02"
+    ]
+  },
+  {
+    "id": "cha_b10",
+    "name": "英雄号召",
+    "type": "Big",
+    "depth": 7,
+    "prerequisites": [
+      "cha_s12"
+    ],
+    "bonuses": {},
+    "effect": "heroic_call",
+    "isActive": true,
+    "description": "主动: 插下战旗, 周围友军获得攻击+2和AC+1持续3回合",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 5,
+    "y": -7,
+    "neighbors": [
+      "cha_s11",
+      "cha_s08",
+      "cha_s13"
+    ]
+  },
+  {
+    "id": "cha_b12",
+    "name": "复仇誓言",
+    "type": "Big",
+    "depth": 8,
+    "prerequisites": [
+      "cha_s15"
+    ],
+    "bonuses": {},
+    "effect": "vow_of_vengeance",
+    "isActive": false,
+    "description": "机制: 标记1个敌人为复仇目标, 对其造成的伤害+25%, 目标死亡时恢复全队10%HP",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 8,
+    "y": -8,
+    "neighbors": [
+      "cha_s15",
+      "cha_ks01",
+      "cha_s16"
+    ]
+  },
+  {
+    "id": "str_ks01",
+    "name": "狂暴之力",
+    "type": "Keystone",
+    "depth": 10,
+    "prerequisites": [
+      "str_b08"
+    ],
+    "bonuses": {},
+    "effect": "berserk_power",
+    "isActive": false,
+    "description": "近战伤害+50%",
+    "cost_desc": "全豁免-3, 不能使用盾牌",
+    "cost_bonuses": {
+      "all_save": -3
+    },
+    "x": 10,
+    "y": -4,
+    "neighbors": [
+      "str_s19",
+      "str_b08"
+    ]
+  },
+  {
+    "id": "dex_ks01",
+    "name": "幽灵步伐",
+    "type": "Keystone",
+    "depth": 8,
+    "prerequisites": [
+      "dex_s11"
+    ],
+    "bonuses": {},
+    "effect": "ghost_step",
+    "isActive": false,
+    "description": "永久获得掩护状态(远程攻击-2命中)",
+    "cost_desc": "HP上限-20%",
+    "cost_bonuses": {
+      "max_hp_pct": -0.2
+    },
+    "x": 6,
+    "y": 2,
+    "neighbors": [
+      "dex_b10",
+      "dex_s11"
+    ]
+  },
+  {
+    "id": "con_ks01",
+    "name": "不朽之躯",
+    "type": "Keystone",
+    "depth": 6,
+    "prerequisites": [
+      "con_s11"
+    ],
+    "bonuses": {},
+    "effect": "immortal_body",
+    "isActive": false,
+    "description": "HP低于0时1/战斗概率=体质修正恢复1HP",
+    "cost_desc": "移动速度-2",
+    "cost_bonuses": {
+      "speed": -2
+    },
+    "x": -3,
+    "y": 6,
+    "neighbors": [
+      "con_s15",
+      "con_s11",
+      "con_s10",
+      "con_s07"
+    ]
+  },
+  {
+    "id": "int_ks01",
+    "name": "绝对专注",
+    "type": "Keystone",
+    "depth": 8,
+    "prerequisites": [
+      "int_s12"
+    ],
+    "bonuses": {},
+    "effect": "absolute_focus",
+    "isActive": false,
+    "description": "法术强度+4",
+    "cost_desc": "不能学习其他体系的法术",
+    "cost_bonuses": {},
+    "x": -8,
+    "y": 3,
+    "neighbors": [
+      "int_s12"
+    ]
+  },
+  {
+    "id": "wis_ks01",
+    "name": "刺客本能",
+    "type": "Keystone",
+    "depth": 7,
+    "prerequisites": [
+      "wis_s05"
+    ],
+    "bonuses": {},
+    "effect": "assassin_instinct",
+    "isActive": false,
+    "description": "暴击倍率 +0.5x；暴击率 +5%",
+    "cost_desc": "不能装备重甲（DR > 5）；不能使用盾牌",
+    "cost_bonuses": {},
+    "x": -1,
+    "y": -6,
+    "neighbors": [
+      "wis_s11",
+      "wis_s05",
+      "wis_b03",
+      "wis_b05",
+      "wis_s14"
+    ]
+  },
+  {
+    "id": "cha_ks01",
+    "name": "君临天下",
+    "type": "Keystone",
+    "depth": 8,
+    "prerequisites": [
+      "cha_s08"
+    ],
+    "bonuses": {},
+    "effect": "royal_presence",
+    "isActive": false,
+    "description": "范围内友军全豁免+2不会恐慌",
+    "cost_desc": "自身HP-20%",
+    "cost_bonuses": {
+      "max_hp_pct": -0.2
+    },
+    "x": 7,
+    "y": -8,
+    "neighbors": [
+      "cha_s08",
+      "cha_b12"
+    ]
+  },
+  {
+    "id": "start",
+    "name": "启程",
+    "type": "Start",
+    "depth": 0,
+    "prerequisites": [],
+    "bonuses": {},
+    "effect": "",
+    "isActive": false,
+    "description": "所有角色的起点。",
+    "cost_desc": "",
+    "cost_bonuses": {},
+    "x": 0,
+    "y": 0,
+    "neighbors": [
+      "str_s01",
+      "dex_s01",
+      "con_s01",
+      "int_s01",
+      "wis_s01",
+      "cha_s01"
+    ]
+  }
+]

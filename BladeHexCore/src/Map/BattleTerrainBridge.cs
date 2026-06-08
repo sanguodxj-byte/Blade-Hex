@@ -2,7 +2,7 @@
 // 战斗地图 BattleCellData.TerrainType ↔ 大地图 HexOverworldTile.TerrainType 的单向桥接
 //
 // 设计考虑：
-// - 战斗地图枚举多了 Wall / Ruins / PoisonMushroom / LuckyGrass 等战场专用类型
+// - 战斗地图枚举多了 Wall / Ruins / PoisonMushroom 等战场专用类型
 // - 大地图枚举多了 DeepWater / Jungle / Ice / MountainSnow 等世界专用类型
 // - 视觉配置挂在大地图枚举上；战斗格子用 ToOverworld() 取 profile
 using BladeHex.Data;
@@ -35,7 +35,6 @@ public static class BattleTerrainBridge
         BattleCellData.TerrainType.Gate => HexOverworldTile.TerrainType.Mountain,
         BattleCellData.TerrainType.Staircase => HexOverworldTile.TerrainType.Rocky,
         BattleCellData.TerrainType.PoisonMushroom => HexOverworldTile.TerrainType.Swamp,
-        BattleCellData.TerrainType.LuckyGrass => HexOverworldTile.TerrainType.Grassland,
         _ => HexOverworldTile.TerrainType.Plains,
     };
 

@@ -5,6 +5,7 @@ using Godot;
 using System.Collections.Generic;
 using BladeHex.Map;
 using BladeHex.Strategic;
+using BladeHex.Strategic.Kingdom;
 
 namespace BladeHex.View.Map;
 
@@ -77,7 +78,8 @@ public partial class TerritoryOverlay : CanvasLayer
         Dictionary<string, NationTerritory> territories,
         List<NationConfig> nations,
         float worldWidthPx, float worldHeightPx,
-        Node3D? sceneRoot = null)
+        Node3D? sceneRoot = null,
+        PlayerKingdom? playerKingdom = null)
     {
         _worldWidthPx = worldWidthPx;
         _worldHeightPx = worldHeightPx;
@@ -91,8 +93,17 @@ public partial class TerritoryOverlay : CanvasLayer
             if (!territories.TryGetValue(nation.Id, out var territory)) continue;
             if (territory.TotalTiles < 10) continue;
 
-            var color = NationColors[colorIdx % NationColors.Length];
-            colorIdx++;
+            // M7: 玩家王国使用自定义旗帜色
+            Color color;
+            if (playerKingdom != null && nation.Id == playerKingdom.KingdomId)
+            {
+                color = playerKingdom.BannerColor;
+            }
+            else
+            {
+                color = NationColors[colorIdx % NationColors.Length];
+                colorIdx++;
+            }
 
             // 计算领土中心
             var centroid = territory.CoreZone?.Centroid ?? Vector2I.Zero;

@@ -129,6 +129,10 @@ public static class BuildingDataLoader
         "barracks" => FiefBuilding.BuildingType.Barracks,
         "smithy" => FiefBuilding.BuildingType.Smithy,
         "lord_manor" => FiefBuilding.BuildingType.LordManor,
+        "blacksmith_workshop" => FiefBuilding.BuildingType.BlacksmithWorkshop,
+        "brew_workshop" => FiefBuilding.BuildingType.BrewWorkshop,
+        "textile_workshop" => FiefBuilding.BuildingType.TextileWorkshop,
+        "tannery_workshop" => FiefBuilding.BuildingType.TanneryWorkshop,
         _ => null,
     };
 
@@ -152,6 +156,10 @@ public static class BuildingDataLoader
         AddFallback(FiefBuilding.BuildingType.Barracks, "兵营", "驻军上限+8，驻军每日恢复HP。", false, 400, 7, 60, 0, 0, 0, 0, 0);
         AddFallback(FiefBuilding.BuildingType.Smithy, "铁匠坊", "驻军装备品质+1。", false, 350, 5, 50, 0, 0, 0, 0, 0);
         AddFallback(FiefBuilding.BuildingType.LordManor, "领主宅邸", "封地核心，不可拆除。", false, 0, 0, 100, 0, 0, 0, 0, 0);
+        AddFallback(FiefBuilding.BuildingType.BlacksmithWorkshop, "武器作坊", "生产武器装备的作坊。", false, 8000, 4, 150, 20, 0, 0, 0, 0);
+        AddFallback(FiefBuilding.BuildingType.BrewWorkshop, "酿酒坊", "生产啤酒等口粮的作坊。", false, 5000, 3, 100, 15, 0, 0, 0, 0);
+        AddFallback(FiefBuilding.BuildingType.TextileWorkshop, "织布作坊", "生产精美布料的作坊。", false, 6000, 3, 110, 15, 0, 0, 0, 0);
+        AddFallback(FiefBuilding.BuildingType.TanneryWorkshop, "制革坊", "生产皮甲皮料的作坊。", false, 7000, 4, 130, 18, 0, 0, 0, 0);
     }
 
     private static void AddFallback(FiefBuilding.BuildingType type, string name, string desc,

@@ -77,11 +77,11 @@ public static class EquipmentManager
         if (unit.Data == null) return false;
         if (item is WeaponData weapon)
         {
-            if (weapon.StrRequired > 0 && unit.Data.Str < weapon.StrRequired) return false;
+            if (weapon.StrRequired > 0 && CombatStats.GetEffectiveStr(unit.Data) < weapon.StrRequired) return false;
         }
         if (item is ArmorData armor)
         {
-            if (armor.StrRequired > 0 && unit.Data.Str < armor.StrRequired) return false;
+            if (armor.StrRequired > 0 && CombatStats.GetEffectiveStr(unit.Data) < armor.StrRequired) return false;
         }
         return true;
     }

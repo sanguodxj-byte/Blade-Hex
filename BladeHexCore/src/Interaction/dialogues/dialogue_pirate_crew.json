@@ -1,0 +1,103 @@
+{
+  "dialogue_id": "pirate_crew",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "“（海寇首领啐了一口唾沫，独眼紧盯着你们的队伍）\n‘哼，今天看来踢到铁板了。风暴之神可不喜欢毫无胜算的战斗。不过，在我们的水道上，规矩还是规矩。你们真的想大干一场吗？’”"
+        },
+        {
+          "condition": "player_race == \"undead\"",
+          "text": "“（海寇们看到你们领头人的死气沉沉的脸孔，顿时发出了不安的低语，甚至有人在胸口画着海神印记）\n‘该死……是海妖的诅咒，还是不死的游魂？真是触了海神的霉头！快走开，我们今天不想和死人打交道！’”"
+        },
+        {
+          "condition": "relation >= 25",
+          "text": "“‘哈哈！这不是能和我们喝干一整桶烈酒的豪杰吗？今天海风不错，怎么，是要去陆地上大干一场，还是来和我们交易点私盐与美酒？’”"
+        },
+        {
+          "text": "“（一群满身纹身、散发着海腥味和朗姆酒味的粗野水手截住了去路）\n‘喂！陆地上的旱鸭子！这条水道由我们风暴兄弟会说了算！留下 {bribe_cost} 金币的过河税，否则就准备下去喂鱼吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "去向海神告状吧！(正面迎击)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "condition": "player_gold >= bribe_cost",
+          "text": "这是给风暴神殿的贡品。(支付 {bribe_cost} 金币)",
+          "next": "bribe_success",
+          "action": "lose_gold;add_relation;add_faction_rep",
+          "action_param": "{bribe_cost};10;4"
+        },
+        {
+          "condition": "player_gold >= 50",
+          "text": "听说你们海寇最讲信用，我们可以来场拼酒游戏吗？(支付 50 金币赌注)",
+          "next": "drinking_game"
+        },
+        {
+          "text": "告辞。",
+          "next": "end"
+        }
+      ]
+    },
+    "bribe_success": {
+      "node_id": "bribe_success",
+      "texts": [
+        {
+          "text": "“（海寇头目接过沉甸甸的金币，在嘴里咬了咬，咧嘴露出一口黄牙）\n‘不错，金币是真的。风暴之神会保佑你们的航线。滚吧，把路让开！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "告辞。",
+          "next": "end"
+        }
+      ]
+    },
+    "drinking_game": {
+      "node_id": "drinking_game",
+      "texts": [
+        {
+          "condition": "relation >= 0",
+          "text": "“（海寇头目狂笑着搬出一桶散发着刺鼻气味的烈酒）\n‘有胆量！来，我们一人一碗，谁先倒下，谁的钱就归对方！海神的子民绝不在酒桌上退缩！’”"
+        },
+        {
+          "text": "“（海寇头目警惕地看着你，吐了口唾沫）\n‘哼，我们没时间陪你在酒杯里玩游戏。交钱，或者决斗！别想拖延时间！’”"
+        }
+      ],
+      "options": [
+        {
+          "condition": "relation >= 0",
+          "text": "干杯！(赌酒)",
+          "next": "drinking_result"
+        },
+        {
+          "text": "既然如此，那我交钱。(支付 {bribe_cost} 金币)",
+          "next": "bribe_success",
+          "action": "lose_gold",
+          "action_param": "{bribe_cost}"
+        }
+      ]
+    },
+    "drinking_result": {
+      "node_id": "drinking_result",
+      "texts": [
+        {
+          "text": "“（三大碗烈酒下肚，海寇头目终于支撑不住，扑通一声倒在桌上昏睡了过去，水手们面面相觑）\n‘老大喝趴下了！这家伙……这家伙简直是海怪转世！钱是你的了，快走吧！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "收起赢得的金币离开。(赢得 100 金币)",
+          "next": "end",
+          "action": "gain_gold;add_relation",
+          "action_param": "100;15"
+        }
+      ]
+    }
+  }
+}

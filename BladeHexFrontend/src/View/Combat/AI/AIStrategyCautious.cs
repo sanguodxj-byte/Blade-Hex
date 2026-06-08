@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.AI;
 
@@ -195,5 +196,28 @@ public class AIStrategyCautious : AIStrategyBase
         }
 
         return bestPos;
+    }
+
+    /// <summary>v0.8 D3-D: 谨慎型 — HP<50%时使用防御性职业技能</summary>
+    protected override AIAction? EvaluateCareerSkill(Unit actor, List<AITargetEvaluator.ScoredTarget> scoredTargets, List<Unit> playerUnits, List<Unit> enemyUnits, HexGrid hexGrid)
+    {
+        var skill = actor.GetCareerSkill();
+        if (skill == null || !skill.IsActive || !actor.CanUseCareerSkill()) return null;
+        if (actor.CurrentAp < 1f) return null;
+
+        float hpPct = (float)actor.CurrentHp / Math.Max(actor.Model.GetMaxHp(), 1);
+        if (hpPct < 0.5f)
+        {
+            var targetCell = SelectCareerSkillTarget(actor, skill, scoredTargets, enemyUnits, hexGrid);
+            return new AIAction
+            {
+                Type = AIAction.ActionType.UseCareerSkill,
+                Actor = actor,
+                SkillTargetCell = targetCell,
+                Description = $"{actor.Data!.UnitName} 防御释放职业技能 {skill.DisplayName}！"
+            };
+        }
+
+        return null;
     }
 }

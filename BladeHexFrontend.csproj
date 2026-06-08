@@ -5,4 +5,13 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="scratch/**/*.cs" />
+  </ItemGroup>
+  
+  <Target Name="VerifyShadersBeforeBuild" BeforeTargets="BeforeBuild">
+    <Message Importance="high" Text="正在校验 Godot Shader 语法..." />
+    <Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)tools\shader_validator\verify_shaders.ps1&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)tools/shader_validator/verify_shaders.ps1&quot;" ContinueOnError="WarnAndContinue" />
+  </Target>
 </Project>

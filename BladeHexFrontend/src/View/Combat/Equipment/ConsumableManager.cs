@@ -49,7 +49,10 @@ public partial class ConsumableManager : Node
 
     private static Godot.Collections.Dictionary UseHealingPotion(Unit user, ConsumableData item)
     {
-        int heal = RPGRuleEngine.RollDice(item.HealDiceCount, item.HealDiceSides) + item.HealBonus;
+        // v0.7: 使用者技能盘 heal_amount 节点（如 con_b07 生命之环、wis 系治疗节点）累加。
+        int heal = RPGRuleEngine.RollDice(item.HealDiceCount, item.HealDiceSides)
+                 + item.HealBonus
+                 + (user.SkillTree?.GetHealBonus() ?? 0);
         int actual = user.Heal(heal);
         return new Godot.Collections.Dictionary { { "success", true }, { "effect", "heal" }, { "amount", actual }, { "targets_affected", 1 } };
     }

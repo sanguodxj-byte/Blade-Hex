@@ -27,14 +27,17 @@ public partial class ArmorData : ItemData
     // ========================================
     // 装甲值 (Armor Points) 与 减伤 (DR)
     // ========================================
-
-    [Export] public int DrSlash;   // 砍伤减免 (用于计算 AC 增益)
-    [Export] public int DrPierce;  // 刺伤减免
-    [Export] public int DrCrush;   // 钝伤减免
+    //
+    // v0.6 设计：DR 减伤完全由 (DamageType × WeaponWeight) 在
+    // DamagePenetrationTable 中按 HpRatio/DrRatio 分流计算，与具体的"砍/刺/钝"
+    // 数值无关。早期设计有 DrSlash/DrPierce/DrCrush 三向字段但从未被任何战斗
+    // 路径读取（已在 v0.7 移除以避免误导：序列化、json 加载、伤害管线都不
+    // 引用这三字段。"DR0/0/0" 显示曾让人误以为护甲减伤未生效）。
 
     /// <summary>
-    /// DR阈值：用于 d20 穿透检定的单一属性。
-    /// 策划案规定：布甲=3, 皮甲=6, 镇钓皮甲=8, 链甲=11, 板甲=15, 全板甲=18
+    /// DR 穿透检定阈值：d20_pen + STRPenBonus ≥ DrThreshold 即穿透。
+    /// 同时复用为护甲耐久基数（MaxArmorPoints = DrThreshold × 10）。
+    /// 策划案规定：布甲=3, 皮甲=6, 镶钉皮甲=8, 链甲=11, 板甲=15, 全板甲=18
     /// </summary>
     [Export] public int DrThreshold;
 
@@ -67,7 +70,8 @@ public partial class ArmorData : ItemData
     [Export] public int StrRequired;
     [Export] public bool StealthDisadvantage; // 隐匿检定不利（重甲）
     [Export] public bool IsDestroyable;       // 可被破坏（木盾可被斧类击碎）
-    [Export] public int BaseAcOverride { get; set; } = -1;  // 固定AC基础值（-1=使用默认10+DEX计算）
+    // v0.7 备注：现行 AC 公式（CombatStats.GetAc）走 BaseAc + DexMod + sqrt(ArmorDR) + sqrt(ShieldDR），
+    // 老版本的 BaseAcOverride 兜底字段已在 v0.7 移除。
 
     // ========================================
     // 词缀加成（运行时累加）
@@ -126,11 +130,10 @@ public partial class ArmorData : ItemData
     /// <summary>获取总AC加成（基础+词缀）</summary>
     public int GetTotalAcBonus() => AcBonus + BonusAc;
 
-    /// <summary>获取总AC（含base_ac_override + 词缀）</summary>
+    /// <summary>获取总AC（基础 10 + AcBonus + 词缀）</summary>
     public int GetTotalBaseAc()
     {
-        int @base = BaseAcOverride >= 0 ? BaseAcOverride : (10 + AcBonus);
-        return @base + BonusAc;
+        return 10 + AcBonus + BonusAc;
     }
 
     public string GetStatBonusText()
@@ -166,10 +169,7 @@ public partial class ArmorData : ItemData
         }
         else
         {
-            if (BaseAcOverride >= 0)
-                parts.Add($"闪避 {BaseAcOverride + BonusAc}");
-            else
-                parts.Add($"闪避 {10 + AcBonus + BonusAc}+敏捷");
+            parts.Add($"闪避 {10 + AcBonus + BonusAc}+敏捷");
             if (MaxDexBonus < 99)
                 parts.Add($"敏捷上限{MaxDexBonus}");
             if (StrRequired > 0)

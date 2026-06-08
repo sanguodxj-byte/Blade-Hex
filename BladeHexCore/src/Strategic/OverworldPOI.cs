@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using BladeHex.Data;
 
@@ -15,12 +15,8 @@ public partial class OverworldPOI : Resource
         Castle,      // 城堡（军事要塞）
         Settlement,  // 外族聚落（敌对）
         Lair,        // 巢穴（可清除的危险地点）
-        Tavern,      // 路边旅店（休息/招募/情报）
-        Outpost,     // 前哨站（小型军事据点）
         Mine,        // 矿场（资源产出）
         Farm,        // 农庄（食物产出）
-        Shrine,      // 药师所/祭坛（祝福/治疗）
-        Port,        // 港口（贸易/渡船）
     }
 
     /// <summary>外族聚落子类型</summary>
@@ -62,6 +58,39 @@ public partial class OverworldPOI : Resource
 
     [Export] public string PoiName { get; set; } = "未命名地点";
     [Export] public POIType PoiTypeEnum = POIType.Village;
+    [Export] public bool IsPortCity { get; set; } = false;
+    [Export] public string ParentPoiName { get; set; } = "";
+
+    // 运行时内存绑定引用
+    public OverworldPOI? ParentPoi { get; set; }
+    public System.Collections.Generic.List<OverworldPOI> SubPois { get; } = new();
+
+    public static void BindParentChildRelationships(System.Collections.Generic.List<OverworldPOI> allPois)
+    {
+        foreach (var p in allPois)
+        {
+            p.SubPois.Clear();
+            p.ParentPoi = null;
+        }
+
+        var poiMap = new System.Collections.Generic.Dictionary<string, OverworldPOI>();
+        foreach (var p in allPois)
+        {
+            if (!string.IsNullOrEmpty(p.PoiName))
+            {
+                poiMap[p.PoiName] = p;
+            }
+        }
+
+        foreach (var p in allPois)
+        {
+            if (!string.IsNullOrEmpty(p.ParentPoiName) && poiMap.TryGetValue(p.ParentPoiName, out var parent))
+            {
+                p.ParentPoi = parent;
+                parent.SubPois.Add(p);
+            }
+        }
+    }
 
     /// <summary>兼容：poi_type 作为 int 访问</summary>
     [Export] public int PoiType
@@ -71,7 +100,31 @@ public partial class OverworldPOI : Resource
     }
 
     [Export] public Vector2 Position { get; set; } = Vector2.Zero;
-    [Export] public string OwningFaction { get; set; } = "neutral";
+    private string _owningFaction = "neutral";
+    [Export]
+    public string OwningFaction
+    {
+        get => _owningFaction;
+        set
+        {
+            _owningFaction = value;
+            if (PoiTypeEnum == POIType.Town || PoiTypeEnum == POIType.Castle)
+            {
+                if (SubPois != null && SubPois.Count > 0)
+                {
+                    foreach (var sub in SubPois)
+                    {
+                        if (sub.OwningFaction != value)
+                        {
+                            sub.OwningFaction = value;
+                            sub.EndSiege();
+                            sub.GarrisonCurrent = sub.GarrisonMax / 4;
+                        }
+                    }
+                }
+            }
+        }
+    }
     [Export] public int Prosperity { get; set; } = 50; // 繁荣度 0-100
 
     // ========================================
@@ -90,8 +143,37 @@ public partial class OverworldPOI : Resource
     /// <summary>Footprint 实际占用的 hex（中心 + 旋转后的 cells）。运行时计算缓存。</summary>
     public Vector2I[] OccupiedHexes { get; set; } = System.Array.Empty<Vector2I>();
 
-    /// <summary>POI 尺度档（来自 POIBattlePresetRegistry，运行时计算）</summary>
-    public POIScale Scale => POIBattlePresetRegistry.ScaleOf(this);
+    /// <summary>POI 尺度档（动态计算）</summary>
+    public POIScale Scale
+    {
+        get
+        {
+            if (PoiTypeEnum == POIType.Town)
+            {
+                int undamagedCount = 0;
+                foreach (var sub in SubPois)
+                {
+                    if (!sub.IsCleared && sub.Prosperity > 0)
+                        undamagedCount++;
+                }
+                if (undamagedCount >= 5) return POIScale.Large;
+                if (undamagedCount <= 1) return POIScale.Small;
+                return POIScale.Medium;
+            }
+            else if (PoiTypeEnum == POIType.Castle)
+            {
+                int undamagedCount = 0;
+                foreach (var sub in SubPois)
+                {
+                    if (!sub.IsCleared && sub.Prosperity > 0)
+                        undamagedCount++;
+                }
+                if (undamagedCount == 0) return POIScale.Medium;
+                return POIScale.Large;
+            }
+            return POIBattlePresetRegistry.ScaleOf(this);
+        }
+    }
 
     /// <summary>检查指定 hex 是否在本 POI 的 footprint 内</summary>
     public bool ContainsHex(Vector2I hex)
@@ -182,17 +264,13 @@ public partial class OverworldPOI : Resource
 
     public string GetTypeName() => PoiTypeEnum switch
     {
-        POIType.Town => "城镇",
+        POIType.Town => IsPortCity ? "港口城市" : "城镇",
         POIType.Village => "村庄",
         POIType.Castle => "城堡",
         POIType.Settlement => GetSettlementRaceName(),
         POIType.Lair => GetLairTypeName(),
-        POIType.Tavern => "旅店",
-        POIType.Outpost => "前哨站",
         POIType.Mine => "矿场",
         POIType.Farm => "农庄",
-        POIType.Shrine => "药师所",
-        POIType.Port => "港口",
         _ => "未知"
     };
 
@@ -379,6 +457,8 @@ public Godot.Collections.Dictionary Serialize()
         { "is_under_siege", IsUnderSiege },
         { "siege_days", SiegeDays },
         { "last_attacked_day", LastAttackedDay },
+        { "is_port_city", IsPortCity },
+        { "parent_poi_name", ParentPoiName },
     };
     return data;
 }
@@ -390,7 +470,26 @@ public void OnDayPassed()
 
     // 繁荣度自然恢复
     if (Prosperity < 50 && !IsUnderSiege)
-        Prosperity = Math.Min(50, Prosperity + 1);
+    {
+        if (PoiTypeEnum == POIType.Town || PoiTypeEnum == POIType.Castle)
+        {
+            int damagedSubs = 0;
+            foreach (var sub in SubPois)
+            {
+                if (sub.IsCleared || sub.Prosperity <= 0)
+                    damagedSubs++;
+            }
+            int maxAllowedProsperity = Math.Max(10, 50 - damagedSubs * 10);
+            if (Prosperity < maxAllowedProsperity)
+                Prosperity = Math.Min(maxAllowedProsperity, Prosperity + 1);
+            else if (Prosperity > maxAllowedProsperity)
+                Prosperity = Math.Max(maxAllowedProsperity, Prosperity - 1);
+        }
+        else
+        {
+            Prosperity = Math.Min(50, Prosperity + 1);
+        }
+    }
 
     // 围攻天数递增
     if (IsUnderSiege)

@@ -1,4 +1,4 @@
-﻿﻿// RecruitPool.cs
+// RecruitPool.cs
 // 城镇招募池 — 每个 POI 维护一份可招募列表，按周刷新
 using Godot;
 using System;
@@ -27,7 +27,7 @@ public partial class RecruitableUnit : Resource
 public partial class RecruitPool : Resource
 {
     [Export] public string PoiId { get; set; } = "";
-    [Export] public int LastRefreshDay { get; set; } = 0;
+    [Export] public int LastRefreshDay { get; set; } = -999;
     [Export] public int RefreshIntervalDays { get; set; } = 7;
 
     public List<RecruitableUnit> Available { get; set; } = new();
@@ -36,32 +36,49 @@ public partial class RecruitPool : Resource
     public bool NeedsRefresh(int currentDay) => currentDay - LastRefreshDay >= RefreshIntervalDays;
 
     /// <summary>刷新招募池</summary>
-    public void Refresh(int currentDay, NationConfig? nation, int poiTier, int seed)
+    public void Refresh(int currentDay, NationConfig? nation, int poiTier, int seed, float conscriptionMultiplier = 1.0f)
     {
         LastRefreshDay = currentDay;
         Available.Clear();
 
         var rng = new Random(seed ^ (PoiId.GetHashCode()) ^ (currentDay / RefreshIntervalDays));
 
-        // 数量：村庄 2-3，城镇 4-6，首都 6-8
-        int count = poiTier switch
+        // 数量：村庄 2-3，城镇 4-6，首都 6-8，乘以征兵权修正
+        int baseCount = poiTier switch
         {
             0 => 2 + rng.Next(2),  // village
             1 => 4 + rng.Next(3),  // town
             _ => 6 + rng.Next(3),  // capital
         };
+        int count = (int)(baseCount * conscriptionMultiplier);
 
         string[] pool = nation?.RecruitPool ?? new[] { "militia", "archer" };
         RaceData? race = GetRaceForNation(nation);
 
+        // T01: RecruitmentDifficulty filtering
+        // <= 0 → race never appears (story-only races)
+        // 1.0 → standard frequency (default)
+        // 2.0 → half frequency
+        if (race != null && race.RecruitmentDifficulty <= 0f)
+        {
+            GD.Print($"[RecruitPool] Skipping {PoiId}: race '{race.RaceName}' has RecruitmentDifficulty=0");
+            return;
+        }
+
+        // Apply difficulty weighting to count
+        float difficultyWeight = (race != null && race.RecruitmentDifficulty > 0f)
+            ? 1.0f / race.RecruitmentDifficulty
+            : 1.0f;
+        count = Math.Max(1, (int)(count * difficultyWeight));
+
         for (int i = 0; i < count; i++)
         {
-            string templateId = pool[rng.Next(pool.Length)];
-            int level = 1 + rng.Next(3); // 1-3 级
-            var unit = CharacterGenerator.GenerateCharacter(race, level, seedVal: rng.Next());
-
-            // 按模板覆盖名字前缀
-            unit.UnitName = $"{GetTemplateName(templateId)}·{unit.UnitName}";
+        	string templateId = pool[rng.Next(pool.Length)];
+        	int level = 1 + rng.Next(3); // 1-3 级
+        	var unit = CharacterGenerator.GenerateCharacter(race, level, seedVal: rng.Next(), templateId: templateId);
+      
+        	// 按模板覆盖名字前缀
+        	unit.UnitName = $"{GetTemplateName(templateId)}·{unit.UnitName}";
             Available.Add(new RecruitableUnit
             {
                 TemplateId = templateId,

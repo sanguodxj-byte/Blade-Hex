@@ -40,47 +40,58 @@ public sealed class UpperBodySkeleton
     public SubViewport Viewport { get; private set; } = null!;
 
     // ═══════════════════════════════════════════
-    // 2D 骨骼节点（在 SubViewport 内）
+    // 动态存储容器（拓扑解耦）
+    // ═══════════════════════════════════════════
+
+    private readonly Dictionary<string, Node2D> _bones = new();
+    private readonly Dictionary<string, Sprite2D> _slots = new();
+
+    // ═══════════════════════════════════════════
+    // 2D 骨骼节点（在 SubViewport 内）- 只读 Shortcut 属性保障兼容
     // ═══════════════════════════════════════════
 
     /// <summary>2D 骨骼根</summary>
     public Node2D BoneRoot { get; private set; } = null!;
 
     /// <summary>躯干骨骼</summary>
-    public Node2D BoneTorso { get; private set; } = null!;
+    public Node2D BoneTorso => _bones.GetValueOrDefault("Torso")!;
 
     /// <summary>头部骨骼</summary>
-    public Node2D BoneHead { get; private set; } = null!;
+    public Node2D BoneHead => _bones.GetValueOrDefault("Head")!;
 
     /// <summary>左臂骨骼</summary>
-    public Node2D BoneArmL { get; private set; } = null!;
+    public Node2D BoneArmL => _bones.GetValueOrDefault("ArmL")!;
 
     /// <summary>左前臂骨骼</summary>
-    public Node2D BoneForearmL { get; private set; } = null!;
+    public Node2D BoneForearmL => _bones.GetValueOrDefault("ForearmL")!;
 
     /// <summary>右臂骨骼</summary>
-    public Node2D BoneArmR { get; private set; } = null!;
+    public Node2D BoneArmR => _bones.GetValueOrDefault("ArmR")!;
 
     /// <summary>右前臂骨骼</summary>
-    public Node2D BoneForearmR { get; private set; } = null!;
+    public Node2D BoneForearmR => _bones.GetValueOrDefault("ForearmR")!;
 
     /// <summary>武器挂载骨骼</summary>
-    public Node2D BoneWeapon { get; private set; } = null!;
+    public Node2D BoneWeapon => _bones.GetValueOrDefault("Weapon")!;
 
     /// <summary>盾牌挂载骨骼</summary>
-    public Node2D BoneShield { get; private set; } = null!;
+    public Node2D BoneShield => _bones.GetValueOrDefault("Shield")!;
 
     // ═══════════════════════════════════════════
-    // Sprite2D 部件（在 SubViewport 内，ZIndex 控制层级）
+    // Sprite2D 部件（在 SubViewport 内）- 只读 Shortcut 属性保障兼容
     // ═══════════════════════════════════════════
 
-    public Sprite2D SpriteBody { get; private set; } = null!;
-    public Sprite2D SpriteCostume { get; private set; } = null!;
-    public Sprite2D SpriteHead { get; private set; } = null!;
-    public Sprite2D SpriteHelmet { get; private set; } = null!;
-    public Sprite2D SpriteHands { get; private set; } = null!;
-    public Sprite2D SpriteWeapon { get; private set; } = null!;
-    public Sprite2D SpriteShield { get; private set; } = null!;
+    public Sprite2D SpriteBody => _slots.GetValueOrDefault("Body")!;
+    public Sprite2D SpriteCostume => _slots.GetValueOrDefault("Costume")!;
+    public Sprite2D SpriteHead => _slots.GetValueOrDefault("Face")!; // 兼容旧版，重定向到 Face 贴图层
+    public Sprite2D SpriteFace => _slots.GetValueOrDefault("Face")!;
+    public Sprite2D SpriteHair => _slots.GetValueOrDefault("Hair")!;
+    public Sprite2D SpriteHelmet => _slots.GetValueOrDefault("Helmet")!;
+    public Sprite2D SpriteHands => _slots.GetValueOrDefault("Hands")!;
+    public Sprite2D SpriteHandsL => _slots.GetValueOrDefault("HandsL")!;
+    public Sprite2D SpriteWeapon => _slots.GetValueOrDefault("Weapon")!;
+    public Sprite2D SpriteShield => _slots.GetValueOrDefault("Shield")!;
+
 
     // ─── 配置 ───
     public BoneConfig Config { get; private set; } = null!;
@@ -115,6 +126,7 @@ public sealed class UpperBodySkeleton
             Size = new Vector2I(ViewportWidth, ViewportHeight),
             TransparentBg = true,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
+            Msaa2D = SubViewport.Msaa.Msaa4X,
             // 不需要自己的 World2D/3D，共享父级即可
             // 但我们需要隔离 2D 内容，所以用独立 world
             OwnWorld3D = false,
@@ -131,6 +143,10 @@ public sealed class UpperBodySkeleton
             Centered = true,
             // Offset 补偿：角色脚底在画布 85% 高度处，需要向上偏移使脚底对齐 3D 原点
             Offset = new Vector2(0, -(ViewportHeight * 0.5f - ViewportHeight * 0.85f)),
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear,
+            Shaded = false,
+            // 底座+半身风格：不投真实影(半身剪影会显怪)，单位接地靠底座 + 脚下 blob 接触阴影
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         Root.AddChild(Billboard);
 
@@ -152,44 +168,52 @@ public sealed class UpperBodySkeleton
         // 单位：像素（SubViewport 内的像素坐标）
 
         // 躯干
-        BoneTorso = new Node2D { Name = "Bone_Torso" };
-        BoneTorso.Position = Vector2.Zero;
-        BoneRoot.AddChild(BoneTorso);
+        var torso = new Node2D { Name = "Bone_Torso" };
+        torso.Position = Vector2.Zero;
+        BoneRoot.AddChild(torso);
+        _bones["Torso"] = torso;
 
         // 头部（躯干上方）
-        BoneHead = new Node2D { Name = "Bone_Head" };
-        BoneHead.Position = new Vector2(0, -config.HeadOffsetY); // 向上
-        BoneTorso.AddChild(BoneHead);
+        var head = new Node2D { Name = "Bone_Head" };
+        head.Position = new Vector2(0, -config.HeadOffsetY); // 向上
+        torso.AddChild(head);
+        _bones["Head"] = head;
 
         // 左臂（肩关节）
-        BoneArmL = new Node2D { Name = "Bone_ArmL" };
-        BoneArmL.Position = new Vector2(-config.ShoulderWidth, -config.ShoulderY);
-        BoneTorso.AddChild(BoneArmL);
+        var armL = new Node2D { Name = "Bone_ArmL" };
+        armL.Position = new Vector2(-config.ShoulderWidth, -config.ShoulderY);
+        torso.AddChild(armL);
+        _bones["ArmL"] = armL;
 
         // 左前臂
-        BoneForearmL = new Node2D { Name = "Bone_ForearmL" };
-        BoneForearmL.Position = new Vector2(0, config.UpperArmLength); // 向下（上臂末端）
-        BoneArmL.AddChild(BoneForearmL);
+        var forearmL = new Node2D { Name = "Bone_ForearmL" };
+        forearmL.Position = new Vector2(0, config.UpperArmLength); // 向下（上臂末端）
+        armL.AddChild(forearmL);
+        _bones["ForearmL"] = forearmL;
 
         // 盾牌挂载
-        BoneShield = new Node2D { Name = "Bone_Shield" };
-        BoneShield.Position = new Vector2(config.ShieldMountOffset.X, -config.ShieldMountOffset.Y);
-        BoneForearmL.AddChild(BoneShield);
+        var shield = new Node2D { Name = "Bone_Shield" };
+        shield.Position = new Vector2(config.ShieldMountOffset.X, -config.ShieldMountOffset.Y);
+        forearmL.AddChild(shield);
+        _bones["Shield"] = shield;
 
         // 右臂
-        BoneArmR = new Node2D { Name = "Bone_ArmR" };
-        BoneArmR.Position = new Vector2(config.ShoulderWidth, -config.ShoulderY);
-        BoneTorso.AddChild(BoneArmR);
+        var armR = new Node2D { Name = "Bone_ArmR" };
+        armR.Position = new Vector2(config.ShoulderWidth, -config.ShoulderY);
+        torso.AddChild(armR);
+        _bones["ArmR"] = armR;
 
         // 右前臂
-        BoneForearmR = new Node2D { Name = "Bone_ForearmR" };
-        BoneForearmR.Position = new Vector2(0, config.UpperArmLength);
-        BoneArmR.AddChild(BoneForearmR);
+        var forearmR = new Node2D { Name = "Bone_ForearmR" };
+        forearmR.Position = new Vector2(0, config.UpperArmLength);
+        armR.AddChild(forearmR);
+        _bones["ForearmR"] = forearmR;
 
         // 武器挂载
-        BoneWeapon = new Node2D { Name = "Bone_Weapon" };
-        BoneWeapon.Position = new Vector2(config.WeaponMountOffset.X, -config.WeaponMountOffset.Y);
-        BoneForearmR.AddChild(BoneWeapon);
+        var weapon = new Node2D { Name = "Bone_Weapon" };
+        weapon.Position = new Vector2(config.WeaponMountOffset.X, -config.WeaponMountOffset.Y);
+        forearmR.AddChild(weapon);
+        _bones["Weapon"] = weapon;
     }
 
     private void BuildSprites2D(BoneConfig config)
@@ -198,50 +222,75 @@ public sealed class UpperBodySkeleton
         // Body=0, Costume=10, Head=20, Helmet=30, ArmL=-5, Shield=-10, ArmR=5, Hands=40, Weapon=50
 
         // 身体
-        SpriteBody = CreateSprite2D("Sprite_Body", 0);
-        SpriteBody.Position = new Vector2(0, -config.TorsoHeight * 0.5f);
-        BoneTorso.AddChild(SpriteBody);
-        _slotSprites[ItemData.EquipSlot.Body] = SpriteBody;
+        var body = CreateSprite2D("Sprite_Body", 0);
+        body.Position = new Vector2(0, -config.TorsoHeight * 0.5f);
+        BoneTorso.AddChild(body);
+        _slots["Body"] = body;
+        _slotSprites[ItemData.EquipSlot.Body] = body;
 
         // 护甲
-        SpriteCostume = CreateSprite2D("Sprite_Costume", 10);
-        SpriteCostume.Position = new Vector2(0, -config.TorsoHeight * 0.35f);
-        SpriteCostume.Visible = false;
-        BoneTorso.AddChild(SpriteCostume);
-        _slotSprites[ItemData.EquipSlot.Costume] = SpriteCostume;
+        var costume = CreateSprite2D("Sprite_Costume", 10);
+        costume.Position = new Vector2(0, -config.TorsoHeight * 0.35f);
+        costume.Visible = false;
+        BoneTorso.AddChild(costume);
+        _slots["Costume"] = costume;
+        _slotSprites[ItemData.EquipSlot.Costume] = costume;
 
-        // 头部
-        SpriteHead = CreateSprite2D("Sprite_Head", 20);
-        SpriteHead.Position = Vector2.Zero;
-        BoneHead.AddChild(SpriteHead);
-        _slotSprites[ItemData.EquipSlot.Head] = SpriteHead;
+        // 脸部
+        var face = CreateSprite2D("Sprite_Face", 20);
+        face.Position = Vector2.Zero;
+        BoneHead.AddChild(face);
+        _slots["Face"] = face;
+        _slots["Head"] = face; // 兼容旧版名称
+        _slotSprites[ItemData.EquipSlot.Face] = face;
+        _slotSprites[ItemData.EquipSlot.Head] = face; // 兼容旧版槽位
+
+        // 发型+胡须合并层 (ZIndex = 25，纹理内已包含胡须)
+        var hair = CreateSprite2D("Sprite_Hair", 25);
+        hair.Position = Vector2.Zero;
+        hair.Visible = false;
+        BoneHead.AddChild(hair);
+        _slots["Hair"] = hair;
+        _slotSprites[ItemData.EquipSlot.Hair] = hair;
 
         // 头盔
-        SpriteHelmet = CreateSprite2D("Sprite_Helmet", 30);
-        SpriteHelmet.Position = new Vector2(0, -8);
-        SpriteHelmet.Visible = false;
-        BoneHead.AddChild(SpriteHelmet);
-        _slotSprites[ItemData.EquipSlot.Helmet] = SpriteHelmet;
+        var helmet = CreateSprite2D("Sprite_Helmet", 30);
+        helmet.Position = new Vector2(0, -16);
+        helmet.Visible = false;
+        BoneHead.AddChild(helmet);
+        _slots["Helmet"] = helmet;
+        _slotSprites[ItemData.EquipSlot.Helmet] = helmet;
 
         // 盾牌（左前臂末端，在身体后面）
-        SpriteShield = CreateSprite2D("Sprite_Shield", -10);
-        SpriteShield.Position = Vector2.Zero;
-        SpriteShield.Visible = false;
-        BoneShield.AddChild(SpriteShield);
+        var shield = CreateSprite2D("Sprite_Shield", -10);
+        shield.Position = Vector2.Zero;
+        shield.Visible = false;
+        BoneShield.AddChild(shield);
+        _slots["Shield"] = shield;
+        _slotSprites[ItemData.EquipSlot.Shield] = shield;
 
         // 手甲（右前臂）
-        SpriteHands = CreateSprite2D("Sprite_Hands", 40);
-        SpriteHands.Position = Vector2.Zero;
-        SpriteHands.Visible = false;
-        BoneForearmR.AddChild(SpriteHands);
-        _slotSprites[ItemData.EquipSlot.Hands] = SpriteHands;
+        var hands = CreateSprite2D("Sprite_Hands", 40);
+        hands.Position = Vector2.Zero;
+        hands.Visible = false;
+        BoneForearmR.AddChild(hands);
+        _slots["Hands"] = hands;
+        _slotSprites[ItemData.EquipSlot.Hands] = hands;
+
+        // 手甲（左前臂 — 新增，挂载在左前臂上以实现左手套的拆分同步）
+        var handsL = CreateSprite2D("Sprite_HandsL", 40);
+        handsL.Position = Vector2.Zero;
+        handsL.Visible = false;
+        BoneForearmL.AddChild(handsL);
+        _slots["HandsL"] = handsL;
 
         // 武器（最前层）
-        SpriteWeapon = CreateSprite2D("Sprite_Weapon", 50);
-        SpriteWeapon.Position = Vector2.Zero;
-        SpriteWeapon.Visible = false;
-        BoneWeapon.AddChild(SpriteWeapon);
-        _slotSprites[ItemData.EquipSlot.Weapon] = SpriteWeapon;
+        var weapon = CreateSprite2D("Sprite_Weapon", 50);
+        weapon.Position = Vector2.Zero;
+        weapon.Visible = false;
+        BoneWeapon.AddChild(weapon);
+        _slots["Weapon"] = weapon;
+        _slotSprites[ItemData.EquipSlot.Weapon] = weapon;
     }
 
     private static Sprite2D CreateSprite2D(string name, int zIndex)
@@ -251,6 +300,7 @@ public sealed class UpperBodySkeleton
             Name = name,
             ZIndex = zIndex,
             Centered = true,
+            TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps,
         };
     }
 
@@ -259,19 +309,14 @@ public sealed class UpperBodySkeleton
     // ═══════════════════════════════════════════
 
     // ╔══════════════════════════════════════════════════════════════════╗
-    // ║ 【强制规则 - 禁止修改】                                          ║
+    // ║ 【朝向规则 - 整体镜像翻转】                                      ║
     // ║                                                                  ║
-    // ║ 实测确认：2D 正 X = 屏幕右侧（无 billboard 镜像）。              ║
-    // ║ ArmR 在骨骼正 X 方向，不翻转时出现在屏幕右侧。                   ║
+    // ║ 美术资源默认面向右侧，但渲染输出时整体镜像了一次，实际呈现为面朝左。║
+    // ║ 因此 Scale.X 符号需要相对于"贴图朝向"反转一次。                    ║
     // ║                                                                  ║
-    // ║ 游戏规则：面朝某方向时，武器手（右手）在该方向的反侧。            ║
-    // ║ 即：面朝右 → 武器在屏幕左侧。                                    ║
-    // ║                                                                  ║
-    // ║ 因此：                                                           ║
-    // ║   面朝右（facingLeft=false）→ Scale.X = -1（翻转，武器到左侧）   ║
-    // ║   面朝左（facingLeft=true） → Scale.X = 1（不翻转，武器到右侧）  ║
-    // ║                                                                  ║
-    // ║ 【禁止】以任何理由修改此函数的翻转方向。                          ║
+    // ║ 游戏规则：                                                       ║
+    // ║   面朝右（facingLeft=false）→ Scale.X = -1（镜像，呈现朝右）       ║
+    // ║   面朝左（facingLeft=true） → Scale.X = 1（不镜像，呈现朝左）      ║
     // ╚══════════════════════════════════════════════════════════════════╝
 
     /// <summary>设置朝向（2D 镜像）</summary>
@@ -304,16 +349,24 @@ public sealed class UpperBodySkeleton
             Viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
     }
 
-    /// <summary>重置所有骨骼到零姿态</summary>
+    /// <summary>重置所有骨骼到零姿态（基于骨骼默认偏移回位，杜绝脱节）</summary>
     public void ResetPose()
     {
-        BoneTorso.Position = Vector2.Zero;
-        BoneTorso.RotationDegrees = 0;
-        BoneHead.RotationDegrees = 0;
-        BoneArmL.RotationDegrees = 0;
-        BoneArmR.RotationDegrees = 0;
-        BoneForearmL.RotationDegrees = 0;
-        BoneForearmR.RotationDegrees = 0;
-        BoneWeapon.RotationDegrees = 0;
+        // 1. 各骨骼节点恢复到 Config 对应的默认局部坐标
+        if (_bones.TryGetValue("Torso", out var torso)) torso.Position = Vector2.Zero;
+        if (_bones.TryGetValue("Head", out var head)) head.Position = new Vector2(0, -Config.HeadOffsetY);
+        if (_bones.TryGetValue("ArmL", out var armL)) armL.Position = new Vector2(-Config.ShoulderWidth, -Config.ShoulderY);
+        if (_bones.TryGetValue("ForearmL", out var forearmL)) forearmL.Position = new Vector2(0, Config.UpperArmLength);
+        if (_bones.TryGetValue("Shield", out var shield)) shield.Position = new Vector2(Config.ShieldMountOffset.X, -Config.ShieldMountOffset.Y);
+        if (_bones.TryGetValue("ArmR", out var armR)) armR.Position = new Vector2(Config.ShoulderWidth, -Config.ShoulderY);
+        if (_bones.TryGetValue("ForearmR", out var forearmR)) forearmR.Position = new Vector2(0, Config.UpperArmLength);
+        if (_bones.TryGetValue("Weapon", out var weapon)) weapon.Position = new Vector2(Config.WeaponMountOffset.X, -Config.WeaponMountOffset.Y);
+
+        // 2. 清空所有的旋转与缩放
+        foreach (var bone in _bones.Values)
+        {
+            bone.RotationDegrees = 0;
+            bone.Scale = Vector2.One;
+        }
     }
 }

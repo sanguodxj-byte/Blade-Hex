@@ -96,11 +96,25 @@ public partial class CombatMinimapPanel : MinimapPanelBase
         _worldHeight = _mapH * HexUtils.VerticalSpacing;
 
         BuildBaseUI();
+        ApplyCombatFrameStyle();
         BakeTerrain();
         Initialized = true;
 
         // 正方形 150×150 渲染图,面板也正方形
-        CustomMinimumSize = new Vector2(RenderResolution, RenderResolution);
+        float panelSide = RenderResolution + PanelMargin * 2;
+        CustomMinimumSize = new Vector2(panelSide, panelSide);
+    }
+
+    private void ApplyCombatFrameStyle()
+    {
+        var style = new StyleBoxFlat();
+        style.BgColor = new Color(0.040f, 0.036f, 0.032f, 0.88f);
+        style.SetBorderWidthAll(1);
+        style.BorderColor = new Color(0.42f, 0.34f, 0.23f, 0.80f);
+        style.SetCornerRadiusAll(4);
+        style.SetContentMarginAll(4);
+        AddThemeStyleboxOverride("panel", style);
+        Modulate = new Color(1, 1, 1, 0.88f);
     }
 
     // ========================================
@@ -305,7 +319,7 @@ public partial class CombatMinimapPanel : MinimapPanelBase
             BattleCellData.TerrainType.Swamp => new Color(0.35f, 0.42f, 0.25f),
             BattleCellData.TerrainType.Road => new Color(0.65f, 0.55f, 0.4f),
             BattleCellData.TerrainType.Sand => new Color(0.82f, 0.75f, 0.5f),
-            BattleCellData.TerrainType.Snow => new Color(0.88f, 0.9f, 0.93f),
+            BattleCellData.TerrainType.Snow => new Color(0.64f, 0.70f, 0.73f),
             BattleCellData.TerrainType.Wall => new Color(0.35f, 0.35f, 0.38f),
             BattleCellData.TerrainType.Ruins => new Color(0.5f, 0.45f, 0.4f),
             _ => new Color(0.5f, 0.5f, 0.5f),

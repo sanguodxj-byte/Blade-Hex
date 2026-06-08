@@ -138,8 +138,8 @@ public static class ProjectileSystemTests
         float speed = 10.0f;
 
         float time = ProjectileTrajectory.CalculateTravelTime(from, to, speed);
-        // distance=100, speed=10 → time=10
-        return Mathf.Abs(time - 10.0f) < 0.01f;
+        float expectedTime = 100.0f / (speed * HexUtils.Size * Mathf.Sqrt(3.0f));
+        return Mathf.Abs(time - expectedTime) < 0.01f;
     }
 
     // ========================================

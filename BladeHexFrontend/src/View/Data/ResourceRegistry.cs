@@ -1,279 +1,298 @@
-// ResourceRegistry.cs
-// View 层资源注册表 — id → Resource 查表
-// 职责：Core 数据类只持 string IconId / SpriteFramesId / MaterialId，View 启动时扫描资源并做 id→Resource 映射
-// 设计：
-//   - 纯静态类（不作为 Node 挂到场景树）
-//   - 懒加载 + 缓存：首次 Get 才 GD.Load，之后走字典
-//   - 支持手动 Register（测试/热重载）
-//   - Miss 时返回 null，不抛异常（调用方自行决定 fallback）
+using BladeHex.View.AssetSystem;
 using Godot;
 using System;
 using System.Collections.Generic;
 
 namespace BladeHex.View.Data;
 
-/// <summary>
-/// View 层资源注册表（线程不安全 —— Godot 主线程使用）
-/// </summary>
 public static class ResourceRegistry
 {
-    // id → 资源路径（manifest 扫描结果）
-    private static readonly Dictionary<string, string> _iconPaths = new();
-    private static readonly Dictionary<string, string> _spriteFramesPaths = new();
-    private static readonly Dictionary<string, string> _materialPaths = new();
+    private const string ManifestPath = "res://assets/resource_manifest.json";
 
-    // id → 已加载资源的缓存
-    private static readonly Dictionary<string, Texture2D> _iconCache = new();
-    private static readonly Dictionary<string, SpriteFrames> _spriteFramesCache = new();
-    private static readonly Dictionary<string, Material> _materialCache = new();
+    private static readonly Dictionary<string, string> IconPaths = new();
+    private static readonly Dictionary<string, string> SpriteFramesPaths = new();
+    private static readonly Dictionary<string, string> MaterialPaths = new();
 
-    // 初始化状态（供 T-305 实装时替换）
+    private static readonly Dictionary<string, Texture2D> IconCache = new();
+    private static readonly Dictionary<string, SpriteFrames> SpriteFramesCache = new();
+    private static readonly Dictionary<string, Material> MaterialCache = new();
+
+    private static readonly string[] DefaultIconDirs =
+    [
+        "res://assets",
+        "res://BladeHexFrontend/src/assets/generated/class_icons",
+        "res://BladeHexFrontend/src/assets/generated/accessories",
+        "res://BladeHexFrontend/src/assets/generated/armor",
+        "res://BladeHexFrontend/src/assets/generated/consumables",
+        "res://BladeHexFrontend/src/assets/tiles",
+        "res://BladeHexFrontend/src/assets/props",
+    ];
+
     public static bool IsInitialized { get; private set; }
 
-    // ========================================
-    // 初始化
-    // ========================================
-
-    /// <summary>
-    /// 骨架实装：扫描默认资源目录建立 id → 路径映射
-    /// T-305 会扩展为支持 manifest JSON 与多目录扫描
-    /// </summary>
     public static void Initialize()
     {
-        if (IsInitialized) return;
+        if (IsInitialized)
+            return;
+
         ScanIconDirectories();
         LoadManifest();
         IsInitialized = true;
-        GD.Print($"[ResourceRegistry] Initialized: {_iconPaths.Count} icons, {_spriteFramesPaths.Count} sprite frames, {_materialPaths.Count} materials");
+        GD.Print($"[ResourceRegistry] Initialized: {IconPaths.Count} icons, {SpriteFramesPaths.Count} sprite frames, {MaterialPaths.Count} materials");
     }
 
-    /// <summary>强制重扫（热重载）</summary>
     public static void Reload()
     {
         Clear();
         Initialize();
     }
 
-    /// <summary>清空注册簿（测试用）</summary>
     public static void Clear()
     {
-        _iconPaths.Clear();
-        _spriteFramesPaths.Clear();
-        _materialPaths.Clear();
-        _iconCache.Clear();
-        _spriteFramesCache.Clear();
-        _materialCache.Clear();
+        IconPaths.Clear();
+        SpriteFramesPaths.Clear();
+        MaterialPaths.Clear();
+        IconCache.Clear();
+        SpriteFramesCache.Clear();
+        MaterialCache.Clear();
         IsInitialized = false;
     }
 
-    // ========================================
-    // 手动注册（测试 / 动态资源）
-    // ========================================
+    public static void RegisterIcon(string id, string resPath)
+    {
+        IconPaths[id] = resPath;
+    }
 
-    public static void RegisterIcon(string id, string resPath)    => _iconPaths[id] = resPath;
-    public static void RegisterIcon(string id, Texture2D texture) => _iconCache[id] = texture;
+    public static void RegisterIcon(string id, Texture2D texture)
+    {
+        IconCache[id] = texture;
+    }
 
-    public static void RegisterSpriteFrames(string id, string resPath)     => _spriteFramesPaths[id] = resPath;
-    public static void RegisterSpriteFrames(string id, SpriteFrames frames) => _spriteFramesCache[id] = frames;
+    public static void RegisterSpriteFrames(string id, string resPath)
+    {
+        SpriteFramesPaths[id] = resPath;
+    }
 
-    public static void RegisterMaterial(string id, string resPath) => _materialPaths[id] = resPath;
-    public static void RegisterMaterial(string id, Material mat)   => _materialCache[id] = mat;
+    public static void RegisterSpriteFrames(string id, SpriteFrames frames)
+    {
+        SpriteFramesCache[id] = frames;
+    }
 
-    // ========================================
-    // 查表
-    // ========================================
+    public static void RegisterMaterial(string id, string resPath)
+    {
+        MaterialPaths[id] = resPath;
+    }
+
+    public static void RegisterMaterial(string id, Material material)
+    {
+        MaterialCache[id] = material;
+    }
 
     public static Texture2D? GetIcon(string? id)
     {
-        if (string.IsNullOrEmpty(id)) return null;
-        if (_iconCache.TryGetValue(id, out var cached)) return cached;
-        if (_iconPaths.TryGetValue(id, out var path))
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        if (IconCache.TryGetValue(id, out var cached))
+            return cached;
+
+        if (TryGetPathCaseInsensitive(IconPaths, id, out var path))
         {
-            var tex = GD.Load<Texture2D>(path);
-            if (tex != null) _iconCache[id] = tex;
-            return tex;
+            var texture = LoadTexture(path);
+            if (texture != null)
+                IconCache[id] = texture;
+
+            return texture;
         }
-        // 大小写不敏感 fallback（处理 ChainMail vs Chainmail 等情况）
-        foreach (var kvp in _iconPaths)
-        {
-            if (string.Equals(kvp.Key, id, StringComparison.OrdinalIgnoreCase))
-            {
-                var tex = GD.Load<Texture2D>(kvp.Value);
-                if (tex != null) _iconCache[id] = tex;
-                return tex;
-            }
-        }
+
         return null;
     }
 
     public static SpriteFrames? GetSpriteFrames(string? id)
     {
-        if (string.IsNullOrEmpty(id)) return null;
-        if (_spriteFramesCache.TryGetValue(id, out var cached)) return cached;
-        if (_spriteFramesPaths.TryGetValue(id, out var path))
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        if (SpriteFramesCache.TryGetValue(id, out var cached))
+            return cached;
+
+        if (SpriteFramesPaths.TryGetValue(id, out var path))
         {
-            var frames = GD.Load<SpriteFrames>(path);
-            if (frames != null) _spriteFramesCache[id] = frames;
+            var frames = SpriteFramesFileLoader.Load(path);
+            if (frames != null)
+                SpriteFramesCache[id] = frames;
+
             return frames;
         }
+
         return null;
     }
 
     public static Material? GetMaterial(string? id)
     {
-        if (string.IsNullOrEmpty(id)) return null;
-        if (_materialCache.TryGetValue(id, out var cached)) return cached;
-        if (_materialPaths.TryGetValue(id, out var path))
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        if (MaterialCache.TryGetValue(id, out var cached))
+            return cached;
+
+        if (MaterialPaths.TryGetValue(id, out var path))
         {
-            var mat = GD.Load<Material>(path);
-            if (mat != null) _materialCache[id] = mat;
-            return mat;
+            var material = MaterialAssetResolver.Load(path);
+            if (material != null)
+                MaterialCache[id] = material;
+
+            return material;
         }
+
         return null;
     }
 
-    /// <summary>泛型查表（按 T 类型自动分派到 icon/frames/material）</summary>
-    public static bool TryGet<T>(string? id, out T? res) where T : Resource
+    public static bool TryGet<T>(string? id, out T? resource) where T : Resource
     {
-        res = null;
-        if (string.IsNullOrEmpty(id)) return false;
+        resource = null;
+        if (string.IsNullOrEmpty(id))
+            return false;
 
         if (typeof(T) == typeof(Texture2D))
-        {
-            res = GetIcon(id) as T;
-        }
+            resource = GetIcon(id) as T;
         else if (typeof(T) == typeof(SpriteFrames))
-        {
-            res = GetSpriteFrames(id) as T;
-        }
+            resource = GetSpriteFrames(id) as T;
         else if (typeof(T) == typeof(Material))
-        {
-            res = GetMaterial(id) as T;
-        }
-        else
-        {
-            // 回退：分别查 3 张表里有没有匹配路径
-            if (_iconPaths.TryGetValue(id, out var p1)) { res = GD.Load<T>(p1); }
-            else if (_spriteFramesPaths.TryGetValue(id, out var p2)) { res = GD.Load<T>(p2); }
-            else if (_materialPaths.TryGetValue(id, out var p3)) { res = GD.Load<T>(p3); }
-        }
-        return res != null;
+            resource = GetMaterial(id) as T;
+        else if (IconPaths.TryGetValue(id, out var iconPath))
+            resource = ResourceAssetResolver.LoadPath<T>(iconPath);
+        else if (SpriteFramesPaths.TryGetValue(id, out var framesPath))
+            resource = ResourceAssetResolver.LoadPath<T>(framesPath);
+        else if (MaterialPaths.TryGetValue(id, out var materialPath))
+            resource = ResourceAssetResolver.LoadPath<T>(materialPath);
+
+        return resource != null;
     }
 
-    // ========================================
-    // Manifest 加载（T-305 实装）
-    // ========================================
-
-    private const string ManifestPath = "res://assets/resource_manifest.json";
-
-    /// <summary>
-    /// 从 resource_manifest.json 加载 id → 路径映射
-    /// 如果文件不存在或解析失败，静默跳过（仅靠目录扫描兜底）
-    /// </summary>
     private static void LoadManifest()
     {
-        if (!Godot.FileAccess.FileExists(ManifestPath)) return;
+        if (!FileAccess.FileExists(ManifestPath))
+            return;
 
-        using var file = Godot.FileAccess.Open(ManifestPath, Godot.FileAccess.ModeFlags.Read);
-        if (file == null) return;
+        using var file = FileAccess.Open(ManifestPath, FileAccess.ModeFlags.Read);
+        if (file == null)
+            return;
 
-        var json = file.GetAsText();
-        if (string.IsNullOrEmpty(json)) return;
+        string json = file.GetAsText();
+        if (string.IsNullOrEmpty(json))
+            return;
 
         try
         {
-            var jsonParser = new Godot.Json();
-            var parseError = jsonParser.Parse(json);
-            if (parseError != Godot.Error.Ok) return;
+            var parser = new Json();
+            if (parser.Parse(json) != Error.Ok)
+                return;
 
-            var data = jsonParser.Data;
-            if (data.VariantType != Godot.Variant.Type.Dictionary) return;
+            var data = parser.Data;
+            if (data.VariantType != Variant.Type.Dictionary)
+                return;
 
             var manifest = data.AsGodotDictionary();
-            int preCount = _iconPaths.Count;
-
-            if (manifest.TryGetValue("icons", out var iconsVar) && iconsVar.VariantType == Godot.Variant.Type.Dictionary)
-            {
-                var icons = iconsVar.AsGodotDictionary();
-                foreach (var key in icons.Keys)
-                    _iconPaths[key.AsString()] = icons[key].AsString();
-            }
-            if (manifest.TryGetValue("sprite_frames", out var framesVar) && framesVar.VariantType == Godot.Variant.Type.Dictionary)
-            {
-                var frames = framesVar.AsGodotDictionary();
-                foreach (var key in frames.Keys)
-                    _spriteFramesPaths[key.AsString()] = frames[key].AsString();
-            }
-            if (manifest.TryGetValue("materials", out var matsVar) && matsVar.VariantType == Godot.Variant.Type.Dictionary)
-            {
-                var mats = matsVar.AsGodotDictionary();
-                foreach (var key in mats.Keys)
-                    _materialPaths[key.AsString()] = mats[key].AsString();
-            }
-
-            int added = _iconPaths.Count - preCount;
-            GD.Print($"[ResourceRegistry] Manifest loaded: {added} new icons");
+            int before = IconPaths.Count;
+            LoadManifestMap(manifest, "icons", IconPaths);
+            LoadManifestMap(manifest, "sprite_frames", SpriteFramesPaths);
+            LoadManifestMap(manifest, "materials", MaterialPaths);
+            GD.Print($"[ResourceRegistry] Manifest loaded: {IconPaths.Count - before} new icons");
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             GD.PrintErr($"[ResourceRegistry] Manifest parse error: {ex.Message}");
         }
     }
 
-    // ========================================
-    // 骨架扫描（T-305 实装）
-    // ========================================
-
-    private static readonly string[] DefaultIconDirs =
+    private static void LoadManifestMap(
+        Godot.Collections.Dictionary manifest,
+        string key,
+        Dictionary<string, string> target)
     {
-        // 统一扫描 assets 根目录下所有子目录
-        "res://assets",
-        // 旧路径（兼容）
-        "res://src/assets/generated/class_icons",
-        "res://src/assets/generated/accessories",
-        "res://src/assets/generated/armor",
-        "res://src/assets/generated/consumables",
-        "res://src/assets/tiles",
-    };
+        if (!manifest.TryGetValue(key, out var value) || value.VariantType != Variant.Type.Dictionary)
+            return;
+
+        var map = value.AsGodotDictionary();
+        foreach (var entryKey in map.Keys)
+            target[entryKey.AsString()] = map[entryKey].AsString();
+    }
 
     private static void ScanIconDirectories()
     {
         foreach (var dir in DefaultIconDirs)
+            TryScanDirRecursive(dir, IconPaths, ".png", stripExt: true);
+    }
+
+    private static void TryScanDirRecursive(
+        string dirPath,
+        Dictionary<string, string> target,
+        string extension,
+        bool stripExt)
+    {
+        using var dir = DirAccess.Open(dirPath);
+        if (dir == null)
+            return;
+
+        dir.ListDirBegin();
+        try
         {
-            TryScanDirRecursive(dir, _iconPaths, ".png", stripExt: true);
+            for (string file = dir.GetNext(); !string.IsNullOrEmpty(file); file = dir.GetNext())
+            {
+                if (dir.CurrentIsDir())
+                {
+                    if (file.StartsWith('.') || file.StartsWith('_'))
+                        continue;
+
+                    TryScanDirRecursive($"{dirPath}/{file}", target, extension, stripExt);
+                    continue;
+                }
+
+                if (!file.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string id = stripExt ? System.IO.Path.GetFileNameWithoutExtension(file) : file;
+                string path = $"{dirPath}/{file}";
+                target.TryAdd(id, path);
+
+                if (id.Length > 2 && id[^2] == '_' && id[^1] is >= 'a' and <= 'c')
+                {
+                    string baseId = id[..^2];
+                    if (id[^1] == 'a')
+                        target.TryAdd(baseId, path);
+                }
+            }
+        }
+        finally
+        {
+            dir.ListDirEnd();
         }
     }
 
-    /// <summary>递归扫描目录及其子目录中的所有图标文件</summary>
-    private static void TryScanDirRecursive(string dirPath, Dictionary<string, string> target, string ext, bool stripExt)
+    private static bool TryGetPathCaseInsensitive(
+        Dictionary<string, string> paths,
+        string id,
+        out string path)
     {
-        using var dir = DirAccess.Open(dirPath);
-        if (dir == null) return;
-        dir.ListDirBegin();
-        for (var file = dir.GetNext(); !string.IsNullOrEmpty(file); file = dir.GetNext())
-        {
-            if (dir.CurrentIsDir())
-            {
-                // 跳过隐藏目录和 _rework 等临时目录
-                if (file.StartsWith('.') || file.StartsWith('_')) continue;
-                TryScanDirRecursive($"{dirPath}/{file}", target, ext, stripExt);
-                continue;
-            }
-            if (!file.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) continue;
-            var id = stripExt ? System.IO.Path.GetFileNameWithoutExtension(file) : file;
-            var full = $"{dirPath}/{file}";
-            // 不覆盖已注册的（manifest 优先）
-            if (!target.ContainsKey(id))
-                target[id] = full;
+        if (paths.TryGetValue(id, out path!))
+            return true;
 
-            // 变体支持：如果文件名以 _a/_b/_c 结尾，也注册不带后缀的版本（_a 作为默认）
-            if (id.Length > 2 && id[^2] == '_' && id[^1] >= 'a' && id[^1] <= 'c')
+        foreach (var kvp in paths)
+        {
+            if (string.Equals(kvp.Key, id, StringComparison.OrdinalIgnoreCase))
             {
-                string baseId = id[..^2];
-                if (id[^1] == 'a' && !target.ContainsKey(baseId))
-                    target[baseId] = full;
+                path = kvp.Value;
+                return true;
             }
         }
-        dir.ListDirEnd();
+
+        path = "";
+        return false;
+    }
+
+    private static Texture2D? LoadTexture(string path)
+    {
+        return TextureFileLoader.Load(path);
     }
 }

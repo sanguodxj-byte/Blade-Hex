@@ -1,8 +1,10 @@
 // WeaponMastery.cs
+//
 // 武器精通系统 — 按「伤害类型 × 轻重」共 9 种精通轨道
 // 同类型同重量的所有变体共享同一精通进度（无视具体变体）
-// 精通等级 1-10，每级所需 XP 递增 100（100/200/.../1000）
-// 每级提供 +10% 伤害加成（不影响护甲/盾牌任何数值）
+// v0.7: 精通等级 1-15，每级所需 XP 公差 50（升到 Lv.N 总 XP = (N-1)*N/2 * 50）
+//   → 比角色等级升级更快，120 级角色应有约 Lv.13~14 主武器精通
+//   → 命中加成 floor(Lv/2)，最高 +7；伤害加成 +10%/级，最高 +150%
 
 using Godot;
 using System.Collections.Generic;
@@ -21,22 +23,24 @@ public class WeaponMastery
         WeaponData.WeightCategory Weight);
 
     // ========================================
-    // 精通经验表（1-10 级，每级递增 100 XP）
-    // Lv1=0, Lv2=100, Lv3=300, Lv4=600, Lv5=1000
-    // Lv6=1500, Lv7=2100, Lv8=2800, Lv9=3600, Lv10=4500
+    // 精通经验表（1-15 级，每级递增 50 XP）
+    // 比角色等级升级更快：120 级角色已达 Lv.13~14 主武器精通
+    // Lv1=0, Lv2=50, Lv3=150, Lv4=300, Lv5=500
+    // Lv6=750, Lv7=1050, Lv8=1400, Lv9=1800, Lv10=2250
+    // Lv11=2750, Lv12=3300, Lv13=3900, Lv14=4550, Lv15=5250
     // ========================================
 
-    public const int MaxMasteryLevel = 10;
+    public const int MaxMasteryLevel = 15;
 
-    /// <summary>升到第 level 级所需的总累计 XP</summary>
+    /// <summary>升到第 level 级所需的总累计 XP（公差 50，二次曲线）</summary>
     public static int XpForLevel(int level)
     {
         if (level <= 1) return 0;
         level = Mathf.Min(level, MaxMasteryLevel);
-        return (level - 1) * level / 2 * 100;
+        return (level - 1) * level / 2 * 50;
     }
 
-    /// <summary>根据累计 XP 反查当前精通等级（1-10）</summary>
+    /// <summary>根据累计 XP 反查当前精通等级（1-15）</summary>
     public static int LevelFromXp(int xp)
     {
         for (int lv = MaxMasteryLevel; lv >= 1; lv--)
@@ -44,7 +48,7 @@ public class WeaponMastery
         return 1;
     }
 
-    /// <summary>距离下一级还需要多少 XP（10级返回 0）</summary>
+    /// <summary>距离下一级还需要多少 XP（满级返回 0）</summary>
     public static int XpToNextLevel(int currentXp)
     {
         int lv = LevelFromXp(currentXp);
@@ -172,7 +176,7 @@ public class WeaponMastery
     public int GetLevelBySubtype(WeaponData.WeaponSubtype subtype)
         => GetLevel(GetKeyFor(subtype));
 
-    /// <summary>精通等级对应的伤害倍率加成（每级 +10%，10级最高 +100%）</summary>
+    /// <summary>精通等级对应的伤害倍率加成（每级 +10%，15 级最高 +150%）</summary>
     public float GetDamageBonus(WeaponData.WeaponSubtype subtype)
         => GetLevelBySubtype(subtype) * 0.1f;
 

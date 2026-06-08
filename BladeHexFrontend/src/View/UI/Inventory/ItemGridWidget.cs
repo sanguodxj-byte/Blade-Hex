@@ -3,7 +3,7 @@
 using Godot;
 using BladeHex.Data;
 using BladeHex.Strategic;
-using BladeHex.View.Data;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.View.UI.Inventory;
 
@@ -53,10 +53,7 @@ public static class ItemGridWidget
         ws.SetCornerRadiusAll(2);
         w.AddThemeStyleboxOverride("panel", ws);
 
-        // 图标 — 优先 ResourceRegistry 加载真实纹理，缺失则使用程序化占位符
-        Texture2D? tex = !string.IsNullOrEmpty(item.IconId)
-            ? (ResourceRegistry.GetIcon(item.IconId) ?? ResourceRegistry.GetIcon(item.IconFallbackId))
-            : null;
+        Texture2D? tex = TextureAssetResolver.LoadItemIcon(item);
 
         if (tex != null)
         {

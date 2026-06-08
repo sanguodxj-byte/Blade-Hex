@@ -4,6 +4,7 @@ using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.Localization;
 
 namespace BladeHex.UI;
 
@@ -99,18 +100,19 @@ public partial class QuestBoard : Control
     {
         if (_selectedQuest == null)
         {
-            _detailLabel.Text = "[center][color=gray]选择一个布告以查看详情[/color][/center]";
+            _detailLabel.Text = L10n.Tr("QUEST_BOARD_SELECT_PROMPT");
             _acceptBtn.Visible = false;
             return;
         }
 
         string d = $"[b][size={Theme.FontSizeLg}]{_selectedQuest.Title}[/size][/b]\n";
-        d += $"[color=gray]推荐等级: {_selectedQuest.RecommendedLevel}[/color]\n\n";
+        d += $"[color=gray]{L10n.Tr("QUEST_RECOMMENDED_LEVEL", _selectedQuest.RecommendedLevel)}[/color]\n\n";
         d += $"{_selectedQuest.Description}\n\n";
         
-        d += "[b]报酬:[/b]\n💰 金币: {_selectedQuest.RewardGold} | ✨ 经验: {_selectedQuest.RewardReputation}\n";
+        d += L10n.Tr("QUEST_PAY_HEADER") + "\n";
+        d += L10n.Tr("QUEST_REWARD_GOLD_EXP", _selectedQuest.RewardGold, _selectedQuest.RewardReputation) + "\n";
         if (_selectedQuest.RewardReputation != 0)
-            d += $"🤝 声望: {_selectedQuest.RewardReputation}\n";
+            d += L10n.Tr("QUEST_REWARD_REPUTATION", _selectedQuest.RewardReputation) + "\n";
 
         _detailLabel.Text = d;
         _acceptBtn.Visible = true;
@@ -122,7 +124,7 @@ public partial class QuestBoard : Control
         if (_manager?.ActiveQuests.Count >= 10)
         {
             canAccept = false;
-            reason = "任务列表已满 (10/10)";
+            reason = L10n.Tr("QUEST_REASON_LOG_FULL");
         }
         else
         {
@@ -133,14 +135,14 @@ public partial class QuestBoard : Control
                 if (player != null && player.Level < _selectedQuest.RecommendedLevel - 2)
                 {
                     canAccept = false;
-                    reason = "等级严重不足";
+                    reason = L10n.Tr("QUEST_REASON_LEVEL_TOO_LOW");
                 }
             }
         }
 
         _acceptBtn.Disabled = !canAccept;
         if (!canAccept)
-            _detailLabel.Text += $"\n\n[color=red]无法接取: {reason}[/color]";
+            _detailLabel.Text += "\n\n[color=red]" + L10n.Tr("QUEST_CANNOT_ACCEPT", reason) + "[/color]";
     }
 
     private void _on_accept_pressed()

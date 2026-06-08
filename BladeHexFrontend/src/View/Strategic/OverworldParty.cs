@@ -1,8 +1,9 @@
-﻿using Godot;
+using Godot;
 using System.Collections.Generic;
 using BladeHex.Map;
 using BladeHex.Data;
 using BladeHex.Strategic;
+using BladeHex.View.Map;
 
 namespace BladeHex.Strategic;
 
@@ -32,12 +33,32 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
 
     public List<Vector2> Path = new();
     [Export] public bool IsMoving { get; set; } = false;
+    [Export] public string ArmyId { get; set; } = "";
 
     /// <summary>最终目标位置 — 用于跨 chunk 持续寻路</summary>
     private Vector2 _finalTarget = Vector2.Zero;
 
     /// <summary>是否有跨 chunk 的远距离目标（需要到达边界后重新寻路）</summary>
     private bool _hasPendingTarget = false;
+
+    // ========================================
+    // 抛物线跳跃动画
+    // ========================================
+
+    /// <summary>跳跃最大高度（像素）</summary>
+    [Export] public float JumpMaxHeight { get; set; } = 25.0f;
+
+    /// <summary>当前跳跃进度 (0~1)</summary>
+    private float _jumpProgress = 0.0f;
+
+    /// <summary>当前跳跃的起始位置</summary>
+    private Vector2 _jumpStartPos = Vector2.Zero;
+
+    /// <summary>当前跳跃的目标位置</summary>
+    private Vector2 _jumpTargetPos = Vector2.Zero;
+
+    /// <summary>当前跳跃的距离</summary>
+    private float _jumpDistance = 0.0f;
 
     // ========================================
     // 六边形地图导航（替代旧 overworld_map）
@@ -49,6 +70,8 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
     /// <summary>Chunk 模式专用寻路</summary>
     public ChunkAStar? ChunkAStar;
     public ChunkManager? ChunkManager;
+    public OverworldMapAccess? MapAccess;
+    public OverworldNavigationAccess? NavigationAccess;
 
     // ========================================
     // 船只与海上航行
@@ -79,9 +102,121 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
     private BladeHex.View.Unit.CharacterView2D? _characterView;
     private Polygon2D? _fallbackPoly;
 
+    // ========================================
+    // NavigationAgent2D 集成
+    // ========================================
+
+    /// <summary>导航代理</summary>
+    private NavigationAgent2D? _navAgent;
+
+    /// <summary>是否使用 NavigationAgent2D 移动</summary>
+    private bool _useNavAgent = false;
+
+    /// <summary>NavigationAgent2D 目标位置</summary>
+    private Vector2 _navTarget = Vector2.Zero;
+
     public override void _Ready()
     {
+        ZIndex = 90;
         SetupVisuals();
+        SetupNavigationAgent();
+    }
+
+    /// <summary>设置 NavigationAgent2D</summary>
+    private void SetupNavigationAgent()
+    {
+        _navAgent = new NavigationAgent2D();
+        _navAgent.Name = "NavAgent";
+        
+        // 配置 agent 参数
+        _navAgent.PathDesiredDistance = 10.0f;  // 到达路径点的判定距离
+        _navAgent.TargetDesiredDistance = 20.0f; // 到达目标的判定距离
+        _navAgent.PathMaxDistance = 50.0f;       // 偏离路径重新计算的距离
+        
+        // 禁用避障（玩家不需要，NPC 可以开）
+        _navAgent.AvoidanceEnabled = false;
+        
+        // 路径简化
+        _navAgent.SimplifyPath = true;
+        _navAgent.SimplifyEpsilon = 10.0f;
+        
+        AddChild(_navAgent);
+    }
+
+    /// <summary>设置 NavigationAgent2D 目标位置</summary>
+    public void SetNavTarget(Vector2 target)
+    {
+        if (_navAgent == null)
+            return;
+        
+        _navTarget = target;
+        _navAgent.TargetPosition = target;
+        _useNavAgent = true;
+        IsMoving = true;
+        
+        GD.Print($"[NavAgent] 设置目标: {target}");
+    }
+
+    /// <summary>停止 NavigationAgent2D 移动</summary>
+    public void StopNavAgent()
+    {
+        _useNavAgent = false;
+        IsMoving = false;
+        Path.Clear();
+        _hasPendingTarget = false;
+        
+        if (_navAgent != null)
+            _navAgent.TargetPosition = Position;
+
+        // 重置跳跃状态
+        _jumpDistance = 0.0f;
+        _jumpProgress = 0.0f;
+        ApplyJumpVisual();
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if (!_useNavAgent || _navAgent == null)
+            return;
+        
+        // 检查导航是否完成
+        if (_navAgent.IsNavigationFinished())
+        {
+            _useNavAgent = false;
+            IsMoving = false;
+            GD.Print("[NavAgent] 导航完成");
+            return;
+        }
+        
+        // 检查地图是否已同步
+        var navMap = _navAgent.GetNavigationMap();
+        var iterationId = NavigationServer2D.MapGetIterationId(navMap);
+        if (iterationId == 0)
+        {
+            // 地图未同步，跳过本帧
+            return;
+        }
+        
+        // 获取下一个路径点
+        Vector2 nextPos = _navAgent.GetNextPathPosition();
+        Vector2 direction = (nextPos - Position).Normalized();
+        
+        // 计算速度（考虑地形代价）
+        float speed = BaseMoveSpeed;
+        if (SpeedComponent != null)
+        {
+            speed = SpeedComponent.CalculateSpeed(Position);
+        }
+        
+        // 移动
+        float moveDelta = speed * (float)delta;
+        Position = Position.MoveToward(Position + direction * moveDelta, moveDelta);
+        
+        // 更新朝向
+        if (direction.LengthSquared() > 0.01f)
+        {
+            // 可以在这里更新角色朝向动画
+        }
     }
 
     private void SetupVisuals()
@@ -156,11 +291,26 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
         ChunkAStar = astar;
     }
 
+    public void SetMapAccess(OverworldMapAccess mapAccess)
+    {
+        MapAccess = mapAccess;
+    }
+
+    public void SetNavigationAccess(OverworldNavigationAccess navigationAccess)
+    {
+        NavigationAccess = navigationAccess;
+    }
+
     public void PlaceAt(float px, float py)
     {
         Position = new Vector2(px, py);
         Path.Clear();
         IsMoving = false;
+
+        // 重置跳跃状态
+        _jumpDistance = 0.0f;
+        _jumpProgress = 0.0f;
+        ApplyJumpVisual();
     }
 
     /// <summary>获取显示名称（IOverworldMapEntity）</summary>
@@ -173,12 +323,30 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
     {
         Vector2[] newPath;
 
+        if (NavigationAccess != null)
+        {
+            var result = NavigationAccess.FindPath(
+                Position,
+                targetPx,
+                CurrentShip != null && !CurrentShip.IsBroken,
+                IsAtSea);
+
+            newPath = result.Path;
+            _hasPendingTarget = result.RequiresContinuation;
+            IsAtSea = result.IsAtSea;
+            if (!IsAtSea)
+                _seaDistanceTraveled = 0f;
+
+            if (_hasPendingTarget)
+                _finalTarget = targetPx;
+        }
         // 优先使用 Chunk 模式寻路
-        if (ChunkAStar != null && ChunkManager != null)
+        else if (ChunkAStar != null && ChunkManager != null)
         {
             // 检测目标是否在水域 — 自动切换导航模式
             var targetAxial = HexOverworldTile.PixelToAxial(targetPx.X, targetPx.Y);
-            var targetTile = ChunkManager.GetTile(targetAxial.X, targetAxial.Y);
+            var targetTile = MapAccess?.GetActiveTile(targetAxial.X, targetAxial.Y)
+                ?? ChunkManager.GetTile(targetAxial.X, targetAxial.Y);
 
             if (targetTile != null)
             {
@@ -213,7 +381,8 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
             }
 
             // 检查目标是否在已加载 chunk 内
-            bool targetLoaded = ChunkManager.IsLoaded(targetAxial.X, targetAxial.Y);
+            bool targetLoaded = MapAccess?.IsLoaded(targetAxial.X, targetAxial.Y)
+                ?? ChunkManager.IsLoaded(targetAxial.X, targetAxial.Y);
 
             if (!targetLoaded)
             {
@@ -322,6 +491,9 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
     /// </summary>
     private bool IsLinePassable(Vector2 from, Vector2 to)
     {
+        if (NavigationAccess != null)
+            return NavigationAccess.IsLinePassable(from, to);
+
         float dist = from.DistanceTo(to);
         int steps = Mathf.Max(2, (int)(dist / 50.0f));
 
@@ -334,7 +506,8 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
             if (ChunkManager != null)
             {
                 var axial = HexOverworldTile.PixelToAxial(sample.X, sample.Y);
-                var tile = ChunkManager.GetTile(axial.X, axial.Y);
+                var tile = MapAccess?.GetActiveTile(axial.X, axial.Y)
+                    ?? ChunkManager.GetTile(axial.X, axial.Y);
                 if (tile == null || !tile.IsPassable) return false;
             }
             else if (HexGrid != null)
@@ -423,14 +596,27 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
             currentSpeed = SpeedComponent.CalculateSpeed(Position);
 
         Vector2 targetPos = Path[0];
-        Vector2 dir = (targetPos - Position).Normalized();
         float dist = Position.DistanceTo(targetPos);
         float step = currentSpeed * (float)delta;
 
+        // 如果是新的跳跃段，初始化跳跃参数
+        if (_jumpDistance <= 0.0f || _jumpTargetPos != targetPos)
+        {
+            _jumpStartPos = Position;
+            _jumpTargetPos = targetPos;
+            _jumpDistance = dist;
+            _jumpProgress = 0.0f;
+        }
+
         if (step >= dist)
         {
+            // 到达当前路径点
             Position = targetPos;
             Path.RemoveAt(0);
+
+            // 重置跳跃状态（准备下一段）
+            _jumpDistance = 0.0f;
+            _jumpProgress = 0.0f;
 
             // 海上遭遇检定
             if (IsAtSea)
@@ -439,7 +625,6 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
                 if (_seaDistanceTraveled >= SeaEncounterTable.EncounterCheckInterval)
                 {
                     _seaDistanceTraveled -= SeaEncounterTable.EncounterCheckInterval;
-                    // 遭遇检定由 OverworldScene3D 处理（通过信号或轮询 SeaEncounterPending）
                     SeaEncounterPending = true;
                 }
             }
@@ -449,10 +634,17 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
                 IsMoving = false;
 
                 // 到达目的地后检查是否登陆
-                if (IsAtSea && ChunkManager != null)
+                if (IsAtSea && NavigationAccess != null && NavigationAccess.ShouldLeaveSea(Position))
+                {
+                    IsAtSea = false;
+                    _seaDistanceTraveled = 0f;
+                    NavigationAccess.SetLandMode();
+                }
+                else if (IsAtSea && ChunkManager != null)
                 {
                     var axial = HexOverworldTile.PixelToAxial(Position.X, Position.Y);
-                    var tile = ChunkManager.GetTile(axial.X, axial.Y);
+                    var tile = MapAccess?.GetActiveTile(axial.X, axial.Y)
+                        ?? ChunkManager.GetTile(axial.X, axial.Y);
                     if (tile != null && tile.Terrain != HexOverworldTile.TerrainType.DeepWater &&
                         tile.Terrain != HexOverworldTile.TerrainType.ShallowWater)
                     {
@@ -480,7 +672,43 @@ public partial class OverworldParty : Node2D, IOverworldMapEntity
         }
         else
         {
+            // 线性移动逻辑位置（地面位置）
+            Vector2 dir = (targetPos - Position).Normalized();
             Position += dir * step;
+
+            // 更新跳跃进度
+            float traveled = _jumpStartPos.DistanceTo(Position);
+            _jumpProgress = Mathf.Clamp(traveled / _jumpDistance, 0.0f, 1.0f);
+        }
+
+        // 应用抛物线跳跃偏移到视觉节点
+        ApplyJumpVisual();
+    }
+
+    /// <summary>
+    /// 应用抛物线跳跃视觉偏移。
+    /// 逻辑位置保持在地面，视觉节点向上偏移模拟跳跃。
+    /// 公式：offset = -4 * maxHeight * t * (t - 1)
+    /// 这是一个开口向下的抛物线，在 t=0 和 t=1 时为 0，t=0.5 时达到最大值。
+    /// </summary>
+    private void ApplyJumpVisual()
+    {
+        // 计算抛物线高度偏移（负值 = 向上）
+        float jumpOffset = 0.0f;
+        if (IsMoving && _jumpDistance > 0.0f)
+        {
+            float t = _jumpProgress;
+            jumpOffset = -4.0f * JumpMaxHeight * t * (t - 1.0f);
+        }
+
+        // 应用偏移到视觉子节点
+        if (_characterView != null)
+        {
+            _characterView.Position = new Vector2(0, jumpOffset);
+        }
+        if (_fallbackPoly != null)
+        {
+            _fallbackPoly.Position = new Vector2(0, jumpOffset);
         }
     }
 

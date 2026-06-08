@@ -8,13 +8,13 @@ export_presets.cfg
 .godot/
 *.tmp
 
-# Imported translations (automatically generated from CSV files)
+# Imported translations
 *.translation
 
 # Mono/C# ignores
 .mono/
 data_*/
-# 排除 .csproj 和 .sln（现在需要提交，因为使用 C#）
+# C# project files are source-controlled.
 # *.csproj
 # *.sln
 
@@ -44,11 +44,15 @@ dist/
 *.apk
 *.ipa
 
-# Build / debug logs (one-off troubleshooting artifacts)
+# Build / debug logs
 build_*.txt
 godot_*.txt
 remaining_errors*.txt
 
-# Game assets (large binaries, distributed separately)
+# Game assets are large binaries and are distributed separately.
 assets/
 sl.txt
+
+# Generated playability check artifacts
+evaluation.json
+playability_screenshots/

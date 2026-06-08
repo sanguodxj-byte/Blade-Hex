@@ -13,6 +13,8 @@
 //   示例：GD.Print(BladeHex.View.Data.Tests.UISignalWiringTests.RunAllFormatted());
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 using Godot;
 using BladeHex.Data;
 using BladeHex.Strategic;
@@ -62,6 +64,11 @@ public static class UISignalWiringTests
         yield return Run(nameof(SkillTree_CreateAndRetrieve), SkillTree_CreateAndRetrieve);
         yield return Run(nameof(ClassTitle_EmptyTree_ReturnsWuMingZhe), ClassTitle_EmptyTree_ReturnsWuMingZhe);
         yield return Run(nameof(ClassTitle_WithNodes_ReturnsValidTitle), ClassTitle_WithNodes_ReturnsValidTitle);
+        yield return Run(nameof(OverlayPanels_DoNotUseBareCenterAnchors), OverlayPanels_DoNotUseBareCenterAnchors);
+        yield return Run(nameof(InteractionPanel_DoesNotUseLegacyBuildContent), InteractionPanel_DoesNotUseLegacyBuildContent);
+        yield return Run(nameof(InteractionPanel_UsesTownPanelBaseLayout), InteractionPanel_UsesTownPanelBaseLayout);
+        yield return Run(nameof(QuestManager_CompletionWaitsForRewardClaim), QuestManager_CompletionWaitsForRewardClaim);
+        yield return Run(nameof(OverworldQuestLoop_HasTargetAndCombatWiring), OverworldQuestLoop_HasTargetAndCombatWiring);
     }
 
     private static (string, bool, string) Run(string name, Func<(bool, string)> test)
@@ -284,5 +291,202 @@ public static class UISignalWiringTests
         if (title != "战士")
             return (false, $"Expected '战士', got '{title}'");
         return (true, "");
+    }
+
+    private static (bool, string) OverlayPanels_DoNotUseBareCenterAnchors()
+    {
+        string? uiRoot = FindFrontendUiRoot();
+        if (uiRoot == null) return (true, "");
+
+        var pattern = new Regex(
+            @"SetAnchorsPreset\s*\(\s*(?:Control\.)?LayoutPreset\.Center\s*\)",
+            RegexOptions.Compiled);
+        var offenders = new List<string>();
+
+        foreach (string file in Directory.EnumerateFiles(uiRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            int lineNo = 0;
+            foreach (string line in File.ReadLines(file))
+            {
+                lineNo++;
+                if (!pattern.IsMatch(line)) continue;
+
+                string relative = Path.GetRelativePath(uiRoot, file);
+                offenders.Add($"{relative}:{lineNo}: {line.Trim()}");
+                if (offenders.Count >= 12) break;
+            }
+
+            if (offenders.Count >= 12) break;
+        }
+
+        if (offenders.Count > 0)
+        {
+            return (false,
+                "Use OverlayPanelLayout.Center/AttachCentered instead of anchors-only Center:\n" +
+                string.Join("\n", offenders));
+        }
+
+        return (true, "");
+    }
+
+    private static (bool, string) InteractionPanel_DoesNotUseLegacyBuildContent()
+    {
+        string? uiRoot = FindFrontendUiRoot();
+        if (uiRoot == null) return (true, "");
+
+        string file = Path.Combine(uiRoot, "Overworld", "InteractionPanel.cs");
+        if (!File.Exists(file)) return (true, "");
+
+        var pattern = new Regex(
+            @"override\s+void\s+BuildContent\s*\(\s*VBoxContainer\s+\w+\s*\)",
+            RegexOptions.Compiled);
+
+        int lineNo = 0;
+        foreach (string line in File.ReadLines(file))
+        {
+            lineNo++;
+            if (!pattern.IsMatch(line)) continue;
+
+            return (false,
+                "InteractionPanel must fill POIPanelBase through data hooks and PopulateActions, not BuildContent(): " +
+                $"Overworld/InteractionPanel.cs:{lineNo}: {line.Trim()}");
+        }
+
+        return (true, "");
+    }
+
+    private static (bool, string) InteractionPanel_UsesTownPanelBaseLayout()
+    {
+        string? uiRoot = FindFrontendUiRoot();
+        if (uiRoot == null) return (true, "");
+
+        string file = Path.Combine(uiRoot, "Overworld", "InteractionPanel.cs");
+        if (!File.Exists(file)) return (true, "");
+
+        var pattern = new Regex(
+            @"override\s+int\s+(PanelWidth|PanelHeight|PanelMargin)\s*=>",
+            RegexOptions.Compiled);
+
+        int lineNo = 0;
+        foreach (string line in File.ReadLines(file))
+        {
+            lineNo++;
+            if (!pattern.IsMatch(line)) continue;
+
+            return (false,
+                "InteractionPanel should share TownPanel/POIPanelBase layout sizing instead of defining custom panel geometry: " +
+                $"Overworld/InteractionPanel.cs:{lineNo}: {line.Trim()}");
+        }
+
+        return (true, "");
+    }
+
+    private static (bool, string) QuestManager_CompletionWaitsForRewardClaim()
+    {
+        var manager = new QuestManager();
+        var quest = new QuestData
+        {
+            QuestId = "test_quest_claim",
+            QuestName = "测试委托",
+            TargetDescription = "测试目标",
+            TargetWorldPosition = new Vector2(100, 100),
+            TargetCount = 1,
+            RewardGold = 123,
+            RewardReputation = 7,
+            RewardFaction = "test_faction",
+        };
+
+        if (!manager.AcceptQuest(quest)) return (false, "AcceptQuest returned false");
+        manager.UpdateQuestProgress(quest.QuestId, 1);
+
+        if (manager.ActiveQuests.Contains(quest)) return (false, "completed quest still active");
+        if (!manager.RewardReadyQuests.Contains(quest)) return (false, "completed quest not waiting for reward claim");
+        if (manager.CompletedQuestIds.Contains(quest.QuestId)) return (false, "quest marked completed before reward claim");
+
+        if (!manager.ClaimReward(quest.QuestId)) return (false, "ClaimReward returned false");
+        if (manager.RewardReadyQuests.Contains(quest)) return (false, "claimed quest still in reward-ready list");
+        if (!manager.CompletedQuestIds.Contains(quest.QuestId)) return (false, "claimed quest not recorded as completed");
+        if (manager.PlayerGold != quest.RewardGold) return (false, $"PlayerGold expected {quest.RewardGold}, got {manager.PlayerGold}");
+
+        return (true, "");
+    }
+
+    private static (bool, string) OverworldQuestLoop_HasTargetAndCombatWiring()
+    {
+        string? root = FindRepoRoot();
+        if (root == null) return (true, "");
+
+        string entities = Path.Combine(root, "BladeHexFrontend", "src", "Scenes", "overworld2d", "OverworldScene2D.Entities.cs");
+        string battleContext = Path.Combine(root, "BladeHexCore", "src", "Strategic", "BattleContext.cs");
+        string questBoard = Path.Combine(root, "BladeHexFrontend", "src", "View", "UI", "Overworld", "QuestBoardPanel.cs");
+        if (!File.Exists(entities) || !File.Exists(battleContext) || !File.Exists(questBoard)) return (true, "");
+
+        string e = File.ReadAllText(entities);
+        string b = File.ReadAllText(battleContext);
+        string q = File.ReadAllText(questBoard);
+
+        var missing = new List<string>();
+        if (!e.Contains("QuestTargetSpawned += OnQuestTargetSpawned")) missing.Add("QuestTargetSpawned subscription");
+        if (!e.Contains("QuestTargetCleared += OnQuestTargetCleared")) missing.Add("QuestTargetCleared subscription");
+        if (!e.Contains("CheckQuestTargets()")) missing.Add("quest target proximity check");
+        if (!e.Contains("BuildEnemyUnitsFromQuestTarget")) missing.Add("quest target enemy generation");
+        if (!e.Contains("CompleteQuestBattleTarget")) missing.Add("quest combat victory progress writeback");
+        if (!b.Contains("public string QuestId")) missing.Add("BattleContext.QuestId");
+        if (!q.Contains("ClaimQuestReward")) missing.Add("quest reward claim UI");
+
+        if (missing.Count > 0)
+            return (false, "Missing quest loop wiring: " + string.Join(", ", missing));
+
+        return (true, "");
+    }
+
+    private static string? FindFrontendUiRoot()
+    {
+        var candidates = new List<string>();
+
+        AddFrontendUiRootCandidates(candidates, ProjectSettings.GlobalizePath("res://"));
+        AddFrontendUiRootCandidates(candidates, Directory.GetCurrentDirectory());
+
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (int i = 0; i < 8 && dir != null; i++, dir = dir.Parent)
+            AddFrontendUiRootCandidates(candidates, dir.FullName);
+
+        foreach (string candidate in candidates)
+        {
+            if (Directory.Exists(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static string? FindRepoRoot()
+    {
+        var candidates = new List<string>
+        {
+            ProjectSettings.GlobalizePath("res://"),
+            Directory.GetCurrentDirectory(),
+        };
+
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (int i = 0; i < 8 && dir != null; i++, dir = dir.Parent)
+            candidates.Add(dir.FullName);
+
+        foreach (string candidate in candidates)
+        {
+            if (File.Exists(Path.Combine(candidate, "BladeHexCore", "src", "Data", "QuestData.cs")) &&
+                Directory.Exists(Path.Combine(candidate, "BladeHexFrontend")))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static void AddFrontendUiRootCandidates(List<string> candidates, string root)
+    {
+        if (string.IsNullOrWhiteSpace(root)) return;
+
+        candidates.Add(Path.Combine(root, "BladeHexFrontend", "src", "View", "UI"));
+        candidates.Add(Path.Combine(root, "src", "View", "UI"));
     }
 }

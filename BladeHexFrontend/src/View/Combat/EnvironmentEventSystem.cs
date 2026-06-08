@@ -101,10 +101,15 @@ public partial class EnvironmentEventSystem : Node
             // 将建筑废墟变为平地，墙壁变为废墟
             if (cell.Data != null)
             {
+                bool changed = true;
                 if (cell.Data.terrainType == BattleCellData.TerrainType.Wall)
-                    cell.Data.terrainType = BattleCellData.TerrainType.Ruins;
+                    cell.Data.TransformTo(BattleCellData.TerrainType.Ruins);
                 else if (cell.Data.terrainType == BattleCellData.TerrainType.Ruins)
-                    cell.Data.terrainType = BattleCellData.TerrainType.Plains;
+                    cell.Data.TransformTo(BattleCellData.TerrainType.Plains);
+                else
+                    changed = false;
+
+                if (changed) cell.RefreshTerrainVisual();
             }
         }
     }

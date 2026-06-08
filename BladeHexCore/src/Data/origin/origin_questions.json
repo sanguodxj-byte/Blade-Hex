@@ -50,14 +50,14 @@
           },
           {
             "id": "temple",
-            "text": "在神殿中侍奉祭司，聆听神谕",
-            "summary": "神殿侍奉",
+            "text": "在神殿中学习星象与疗愈之术",
+            "summary": "神殿修行",
             "attrMods": {
               "wis": 2,
               "dex": -1,
               "str": -1
             },
-            "itemReward": "圣水瓶",
+            "itemReward": "净化药剂",
             "illustId": "human_childhood_temple",
             "itemRewardId": "holy_water",
             "itemRewardType": "consumable"
@@ -694,14 +694,14 @@
         "choices": [
           {
             "id": "relic",
-            "text": "氏族圣物失窃，我必须夺回它",
-            "summary": "圣物失窃",
+            "text": "氏族重器失窃，我必须夺回它",
+            "summary": "重器失窃",
             "attrMods": {
               "str": 2,
               "cha": -1,
               "intel": -1
             },
-            "itemReward": "圣物盾牌",
+            "itemReward": "氏族盾牌",
             "illustId": "dwarf_departure_relic",
             "itemRewardId": "infantry_round_shield",
             "itemRewardType": "armor"
@@ -965,7 +965,7 @@
               "dex": -1,
               "str": -1
             },
-            "itemReward": "祖灵圣水",
+            "itemReward": "祖灵药剂",
             "illustId": "halforc_departure_totem",
             "itemRewardId": "holy_water",
             "itemRewardType": "consumable"

@@ -181,6 +181,49 @@ public partial class BattleCellData : Resource
 
         return data;
     }
+
+    // ========================================
+    // 运行时地形变更（Frontend → Core 的写入桥梁）
+    // ========================================
+
+    /// <summary>
+    /// 原地转换地形类型，同步更新所有关联属性（moveCost / acBonus / coverLevel / 等）。
+    /// 提供给 Frontend 作为写入 Core 数据的唯一途径。
+    /// </summary>
+    public void TransformTo(TerrainType newType)
+    {
+        var props = GetTerrainProperties(newType);
+        terrainType = newType;
+        terrainName = props.TerrainName;
+        moveCost = props.MoveCost;
+        acBonus = props.AcBonus;
+        coverLevel = props.CoverLevel;
+        blocksLineOfSight = props.BlocksLos;
+        isPassable = props.IsPassable;
+        passCondition = props.PassCondition;
+        specialEffect = props.SpecialEffect;
+        terrainColor = props.Color;
+
+        // 特定地形微调
+        if (newType == TerrainType.River) isRiver = true;
+        if (newType == TerrainType.Bridge && elevation < 1) elevation = 1;
+
+        // 攻城机制字段重置
+        if (newType == TerrainType.Gate)
+        {
+            isDestructible = true;
+            durability = 20;
+            maxDurability = 20;
+        }
+        else
+        {
+            isDestructible = false;
+            durability = 0;
+            maxDurability = 0;
+        }
+        if (newType != TerrainType.Rampart)
+            ladderProgress = 0;
+    }
 }
 
 /// <summary>

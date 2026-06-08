@@ -18,9 +18,6 @@ public class UseSkillCommand : CommandBase
     public string SkillEffect { get; }
     public Vector2I TargetCell { get; }
 
-    /// <summary>技能结算结果(由 CombatManager 在 Execute 后填入)</summary>
-    public Godot.Collections.Dictionary? ResolveResult { get; set; }
-
     public UseSkillCommand(long casterId, string skillEffect, Vector2I targetCell)
     {
         CasterId = casterId;
@@ -31,12 +28,7 @@ public class UseSkillCommand : CommandBase
 
     public override CommandResult Execute(CommandContext ctx)
     {
-        return CommandResult.Ok(new Godot.Collections.Dictionary
-        {
-            { "caster_id", CasterId },
-            { "skill_effect", SkillEffect },
-            { "target_cell", TargetCell },
-        });
+        return CommandResult.Ok(new SkillResult(CasterId, SkillEffect, TargetCell));
     }
 
     public override Godot.Collections.Dictionary Serialize()

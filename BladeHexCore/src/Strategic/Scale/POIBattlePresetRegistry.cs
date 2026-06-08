@@ -33,11 +33,8 @@ public static class POIBattlePresetRegistry
         // ========================================
         // Tiny — 单格小据点
         // ========================================
-        [(POIType.Outpost, 0)]  = new("plain_field", POIScale.Tiny,   "solo", null, "前哨遭遇"),
         [(POIType.Mine, 0)]     = new("plain_field", POIScale.Tiny,   "solo", null, "矿场冲突"),
         [(POIType.Farm, 0)]     = new("plain_field", POIScale.Tiny,   "solo", null, "农庄突袭"),
-        [(POIType.Shrine, 0)]   = new("plain_field", POIScale.Tiny,   "solo", null, "祭坛守卫"),
-        [(POIType.Tavern, 0)]   = new("plain_field", POIScale.Tiny,   "solo", null, "旅店纠纷"),
 
         // ========================================
         // Small — 多格小聚落
@@ -46,7 +43,7 @@ public static class POIBattlePresetRegistry
         [(POIType.Settlement, (int)SettlementRace.Bandit)]    = new("bandit_stronghold", POIScale.Small,  "forest_camp_3",  null, "山贼营地"),
         [(POIType.Settlement, (int)SettlementRace.Robber)]    = new("bandit_stronghold", POIScale.Small,  "forest_camp_3",  null, "劫匪窝点"),
         [(POIType.Settlement, (int)SettlementRace.Goblin)]    = new("goblin_camp",       POIScale.Small,  "swamp_camp_3",   null, "哥布林营地"),
-        [(POIType.Settlement, (int)SettlementRace.Kobold)]    = new("kobold_mine",       POIScale.Small,  "mountain_dig_3", null, "狗头人矿坑"),
+        [(POIType.Settlement, (int)SettlementRace.Kobold)]    = new("gobold_mine",       POIScale.Small,  "mountain_dig_3", null, "狗头人矿坑"),
         [(POIType.Lair, (int)LairType.AncientTomb)]     = new("ancient_tomb",      POIScale.Small,  "ruins_3",        null, "远古墓穴"),
         [(POIType.Lair, (int)LairType.Ruins)]           = new("ruins_exploration", POIScale.Small,  "ruins_3",        null, "遗迹探索"),
         [(POIType.Lair, (int)LairType.BanditCamp)]      = new("bandit_stronghold", POIScale.Small,  "forest_camp_3",  null, "山贼据点"),
@@ -57,7 +54,6 @@ public static class POIBattlePresetRegistry
         // Medium — 中型据点（含变形 footprint）
         // ========================================
         [(POIType.Town, 0)]                             = new("town_defense",       POIScale.Medium, "town_5",          null, "城镇防御战"),
-        [(POIType.Port, 0)]                             = new("pirate_cove",        POIScale.Medium, "port_city_4",     null, "港口袭扰"),
         [(POIType.Lair, (int)LairType.GolemForge)]      = new("golem_forge",        POIScale.Medium, "ruins_5",         null, "魔像工坊"),
         [(POIType.Lair, (int)LairType.RaiderOutpost)]   = new("raider_outpost",     POIScale.Medium, "plains_5",        null, "劫掠据点"),
 
@@ -74,6 +70,11 @@ public static class POIBattlePresetRegistry
     /// <summary>查询某 POI 的 preset</summary>
     public static POIBattlePreset Resolve(OverworldPOI poi)
     {
+        if (poi.PoiTypeEnum == POIType.Town && poi.IsPortCity)
+        {
+            return new POIBattlePreset("pirate_cove", POIScale.Medium, "port_city_4", null, "港口袭扰");
+        }
+
         int subType = poi.PoiTypeEnum switch
         {
             POIType.Settlement => (int)poi.SettlementRaceValue,

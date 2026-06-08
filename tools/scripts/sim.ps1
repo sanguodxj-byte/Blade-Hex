@@ -14,6 +14,7 @@ param(
     [int]$Seed = 0,
     [int]$Level = 5,
     [int]$TeamSize = 4,
+    [int]$BossLevel = 120,
     [string]$Scenario = 'combat',
     [ValidateSet('core', 'single', 'double', 'triple', 'quad', 'penta', 'all')]
     [string]$BuildFilter = 'core',
@@ -54,6 +55,7 @@ $envVars = @{
     SIM_SCENARIO = $Scenario
     SIM_LEVEL    = $Level.ToString()
     SIM_TEAM_SIZE = $TeamSize.ToString()
+    SIM_BOSS_LEVEL = $BossLevel.ToString()
     SIM_BUILD_FILTER = $BuildFilter
     SIM_ENABLE_SPELLS = if ($EnableSpells) { '1' } else { '0' }
     SIM_ECON_REWARD = $EconReward.ToString()

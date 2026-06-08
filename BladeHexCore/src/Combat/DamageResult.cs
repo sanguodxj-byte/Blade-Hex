@@ -56,6 +56,18 @@ public readonly struct DamageResult
     /// <summary>由防御方装备能力（如 thorns）反弹给攻击方的伤害</summary>
     public int ReflectDamageToAttacker { get; init; }
 
+    /// <summary>被盾牌吸收的远程伤害值</summary>
+    public int ShieldAbsorbed { get; init; }
+
+    /// <summary>盾牌是否因此次伤害彻底毁坏</summary>
+    public bool ShieldBroken { get; init; }
+
+    /// <summary>被守护链接等效果转移给另一个单位的 HP 伤害</summary>
+    public int RedirectedHpDamage { get; init; }
+
+    /// <summary>承受转移伤害的单位实例 ID；无转移时为 0</summary>
+    public long RedirectedToUnitId { get; init; }
+
     /// <summary>总伤害（HP + DR）— 精通 XP 以该值归因</summary>
     public int TotalDealt => HpDamage + DrDamage;
 

@@ -41,8 +41,8 @@ public class BuffInstance
     /// <summary>最大叠加层数。1 = 不可叠加(刷新持续时间)</summary>
     public int MaxStacks = 1;
 
-    /// <summary>当前叠加层数</summary>
-    public int CurrentStacks = 1;
+    /// <summary>当前叠加层数。通过 BuffSystem 或 internal 代码修改。</summary>
+    public int CurrentStacks { get; internal set; } = 1;
 
     // ============================================================
     // 属性修正(多乘区)
@@ -119,6 +119,7 @@ public class BuffInstance
             { "id", Id }, { "name", Name }, { "description", Description },
             { "duration", Duration }, { "is_negative", IsNegative },
             { "icon_id", IconId }, { "tags", Tags },
+            { "source_unit_id", SourceUnitId }, { "source", Source },
             { "stacks", CurrentStacks }, { "max_stacks", MaxStacks },
             { "stat_modifiers", mods },
         };

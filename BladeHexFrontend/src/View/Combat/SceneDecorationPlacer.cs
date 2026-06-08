@@ -29,6 +29,7 @@ public partial class SceneDecorationPlacer : Node3D
         { BattleCellData.TerrainType.Snow, new[] { "tree_pine", "rock_small" } },
         { BattleCellData.TerrainType.Sand, new[] { "rock_small", "rock_large" } },
         { BattleCellData.TerrainType.Savanna, new[] { "bush_dry", "rock_small" } },
+        { BattleCellData.TerrainType.PoisonMushroom, new[] { "poison_mushroom_prop" } },
     };
 
     /// <summary>掩体等级 → 装饰精灵 ID</summary>
@@ -48,8 +49,8 @@ public partial class SceneDecorationPlacer : Node3D
     /// <summary>装饰精灵的像素大小(基础值;角色 sprite 用 PixelSize=2,装饰物显著小一档避免遮挡)</summary>
     private const float SpritePixelSize = 0.5f;
 
-    /// <summary>装饰精灵 Y 轴基础偏移(放在格子顶面上方)</summary>
-    private const float BaseYOffset = 8.0f;
+    /// <summary>装饰精灵 Y 轴基础偏移(放在格子顶面上方。格子顶面为 cell.Position.Y + HexHeight * 0.5f = 24.0f)</summary>
+    private const float BaseYOffset = 24.0f;
 
     // ========================================
     // 状态
@@ -113,8 +114,11 @@ public partial class SceneDecorationPlacer : Node3D
         if (GD.Randf() > chance) return;
         if (spriteIds.Length == 0) return;
 
-        // 随机选择一个装饰类型
-        string spriteId = spriteIds[(int)(GD.Randf() * spriteIds.Length)];
+        // 随机选择一个装饰基础 ID
+        string baseId = spriteIds[(int)(GD.Randf() * spriteIds.Length)];
+        // 随机生成 4 个变体后缀（由 AI 批量生成 _0 ~ _3）
+        int variantIndex = (int)(GD.Randf() * 4);
+        string spriteId = $"{baseId}_{variantIndex}";
 
         // 优先级 1:从 CombatTextureLoader 获取真实纹理
         var texture = CombatTextureLoader.Instance.GetSceneSprite(spriteId);
@@ -134,6 +138,9 @@ public partial class SceneDecorationPlacer : Node3D
         sprite.TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest;
         sprite.AlphaScissorThreshold = 0.5f;
         sprite.AlphaCut = SpriteBase3D.AlphaCutMode.OpaquePrepass;
+        // 不接光只投影（与单位/BattlePropRenderer 口径一致）：保持 2D 原画亮度，向地面投出剪影
+        sprite.Shaded = false;
+        sprite.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
 
         // 底部对齐（精灵脚踩地面）
         sprite.Offset = new Vector2(0, texture.GetHeight() / 2.0f);

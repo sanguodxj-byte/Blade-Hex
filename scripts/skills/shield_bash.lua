@@ -10,6 +10,10 @@ function execute(ctx)
 
     if r.hit then
         local push_pos = hex:get_neighbor(target.q, target.r, ctx.attacker.facing)
-        result:add_teleport(target, push_pos.X, push_pos.Y, target.q, target.r)
+        if unit:can_push_to(push_pos.X, push_pos.Y) then
+            result:add_teleport(target, push_pos.X, push_pos.Y, target.q, target.r)
+        else
+            result:add_damage(target, percent_of_max_hp(target, 0.08))
+        end
     end
 end

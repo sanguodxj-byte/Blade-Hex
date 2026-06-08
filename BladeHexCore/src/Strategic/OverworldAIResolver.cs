@@ -12,10 +12,10 @@ public static class OverworldAIResolver
     private static readonly Random _random = new();
 
     /// <summary>结算一场AI间的战斗</summary>
-    public static Godot.Collections.Dictionary ResolveBattle(OverworldEntity attacker, OverworldEntity defender)
+    public static Godot.Collections.Dictionary ResolveBattle(OverworldEntity attacker, OverworldEntity defender, float? attackerArmyPower = null, float? defenderArmyPower = null)
     {
-        float atkPower = attacker.CombatPower;
-        float defPower = defender.CombatPower;
+        float atkPower = attackerArmyPower ?? attacker.CombatPower;
+        float defPower = defenderArmyPower ?? defender.CombatPower;
 
         // 围攻加成：防守方有城墙优势
         if (attacker.CurrentAIState == OverworldEntity.AIState.Besieging)
@@ -76,9 +76,9 @@ public static class OverworldAIResolver
     }
 
     /// <summary>结算围攻战斗（攻击方 vs POI守军）</summary>
-    public static Godot.Collections.Dictionary ResolveSiege(OverworldEntity attacker, OverworldPOI target)
+    public static Godot.Collections.Dictionary ResolveSiege(OverworldEntity attacker, OverworldPOI target, float? armyTotalPower = null)
     {
-        float atkPower = attacker.CombatPower;
+        float atkPower = armyTotalPower ?? attacker.CombatPower;
         float defPower = target.GetDefensePower();
 
         float atkRoll = atkPower * (0.8f + (float)_random.NextDouble() * 0.4f);

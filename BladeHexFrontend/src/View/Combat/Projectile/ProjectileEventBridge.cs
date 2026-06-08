@@ -1,6 +1,8 @@
 // ProjectileEventBridge.cs
 // Bridges Core ProjectileSystem events to the frontend EventBus.
+using Godot;
 using BladeHex.Events;
+using BladeHex.Events.Payloads;
 
 namespace BladeHex.Combat;
 
@@ -18,11 +20,26 @@ public sealed class ProjectileEventBridge
 
     private static void OnProjectileLaunched(Godot.Collections.Dictionary data)
     {
-        EventBus.Instance?.Publish(EventBus.Signals.ProjectileLaunched, data);
+        // Extract typed data from Core dictionary
+        var projData = (Godot.Collections.Dictionary)data["data"];
+        var fromWorld = (Vector3)data["from_world"];
+        var toWorld = (Vector3)data["to_world"];
+        var projectileData = ProjectileData.Deserialize(projData);
+        var projectileType = projectileData.ProjectileType;
+        var travelTime = data["travel_time"].AsSingle();
+
+        // Dual-publish: typed + string (backward compat)
+        EventBus.Instance?.PublishProjectileLaunched(projectileData, fromWorld, toWorld, projectileType, travelTime);
     }
 
     private static void OnProjectileImpact(Godot.Collections.Dictionary data)
     {
-        EventBus.Instance?.Publish(EventBus.Signals.ProjectileImpact, data);
+        // Extract typed data from Core dictionary
+        var projData = (Godot.Collections.Dictionary)data["data"];
+        var projectileType = projData["type"].AsString();
+        var damage = projData["damage"].AsInt32();
+
+        // Dual-publish: typed + string (backward compat)
+        EventBus.Instance?.PublishProjectileImpact(projectileType, damage);
     }
 }

@@ -68,8 +68,9 @@ public static class FacingSystem
     /// <summary>判定攻击方向（攻击者相对于目标的位置）</summary>
     public static AttackDirection GetAttackDirection(Vector2I attackerPos, Unit target)
     {
-        var flankCells = GetFlankCells(target.GridPos, target.Data!.Runtime.Facing);
-        var rearCell = GetRearCell(target.GridPos, target.Data!.Runtime.Facing);
+        if (target.Data == null) return AttackDirection.Front;
+        var flankCells = GetFlankCells(target.GridPos, target.Data.Runtime.Facing);
+        var rearCell = GetRearCell(target.GridPos, target.Data.Runtime.Facing);
 
         if (attackerPos == rearCell)
             return AttackDirection.Rear;
@@ -153,6 +154,16 @@ public static class FacingSystem
     /// <summary>检查是否触发借机攻击，返回触发AoO的敌方单位（或null）</summary>
     public static Unit? ShouldTriggerAoo(Unit mover, Vector2I from, Vector2I to, Unit[] enemyUnits)
     {
+        // no_aoo_on_move explicitly suppresses AoO. ignore_zoc only lets movement
+        // continue through control zones; leaving an adjacent enemy still provokes.
+        if (mover.Data != null)
+        {
+            var aooMod = BladeHex.Combat.Buff.BuffSystem.ResolveStatModifiers(mover.Data, "no_aoo_on_move");
+            if ((aooMod.OverrideValue.HasValue && aooMod.OverrideValue.Value >= 1f)
+                || aooMod.FlatBonus > 0f)
+                return null;
+        }
+
         foreach (var enemy in enemyUnits)
         {
             if (!GodotObject.IsInstanceValid(enemy) || enemy.CurrentHp <= 0)
@@ -202,7 +213,7 @@ public static class FacingSystem
     public static FlankBonus GetFlankingBonus(Vector2I attackerPos, Unit defender)
     {
         if (defender.Data!.Runtime.IsDefending)
-            return new FlankBonus { DamageMultiplier = 1.0f, MoraleChange = 0, CanCounter = true };
+            return new FlankBonus { DamageMultiplier = 1.0f, CanCounter = true };
 
         var direction = GetAttackDirection(attackerPos, defender);
         return direction switch
@@ -210,19 +221,16 @@ public static class FacingSystem
             AttackDirection.Rear => new FlankBonus
             {
                 DamageMultiplier = 1.5f,
-                MoraleChange = -5,
                 CanCounter = false,
             },
             AttackDirection.Flank => new FlankBonus
             {
                 DamageMultiplier = 1.25f,
-                MoraleChange = -3,
                 CanCounter = true,
             },
             _ => new FlankBonus
             {
                 DamageMultiplier = 1.0f,
-                MoraleChange = 0,
                 CanCounter = true,
             },
         };
@@ -264,10 +272,7 @@ public static class FacingSystem
     // 冲锋检测 (Charge Detection)
     // ========================================
 
-    /// <summary>检查移动路径是否构成冲锋（移动3格以上后发起近战攻击）</summary>
-    public static bool IsCharge(Vector2I[] movePath) => movePath.Length >= 3;
-
-    /// <summary>获取冲锋伤害加成</summary>
+    /// <summary>获取冲锋伤害加成 — 仅重战士(Juggernaut)职业冲锋有加成</summary>
     public static ChargeBonus GetChargeBonus(Unit unit, bool isChargeMove)
     {
         if (!isChargeMove)
@@ -307,13 +312,11 @@ public static class FacingSystem
     // 反击 (Retaliation)
     // ========================================
 
-    /// <summary>获取反击伤害倍率</summary>
+    /// <summary>获取反击伤害倍率 — 仅决斗家可触发，不限次数</summary>
     public static float GetCounterAttackMultiplier(Unit defender, Vector2I attackerPos)
     {
         var flank = GetFlankingBonus(attackerPos, defender);
         if (!flank.CanCounter)
-            return 0.0f;
-        if (defender.Data!.Runtime.CounterUsedThisTurn)
             return 0.0f;
         if (defender.Data!.Runtime.IsDefending)
             return 1.0f;
@@ -327,7 +330,6 @@ public static class FacingSystem
     public struct FlankBonus
     {
         public float DamageMultiplier;
-        public int MoraleChange;
         public bool CanCounter;
     }
 

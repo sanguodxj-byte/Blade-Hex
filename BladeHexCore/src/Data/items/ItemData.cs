@@ -1,6 +1,7 @@
-﻿// ItemData.cs
+// ItemData.cs
 // 所有物品的基类 — 增加稀有度、物品ID、词缀槽位
 // 对应策划案 06-装备与物品.md
+using System;
 using Godot;
 
 namespace BladeHex.Data;
@@ -31,13 +32,16 @@ public partial class ItemData : Resource
     /// </summary>
     public enum EquipSlot
     {
-        Body,    // 身体层
-        Costume, // 服装层
-        Hands,   // 手甲层
-        Head,    // 头部层
-        Helmet,  // 头盔层
-        Weapon,  // 武器层
-        Feet,    // 鞋子层
+    	Body, // 身体层
+    	Costume, // 服装层
+    	Hands, // 手甲层
+    	Head, // 头部层
+    	Helmet, // 头盔层
+    	Weapon, // 武器层
+    	Feet, // 鞋子层
+    	Shield, // 盾牌层
+    	Face, // 脸部层
+    	Hair, // 发型+胡须合并层
     }
 
     // ========================================
@@ -134,6 +138,7 @@ public partial class ItemData : Resource
         _ => Colors.White,
     };
 
+    [Obsolete("使用 TradePricingService.GetSellPrice() 获取经济锚定价格。此方法直接使用 JSON Price，脱离经济模型。")]
     public int GetSellPrice() => ItemRarity switch
     {
         Rarity.Common => Price,

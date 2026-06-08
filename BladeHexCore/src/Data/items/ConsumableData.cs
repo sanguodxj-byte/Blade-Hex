@@ -51,10 +51,8 @@ public partial class ConsumableData : ItemData
     // 关联法术（卷轴用）— 存储 SpellData 的 SpellId
     [Export] public string LinkedSpellId { get; set; } = "";
 
-    // 使用时机：main_action / minor_action
-    [Export] public string UseAction { get; set; } = "main_action";
-
-    // 战斗外使用
+    // 战斗外使用：当前未实装"战斗外消耗品菜单"，UI 不查询此字段。
+    // 食物/野营工具等大地图行为走 PartyRoster 自己的接口，不通过 ConsumableData。
     [Export] public bool UsableOutsideCombat;
 
     // 使用后附带的状态效果

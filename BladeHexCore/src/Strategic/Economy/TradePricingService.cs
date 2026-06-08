@@ -24,21 +24,42 @@ public static class TradePricingService
         return Math.Max(1, RoundToTradeStep(anchored * rarity));
     }
 
-    /// <summary>市场买入价：基准价 × 繁荣度加价 × 可选声望倍率。</summary>
-    public static int GetBuyPrice(ItemData item, int prosperity = 50, float reputationMultiplier = 1.0f, EconomyPriceAnchor? anchor = null)
+    private static string GetItemCategory(ItemData item)
+    {
+        if (item == null) return "all";
+        if (item.ItemId.Contains("horse") || item.ItemName.Contains("马")) return "horse";
+        if (item.ItemId == "rations" || item.ItemId == "beer" || item.ItemId == "bandage" || item.ItemId.Contains("food") || item.ItemName.Contains("口粮") || item.ItemName.Contains("麦") || item.ItemName.Contains("酒")) return "food";
+        if (item.EquipSlotTarget == ItemData.EquipSlot.Weapon || item.EquipSlotTarget == ItemData.EquipSlot.Helmet || item.ItemId.Contains("sword") || item.ItemId.Contains("shield") || item.ItemId.Contains("armor") || item.ItemId.Contains("bow") || item.ItemId.Contains("boots")) return "weapon";
+        return "all";
+    }
+
+    /// <summary>市场买入价：基准价 × 繁荣度加价 × 可选声望倍率 × 物价波动乘数。</summary>
+    public static int GetBuyPrice(ItemData item, int prosperity = 50, float reputationMultiplier = 1.0f, EconomyPriceAnchor? anchor = null, OverworldPOI? poi = null, EconomyEventEngine? eventEngine = null)
     {
         prosperity = Math.Clamp(prosperity, 0, 100);
         float markup = 1.0f + (100 - prosperity) * 0.005f;
         float mult = Math.Clamp(markup * reputationMultiplier, 0.8f, 1.8f);
+        
+        if (poi != null && eventEngine != null)
+        {
+            mult *= eventEngine.GetPriceMultiplierFor(poi, GetItemCategory(item));
+        }
+
         return Math.Max(1, RoundToTradeStep(GetBasePrice(item, anchor) * mult));
     }
 
-    /// <summary>市场卖出价：基准价 × 繁荣度/声望回收倍率。</summary>
-    public static int GetSellPrice(ItemData item, int prosperity = 50, float reputationMultiplier = 1.0f, EconomyPriceAnchor? anchor = null)
+    /// <summary>市场卖出价：基准价 × 繁荣度/声望回收倍率 × 物价波动乘数。</summary>
+    public static int GetSellPrice(ItemData item, int prosperity = 50, float reputationMultiplier = 1.0f, EconomyPriceAnchor? anchor = null, OverworldPOI? poi = null, EconomyEventEngine? eventEngine = null)
     {
         prosperity = Math.Clamp(prosperity, 0, 100);
         float mult = 0.35f + prosperity * 0.002f;
         mult = Math.Clamp(mult * reputationMultiplier, 0.25f, 0.65f);
+
+        if (poi != null && eventEngine != null)
+        {
+            mult *= eventEngine.GetPriceMultiplierFor(poi, GetItemCategory(item));
+        }
+
         return Math.Max(1, RoundToTradeStep(GetBasePrice(item, anchor) * mult));
     }
 

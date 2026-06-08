@@ -34,52 +34,69 @@ public partial class SkillTreeData : RefCounted
 
     void BuildSkillTree()
     {
-        BuildStartNode();
-        BuildStrRegion();
-        BuildDexRegion();
-        BuildConRegion();
-        BuildIntRegion();
-        BuildWisRegion();
-        BuildChaRegion();
-        BuildTransitionNodes();
-        BuildCrossRegionLoops();
+        if (SkillTreeLayoutLoader.TryLoadDefault(Nodes, out var loadError))
+        {
+            var (ok, validationMessage) = SkillTreeLayoutLoader.Validate(Nodes, 20);
+            if (ok)
+            {
+                GD.Print($"[SkillTree] Loaded fixed layout from JSON: nodes={Nodes.Count}");
+                return;
+            }
 
-        // 注：节点位置由各 Build*Region 中的 Mp(dir, ring, slot) 手工指定
-        // 节点连线由各 Build*Region 中的 n.Neighbors 列表显式定义（星座式拓扑）
-        // 网格仅作为坐标系，不参与连接判定
+            GD.PushError($"[SkillTree] Fixed layout validation failed: {validationMessage}.");
+            Nodes.Clear();
+        }
+        else
+        {
+            GD.PushError($"[SkillTree] Fixed layout load failed: {loadError}.");
+        }
+
+        BuildStartNode();
+        GD.PushError("[SkillTree] Fixed JSON layout is required; legacy auto layout is disabled.");
     }
 
     /// <summary>
-    /// 自动布局：清除所有手动 GridPosition / Neighbors，
-    /// 按区域+深度重新分配位置，再按几何相邻关系自动连线
-    /// 使用"内向扩散"BFS：从 start 节点开始，6 个区域同时向外扩散，确保所有节点均与至少一个已放置节点相邻
+    /// 自动布局：清除所有手动 GridPosition，
+    /// 按区域+深度重新分配位置到对应 60° 扇区。
+    /// 可点亮依据直接使用几何共享边（NodeFiller 几何邻接判断），不建立 Neighbors 列表。
     /// </summary>
     void AutoLayoutAndConnect()
     {
         const int HexagonRadius = 20;
+        var coord = new SkillTreeCoord { HexSize = 1.0f };
+        var allTiles = SkillTreeCoord.GetAllTiles(HexagonRadius)
+            .OrderBy(t => TileDistanceKey(coord, t))
+            .ThenBy(t => t.X)
+            .ThenBy(t => t.Y)
+            .ToList();
 
         // 1. start 固定原点
         if (Nodes.TryGetValue(StartNodeId, out var startNode))
             startNode.GridPosition = Vector2I.Zero;
 
-        // 2. 6 个区域按 dirIdx 0-5 分布到六边形 6 个轴线
-        var regionToDir = new Dictionary<SkillNodeData.Region, int>
+        // 2. 6 个区域按 sectorIdx 0-5 分布到六个 60° 三角扇区。
+        // sector 0..5 对应顶点边: top->upper-right, upper-right->lower-right, ...
+        // 与 SkillTreeUI 的六维区域底色保持一致，避免节点压在分割轴线上。
+        var regionToSector = new Dictionary<SkillNodeData.Region, int>
         {
-            { SkillNodeData.Region.Str, 0 },
-            { SkillNodeData.Region.Dex, 1 },
-            { SkillNodeData.Region.Con, 2 },
-            { SkillNodeData.Region.Int, 3 },
-            { SkillNodeData.Region.Wis, 4 },
-            { SkillNodeData.Region.Cha, 5 },
+            { SkillNodeData.Region.Dex, 0 },
+            { SkillNodeData.Region.Con, 1 },
+            { SkillNodeData.Region.Int, 2 },
+            { SkillNodeData.Region.Wis, 3 },
+            { SkillNodeData.Region.Cha, 4 },
+            { SkillNodeData.Region.Str, 5 },
         };
 
-        // 占用记录：所有已放置节点的位置
-        var occupied = new HashSet<Vector2I> { Vector2I.Zero };
+        // Occupancy is tracked by full triangular figures, not node anchors.
+        var occupiedTiles = new HashSet<Vector2I>();
+        if (Nodes.TryGetValue(StartNodeId, out var start))
+            SkillNodeShape.AddTo(SkillNodeShape.GetTiles(start), occupiedTiles);
+        var startTiles = new HashSet<Vector2I>(occupiedTiles);
 
         // 各区域填充其 60° 扇区
-        // BFS 起点：扇区内距 start 最近的轴向格点
-        // 这保证每个新节点至少有一个已放置邻居（来自已放置的扇区内节点 + start 节点）
-        foreach (var (region, dirIdx) in regionToDir)
+        // This keeps visual figures from overlapping and makes runtime
+        // availability match what the player sees on the board.
+        foreach (var (region, sectorIdx) in regionToSector)
         {
             var regionNodes = Nodes.Values
                 .Where(n => n.CurrentRegion == region)
@@ -89,71 +106,39 @@ public partial class SkillTreeData : RefCounted
 
             if (regionNodes.Count == 0) continue;
 
-            var mainDir = Dirs[dirIdx];
-            var sideDir = Dirs[(dirIdx + 5) % 6]; // dirIdx-1，朝前一区域偏移
+            var sectorCandidates = allTiles
+                .Where(t => GetTileRegionIndex(coord, t) == sectorIdx)
+                .ToList();
 
-            // 预计算扇区内所有合法位置
-            var sectorSet = new HashSet<Vector2I>();
-            for (int a = 1; a <= HexagonRadius; a++)
-                for (int b = 0; b <= a; b++)
-                {
-                    var pos = mainDir * a + sideDir * b;
-                    if (IsValidPosition(pos, HexagonRadius))
-                        sectorSet.Add(pos);
-                }
-
-            // BFS：从扇区种子开始，按距离扩散
-            var seed = mainDir;
-            var queue = new Queue<Vector2I>();
-            var visited = new HashSet<Vector2I>();
-            if (sectorSet.Contains(seed))
+            for (int i = 0; i < regionNodes.Count; i++)
             {
-                queue.Enqueue(seed);
-                visited.Add(seed);
-            }
+                var node = regionNodes[i];
+                Vector2I targetPos;
+                Vector2I[] shapeTiles;
 
-            foreach (var node in regionNodes)
-            {
-                Vector2I targetPos = mainDir * (HexagonRadius - 1); // fallback
                 bool placed = false;
-
-                while (queue.Count > 0)
+                if (i == 0)
                 {
-                    var p = queue.Dequeue();
-                    if (occupied.Contains(p)) continue;
-                    if (!sectorSet.Contains(p)) continue;
-                    targetPos = p;
-                    placed = true;
-
-                    // 入队 6 邻居
-                    foreach (var d in Dirs)
-                    {
-                        var nb = p + d;
-                        if (!visited.Contains(nb) && sectorSet.Contains(nb))
-                        {
-                            visited.Add(nb);
-                            queue.Enqueue(nb);
-                        }
-                    }
-                    break;
+                    placed = TryFindPlacement(node, sectorCandidates, occupiedTiles, HexagonRadius, requireTouch: true,
+                            out targetPos, out shapeTiles, startTiles)
+                        || TryFindPlacement(node, allTiles, occupiedTiles, HexagonRadius, requireTouch: true,
+                            out targetPos, out shapeTiles, startTiles);
+                }
+                else
+                {
+                    placed = TryFindPlacement(node, sectorCandidates, occupiedTiles, HexagonRadius, requireTouch: true,
+                        out targetPos, out shapeTiles);
                 }
 
-                if (!placed)
-                {
-                    // 队列耗尽：回退到主轴最远空位
-                    for (int r = HexagonRadius; r >= 1; r--)
-                    {
-                        var p = mainDir * r;
-                        if (sectorSet.Contains(p) && !occupied.Contains(p))
-                        {
-                            targetPos = p;
-                            break;
-                        }
-                    }
-                }
+                if (!placed
+                    && !TryFindPlacement(node, sectorCandidates, occupiedTiles, HexagonRadius, requireTouch: false,
+                        out targetPos, out shapeTiles)
+                    && !TryFindPlacement(node, allTiles, occupiedTiles, HexagonRadius, requireTouch: false,
+                        out targetPos, out shapeTiles))
+                    targetPos = Vector2I.Zero;
 
                 node.GridPosition = targetPos;
-                occupied.Add(targetPos);
+                SkillNodeShape.AddTo(shapeTiles, occupiedTiles);
             }
         }
 
@@ -167,74 +152,17 @@ public partial class SkillTreeData : RefCounted
 
         foreach (var n in transitionNodes)
         {
-            // 寻找紧邻已占用区域的空位
-            Vector2I targetPos = Vector2I.Zero;
-            bool placed = false;
+            if (!TryFindPlacement(n, allTiles, occupiedTiles, HexagonRadius, requireTouch: true,
+                    out var targetPos, out var shapeTiles)
+                && !TryFindPlacement(n, allTiles, occupiedTiles, HexagonRadius, requireTouch: false,
+                    out targetPos, out shapeTiles))
+                targetPos = Vector2I.Zero;
 
-            // 收集所有"紧邻已占用"的空位
-            var candidates = new HashSet<Vector2I>();
-            foreach (var p in occupied)
-            {
-                foreach (var d in Dirs)
-                {
-                    var nb = p + d;
-                    if (occupied.Contains(nb)) continue;
-                    if (!IsValidPosition(nb, HexagonRadius)) continue;
-                    candidates.Add(nb);
-                }
-            }
-
-            if (candidates.Count > 0)
-            {
-                // 选第一个（按位置稳定排序）
-                targetPos = candidates.OrderBy(p => Math.Max(Math.Max(Math.Abs(p.X), Math.Abs(p.Y)), Math.Abs(-p.X - p.Y)))
-                    .ThenBy(p => p.X).ThenBy(p => p.Y).First();
-                placed = true;
-            }
-
-            if (!placed) targetPos = Vector2I.Zero;
             n.GridPosition = targetPos;
-            occupied.Add(targetPos);
+            SkillNodeShape.AddTo(shapeTiles, occupiedTiles);
         }
 
-        // 4. 清除所有手动 Neighbors，按几何相邻自动连线
-        foreach (var n in Nodes.Values)
-            n.Neighbors.Clear();
-
-        // 建立位置 -> 节点查找表（位置冲突时保留第一个）
-        var posToNode = new Dictionary<Vector2I, SkillNodeData>();
-        var collisions = 0;
-        foreach (var n in Nodes.Values)
-        {
-            if (posToNode.ContainsKey(n.GridPosition))
-            {
-                collisions++;
-                continue;
-            }
-            posToNode[n.GridPosition] = n;
-        }
-
-        // 对每个节点，查找 6 个相邻方向上的节点并连线
-        int totalEdges = 0;
-        foreach (var n in Nodes.Values)
-        {
-            foreach (var dir in Dirs)
-            {
-                var neighbor = n.GridPosition + dir;
-                if (posToNode.TryGetValue(neighbor, out var nb) && nb != n)
-                {
-                    if (!n.Neighbors.Contains(nb.NodeId))
-                    {
-                        n.Neighbors.Add(nb.NodeId);
-                        totalEdges++;
-                    }
-                }
-            }
-        }
-
-        GD.Print($"[SkillTree] AutoLayout: 节点={Nodes.Count}, 边={totalEdges / 2}, 冲突={collisions}");
-        if (Nodes.TryGetValue(StartNodeId, out var sn))
-            GD.Print($"[SkillTree] start.GridPos={sn.GridPosition}, Neighbors=[{string.Join(",", sn.Neighbors)}]");
+        GD.Print($"[SkillTree] AutoLayout: 节点={Nodes.Count}, 占用瓦片={occupiedTiles.Count}");
     }
 
     /// <summary>判断位置是否在六边形内</summary>
@@ -242,6 +170,58 @@ public partial class SkillTreeData : RefCounted
     {
         int z = -pos.X - pos.Y;
         return Math.Abs(pos.X) <= radius && Math.Abs(pos.Y) <= radius && Math.Abs(z) <= radius;
+    }
+
+    static bool TryFindPlacement(SkillNodeData node, IEnumerable<Vector2I> candidates,
+        HashSet<Vector2I> occupiedTiles, int radius, bool requireTouch,
+        out Vector2I anchor, out Vector2I[] shapeTiles,
+        HashSet<Vector2I>? requiredTouchTiles = null)
+    {
+        foreach (var candidate in candidates)
+        {
+            var tiles = SkillNodeShape.GetTilesForAnchor(node, candidate);
+            if (!SkillNodeShape.IsInsideHex(tiles, radius)) continue;
+            if (SkillNodeShape.Overlaps(tiles, occupiedTiles)) continue;
+            if (requireTouch && !SkillNodeShape.Touches(tiles, requiredTouchTiles ?? occupiedTiles)) continue;
+
+            anchor = candidate;
+            shapeTiles = tiles;
+            return true;
+        }
+
+        anchor = Vector2I.Zero;
+        shapeTiles = [];
+        return false;
+    }
+
+    static int GetTileRegionIndex(SkillTreeCoord coord, Vector2I tile)
+    {
+        var p = coord.TileCentroid(tile);
+        if (p.LengthSquared() < 0.0001f) return 0;
+
+        var direction = p.Normalized();
+        int bestIndex = 0;
+        float bestDot = float.NegativeInfinity;
+        for (int i = 0; i < Dirs.Length; i++)
+        {
+            var a = coord.VertexToPixel(Dirs[i].X, Dirs[i].Y);
+            var b = coord.VertexToPixel(Dirs[(i + 1) % Dirs.Length].X, Dirs[(i + 1) % Dirs.Length].Y);
+            var axis = (a + b).Normalized();
+            float dot = direction.Dot(axis);
+            if (dot > bestDot)
+            {
+                bestDot = dot;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    static float TileDistanceKey(SkillTreeCoord coord, Vector2I tile)
+    {
+        var p = coord.TileCentroid(tile);
+        return p.LengthSquared();
     }
 
     // ========================================================================
@@ -402,7 +382,7 @@ public partial class SkillTreeData : RefCounted
         Ms("str_s05", "狂战士之怒", 5, ["str_b01"], D(("critical_rate", 0.05), ("melee_damage", 1)), Vector2I.Zero);
         Ms("str_s07", "致命精准", 5, ["str_b02"], D(("critical_rate", 0.03)), Vector2I.Zero);
         Ms("str_s12", "战意高昂", 5, ["str_b02"], D(("melee_damage", 2), ("max_hp", 5)), Vector2I.Zero);
-        Ms("str_s14", "战场怒吼", 5, ["str_s08"], D(("morale", 1), ("melee_hit", 1)), Vector2I.Zero);
+        Ms("str_s14", "战场怒吼", 5, ["str_s08"], D(("melee_hit", 1)), Vector2I.Zero);
 
         Mb("str_b03", "旋风斩", 6, [], ["str_s05"], "whirlwind", true, "主动: 攻击周围所有敌人", Vector2I.Zero);
         Ms("str_s09", "巨力挥击", 6, ["str_s07"], D(("melee_damage", 3)), Vector2I.Zero);
@@ -410,12 +390,12 @@ public partial class SkillTreeData : RefCounted
         Mb("str_b04", "重甲精通", 6, [], ["str_s14"], "heavy_armor", false, "被动: 护甲+3, 速度-1", Vector2I.Zero);
 
         Ms("str_s16", "无畏冲锋", 7, ["str_b03"], D(("melee_damage", 2), ("speed", 1)), Vector2I.Zero);
-        Mb("str_b06", "嗜血", 7, [5], ["str_s09"], "bloodthirst", true, "主动: 近战击杀敌人后立即获得额外行动", Vector2I.Zero);
+        Mb("str_b06", "无畏冲锋", 7, [5], ["str_s09"], "fearless_charge", true, "主动: 直线冲撞，途经敌人受武器 50%，命中附 STUN 1 回合", Vector2I.Zero);
         Mb("str_b05", "暴击大师", 7, [], ["str_s13"], "critical_master", false, "被动: 暴击伤害×3", Vector2I.Zero);
         Ms("str_s18", "战场本能", 7, ["str_b04"], D(("max_hp", 5), ("melee_hit", 1)), Vector2I.Zero);
 
         Ms("str_s17", "不屈意志", 8, ["str_b06"], D(("max_hp", 8), ("all_save", 2)), Vector2I.Zero);
-        Mb("str_b07", "战斗怒吼", 8, [7], ["str_b05"], "battle_cry", true, "主动: 怒吼震慑周围敌人使其下回合攻击-2, 同时友军士气+3", Vector2I.Zero);
+        Mb("str_b07", "战吼震慑", 8, [7], ["str_b05"], "battle_cry", true, "主动: 半径 3 敌人命中 -20%（1 回合）", Vector2I.Zero);
         Ms("str_s20", "战争践踏", 8, ["str_s18"], D(("melee_damage", 2), ("ac", -1)), Vector2I.Zero);
 
         Ms("str_s19", "血性狂热", 9, ["str_b07"], D(("melee_damage", 2), ("max_hp", 5)), Vector2I.Zero);
@@ -563,7 +543,7 @@ public partial class SkillTreeData : RefCounted
         n.Neighbors = new List<string> { "dex_b02", "dex_b07" };
         n = Ms("dex_s07", "长距瞄准", 5, ["dex_b05"], D(("range_bonus", 1)), Mp(1,5,-2));
         n.Neighbors = new List<string> { "dex_b05", "dex_b06" };
-        n = Mb("dex_b07", "隐匿", 5, [], ["dex_s08"], "stealth", true, "主动: 进入潜行状态", Mp(1,5,-3));
+        n = Mb("dex_b07", "闪避翻滚", 5, [], ["dex_s08"], "evasive_roll", true, "主动: 位移 4 格，不触发借机攻击", Mp(1,5,-3));
         n.Neighbors = new List<string> { "dex_s08", "dex_s09", "dex_s13" };
         n = Mb("dex_b03", "连珠箭", 6, [], ["dex_s04"], "multi_shot", true, "主动: 连射3支箭, 每支-2命中", Mp(1,6,0));
         n.Neighbors = new List<string> { "dex_s04", "dex_s05" };
@@ -575,7 +555,7 @@ public partial class SkillTreeData : RefCounted
         n.Neighbors = new List<string> { "dex_b07", "dex_b06" };
         n = Mb("dex_b11", "陷阱大师", 6, [], ["dex_s13"], "trap_master", true, "主动: 放置陷阱, 触发的敌人停止移动并受1d8伤害", Mp(1,6,-3));
         n.Neighbors = new List<string> { "dex_s13" };
-        n = Mb("dex_b04", "剑舞", 7, [], ["dex_s05"], "sword_dance", true, "主动: 对周围所有敌人进行近战攻击", Mp(1,7,1));
+        n = Mb("dex_b04", "游猎姿态", 7, [], ["dex_s05"], "hunter_stance", true, "姿态: 远程伤害 +15%；近战伤害 -20%", Mp(1,7,1));
         n.Neighbors = new List<string> { "dex_s05" };
         n = Ms("dex_s16", "疾风步", 7, ["dex_b11"], D(("speed", 2), ("ac", 1)), Mp(1,7,-1));
         n.Neighbors = new List<string> { "dex_b11", "dex_b12" };
@@ -599,7 +579,7 @@ public partial class SkillTreeData : RefCounted
         n.Neighbors = new List<string> { "dex_b12" };
         n = Ms("dex_s18", "射手之道", 8, ["dex_b04"], D(("ranged_hit", 2)), Mp(1,8,1));
         n.Neighbors = new List<string> { "dex_b04", "dex_b13" };
-        n = Mb("dex_b13", "流星箭雨", 9, [], ["dex_s18"], "meteor_shower", true, "主动: 向区域倾泻箭雨, 所有目标受2d8伤害", Mp(1,9,1));
+        n = Mb("dex_b13", "流星箭雨", 9, [], ["dex_s18"], "arrow_rain", true, "主动: 半径 2，范围内敌人各受武器 60%", Mp(1,9,1));
         n.Neighbors = new List<string> { "dex_s18", "dex_s19" };
         n = Ms("dex_s19", "元素共鸣", 9, ["dex_b13"], D(("ranged_hit", 2), ("ranged_damage", 2)), Mp(1,10,1));
         n.Neighbors = new List<string> { "dex_b13" };
@@ -646,7 +626,7 @@ public partial class SkillTreeData : RefCounted
         // Ring 6
         n = Mb("con_b03", "不屈", 6, [], ["con_s04"], "unyielding", false, "机制: HP低于25%时伤害减半", Mp(2,6,0));
         n.Neighbors = new List<string> { "con_s04", "con_s12" };
-        n = Mb("con_b04", "生命之盾", 6, [], ["con_s09"], "life_shield", true, "主动: 获得等于最大HP30%的临时护盾(3回合)", Mp(2,6,-1));
+        n = Mb("con_b04", "守护链接", 6, [], ["con_s09"], "guardian_link", true, "主动: 指定 1 友军，其受到伤害的 50% 转移到自己（3 回合）", Mp(2,6,-1));
         n.Neighbors = new List<string> { "con_s09", "con_s11" };
         n = Ms("con_s11", "铁血战士", 6, ["con_b04"], D(("max_hp", 10), ("melee_damage", 1)), Mp(2,6,-2));
         n.Neighbors = new List<string> { "con_b04", "con_ks01" };
@@ -655,7 +635,7 @@ public partial class SkillTreeData : RefCounted
         n.Neighbors = new List<string> { "con_s11" };
         n = Ms("con_s12", "活力涌动", 7, ["con_b03"], D(("max_hp", 10), ("heal_amount", 1)), Mp(2,7,0));
         n.Neighbors = new List<string> { "con_b03", "con_b07" };
-        n = Mb("con_b07", "生命之环", 8, [], ["con_s12"], "life_circle", true, "主动: 治疗周围所有友军2d10+体质修正HP", Mp(2,8,0));
+        n = Mb("con_b07", "岿然不动", 8, [], ["con_s12"], "unyielding_stand", true, "主动: 立即回复 25% 最大 HP，本回合受到伤害 -30%", Mp(2,8,0));
         n.Neighbors = new List<string> { "con_s12", "con_s13" };
         n = Ms("con_s13", "坚不可摧", 9, ["con_b07"], D(("ac", 2), ("all_save", 2)), Mp(2,9,0));
         n.Neighbors = new List<string> { "con_b07" };
@@ -834,22 +814,22 @@ public partial class SkillTreeData : RefCounted
     {
         SkillNodeData n;
         // Ring 1
-        n = Ms("cha_s01", "鼓舞士气", 1, ["start"], D(("morale", 1)), Mp(5,1,0));
+        n = Ms("cha_s01", "鼓舞士气", 1, ["start"], new Godot.Collections.Dictionary(), Mp(5,1,0));
         n.Neighbors = new List<string> { "start", "cha_s02" };
         // Ring 2
         n = Ms("cha_s02", "领袖气质", 2, ["cha_s01"], D(("cha_check", 1)), Mp(5,2,0));
         n.Neighbors = new List<string> { "cha_s01", "cha_b01" };
-        n = Ms("cha_s09", "交际手腕", 2, ["cha_s01"], D(("morale", 1)), Mp(5,2,-1));
+        n = Ms("cha_s09", "交际手腕", 2, ["cha_s01"], new Godot.Collections.Dictionary(), Mp(5,2,-1));
         n.Neighbors = new List<string> { "cha_s01", "cha_s06" };
         // Ring 3
-        n = Mb("cha_b01", "指挥", 3, [], ["cha_s02"], "command", true, "主动: 指令1名友军立即行动", Mp(5,3,0));
+        n = Mb("cha_b01", "战术调度", 3, [], ["cha_s02"], "tactical_reposition", true, "主动: 指定 1 友军获得额外 4 AP，可超出 AP 上限", Mp(5,3,0));
         n.Neighbors = new List<string> { "cha_s02", "cha_s03", "cha_s06" };
         n = Ms("cha_s03", "威压", 3, ["cha_b01"], D(("cha_check", 1)), Mp(5,3,-1));
         n.Neighbors = new List<string> { "cha_b01", "cha_b02" };
         n = Ms("cha_s06", "团结之力", 3, ["cha_s09"], D(("ally_bonus", 1)), Mp(5,3,-2));
         n.Neighbors = new List<string> { "cha_s09", "cha_b01", "cha_b04" };
         // Ring 4
-        n = Mb("cha_b02", "集结号令", 4, [], ["cha_s03"], "rally", true, "主动: 所有友军下回合攻击+2", Mp(5,4,0));
+        n = Mb("cha_b02", "集结号令", 4, [], ["cha_s03"], "gathering_order", true, "主动: 所有友军下回合命中 +10%、伤害 +10%", Mp(5,4,0));
         n.Neighbors = new List<string> { "cha_s03", "cha_s04" };
         n = Ms("cha_s10", "声东击西", 4, ["cha_s06"], D(("cha_check", 1), ("initiative", 1)), Mp(5,4,-1));
         n.Neighbors = new List<string> { "cha_s06", "cha_b06" };
@@ -860,36 +840,36 @@ public partial class SkillTreeData : RefCounted
         n.Neighbors = new List<string> { "cha_b02", "cha_b03" };
         n = Mb("cha_b06", "暗影交易", 5, [], ["cha_s10"], "shadow_deal", true, "主动: 贿赂敌人使其1回合不攻击", Mp(5,5,-1));
         n.Neighbors = new List<string> { "cha_s10", "cha_s07" };
-        n = Ms("cha_s07", "鼓舞之歌", 5, ["cha_b06"], D(("morale", 2), ("ally_bonus", 1)), Mp(5,5,-2));
+        n = Ms("cha_s07", "鼓舞之歌", 5, ["cha_b06"], D(("ally_bonus", 1)), Mp(5,5,-2));
         n.Neighbors = new List<string> { "cha_b06", "cha_b05" };
         // Ring 6
         n = Mb("cha_b03", "统帅光环", 6, [], ["cha_s04"], "command_aura", false, "被动: 周围友军攻击+1 AC+1", Mp(5,6,0));
         n.Neighbors = new List<string> { "cha_s04", "cha_s11" };
-        n = Mb("cha_b05", "威压", 6, [], ["cha_s07"], "intimidate", true, "主动: 敌人攻击检定-2(3回合), WIS豁免", Mp(5,6,-1));
+        n = Mb("cha_b05", "威压", 6, [], ["cha_s07"], "command_intimidate", true, "主动: 半径 3 敌人命中 -10%（3 回合）", Mp(5,6,-1));
         n.Neighbors = new List<string> { "cha_s07", "cha_s08" };
-        n = Ms("cha_s11", "王者风范", 6, ["cha_b03"], D(("ally_bonus", 1), ("morale", 1)), Mp(5,6,-2));
+        n = Ms("cha_s11", "王者风范", 6, ["cha_b03"], D(("ally_bonus", 1)), Mp(5,6,-2));
         n.Neighbors = new List<string> { "cha_b03", "cha_s12" };
-        n = Ms("cha_s12", "领袖魅力", 6, ["cha_s11"], D(("morale", 2), ("ally_bonus", 1)), Mp(5,6,-3));
+        n = Ms("cha_s12", "领袖魅力", 6, ["cha_s11"], D(("ally_bonus", 1)), Mp(5,6,-3));
         n.Neighbors = new List<string> { "cha_s11", "cha_b10" };
         // Ring 7
         n = Ms("cha_s08", "王者之心", 7, ["cha_b05"], D(("ally_bonus", 1)), Mp(5,7,-1));
         n.Neighbors = new List<string> { "cha_b05", "cha_ks01" };
         n = Mk("cha_ks01", "君临天下", 7, ["cha_s08"], "royal_presence", "范围内友军全豁免+2不会恐慌", "自身HP-20%", D(("max_hp_pct", -0.2)), Mp(5,8,-1));
         n.Neighbors = new List<string> { "cha_s08" };
-        n = Mb("cha_b10", "英雄号召", 7, [7], ["cha_s12"], "heroic_call", true, "主动: 插下战旗, 周围友军获得攻击+2和AC+1持续3回合", Mp(5,7,-2));
+        n = Mb("cha_b10", "英雄号召", 7, [7], ["cha_s12"], "battle_banner", true, "主动: 插战旗；半径 2 内友军命中 +10%、AC +1（3 回合）", Mp(5,7,-2));
         n.Neighbors = new List<string> { "cha_s12", "cha_s13" };
-        n = Ms("cha_s13", "传奇号召", 8, ["cha_b10"], D(("morale", 3), ("cha_check", 2)), Mp(5,8,-2));
+        n = Ms("cha_s13", "传奇号召", 8, ["cha_b10"], D(("cha_check", 2)), Mp(5,8,-2));
         n.Neighbors = new List<string> { "cha_b10" };
         // 外扩分支
-        n = Ms("cha_s14", "商业嗅觉", 5, ["cha_b04"], D(("cha_check", 1), ("morale", 1)), Mp(5,5,1));
+        n = Ms("cha_s14", "商业嗅觉", 5, ["cha_b04"], D(("cha_check", 1)), Mp(5,5,1));
         n.Neighbors = new List<string> { "cha_b04", "cha_b11" };
         n = Mb("cha_b11", "商业帝国", 6, [5], ["cha_s14"], "merchant_empire", false, "机制: 每次战斗结束额外获得敌人等级x5金币, 商店出现稀有物品概率+15%", Mp(5,6,1));
         n.Neighbors = new List<string> { "cha_s14" };
-        n = Ms("cha_s15", "仇恨刻印", 7, ["cha_s08"], D(("morale", 2), ("melee_damage", 1)), Mp(5,7,0));
+        n = Ms("cha_s15", "仇恨刻印", 7, ["cha_s08"], D(("melee_damage", 1)), Mp(5,7,0));
         n.Neighbors = new List<string> { "cha_b03", "cha_b12" };
         n = Mb("cha_b12", "复仇誓言", 8, [7], ["cha_s15"], "vow_of_vengeance", false, "机制: 标记1个敌人为复仇目标, 对其造成的伤害+25%, 目标死亡时恢复全队10%HP", Mp(5,8,0));
         n.Neighbors = new List<string> { "cha_s15", "cha_s16" };
-        n = Ms("cha_s16", "血债血偿", 9, ["cha_b12"], D(("morale", 2), ("ally_bonus", 2)), Mp(5,9,0));
+        n = Ms("cha_s16", "血债血偿", 9, ["cha_b12"], D(("ally_bonus", 2)), Mp(5,9,0));
         n.Neighbors = new List<string> { "cha_b12" };
     }
 
@@ -922,11 +902,11 @@ public partial class SkillTreeData : RefCounted
         n.IsBridge = true;
 
         // WIS(dir4: 0,-1) <-> CHA(dir5: 1,-1) — 中间方向约 (1,-2)
-        n = Ms("trans_wc01", "精神领袖", 2, ["wis_s01", "cha_s01"], D(("heal_amount", 1), ("morale", 1)), new Vector2I(1, -2));
+        n = Ms("trans_wc01", "精神领袖", 2, ["wis_s01", "cha_s01"], D(("heal_amount", 1)), new Vector2I(1, -2));
         n.IsBridge = true;
 
         // CHA(dir5: 1,-1) <-> CON(dir2: -1,1) — 中间方向约 (0,0)... 实际在 ring2 偏 CHA-CON 边界
-        n = Ms("trans_cc01", "鼓舞防御", 2, ["cha_s01", "con_s01"], D(("ac", 1), ("morale", 1)), new Vector2I(-1, 0));  // 注意：这里不能是(0,0)因为那是start
+        n = Ms("trans_cc01", "鼓舞防御", 2, ["cha_s01", "con_s01"], D(("ac", 1)), new Vector2I(-1, 0));
         n.IsBridge = true;
 
         // === 中层过渡 (Ring 4) — 连接相邻区域的 Ring 3 大节点 ===
@@ -963,7 +943,7 @@ public partial class SkillTreeData : RefCounted
 
         // STR <-> CHA 深层
         // 位于 STR(b07@8,-3) 与 CHA(b10@5,7,-2 → grid(7,-7) 之间, 偏向 STR-CHA 交界)
-        n = Ms("trans_sc03", "战神信仰", 7, ["str_b07", "cha_b10"], D(("melee_hit", 1), ("morale", 2)), new Vector2I(7, -5));
+        n = Ms("trans_sc03", "战意昂扬", 7, ["str_b07", "cha_b10"], D(("melee_hit", 1)), new Vector2I(7, -5));
         n.IsBridge = true;
 
         // CON <-> WIS 深层

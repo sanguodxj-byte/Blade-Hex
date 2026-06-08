@@ -114,6 +114,23 @@ public static class EntityCombatBridge
     /// </summary>
     public static void ApplyBattleOutcome(OverworldEntity entity, BattleOutcome outcome)
     {
+        ApplyBattleOutcome(entity, outcome, null, null, null, null, null, null);
+    }
+
+    /// <summary>
+    /// 应用战斗结果(带英雄网络) — 战斗结束后更新实体状态。
+    /// 战败时统一走 HeroDefeatResolver,触发被俘/战死/关系传播/新闻。
+    /// </summary>
+    public static void ApplyBattleOutcome(
+        OverworldEntity entity,
+        BattleOutcome outcome,
+        OverworldEntity? winner,
+        BladeHex.Strategic.WorldEvents.WorldEventEngine? engine,
+        BladeHex.Strategic.Hero.HeroRegistry? registry,
+        BladeHex.Strategic.Hero.PrisonerLedger? ledger,
+        BladeHex.Strategic.Hero.HeroRelationMatrix? relations,
+        List<OverworldPOI>? pois)
+    {
         if (outcome == null) return;
 
         // 更新队伍人数
@@ -127,10 +144,11 @@ public static class EntityCombatBridge
         entity.CombatPower = entity.PartySize * entity.PartyLevel
             * (entity.EntityTypeEnum == OverworldEntity.EntityType.LordArmy ? 1.5f : 2.0f);
 
-        // 全灭处理
+        // 全灭处理 — 走统一战败入口(英雄网络可空,降级为 IsAlive=false)
         if (outcome.AttackerDestroyed || entity.PartySize <= 0)
         {
-            entity.IsAlive = false;
+            BladeHex.Strategic.Hero.HeroDefeatResolver.Resolve(
+                entity, winner, engine, registry, ledger, relations, pois);
             return;
         }
 

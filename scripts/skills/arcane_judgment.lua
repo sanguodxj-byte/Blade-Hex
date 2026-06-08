@@ -1,12 +1,11 @@
 -- arcane_judgment.lua
--- 奥术审判：单体3d10+WIS伤害，若拥有知识力量则额外+INT，类型奥术
+-- 奥术审判：单体等级*骰+WIS伤害，若拥有知识力量则额外+INT，类型奥术
 
 function execute(ctx)
     local target = require_enemy(ctx.target_q, ctx.target_r)
     if not target then return end
 
-    local wis_mod = combat:get_stat_mod(ctx.attacker.wis)
-    local dmg = combat:roll_dice(3, 10) + wis_mod
+    local _, _, dmg = calc_skill_value(ctx, "arcane_judgment")
 
     if ctx.attacker:has_skill("knowledge_power") then
         local int_mod = combat:get_stat_mod(ctx.attacker.intel)

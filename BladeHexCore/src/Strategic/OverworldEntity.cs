@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using BladeHex.Data;
 
@@ -34,7 +34,18 @@ public partial class OverworldEntity : Resource
         Chasing,        // 追击敌人
         Recruiting,     // 招募中（领主在城镇）
         Escorting,      // 护送中（领主护送商队）
+        Engaged,        // 交战中（实体接触，等待战斗结算）
     }
+
+    /// <summary>实体 LOD 级别</summary>
+    public enum EntityLod
+    {
+        Active,
+        Hibernated
+    }
+
+    /// <summary>当前实体的 LOD 级别（不参与持久化序列化）</summary>
+    public EntityLod Lod { get; set; } = EntityLod.Active;
 
     // ========================================
     // 基础字段
@@ -59,6 +70,13 @@ public partial class OverworldEntity : Resource
     [Export] public string BoundPoiName { get; set; } = "";
     /// <summary>上次升级的游戏天数</summary>
     [Export] public int LastLevelUpDay { get; set; } = 0;
+
+    // ========================================
+    // 英雄网络新字段
+    // ========================================
+    [Export] public string HeroId { get; set; } = "";
+    [Export] public int CapturedStateInt { get; set; } = 0;
+    [Export] public string CaptorHeroId { get; set; } = "";
 
     // ========================================
     // 队伍配置
@@ -89,6 +107,12 @@ public partial class OverworldEntity : Resource
     [Export] public Vector2 TerritoryCenter { get; set; } = Vector2.Zero; // 领地中心
     [Export] public float TerritoryRadius { get; set; } = 500.0f; // 领地范围
 
+    /// <summary>大地图行为策略 — 影响 EntityBehaviorEvaluator 的追/逃阈值</summary>
+    [Export] public AIStrategyEnum AIStrategy { get; set; } = AIStrategyEnum.Instinct;
+
+    /// <summary>动态生态怪兽（用于拦截 GetEncounterConfig()）</summary>
+    [Export] public string[]? TempEncounterEnemies { get; set; } = null;
+
     // ========================================
     // 各种族专用字段
     // ========================================
@@ -115,6 +139,10 @@ public partial class OverworldEntity : Resource
     [Export] public OverworldPOI.LordPersonality LordPersonalityValue = OverworldPOI.LordPersonality.Balanced;
     [Export] public int GarrisonSize { get; set; } = 30; // 麾下兵力
     [Export] public OverworldPOI? GuardedPOI; // 守卫的POI
+    [Export] public string ArmyId { get; set; } = ""; // 所属 Army(空=独立 Lord)
+    [Export] public bool IsMarshal { get; set; } = false; // 是否元帅
+    /// <summary>元帅 cooldown — 在此天数前不能再被选为新军团的元帅。0 = 无 cooldown。</summary>
+    [Export] public int MarshalCooldownUntilDay { get; set; } = 0;
 
     // ========================================
     // 围攻/回援/追击目标
@@ -123,6 +151,26 @@ public partial class OverworldEntity : Resource
     public OverworldPOI? SiegeTarget;
     public OverworldPOI? ReinforceTarget;
     public OverworldEntity? ChaseTarget;
+
+    /// <summary>当前战术感知目标（Fleeing/Chasing 状态下用于 UI 与即时移动；不持久化）</summary>
+    public OverworldEntity? CurrentTacticalTarget;
+
+    /// <summary>最近一次 AI 意图说明（用于大地图 Tooltip 展示；不持久化）</summary>
+    public string LastIntentSummary { get; set; } = "";
+
+    /// <summary>当前交战对手（Engaged 状态下有效）</summary>
+    public OverworldEntity? EngagedWith;
+    /// <summary>所属战场 ID（Engaged 状态下有效，指向 Battlefield）</summary>
+    public string BattlefieldId { get; set; } = "";
+    /// <summary>交战开始的游戏小时数（全局累计小时）</summary>
+    public float EngagedSinceHour = -1f;
+    /// <summary>本次交战预计持续小时数（3~24h，根据双方规模动态计算）</summary>
+    public int CombatDurationHours = 0;
+    /// <summary>上次渐进更新的游戏小时数</summary>
+    public float LastGradualUpdateHour = -1f;
+
+    [Export] public string AssignedWarTargetPoiName { get; set; } = "";
+    [Export] public int WarTargetAssignedDay { get; set; } = 0;
 
     // ========================================
     // 运行时状态
@@ -147,6 +195,9 @@ public partial class OverworldEntity : Resource
         EntityType.Caravan => "商队",
         EntityType.EpicMonster => GetMonsterDisplayName(),
         EntityType.LordArmy => "领主军队",
+        EntityType.BanditParty => "山贼队伍",
+        EntityType.RobberParty => "劫匪队伍",
+        EntityType.PirateCrew => "海寇队伍",
         _ => "未知"
     };
 
@@ -167,6 +218,18 @@ public partial class OverworldEntity : Resource
         EntityType.LordArmy => new Color(0.3f, 0.5f, 0.9f), // 蓝色
         _ => Colors.White
     };
+
+    /// <summary>计算实体的基本战斗力（用于大地图 AI 决策）</summary>
+    public static float CalculateBaseCombatPower(int partySize, int partyLevel, EntityType type)
+    {
+        float factor = type switch
+        {
+            EntityType.EpicMonster => 3.0f, // 史诗怪物/巨兽战力折合系数
+            EntityType.LordArmy => 2.0f,    // 领主军队
+            _ => 1.5f                       // 掠夺队/冒险者等基础系数
+        };
+        return Math.Max(10.0f, partySize * partyLevel * factor);
+    }
 
     public float EvaluatePowerRatio(OverworldEntity other)
     {
@@ -189,6 +252,16 @@ public partial class OverworldEntity : Resource
     {
         var config = new Godot.Collections.Dictionary { { "enemies", new Godot.Collections.Array<string>() }, { "cr_total", 0.0f } };
         var enemies = (Godot.Collections.Array<string>)config["enemies"];
+
+        if (TempEncounterEnemies != null && TempEncounterEnemies.Length > 0)
+        {
+            foreach (var enemy in TempEncounterEnemies)
+            {
+                enemies.Add(enemy);
+            }
+            config["cr_total"] = TempEncounterEnemies.Length * 1.5f;
+            return config;
+        }
 
         switch (EntityTypeEnum)
         {
@@ -287,6 +360,11 @@ public partial class OverworldEntity : Resource
         AIState.Chasing => ChaseTarget != null && GodotObject.IsInstanceValid(ChaseTarget) && ChaseTarget.IsAlive ? $"追击 {ChaseTarget.EntityName}" : "追击中",
         AIState.Recruiting => "招募中",
         AIState.Escorting => "护送中",
+        AIState.Engaged => EngagedWith != null && GodotObject.IsInstanceValid(EngagedWith)
+            ? CombatDurationHours > 0
+                ? $"交战: {EngagedWith.EntityName} ({System.Math.Min(100, (int)(EngagedSinceHour >= 0 ? (LastGradualUpdateHour - EngagedSinceHour) / CombatDurationHours * 100 : 0))}%%)"
+                : $"交战: {EngagedWith.EntityName}"
+            : "交战中",
         _ => "未知状态"
     };
 
@@ -338,6 +416,7 @@ public partial class OverworldEntity : Resource
             { "territory_center_x", TerritoryCenter.X },
             { "territory_center_y", TerritoryCenter.Y },
             { "territory_radius", TerritoryRadius },
+            { "ai_strategy", (int)AIStrategy },
             { "adventurer_type", AdventurerType },
             { "gold_carried", GoldCarried },
             { "loot_carried", LootCarried },
@@ -352,6 +431,16 @@ public partial class OverworldEntity : Resource
             { "target_pos_y", TargetPosition.Y },
             { "days_alive", DaysAlive },
             { "is_alive", IsAlive },
+            { "assigned_war_target_poi_name", AssignedWarTargetPoiName },
+            { "war_target_assigned_day", WarTargetAssignedDay },
+            { "army_id", ArmyId },
+            { "is_marshal", IsMarshal },
+            { "marshal_cooldown_until_day", MarshalCooldownUntilDay },
+            { "hero_id", HeroId },
+            { "captured_state_int", CapturedStateInt },
+            { "captor_hero_id", CaptorHeroId },
+            { "engaged_since_hour", EngagedSinceHour },
+            { "combat_duration_hours", CombatDurationHours },
         };
         return data;
     }

@@ -34,16 +34,16 @@ public partial class TownPanel : POIPanelBase
         string type = _currentTown.TownType switch
         {
             "village" => "村庄",
-            "port" => "港口",
+            "port" => "港口城市",
             "castle" => "城堡",
-            "outpost" => "前哨站",
-            "tavern" => "旅店",
             "mine" => "矿场",
-            "shrine" => "药师所",
             _ => "城镇"
         };
         return $"[ {type} ]";
     }
+
+    protected override string? GetIllustrationPath()
+        => _currentTown != null ? POIIllustrationResolver.GetTownIllustration(_currentTown.TownType) : null;
 
     protected override string GetPanelTitle() => "";
 
@@ -53,9 +53,9 @@ public partial class TownPanel : POIPanelBase
         string typeText = _currentTown.TownType switch
         {
             "village" => "村庄",
-            "port" => "港口",
+            "port" => "港口城市",
             "castle" => "城堡",
-            "outpost" => "前哨站",
+            "mine" => "矿场",
             _ => "城镇"
         };
         return $"{_currentTown.TownName} | {typeText} | 繁荣: {_currentTown.Prosperity}";
@@ -68,12 +68,8 @@ public partial class TownPanel : POIPanelBase
         var poiType = _currentTown.TownType switch
         {
             "village" => Strategic.OverworldPOI.POIType.Village,
-            "port" => Strategic.OverworldPOI.POIType.Port,
             "castle" => Strategic.OverworldPOI.POIType.Castle,
-            "outpost" => Strategic.OverworldPOI.POIType.Outpost,
-            "tavern" => Strategic.OverworldPOI.POIType.Tavern,
             "mine" => Strategic.OverworldPOI.POIType.Mine,
-            "shrine" => Strategic.OverworldPOI.POIType.Shrine,
             _ => Strategic.OverworldPOI.POIType.Town,
         };
         var ctx = Strategic.DescriptionContext.Default;
@@ -90,7 +86,6 @@ public partial class TownPanel : POIPanelBase
     {
         if (_currentTown == null) return;
 
-        // 确保设施已初始化
         if (_currentTown.Facilities.Count == 0)
         {
             if (_currentTown.TownType == "village")
@@ -99,18 +94,30 @@ public partial class TownPanel : POIPanelBase
                 _currentTown.SetupDefaultFacilities();
         }
 
+        // 浣跨敤 GridContainer 杩涜缃戞牸绱у噾鍖栵紝姣忚涓や釜鎸夐挳
+        var grid = new GridContainer();
+        grid.Columns = 3;
+        grid.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        grid.AddThemeConstantOverride("h_separation", 8);
+        grid.AddThemeConstantOverride("v_separation", 8);
+        container.AddChild(grid);
+
         foreach (var facility in _currentTown.Facilities)
         {
             if (!facility.IsAvailable) continue;
 
-            string desc = facility.Description;
-            string btnText = string.IsNullOrEmpty(desc)
-                ? facility.FacilityName
-                : $"{facility.FacilityName} -- {desc}";
+            // 绉婚櫎鍚庣画鎻忚堪锛屼粎淇濈暀閰掗/绔炴妧鍦虹瓑鏍稿績鍚嶇О
+            string btnText = facility.FacilityName;
+            int dashIndex = btnText.IndexOf("-");
+            if (dashIndex > 0) btnText = btnText.Substring(0, dashIndex).Trim();
+            int spaceIndex = btnText.IndexOf(" ");
+            if (spaceIndex > 0) btnText = btnText.Substring(0, spaceIndex).Trim();
+            
             var btn = CreateActionButton(btnText);
+            btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             int ftype = facility.FacilityTypeInt;
             btn.Pressed += () => EmitSignal(SignalName.FacilitySelected, ftype);
-            container.AddChild(btn);
+            grid.AddChild(btn);
         }
     }
 
@@ -118,10 +125,10 @@ public partial class TownPanel : POIPanelBase
     // 公开接口
     // ============================================================================
 
-    public void ShowTown(OverworldTown town)
+    public void ShowTown(OverworldTown town, bool instantOverlay = false)
     {
         _currentTown = town;
-        ShowPanel();
+        ShowPanel(instantOverlay);
     }
 
     public override void HidePanel()
@@ -132,7 +139,7 @@ public partial class TownPanel : POIPanelBase
 
     protected override void OnCloseRequested()
     {
-        EmitSignal(SignalName.LeaveTown);
-        HidePanel();
+    	HidePanel();
+    	EmitSignal(SignalName.LeaveTown);
     }
 }

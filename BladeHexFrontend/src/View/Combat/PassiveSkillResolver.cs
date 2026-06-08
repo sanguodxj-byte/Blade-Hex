@@ -3,15 +3,34 @@ using System;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat;
 
 /// <summary>
 /// 被动技能查询接口 — 提供所有被动技能的加成查询
 /// 供 CombatResolver / Unit / CombatManager 调用
+///
+/// 与 CareerSkillResolver 的区别:
+///   - PassiveSkillResolver: 查询技能树的永久被动效果（装备即生效，无持续时间）
+///   - CareerSkillResolver: 查询职业技能的临时 buff（主动释放后生效，有持续时间）
 /// </summary>
 public static class PassiveSkillResolver
 {
+    private static bool HasEffect(Unit unit, string effectId, params string[] legacyEffectIds)
+    {
+        if (unit.HasSkillEffect(effectId))
+            return true;
+
+        foreach (var legacyId in legacyEffectIds)
+        {
+            if (unit.HasSkillEffect(legacyId))
+                return true;
+        }
+
+        return false;
+    }
+
     // ============================================================================
     // 被动伤害加成
     // ============================================================================
@@ -31,7 +50,7 @@ public static class PassiveSkillResolver
         {
             if (unit.Data != null)
             {
-                int strMod = RPGRuleEngine.GetStatModifier(unit.Data.Str);
+                int strMod = RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveStr(unit.Data));
                 if (strMod > 0) bonus += (int)(strMod * 0.5f);
             }
         }
@@ -71,7 +90,7 @@ public static class PassiveSkillResolver
         int reduction = 0;
         // v0.6 11.8 con_b05 铁壁的 -3 已下沉到 BattleUnitModel.ApplyDamage 的入口，
         // 这里不再重复计入 DamageInput.DamageReduction。
-        if (unit.HasSkillEffect("diamond_body")) reduction += 3;
+        if (HasEffect(unit, "iron_body", "diamond_body")) reduction += 3;
         return reduction;
     }
 
@@ -91,7 +110,7 @@ public static class PassiveSkillResolver
         {
             if (unit.Data != null)
             {
-                int dexMod = RPGRuleEngine.GetStatModifier(unit.Data.Dex);
+                int dexMod = RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveDex(unit.Data));
                 if (dexMod > 0) bonus += dexMod;
             }
         }
@@ -113,7 +132,7 @@ public static class PassiveSkillResolver
     /// <summary>远程AC加成</summary>
     public static int GetPassiveRangedAcBonus(Unit unit)
     {
-        if (unit.HasSkillEffect("ghost_step")) return 2;
+        if (HasEffect(unit, "ghost_footwork", "ghost_step")) return 2;
         return 0;
     }
 
@@ -160,9 +179,9 @@ public static class PassiveSkillResolver
     public static bool RollDeathSave(Unit unit)
     {
         if (unit.Data == null) return false;
-        int conScore = unit.Data.Con;
-        int prof = RPGRuleEngine.GetProficiencyBonus(unit.Data.Level);
-        var result = RPGRuleEngine.MakeSave(conScore, prof, false, 15);
+        int conScore = CombatStats.GetEffectiveCon(unit.Data);
+        int bonus = CombatStats.GetSaveBonus(unit.Data);
+        var result = RPGRuleEngine.MakeSave(conScore, bonus, false, 15);
         return (bool)result["success"];
     }
 
@@ -188,13 +207,13 @@ public static class PassiveSkillResolver
         {
             var stacksVar = unit.Data.Get("_arcane_resonance_stacks");
             int current = stacksVar.VariantType != Variant.Type.Nil ? stacksVar.AsInt32() : 0;
-            unit.Data.Set("_arcane_resonance_stacks", Math.Min(current + 1, 2));
+            unit.Model.ArcaneResonanceStacks = Math.Min(current + 1, 2);
         }
     }
 
     public static void ResetArcaneResonance(Unit unit)
     {
-        unit.Data?.Set("_arcane_resonance_stacks", 0);
+        unit.Model.ArcaneResonanceStacks = 0;
     }
 
     // ============================================================================
@@ -226,8 +245,50 @@ public static class PassiveSkillResolver
     public static Godot.Collections.Dictionary GetCommandAuraBonus(Unit unit)
     {
         if (unit.HasSkillEffect("command_aura"))
-            return new Godot.Collections.Dictionary { { "attack_bonus", 1 }, { "ac_bonus", 1 } };
+        {
+            // v0.7: 技能盘 ally_bonus 节点（统率之力/王者风范/领袖魅力等 8 处）作为
+            // command_aura 的强化系数 — 每点 ally_bonus 让光环额外 +1 attack/ac。
+            int allyBonus = unit.SkillTree?.GetAllyBonus() ?? 0;
+            int range = GetCommandAuraRange(unit);
+            return new Godot.Collections.Dictionary
+            {
+                { "attack_bonus", 1 + allyBonus },
+                { "ac_bonus", 1 + allyBonus },
+                { "range", range },
+            };
+        }
         return new Godot.Collections.Dictionary();
+    }
+
+    public static int GetCommandAuraRange(Unit unit)
+        => unit.HasSkillEffect("agnostic_command") ? 4 : 2;
+
+    public static int GetIncomingCommandAuraAttackBonus(Unit attacker, IEnumerable<Unit>? allies)
+        => GetBestCommandAuraBonus(attacker, allies, "attack_bonus");
+
+    public static int GetIncomingCommandAuraAcBonus(Unit defender, IEnumerable<Unit>? allies)
+        => GetBestCommandAuraBonus(defender, allies, "ac_bonus");
+
+    private static int GetBestCommandAuraBonus(Unit recipient, IEnumerable<Unit>? allies, string bonusKey)
+    {
+        if (allies == null)
+            return 0;
+
+        int best = 0;
+        foreach (var ally in allies)
+        {
+            if (ally == recipient) continue;
+            if (!GodotObject.IsInstanceValid(ally) || ally.CurrentHp <= 0) continue;
+            if (ally.IsPlayerSide != recipient.IsPlayerSide) continue;
+            if (!ally.HasSkillEffect("command_aura")) continue;
+            if (recipient.DistanceTo(ally) > GetCommandAuraRange(ally)) continue;
+
+            var aura = GetCommandAuraBonus(ally);
+            if (aura.ContainsKey(bonusKey))
+                best = Math.Max(best, aura[bonusKey].AsInt32());
+        }
+
+        return best;
     }
 
     public static float GetVowOfVengeanceBonus(Unit unit, Unit target)
@@ -241,7 +302,7 @@ public static class PassiveSkillResolver
 
     public static void SetVengeanceTarget(Unit unit, Unit target)
     {
-        unit.Data?.Set("_vengeance_target_id", (long)target.GetInstanceId());
+        unit.Model.VengeanceTargetId = (long)target.GetInstanceId();
     }
 
     public static void OnVengeanceTargetKilled(Unit avenger, IEnumerable<Unit> allAllies)
@@ -252,12 +313,59 @@ public static class PassiveSkillResolver
             if (GodotObject.IsInstanceValid(ally) && ally.CurrentHp > 0)
             {
                 int heal = Math.Max(1, (int)(ally.Model.GetMaxHp() * 0.1f));
-                ally.Heal(heal);
+                ally.Heal(heal, avenger);
             }
         }
     }
 
-    public static int GetRoyalPresenceSaveBonus(Unit unit) => unit.HasSkillEffect("royal_presence") ? 2 : 0;
+    public static int GetRoyalPresenceSaveBonus(Unit unit)
+        => unit.Data != null ? SkillTreeKeystoneResolver.GetRoyalPresenceSaveBonus(unit.Data) : 0;
+
+    public static int GetRoyalPresenceAuraRange(Unit unit)
+        => 2 + (unit.Data != null ? SkillTreeKeystoneResolver.GetAuraRangeBonus(unit.Data) : 0);
+
+    public static int GetRoyalPresenceAuraSaveBonus(Unit recipient, IEnumerable<Unit>? allies)
+        => IsProtectedByRoyalPresenceAura(recipient, allies) ? 2 : 0;
+
+    public static bool IsProtectedByRoyalPresence(Unit recipient, IEnumerable<Unit>? allies)
+    {
+        if (recipient.Data == null) return false;
+        if (recipient.HasSkillEffect("royal_presence")) return true;
+        return IsProtectedByRoyalPresenceAura(recipient, allies);
+    }
+
+    private static bool IsProtectedByRoyalPresenceAura(Unit recipient, IEnumerable<Unit>? allies)
+    {
+        if (recipient.Data == null) return false;
+        if (allies == null) return false;
+
+        foreach (var ally in allies)
+        {
+            if (ally == recipient) continue;
+            if (!GodotObject.IsInstanceValid(ally) || ally.CurrentHp <= 0 || ally.Data == null) continue;
+            if (ally.IsPlayerSide != recipient.IsPlayerSide) continue;
+            if (!ally.HasSkillEffect("royal_presence")) continue;
+            if (recipient.DistanceTo(ally) > GetRoyalPresenceAuraRange(ally)) continue;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool IsProtectedFromFearByRoyalPresence(Unit recipient, IEnumerable<Unit>? allies)
+        => IsProtectedByRoyalPresence(recipient, allies);
+
+    public static bool IsFearEffect(string effectId)
+        => string.Equals(effectId, "fear", StringComparison.Ordinal)
+            || string.Equals(effectId, "feared", StringComparison.Ordinal)
+            || string.Equals(effectId, "panic", StringComparison.Ordinal)
+            || string.Equals(effectId, "panicked", StringComparison.Ordinal);
+
+    public static bool CanApplyFearEffect(Unit recipient, IEnumerable<Unit>? allies)
+        => recipient.Data != null
+            && !SkillTreeKeystoneResolver.IsImmuneToFear(recipient.Data)
+            && !IsProtectedFromFearByRoyalPresence(recipient, allies);
+
     public static int GetLifeSpringHeal(Unit unit) => unit.HasSkillEffect("life_spring") ? RPGRuleEngine.RollDice(1, 6) : 0;
 
     // ============================================================================
@@ -276,8 +384,8 @@ public static class PassiveSkillResolver
         var usedVar = guardian.Data.Get("_soul_guardian_used");
         if (usedVar.VariantType != Variant.Type.Nil && usedVar.AsBool())
             return 0;
-        guardian.Data.Set("_soul_guardian_used", true);
-        int wisMod = RPGRuleEngine.GetStatModifier(guardian.Data.Wis);
+        guardian.Model.SoulGuardianUsed = true;
+        int wisMod = RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveWis(guardian.Data));
         int heal = RPGRuleEngine.RollDice(1, 10) + wisMod;
         return Math.Max(1, heal);
     }
@@ -317,12 +425,12 @@ public static class PassiveSkillResolver
     public static void ActivateFortify(Unit unit)
     {
         if (unit.HasSkillEffect("fortify"))
-            unit.Data?.Set("_fortify_active", true);
+            unit.Model.FortifyActive = true;
     }
 
     public static void DeactivateFortify(Unit unit)
     {
-        unit.Data?.Set("_fortify_active", false);
+        unit.Model.FortifyActive = false;
     }
 
     // ============================================================================
@@ -342,21 +450,21 @@ public static class PassiveSkillResolver
     // ============================================================================
 
     /// <summary>是否拥有不灭之躯</summary>
-    public static bool HasImmortalBody(Unit unit) => unit.HasSkillEffect("immortal_body");
+    public static bool HasImmortalBody(Unit unit) => HasEffect(unit, "undying_body", "immortal_body");
 
     /// <summary>不灭之躯CON检定存活</summary>
     public static bool RollImmortalBodySave(Unit unit)
     {
-        if (!unit.HasSkillEffect("immortal_body") || unit.Data == null) return false;
+        if (!HasEffect(unit, "undying_body", "immortal_body") || unit.Data == null) return false;
         // 每场战斗只能触发一次
         var usedVar = unit.Data.Get("_immortal_body_used");
         if (usedVar.VariantType != Variant.Type.Nil && usedVar.AsBool()) return false;
-        int conScore = unit.Data.Con;
-        int prof = RPGRuleEngine.GetProficiencyBonus(unit.Data.Level);
-        var result = RPGRuleEngine.MakeSave(conScore, prof, true, 15);
+        int conScore = CombatStats.GetEffectiveCon(unit.Data);
+        int bonus = CombatStats.GetSaveBonus(unit.Data);
+        var result = RPGRuleEngine.MakeSave(conScore, bonus, true, 15);
         if ((bool)result["success"])
         {
-            unit.Data.Set("_immortal_body_used", true);
+            unit.Model.ImmortalBodyUsed = true;
             return true;
         }
         return false;
@@ -391,13 +499,13 @@ public static class PassiveSkillResolver
         if (!unit.HasSkillEffect("spell_reflect") || unit.Data == null) return false;
         var usedVar = unit.Data.Get("_spell_reflect_used_this_turn");
         if (usedVar.VariantType != Variant.Type.Nil && usedVar.AsBool()) return false;
-        unit.Data.Set("_spell_reflect_used_this_turn", true);
+        unit.Model.SpellReflectUsedThisTurn = true;
         return true;
     }
 
     public static void ResetSpellReflect(Unit unit)
     {
-        unit.Data?.Set("_spell_reflect_used_this_turn", false);
+        unit.Model.SpellReflectUsedThisTurn = false;
     }
 
     // ============================================================================
@@ -408,7 +516,7 @@ public static class PassiveSkillResolver
     public static int GetKnowledgePowerBonus(Unit unit)
     {
         if (!unit.HasSkillEffect("knowledge_power") || unit.Data == null) return 0;
-        return RPGRuleEngine.GetStatModifier(unit.Data.Intel);
+        return RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveInt(unit.Data));
     }
 
     // ============================================================================
@@ -424,13 +532,13 @@ public static class PassiveSkillResolver
         if (!unit.HasSkillEffect("fate_eye") || unit.Data == null) return false;
         var usedVar = unit.Data.Get("_fate_eye_used_this_turn");
         if (usedVar.VariantType != Variant.Type.Nil && usedVar.AsBool()) return false;
-        unit.Data.Set("_fate_eye_used_this_turn", true);
+        unit.Model.FateEyeUsedThisTurn = true;
         return true;
     }
 
     public static void ResetFateEye(Unit unit)
     {
-        unit.Data?.Set("_fate_eye_used_this_turn", false);
+        unit.Model.FateEyeUsedThisTurn = false;
     }
 
     // ============================================================================
@@ -457,12 +565,12 @@ public static class PassiveSkillResolver
 
     public static void ConsumeLightningReflexAdvantage(Unit unit)
     {
-        unit.Data?.Set("_lightning_reflex_first_attack_used", true);
+        unit.Model.LightningReflexFirstAttackUsed = true;
     }
 
     public static void ResetLightningReflex(Unit unit)
     {
-        unit.Data?.Set("_lightning_reflex_first_attack_used", false);
+        unit.Model.LightningReflexFirstAttackUsed = false;
     }
 
     // ============================================================================
@@ -473,7 +581,7 @@ public static class PassiveSkillResolver
     public static int GetIntimidatedAttackPenalty(Unit unit)
     {
         if (unit.Data == null) return 0;
-        foreach (var eff in unit.Data.Runtime.ActiveStatusEffects)
+        foreach (var eff in unit.Model.ActiveStatusEffects)
         {
             if (eff.Id == "intimidated") return 2;
         }
@@ -524,9 +632,9 @@ public static class PassiveSkillResolver
     public static int GetKeystoneSpeedPenalty(Unit unit)
     {
         int penalty = 0;
-        if (unit.HasSkillEffect("diamond_body")) penalty += 2;
+        if (HasEffect(unit, "iron_body", "diamond_body")) penalty += 2;
         if (unit.HasSkillEffect("life_spring")) penalty += 1;
-        if (unit.HasSkillEffect("immortal_body")) penalty += 2;
+        if (HasEffect(unit, "undying_body", "immortal_body")) penalty += 2;
         return penalty;
     }
 
@@ -549,7 +657,7 @@ public static class PassiveSkillResolver
     public static float GetKeystoneHpModifier(Unit unit)
     {
         float mod = 1.0f;
-        if (unit.HasSkillEffect("ghost_step")) mod *= 0.8f;
+        if (HasEffect(unit, "ghost_footwork", "ghost_step")) mod *= 0.8f;
         if (unit.HasSkillEffect("royal_presence")) mod *= 0.8f;
         if (unit.HasSkillEffect("soul_guardian")) mod *= 0.9f;
         return mod;

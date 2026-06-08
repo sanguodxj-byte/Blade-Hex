@@ -3,6 +3,7 @@
 // 使用统一布局基类，只填充数据；业务规则委托给 SmithyService。
 using Godot;
 using BladeHex.Data;
+using BladeHex.Localization;
 using BladeHex.Strategic.Facilities;
 using BladeHex.Strategic.Economy;
 
@@ -18,58 +19,60 @@ public partial class SmithyPanel : POIPanelBase
     private PartyRoster? Roster => _context?.Roster;
 
     protected override Color GetIllustrationColor() => new(0.12f, 0.08f, 0.04f, 1.0f);
-    protected override string GetIllustrationText() => "[ 铁匠铺 ]";
+    protected override string GetIllustrationText() => L10n.Tr("FACILITY_SMITHY_BRACKET");
+    protected override string? GetIllustrationPath()
+        => POIIllustrationResolver.GetPanelIllustration("smithy");
     protected override string GetPanelTitle() => "";
     protected override string GetInfoText()
     {
-        string gold = Economy != null ? $"金币: {Economy.Gold}" : "金币: —";
-        string memberCount = Roster != null ? $"队伍: {Roster.Count}人" : "无队伍";
-        return $"铁匠铺 | {gold} | {memberCount}";
+        string gold = Economy != null ? L10n.Tr("COMMON_GOLD_VALUE", Economy.Gold) : L10n.Tr("COMMON_GOLD_DASH");
+        string memberCount = Roster != null ? L10n.Tr("COMMON_PARTY_MEMBERS", Roster.Count) : L10n.Tr("REASON_NO_PARTY");
+        return L10n.Tr("SMITHY_INFO", gold, memberCount);
     }
-    protected override string GetDescriptionText() => "经验丰富的铁匠可以帮你修理和强化装备。炉火通明，铁锤声不绝于耳。";
-    protected override string GetLeaveButtonText() => "离开铁匠铺";
+    protected override string GetDescriptionText() => L10n.Tr("SMITHY_DESC");
+    protected override string GetLeaveButtonText() => L10n.Tr("SMITHY_LEAVE");
 
     protected override void PopulateActions(VBoxContainer container)
     {
         int repairCost = SmithyService.CalculateRepairCost(Roster);
         bool hasDamaged = SmithyService.CountDamagedArmorPieces(Roster) > 0;
         bool canRepair = Economy != null && repairCost > 0 && Economy.Gold >= repairCost && hasDamaged;
-        string repairReason = !hasDamaged ? "所有装备耐久完好" : "金币不足";
-        var btnRepair = CreateActionButton($"全副修理 ({repairCost}金) -- 恢复所有装备耐久", canRepair, repairReason);
+        string repairReason = !hasDamaged ? L10n.Tr("SMITHY_REASON_NO_DAMAGED") : L10n.Tr("REASON_NOT_ENOUGH_GOLD");
+        var btnRepair = CreateActionButton(L10n.Tr("SMITHY_REPAIR_ALL", repairCost), canRepair, repairReason);
         btnRepair.Pressed += () => ApplyResult(SmithyService.RepairAll(Roster, SpendGold));
         container.AddChild(btnRepair);
 
         bool hasWeapon = Roster?.Leader?.PrimaryMainHand != null;
         int sharpenCost = FacilityPricingService.GetSharpenCost(Roster?.Leader?.PrimaryMainHand);
         bool canSharpen = Economy != null && Economy.Gold >= sharpenCost && hasWeapon;
-        var btnSharpen = CreateActionButton($"磨砺武器 ({sharpenCost}金) -- 队长主手武器伤害永久+1", canSharpen, hasWeapon ? "金币不足" : "队长未装备主手武器");
+        var btnSharpen = CreateActionButton(L10n.Tr("SMITHY_SHARPEN", sharpenCost), canSharpen, hasWeapon ? L10n.Tr("REASON_NOT_ENOUGH_GOLD") : L10n.Tr("SMITHY_REASON_NO_MAIN_WEAPON"));
         btnSharpen.Pressed += () => ApplyResult(SmithyService.SharpenLeaderWeapon(Roster, SpendGold));
         container.AddChild(btnSharpen);
 
         bool hasArmor = Roster?.Leader?.Armor != null;
         int reinforceCost = FacilityPricingService.GetReinforceCost(Roster?.Leader?.Armor);
         bool canReinforce = Economy != null && Economy.Gold >= reinforceCost && hasArmor;
-        var btnReinforce = CreateActionButton($"加固防具 ({reinforceCost}金) -- 队长身甲装甲阈值永久+1", canReinforce, hasArmor ? "金币不足" : "队长未装备身甲");
+        var btnReinforce = CreateActionButton(L10n.Tr("SMITHY_REINFORCE", reinforceCost), canReinforce, hasArmor ? L10n.Tr("REASON_NOT_ENOUGH_GOLD") : L10n.Tr("SMITHY_REASON_NO_ARMOR"));
         btnReinforce.Pressed += () => ApplyResult(SmithyService.ReinforceLeaderArmor(Roster, SpendGold));
         container.AddChild(btnReinforce);
     }
 
-    public void ShowSmithy(EconomyManager economy)
+    public void ShowSmithy(EconomyManager economy, bool instantOverlay = false)
     {
         _context = new PoiPanelContext { Economy = economy, PlayerParty = null, CurrentTown = null };
-        ShowPanel();
+        ShowPanel(instantOverlay);
     }
 
-    public void ShowSmithy(PoiPanelContext context)
+    public void ShowSmithy(PoiPanelContext context, bool instantOverlay = false)
     {
         _context = context;
-        ShowPanel();
+        ShowPanel(instantOverlay);
     }
 
     protected override void OnCloseRequested()
     {
-        EmitSignal(SignalName.SmithyFinished);
-        HidePanel();
+    	HidePanel();
+    	EmitSignal(SignalName.SmithyFinished);
     }
 
     private bool SpendGold(int amount) => Economy?.SpendGold(amount) == true;

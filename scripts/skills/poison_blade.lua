@@ -1,14 +1,7 @@
 -- poison_blade.lua
--- 毒刃：攻击目标并附加中毒效果3回合
+-- 影刃涂毒：下次武器攻击命中时附加中毒3回合
 
 function execute(ctx)
-    local target = require_enemy(ctx.target_q, ctx.target_r)
-    if not target then return end
-
-    local r = result:resolve_attack(ctx.attacker, target)
-    result:add_attack(r)
-
-    if r.hit then
-        buff:apply(target, "poison", 3)
-    end
+    buff:apply_custom(ctx.attacker, "poison_blade_next", 1, { next_hit_poison_duration = 3 })
+    result:add_effect(ctx.attacker, "poison_blade_next", 1)
 end

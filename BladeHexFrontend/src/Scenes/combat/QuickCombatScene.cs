@@ -115,7 +115,7 @@ public partial class QuickCombatScene : CombatSceneBase
                 (BattleMapGenerator.BattleSize)(int)battleSize, seed);
         }
 
-        _mapWidth = _mapData.Width;
+        _mapWidth = _mapData!.Width;
         _mapHeight = _mapData.Height;
 
         _hexGrid.LoadFromMapData(_mapData);
@@ -141,7 +141,8 @@ public partial class QuickCombatScene : CombatSceneBase
         int enemyCount = Mathf.Clamp(gs.QuickCombat.EnemyCount, 1, 10);
         int difficulty = gs.QuickCombat.Difficulty;
         int playerLevel = Mathf.Clamp(gs.QuickCombat.PlayerLevel, 1, 120);
-        int enemyTypeIdx = Mathf.Clamp(gs.QuickCombat.EnemyType, 0, 3);
+        int enemyTypeIdx = Mathf.Clamp(gs.QuickCombat.EnemyType, 0, 4);
+        int legendaryTypeIdx = gs.QuickCombat.LegendaryType;
 
         string difficultyStr = difficulty switch { 0 => "easy", 2 => "hard", _ => "normal" };
         int itemLevel = EquipmentGenerator.GetItemLevelFromCr(RPGRuleEngine.GetCrFromLevel(playerLevel));
@@ -183,7 +184,7 @@ public partial class QuickCombatScene : CombatSceneBase
         }
 
         if (playerUnits.Count > 0)
-            _activePlayerUnit = playerUnits[0];
+            ActivePlayerUnit = playerUnits[0];
 
         // === 敌方（始终自动放置）===
         float difficultyMult = difficulty switch { 0 => 0.7f, 2 => 1.5f, _ => 1.0f };
@@ -195,6 +196,37 @@ public partial class QuickCombatScene : CombatSceneBase
             _ => UnitData.EnemyType.Humanoid,
         };
 
+        // 传奇生物模式
+        if (enemyTypeIdx == 4)
+        {
+            var legendaryTemplates = UnitTemplateDB.GetLegendaryTemplates();
+            Godot.Collections.Dictionary chosenTemplate;
+
+            if (legendaryTypeIdx >= 0 && legendaryTypeIdx < legendaryTemplates.Count)
+            {
+                chosenTemplate = legendaryTemplates[legendaryTypeIdx];
+            }
+            else
+            {
+                // 随机选择
+                chosenTemplate = legendaryTemplates[(int)(GD.Randf() * legendaryTemplates.Count)];
+            }
+
+            // 传奇生物单挑 — 只生成一个传奇单位，无杂兵
+            var legendaryData = UnitTemplateDB.InstantiateTemplate(chosenTemplate);
+            var legendaryUnit = new Unit
+            {
+                Data = legendaryData,
+                Name = "Enemy_0"
+            };
+            var legendPos = FindEnemyDeployPos(0, 1);
+            PlaceUnitAt(legendaryUnit, legendPos.X, legendPos.Y);
+            _combatManager.RegisterUnit(legendaryUnit, false);
+            _combatUi.RegisterEnemy(legendaryUnit);
+            legendaryUnit.InitDr();
+        }
+        else
+        {
         for (int i = 0; i < enemyCount; i++)
         {
             var thisEnemyType = enemyTypeIdx == 3
@@ -222,8 +254,8 @@ public partial class QuickCombatScene : CombatSceneBase
             if (thisEnemyType == UnitData.EnemyType.Humanoid)
                 AssignSkillTree(enemyUnit, Mathf.Max(1, enemyData.Level));
         }
+        }
 
-        UpdateFov();
     }
 
     /// <summary>为单位分配随机装备（完整套装）</summary>
@@ -238,7 +270,7 @@ public partial class QuickCombatScene : CombatSceneBase
 
     protected override void HandleCombatEnd(bool victory)
     {
-        BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/main_menu.tscn");
+        BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
     }
 
     // ============================================================
@@ -255,7 +287,7 @@ public partial class QuickCombatScene : CombatSceneBase
         if (tree != null)
         {
             unit.SkillTree = tree;
-            unit.Data.Runtime.SkillTree = tree;
+            unit.Model.SkillTree = tree;
         }
     }
 

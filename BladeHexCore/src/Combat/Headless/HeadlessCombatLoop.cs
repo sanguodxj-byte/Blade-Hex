@@ -1,4 +1,4 @@
-﻿// HeadlessCombatLoop.cs
+// HeadlessCombatLoop.cs
 // Pure-C# combat loop for batch simulation, AI tuning, and unit tests.
 //
 // Design goals
@@ -10,7 +10,7 @@
 //   - No line-of-sight, no high ground, no flanking direction, no charge.
 //     (Frontend's CombatResolver layers those features on top of CombatRuleEngine
 //     using LineOfSight / FacingSystem, which depend on HexCell Node3D state.)
-//   - No spells, no items, no status effects, no morale. Each unit just attacks
+//   - No spells, no items, no status effects. Each unit just attacks
 //     with its main hand. Simulation can already expose damage/HP balance issues
 //     under these assumptions; richer features can be folded in incrementally.
 //   - Movement is straight-line greedy: each turn a unit closes the gap by up to
@@ -24,6 +24,7 @@ using Godot;
 using BladeHex.Combat.State;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic;
 
 namespace BladeHex.Combat.Headless;
 
@@ -115,6 +116,32 @@ public static class HeadlessCombatLoop
     private static bool _firstBattleStarted = false;
     internal static bool ShouldLog => DebugFirstBattle && _firstBattleStarted;
 
+    /// <summary>
+    /// Optional per-roll trace sink. When non-null, every CombatRuleEngine.RollAttack
+    /// call in this loop publishes its inputs/outputs here. Used by SimulationHarness
+    /// to diagnose advantage/disadvantage prevalence and final hit-chance distribution.
+    /// Set to null in production paths to keep the loop allocation-free.
+    /// </summary>
+    public sealed class AttackTrace
+    {
+        public bool AttackerIsPlayer;
+        public int  AttackBonus;       // post-mastery, post-buff, pre-accuracy mod
+        public int  AccuracyMod;       // LOS / cover penalty
+        public int  EffectiveAttackBonus => AttackBonus + AccuracyMod;
+        public int  TargetAc;
+        public bool HasAdvantage;
+        public bool HasDisadvantage;
+        public int  HitChancePercent;  // as reported by RollAttack
+        public int  NaturalRoll;
+        public int  TotalAttack;
+        public bool IsHit;
+        public bool IsCritical;
+        public bool IsFumble;
+        public bool IsGraze;
+    }
+
+    public static System.Action<AttackTrace>? AttackTraceSink;
+
     public static HeadlessCombatResult Run(
         BattleSquad player,
         BattleSquad enemy,
@@ -137,7 +164,7 @@ public static class HeadlessCombatLoop
                 var w = u.GetMainHand() as WeaponData;
                 int armorDr = u.Data.Armor?.DrThreshold ?? 0;
                 int armorAp = u.Data.Armor?.CurrentArmorPoints ?? 0;
-                Godot.GD.Print($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
+                Godot.GD.Print($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
             }
             Godot.GD.Print($"  Enemy squad: {enemy.AliveCount} units");
             foreach (var u in enemy.AliveUnits)
@@ -145,7 +172,7 @@ public static class HeadlessCombatLoop
                 var w = u.GetMainHand() as WeaponData;
                 int armorDr = u.Data.Armor?.DrThreshold ?? 0;
                 int armorAp = u.Data.Armor?.CurrentArmorPoints ?? 0;
-                Godot.GD.Print($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
+                Godot.GD.Print($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
             }
         }
 
@@ -243,6 +270,8 @@ public static class HeadlessCombatLoop
             if (u.Runtime.BuffAcBonusTurns > 0) u.Runtime.BuffAcBonusTurns--;
             if (u.Runtime.DebuffAttackPenaltyTurns > 0) u.Runtime.DebuffAttackPenaltyTurns--;
             if (u.Runtime.DeathblowFocusPendingTurns > 0) u.Runtime.DeathblowFocusPendingTurns--;
+            if (u.Runtime.KeystoneRecentCritTurns > 0) u.Runtime.KeystoneRecentCritTurns--;
+            SkillTreeKeystoneResolver.ApplyBloodOathTurnStartLoss(u.Data);
             // BuffTempHp 不衰减，受伤吸收完为止
         }
     }
@@ -365,7 +394,7 @@ public static class HeadlessCombatLoop
                 else
                 {
                     bool isCharge = moveDistance >= 3
-                        && (actor.GetMainHand() is not WeaponData mw || !mw.IsRanged);
+                        && (actor.GetMainHand() is not WeaponData mw || (!mw.IsRanged && !mw.IsCatalyst));
                     int apBefore = (int)actor.Runtime.CurrentAp;
                     ResolveAttack(actor, plan.Target, isPlayer, result, isCharge);
                     if ((int)actor.Runtime.CurrentAp < apBefore) didSomething = true;
@@ -778,13 +807,21 @@ public static class HeadlessCombatLoop
                 apCost = 8; manaCost = 24; range = 13; dCount = 6; dSides = 8; isAoe = true; break;
             default: return false;
         }
+        int effectiveManaCost = SkillTreeKeystoneResolver.ApplySpellManaCost(actor.Data, manaCost);
+        int hpCost = SkillTreeKeystoneResolver.GetSpellHpCost(actor.Data, manaCost);
         if (curAp < apCost) return false;
-        if (curMana < manaCost) return false;
+        if (curMana < effectiveManaCost) return false;
+        if (hpCost > 0 && actor.Runtime.CurrentHp <= hpCost) return false;
         if (dist > range) return false;
 
         // Consume resources
         actor.Runtime.CurrentAp -= apCost;
-        actor.Data.CurrentMana = Math.Max(0, actor.Data.CurrentMana - manaCost);
+        actor.Data.CurrentMana = Math.Max(0, actor.Data.CurrentMana - effectiveManaCost);
+        if (hpCost > 0)
+        {
+            actor.Runtime.CurrentHp = Math.Max(1, actor.Runtime.CurrentHp - hpCost);
+            actor.CurrentHp = actor.Runtime.CurrentHp;
+        }
         actor.Runtime.HasActed = true;
 
         // Damage: baseDice + Mod(INT)
@@ -991,6 +1028,8 @@ public static class HeadlessCombatLoop
 
         var weapon = attacker.GetMainHand() as WeaponData;
         bool isMelee = weapon == null || !weapon.IsRanged;
+        bool isRanged = !isMelee;
+        int distance = HexUtils.AxialDistance(attacker.Runtime.GridPos, defender.Runtime.GridPos);
 
         // Ranged attacks: accumulate accuracy penalties for terrain + units in
         // path. Replaces the earlier binary "no-LOS aborts the swing" rule.
@@ -1009,15 +1048,14 @@ public static class HeadlessCombatLoop
         if (hg.Advantage)    hasAdvantage    = true;
         if (hg.Disadvantage) hasDisadvantage = true;
 
-        int attackBonus = attacker.GetAttackBonus();
-        if (atkTree != null)
-            attackBonus += isMelee ? atkTree.GetMeleeHitBonus() : atkTree.GetRangedHitBonus();
+        int attackBonus = SkillTreeKeystoneResolver.ApplyAttackBonus(attacker.Data, attacker.GetAttackBonus(), isMelee, isRanged, distance);
         // sim buff: 攻击 +N
         if (attacker.Runtime.BuffAttackBonusTurns > 0)
             attackBonus += attacker.Runtime.BuffAttackBonusValue;
         // sim debuff: 攻击 -N
         if (attacker.Runtime.DebuffAttackPenaltyTurns > 0)
             attackBonus -= attacker.Runtime.DebuffAttackPenaltyValue;
+        attackBonus = SkillTreeKeystoneResolver.ApplyIncomingAttackBonus(defender.Data, attackBonus, isRanged);
 
         // WIS 刺客系 (2026-05-17): 致命猎杀 — 对 HP<30% 敌人 +2 命中
         bool defenderLowHp = false;
@@ -1026,22 +1064,18 @@ public static class HeadlessCombatLoop
         if (atkTree != null && atkTree.HasSkillEffect("lethal_focus") && defenderLowHp)
             attackBonus += 2;
 
-        int defenderAcBonus = defTree?.GetAcBonus() ?? 0;
+        int defenderAcBonus = 0;
         // sim buff: 防御方 AC +N
         if (defender.Runtime.BuffAcBonusTurns > 0)
             defenderAcBonus += defender.Runtime.BuffAcBonusValue;
-        int defenderAc = defender.GetEffectiveAc(false, defenderAcBonus, 0);
+        int defenderAc = defender.GetEffectiveAc(false, defenderAcBonus);
 
         // 暴击率加成：节点 critical_rate + lethal_focus 低血敌人 +10% + deathblow_focus 击杀后 +10%
-        float bonusCritChance = atkTree?.GetCriticalRateBonus() ?? 0f;
+        float bonusCritChance = SkillTreeKeystoneResolver.GetBonusCritChance(attacker.Data);
         if (atkTree != null && atkTree.HasSkillEffect("lethal_focus") && defenderLowHp)
             bonusCritChance += 0.10f;
         if (attacker.Runtime.DeathblowFocusPendingTurns > 0)
             bonusCritChance += 0.10f;
-        // assassin_instinct keystone: +5% crit (节点 critical_rate 已加，但 keystone 在 cost dict 中)
-        // 这里通过 HasSkillEffect 显式补加
-        if (atkTree != null && atkTree.HasSkillEffect("assassin_instinct"))
-            bonusCritChance += 0.05f;
 
         // Build an attack input.
         var atkInput = new CombatRuleEngine.AttackInput
@@ -1055,8 +1089,28 @@ public static class HeadlessCombatLoop
             CoverAcBonus   = 0,            // cover folded into AccuracyMod above
             BonusCritChance = bonusCritChance,
         };
+        SkillTreeKeystoneResolver.ApplyAttackRollRules(attacker.Data, ref atkInput, isMelee);
 
         var roll = CombatRuleEngine.RollAttack(in atkInput);
+        if (AttackTraceSink != null)
+        {
+            AttackTraceSink.Invoke(new AttackTrace
+            {
+                AttackerIsPlayer = attackerIsPlayer,
+                AttackBonus      = attackBonus,
+                AccuracyMod      = accuracyMod,
+                TargetAc         = defenderAc,
+                HasAdvantage     = hasAdvantage,
+                HasDisadvantage  = hasDisadvantage,
+                HitChancePercent = roll.HitChancePercent,
+                NaturalRoll      = roll.NaturalRoll,
+                TotalAttack      = roll.TotalAttack,
+                IsHit            = roll.IsHit,
+                IsCritical       = roll.IsCritical,
+                IsFumble         = roll.IsFumble,
+                IsGraze          = roll.IsGraze
+            });
+        }
         if (attackerIsPlayer) result.PlayerAttacksAttempted++;
         else                  result.EnemyAttacksAttempted++;
 
@@ -1097,15 +1151,13 @@ public static class HeadlessCombatLoop
             ChargeMultiplier = isCharge ? 1.5f : 1.0f,  // Charge: +50% damage
             MountBonus = 0,
             DamageReduction = 0,
-            FinalMultiplier = (isAoO ? 0.5f : 1.0f) * damageMultiplier,  // 包含 AoO 半伤 + 主动技能伤害倍率
+            FinalMultiplier = (isAoO ? 0.5f : 1.0f) * damageMultiplier  // 包含 AoO 半伤 + 主动技能伤害倍率
+                * Buff.BuffSystem.ResolveMultiplier(attacker.Data, "damage")  // buff +%伤害(与实战路径一致)
+                * SkillTreeKeystoneResolver.GetDamageFinalMultiplier(attacker.Data, isMelee, isRanged, distance, roll.IsCritical),
         };
         // Apply ranged damage bonus directly to base (CombatRuleEngine has no ranged-passive field)
         if (!isMelee && passiveDamageBonus != 0)
             dmgInput.BaseDamage += passiveDamageBonus;
-
-        // WIS 刺客系：assassin_instinct 暴击倍率 +0.5x（基础 2.0 → 2.5）
-        if (roll.IsCritical && atkTree != null && atkTree.HasSkillEffect("assassin_instinct"))
-            dmgInput.FinalMultiplier *= 1.25f;  // 等价 2.0 → 2.5 在 CritMultiplier=2 基础上额外 +25%
 
         // WIS 死灵之锋：击杀后下次攻击 +20% 伤害（之后清除）
         bool deathblowApplied = false;
@@ -1117,30 +1169,7 @@ public static class HeadlessCombatLoop
 
         var calc = CombatRuleEngine.CalculateDamage(in dmgInput);
 
-        // v0.6 6.2 盾牌对远程攻击的有效伤害减免（仅盾牌持有者；正面/盾牌防护弧）
-        // 简化模型：headless 不区分方向，认为防御方面对攻击者时盾牌全程生效。
         int finalDamage = calc.FinalDamage;
-        if (!isMelee && defender.Data.Shield != null
-            && defender.Data.Shield.RangedDamageMultiplier < 1.0f
-            && defender.Data.Shield.CurrentArmorPoints > 0)
-        {
-            int reduced = (int)(finalDamage * defender.Data.Shield.RangedDamageMultiplier);
-            // 盾牌吸收部分伤害（差额计入盾牌耐久），上限不超过当前盾牌耐久
-            int absorbed = finalDamage - reduced;
-            int actualAbsorb = System.Math.Min(absorbed, defender.Data.Shield.CurrentArmorPoints);
-            defender.Data.Shield.CurrentArmorPoints -= actualAbsorb;
-            if (defender.Data.Shield.CurrentArmorPoints <= 0)
-                defender.Data.Shield = null; // 盾牌击碎
-            finalDamage = reduced + (absorbed - actualAbsorb); // 盾牌没顶住的部分仍打到本体
-        }
-
-        // sim buff: 临时 HP 吸收（life_shield / unyielding_bulwark）
-        if (defender.Runtime.BuffTempHp > 0 && finalDamage > 0)
-        {
-            int absorbedByTemp = Math.Min(defender.Runtime.BuffTempHp, finalDamage);
-            defender.Runtime.BuffTempHp -= absorbedByTemp;
-            finalDamage -= absorbedByTemp;
-        }
 
         // STR 穿甲加成 v0.6 6.3: floor(sqrt(STR/4))
         int strPen = (int)Math.Floor(Math.Sqrt(attacker.Data.Str / 4.0));
@@ -1154,6 +1183,7 @@ public static class HeadlessCombatLoop
         }
 
         // Apply through the same DR pipeline as the live game.
+        // 传入 isRanged: !isMelee 以驱动下沉后的盾牌减伤逻辑
         var dmgResult = defender.ApplyDamage(
             source: DamageSource.WeaponAttack,
             amount: finalDamage,
@@ -1162,9 +1192,9 @@ public static class HeadlessCombatLoop
             weaponWeight: weapon?.Weight ?? WeaponData.WeightCategory.Medium,
             attackerMastery: attacker.Data.WeaponMastery,
             weaponSubtype: weapon?.Subtype ?? WeaponData.WeaponSubtype.Unarmed,
-            weaponPen: weapon?.WeaponPen ?? 0,
             strPenBonus: strPen,
-            mediumLv5Mastery: mediumLv5);
+            mediumLv5Mastery: mediumLv5,
+            isRanged: !isMelee);
 
         if (ShouldLog)
         {
@@ -1196,6 +1226,14 @@ public static class HeadlessCombatLoop
                 result.EnemyAttacksLanded++;
                 result.EnemyDamageDealt += dmgResult.HpDamage;
             }
+        }
+
+        SkillTreeKeystoneResolver.OnAttackResolved(attacker.Data, roll.IsCritical);
+        int leech = SkillTreeKeystoneResolver.ApplyBloodOathLeech(attacker.Data, dmgResult.HpDamage, isMelee);
+        if (leech > 0 && attacker.Runtime.CurrentHp > 0)
+        {
+            attacker.Runtime.CurrentHp = Math.Min(attacker.GetMaxHp() + attacker.GetMaxHp() / 2, attacker.Runtime.CurrentHp + leech);
+            attacker.CurrentHp = attacker.Runtime.CurrentHp;
         }
     }
 }

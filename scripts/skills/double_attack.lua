@@ -6,8 +6,8 @@ function execute(ctx)
     if not target then return end
 
     local r1 = result:resolve_attack(ctx.attacker, target)
-    result:add_attack(r1)
+    result:add_attack(r1, target)
 
     local r2 = result:resolve_attack(ctx.attacker, target, { hit_mod = -3 })
-    result:add_attack(r2)
+    result:add_attack(r2, target)
 end

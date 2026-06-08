@@ -5,6 +5,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BladeHex.Strategic.Diplomacy;
 
 namespace BladeHex.Strategic.WorldEvents;
 
@@ -36,8 +37,17 @@ public class WorldEventEngine
     /// <summary>新闻队列（最近 50 条）</summary>
     public List<NewsEntry> NewsQueue { get; } = new();
 
+    /// <summary>当有新新闻加入时触发</summary>
+    public event Action<NewsEntry>? NewsAdded;
+
+    /// <summary>势力关系核心映射表</summary>
+    public FactionRelationMap FactionRelations { get; } = new();
+
     /// <summary>外交关系矩阵 [nationA_id, nationB_id] → value (-100~+100)</summary>
-    public Dictionary<string, int> DiplomaticRelations { get; } = new();
+    public Dictionary<string, int> DiplomaticRelations => FactionRelations.RelationsInternal;
+
+    /// <summary>势力影响力追踪器</summary>
+    public InfluenceTracker Influence { get; } = new();
 
     /// <summary>玩家介入次数（按危机类型）</summary>
     public Dictionary<string, int> PlayerInterventions { get; } = new();
@@ -60,6 +70,9 @@ public class WorldEventEngine
 
         try
         {
+            // 每日清理过期停战协议
+            FactionRelations.TickTruces(CurrentDay);
+
             // 1. 威胁升级
             TickThreatLevel(ctx);
 
@@ -196,6 +209,9 @@ public class WorldEventEngine
         foreach (var war in ActiveWars.ToList())
         {
             war.DaysSinceStart++;
+
+            // 评估并更新战争目标
+            WarObjectivePlanner.RefreshObjectives(war, ctx);
 
             // 和平谈判（双方都损失惨重时）
             if (war.DaysSinceStart > 60 && _rng.Next(100) < 10)
@@ -353,19 +369,22 @@ public class WorldEventEngine
     // 新闻系统
     // ========================================
 
-    private void AddNews(string type, string description, Vector2 location)
+    public void AddNews(string type, string description, Vector2 location)
     {
-        NewsQueue.Add(new NewsEntry
+        var entry = new NewsEntry
         {
             Type = type,
             Description = description,
             Location = location,
             Day = CurrentDay,
-        });
+        };
+        NewsQueue.Add(entry);
 
         // 保持最多 50 条
         while (NewsQueue.Count > 50)
             NewsQueue.RemoveAt(0);
+
+        NewsAdded?.Invoke(entry);
     }
 
     /// <summary>获取玩家可见的新闻（按距离延迟过滤）</summary>
@@ -428,11 +447,31 @@ public class WorldEventEngine
             ["threat_level"] = ThreatLevel,
             ["days_since_lair_cleared"] = DaysSinceLastLairCleared,
             ["current_day"] = CurrentDay,
+            ["influence"] = Influence.Serialize(),
+            ["faction_relations_map"] = FactionRelations.Serialize(),
         };
 
         var warsArr = new Godot.Collections.Array();
         foreach (var w in ActiveWars)
-            warsArr.Add(new Godot.Collections.Dictionary { ["a"] = w.NationA, ["b"] = w.NationB, ["days"] = w.DaysSinceStart });
+        {
+            var wDict = new Godot.Collections.Dictionary
+            {
+                ["a"] = w.NationA,
+                ["b"] = w.NationB,
+                ["days"] = w.DaysSinceStart,
+                ["score_a"] = w.WarScoreA,
+                ["last_refresh"] = w.LastObjectiveRefreshDay
+            };
+            var objA = new Godot.Collections.Array();
+            foreach (var o in w.ObjectivesA) objA.Add(o);
+            wDict["obj_a"] = objA;
+
+            var objB = new Godot.Collections.Array();
+            foreach (var o in w.ObjectivesB) objB.Add(o);
+            wDict["obj_b"] = objB;
+
+            warsArr.Add(wDict);
+        }
         data["wars"] = warsArr;
 
         var alliancesArr = new Godot.Collections.Array();
@@ -455,6 +494,20 @@ public class WorldEventEngine
         DaysSinceLastLairCleared = data.ContainsKey("days_since_lair_cleared") ? (int)data["days_since_lair_cleared"] : 0;
         CurrentDay = data.ContainsKey("current_day") ? (int)data["current_day"] : 1;
 
+        if (data.ContainsKey("faction_relations_map"))
+        {
+            FactionRelations.Deserialize((Godot.Collections.Dictionary)data["faction_relations_map"]);
+        }
+        else
+        {
+            if (data.ContainsKey("relations"))
+            {
+                var dict = (Godot.Collections.Dictionary)data["relations"];
+                foreach (var key in dict.Keys)
+                    FactionRelations.RelationsInternal[(string)key] = (int)dict[key];
+            }
+        }
+
         ActiveWars.Clear();
         if (data.ContainsKey("wars"))
         {
@@ -462,7 +515,27 @@ public class WorldEventEngine
             foreach (var item in warsArr)
             {
                 var d = (Godot.Collections.Dictionary)item;
-                ActiveWars.Add(new WarState { NationA = (string)d["a"], NationB = (string)d["b"], DaysSinceStart = (int)d["days"] });
+                var w = new WarState
+                {
+                    NationA = (string)d["a"],
+                    NationB = (string)d["b"],
+                    DaysSinceStart = (int)d["days"]
+                };
+                w.WarScoreA = d.ContainsKey("score_a") ? (int)d["score_a"] : 0;
+                w.LastObjectiveRefreshDay = d.ContainsKey("last_refresh") ? (int)d["last_refresh"] : 0;
+                w.ObjectivesA = new List<string>();
+                if (d.ContainsKey("obj_a"))
+                {
+                    var arr = (Godot.Collections.Array)d["obj_a"];
+                    foreach (var o in arr) w.ObjectivesA.Add((string)o);
+                }
+                w.ObjectivesB = new List<string>();
+                if (d.ContainsKey("obj_b"))
+                {
+                    var arr = (Godot.Collections.Array)d["obj_b"];
+                    foreach (var o in arr) w.ObjectivesB.Add((string)o);
+                }
+                ActiveWars.Add(w);
             }
         }
 
@@ -477,13 +550,8 @@ public class WorldEventEngine
             }
         }
 
-        DiplomaticRelations.Clear();
-        if (data.ContainsKey("relations"))
-        {
-            var dict = (Godot.Collections.Dictionary)data["relations"];
-            foreach (var key in dict.Keys)
-                DiplomaticRelations[(string)key] = (int)dict[key];
-        }
+        if (data.ContainsKey("influence"))
+            Influence.Deserialize((Godot.Collections.Dictionary)data["influence"]);
     }
 }
 
@@ -508,6 +576,10 @@ public class WarState
     public string NationA = "";
     public string NationB = "";
     public int DaysSinceStart;
+    public int WarScoreA = 0;
+    public List<string> ObjectivesA = new();
+    public List<string> ObjectivesB = new();
+    public int LastObjectiveRefreshDay = 0;
 }
 
 /// <summary>联盟状态</summary>

@@ -2,26 +2,30 @@
 // 悬浮面板基类 — 所有鼠标跟随/右键弹出的详情面板的公共基础。
 //
 // 提供：
-//   - 统一的深色半透明面板样式（可自定义颜色/边框/圆角）
-//   - MouseFilter.Ignore（不阻挡输入）
+//   - 统一的深色半透明面板样式（颜色/边框/圆角接入 UITheme）
+//   - 三种交互策略（外部控制 / 鼠标移出关闭）
 //   - 高 ZIndex（始终在最上层）
 //   - 鼠标位置定位 + 视口边界修正
-//   - Show/Hide 生命周期
+//   - 标准 Label 工厂方法（统一比例与配色）
 //
 // 子类只需：
 //   1. override BuildContent() 构建内部 UI
 //   2. 调用 ShowAt(screenPos) 或 ShowAtMouse() 显示
 //   3. 调用 HidePanel() 隐藏
-//
-// 已有子类迁移参考：
-//   - UnitInspectPanel（战斗右键单位详情）
-//   - ItemPopup（物品详情）
-//   - HitPreviewTooltip（命中预览）
-//   - TerrainTooltip（地形信息）
-//   - 未来：POI详情、地图实体详情、技能详情
 using Godot;
+using BladeHex.UI;
 
 namespace BladeHex.UI.Common;
+
+/// <summary>悬浮面板交互策略</summary>
+public enum FloatingPanelDismissMode
+{
+    /// <summary>外部代码控制显隐（默认）</summary>
+    None,
+
+    /// <summary>鼠标移出面板时自动关闭</summary>
+    OnMouseExit,
+}
 
 /// <summary>
 /// 悬浮面板基类 — 鼠标跟随/弹出式详情面板的公共基础。
@@ -33,11 +37,11 @@ public abstract partial class FloatingPanel : PanelContainer
     // 可配置参数（子类可在构造函数或 _Ready 前覆盖）
     // ============================================================================
 
-    /// <summary>面板背景色</summary>
-    protected virtual Color PanelBgColor => new(0.06f, 0.06f, 0.08f, 0.95f);
+    /// <summary>面板背景色（默认从 UITheme 读取）</summary>
+    protected virtual Color PanelBgColor => UITheme.Instance?.BgTooltip ?? new Color(0.06f, 0.06f, 0.08f, 0.95f);
 
-    /// <summary>面板边框色</summary>
-    protected virtual Color PanelBorderColor => new(0.45f, 0.38f, 0.28f, 0.8f);
+    /// <summary>面板边框色（默认从 UITheme 读取）</summary>
+    protected virtual Color PanelBorderColor => UITheme.Instance?.BorderHighlight ?? new Color(0.45f, 0.38f, 0.28f, 0.8f);
 
     /// <summary>边框宽度</summary>
     protected virtual int PanelBorderWidth => 1;
@@ -47,6 +51,9 @@ public abstract partial class FloatingPanel : PanelContainer
 
     /// <summary>内容边距</summary>
     protected virtual int PanelContentMargin => 10;
+
+    /// <summary>交互策略</summary>
+    protected virtual FloatingPanelDismissMode PanelDismiss => FloatingPanelDismissMode.None;
 
     /// <summary>阴影大小（0=无阴影）</summary>
     protected virtual int PanelShadowSize => 0;
@@ -86,12 +93,22 @@ public abstract partial class FloatingPanel : PanelContainer
     public override void _Ready()
     {
         Visible = false;
-        MouseFilter = MouseFilterEnum.Ignore;
         ZIndex = PanelZIndex;
         TopLevel = UseTopLevel;
         CustomMinimumSize = new Vector2(MinPanelWidth, 0);
 
         ApplyPanelStyle();
+
+        // 根据 DismissMode 配置交互策略
+        if (PanelDismiss == FloatingPanelDismissMode.OnMouseExit)
+        {
+            MouseFilter = MouseFilterEnum.Stop;
+            MouseExited += HidePanel;
+        }
+        else
+        {
+            MouseFilter = MouseFilterEnum.Ignore;
+        }
 
         Content = new VBoxContainer();
         Content.AddThemeConstantOverride("separation", 4);
@@ -230,22 +247,32 @@ public abstract partial class FloatingPanel : PanelContainer
         return lbl;
     }
 
-    /// <summary>创建标题标签（大字号，强调色）</summary>
+    /// <summary>创建标题标签（大字号，强调色，从 UITheme 读取）</summary>
     protected static Label MakeTitleLabel(string text, int fontSize = 16)
     {
-        return MakeLabel(text, fontSize, new Color(0.95f, 0.85f, 0.5f));
+        var c = UITheme.Instance?.TextAccent ?? new Color(0.95f, 0.85f, 0.5f);
+        return MakeLabel(text, fontSize, c);
     }
 
-    /// <summary>创建正文标签</summary>
+    /// <summary>创建正文标签（从 UITheme 读取）</summary>
     protected static Label MakeBodyLabel(string text, int fontSize = 13)
     {
-        return MakeLabel(text, fontSize, new Color(0.9f, 0.88f, 0.82f));
+        var c = UITheme.Instance?.TextPrimary ?? new Color(0.9f, 0.88f, 0.82f);
+        return MakeLabel(text, fontSize, c);
     }
 
-    /// <summary>创建次要文本标签</summary>
+    /// <summary>创建次要文本标签（从 UITheme 读取）</summary>
     protected static Label MakeMutedLabel(string text, int fontSize = 11)
     {
-        return MakeLabel(text, fontSize, new Color(0.55f, 0.53f, 0.5f));
+        var c = UITheme.Instance?.TextMuted ?? new Color(0.55f, 0.53f, 0.5f);
+        return MakeLabel(text, fontSize, c);
+    }
+
+    /// <summary>创建数据行标签（字号12，次要色）</summary>
+    protected static Label MakeStatLabel(string text)
+    {
+        var c = UITheme.Instance?.TextSecondary ?? new Color(0.7f, 0.68f, 0.63f);
+        return MakeLabel(text, 12, c);
     }
 
     /// <summary>创建富文本标签</summary>
@@ -255,6 +282,7 @@ public abstract partial class FloatingPanel : PanelContainer
         rt.BbcodeEnabled = true;
         rt.ScrollActive = false;
         rt.FitContent = true;
+        rt.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rt.CustomMinimumSize = new Vector2(minWidth, 0);
         rt.MouseFilter = MouseFilterEnum.Ignore;
         return rt;

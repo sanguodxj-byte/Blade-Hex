@@ -6,6 +6,7 @@ using BladeHex.Map.Tests;
 using BladeHex.Strategic.Tests;
 using BladeHex.Tests.Strategic;
 using BladeHex.Tests.Simulation;
+using BladeHex.Tests.SkillTree;
 using BladeHex.Tests.UI;
 using Godot;
 using System.Collections.Generic;
@@ -26,6 +27,7 @@ public partial class UnitTestRunner : Node
         int totalFailed = 0;
 
         RunSuite("CombatRuleEngineTests", CombatRuleEngineTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("SpellTargetRulesTests", SpellTargetRulesTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("CombatStateMachineTests", CombatStateMachineTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("LosCoreTests", LosCoreTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("HighLevelSanityCheck", HighLevelSanityCheck.RunAll, ref totalPassed, ref totalFailed);
@@ -46,6 +48,45 @@ public partial class UnitTestRunner : Node
         RunSuite("EconomySystemIntegrationTests", EconomySystemIntegrationTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("EconomyBalanceTests", EconomyBalanceTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("ProjectileSystemTests", ProjectileSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("BuffSystemTests", BuffSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("SkillTreeLayoutTests", SkillTreeLayoutTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("CareerSkillRegistryV1Tests", CareerSkillRegistryV1Tests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("CareerPassiveHooksCoreTests", CareerPassiveHooksCoreTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("WarSystemTests", WarSystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("DiplomacyTests", DiplomacyTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("ArmySystemTests", ArmySystemTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("OverworldEntityAITests", OverworldEntityAITests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("OverworldSimulationArchitectureTests", OverworldSimulationArchitectureTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("PlayerKingdomServiceTests", PlayerKingdomServiceTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("KingdomLawsTests", KingdomLawsTests.RunAll, ref totalPassed, ref totalFailed);
+        // WarLoopSimulationTests 包含大地图与 Node 实体，已迁移至 Frontend 层（通过反射调用以防编译依赖）
+        var warLoopTestType = System.Type.GetType("BladeHex.Tests.Strategic.WarLoopSimulationTests, BladeHexFrontend");
+        if (warLoopTestType != null)
+        {
+            var runAllMethod = warLoopTestType.GetMethod("RunAll", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (runAllMethod != null)
+            {
+                var result = runAllMethod.Invoke(null, null);
+                if (result is System.ValueTuple<int, int, System.Collections.Generic.List<string>> tuple)
+                {
+                    var (p, f, details) = tuple;
+                    GD.Print("--- WarLoopSimulationTests (Reflection) ---");
+                    foreach (var line in details) GD.Print(line);
+                    GD.Print($"  {p} passed, {f} failed");
+                    GD.Print();
+                    totalPassed += p;
+                    totalFailed += f;
+                }
+            }
+            else
+            {
+                GD.PrintErr("[TestRunner] WarLoopSimulationTests.RunAll method not found via reflection");
+            }
+        }
+        else
+        {
+            GD.PrintErr("[TestRunner] WarLoopSimulationTests type not found via reflection");
+        }
 
         GD.Print();
         GD.Print("========================================");

@@ -79,6 +79,15 @@ public partial class SpellData : Resource
         Reaction,    // 反应
     }
 
+    public enum SpellTargetAffinity
+    {
+        Auto,     // 根据法术效果推断
+        Self,     // 仅自身
+        Allies,   // 友方单位
+        Enemies,  // 敌方单位
+        AllUnits, // 不区分敌我
+    }
+
     // ========================================
     // 基础标识
     // ========================================
@@ -88,6 +97,7 @@ public partial class SpellData : Resource
     [Export] public string Description { get; set; } = "";
     [Export] public SpellSchool spellSchool = SpellSchool.Evocation;
     [Export] public SpellTier tier = SpellTier.Cantrip;
+    [Export] public SpellTargetAffinity targetAffinity = SpellTargetAffinity.Auto;
 
     // ========================================
     // 施放参数
@@ -178,6 +188,17 @@ public partial class SpellData : Resource
         SpellShape.Touch => "触碰",
         _ => "未知",
     };
+
+    public SpellTargetAffinity GetEffectiveTargetAffinity()
+    {
+        if (targetAffinity != SpellTargetAffinity.Auto) return targetAffinity;
+        if (shape == SpellShape.Self) return SpellTargetAffinity.Self;
+        if (DamageDiceCount > 0) return SpellTargetAffinity.Enemies;
+        if (HealDiceCount > 0) return SpellTargetAffinity.Allies;
+        if (!string.IsNullOrEmpty(AppliedStatusEffect) || !string.IsNullOrEmpty(SpecialEffect))
+            return SpellTargetAffinity.Allies;
+        return SpellTargetAffinity.AllUnits;
+    }
 
     /// <summary>获取默认冷却（按环阶，策划案规定）</summary>
     public static int GetDefaultCooldown(SpellTier spellTier) => (int)spellTier;

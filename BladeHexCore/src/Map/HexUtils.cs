@@ -154,4 +154,37 @@ public static class HexUtils
 
     /// <summary>同 GetHexagonCoords，中心为 (0, 0)</summary>
     public static List<Vector2I> GetHexagonCoords(int n) => GetHexagonCoords(0, 0, n);
+
+    /// <summary>计算从 from 指向 to 的最接近的朝向方向 (0-5)</summary>
+    public static int GetFacingDirection(Vector2I from, Vector2I to)
+    {
+        if (from == to) return 0;
+        
+        // 1. 如果是直接的邻居，直接返回方向
+        Vector2I diff = to - from;
+        for (int i = 0; i < 6; i++)
+        {
+            if (Directions[i] == diff)
+                return i;
+        }
+
+        // 2. 如果不是邻居，转换为 2D 像素坐标计算最接近的方向
+        Vector2 pFrom = AxialToPixel(from.X, from.Y);
+        Vector2 pTo = AxialToPixel(to.X, to.Y);
+        Vector2 dirVec = pTo - pFrom;
+        
+        int bestDir = 0;
+        float maxDot = -999999f;
+        for (int i = 0; i < 6; i++)
+        {
+            Vector2 standardVec = AxialToPixel(Directions[i].X, Directions[i].Y).Normalized();
+            float dot = dirVec.Normalized().Dot(standardVec);
+            if (dot > maxDot)
+            {
+                maxDot = dot;
+                bestDir = i;
+            }
+        }
+        return bestDir;
+    }
 }

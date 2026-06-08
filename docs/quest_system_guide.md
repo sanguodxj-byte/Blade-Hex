@@ -8,25 +8,27 @@
 
 ### 核心组件
 
-1. **QuestData.gd** - 任务数据定义
+1. **QuestData.cs** (`BladeHex.Data`) - 任务数据定义
    - 定义任务的所有属性（类型、难度、奖励等）
    - 包含任务状态管理和进度追踪
    - 支持时间限制和前置条件
 
-2. **QuestManager.gd** - 任务管理器（单例）
+2. **QuestManager.cs** (`BladeHex.Strategic`) - 任务管理器（场景服务）
    - 管理所有任务的生命周期
    - 处理任务接取、进度更新、完成和失败
    - 发放奖励和管理玩家数据
 
-3. **QuestBoard.gd** - 布告栏UI
+3. **QuestBoard.cs** (`BladeHex.UI`) - 布告栏UI
    - 显示可用任务列表
    - 展示任务详情
    - 处理任务接取
 
-4. **QuestLog.gd** - 任务日志UI
+4. **QuestLog.cs** (`BladeHex.UI`) - 任务日志UI
    - 显示进行中和已完成的任务
    - 实时更新任务进度
    - 支持放弃任务
+
+> 所有任务相关 C# 类均以 `[GlobalClass]` 注册，可在 Godot 编辑器中直接作为节点或资源使用。
 
 ## 任务类型
 
@@ -53,71 +55,103 @@
 
 ### 在场景中使用
 
-```gdscript
-# 1. 添加QuestManager节点
-var quest_manager = QuestManager.new()
-add_child(quest_manager)
+```csharp
+using Godot;
+using BladeHex.Strategic;
+using BladeHex.UI;
 
-# 2. 设置玩家数据
-quest_manager.player_gold = 500
-quest_manager.player_reputation = 10
+public partial class MyScene : Node
+{
+    private QuestManager _questManager;
+    private QuestBoard _questBoard;
+    private QuestLog _questLog;
 
-# 3. 创建UI并关联
-var quest_board = preload("res://src/ui/quest/QuestBoard.tscn").instantiate()
-quest_board.set_quest_manager(quest_manager)
-add_child(quest_board)
+    public override void _Ready()
+    {
+        // 1. 添加 QuestManager 节点
+        _questManager = new QuestManager();
+        AddChild(_questManager);
 
-var quest_log = preload("res://src/ui/quest/QuestLog.tscn").instantiate()
-quest_log.set_quest_manager(quest_manager)
-add_child(quest_log)
+        // 2. 设置玩家数据（QuestManager 会在 _Ready 中初始化）
+        _questManager.PlayerGold = 500;
+        _questManager.PlayerReputation = 10;
+
+        // 3. 创建 UI 并关联（通过 Open() 传入 QuestManager 引用）
+        _questBoard = GD.Load<PackedScene>("res://src/ui/quest/QuestBoard.tscn").Instantiate<QuestBoard>();
+        _questBoard.Open(_questManager, _questManager.AvailableQuests);
+        AddChild(_questBoard);
+
+        _questLog = GD.Load<PackedScene>("res://src/ui/quest/QuestLog.tscn").Instantiate<QuestLog>();
+        _questLog.Open(_questManager);
+        AddChild(_questLog);
+    }
+}
 ```
 
 ### 创建自定义任务
 
-```gdscript
-var quest = QuestData.new()
-quest.quest_id = "custom_quest_01"
-quest.quest_name = "自定义任务"
-quest.description = "这是一个自定义任务的描述"
-quest.quest_type = QuestData.QuestType.EXTERMINATION
-quest.difficulty = QuestData.QuestDifficulty.MEDIUM
-quest.target_count = 10
-quest.reward_gold = 200
-quest.reward_reputation = 10
+```csharp
+using BladeHex.Data;
 
-# 添加到任务管理器
-quest_manager.quest_templates[quest.quest_id] = quest
-quest_manager.available_quests.append(quest.duplicate_quest())
+var quest = new QuestData
+{
+    QuestId = "custom_quest_01",
+    QuestName = "自定义任务",
+    Description = "这是一个自定义任务的描述",
+    questType = QuestData.QuestType.Extermination,
+    difficulty = QuestData.QuestDifficulty.Medium,
+    TargetCount = 10,
+    RewardGold = 200,
+    RewardReputation = 10
+};
+
+// 添加到任务管理器
+_questManager.QuestTemplates[quest.QuestId] = quest;
+_questManager.AvailableQuests.Add((QuestData)quest.Duplicate());
 ```
 
 ### 更新任务进度
 
-```gdscript
-# 在战斗中击杀敌人时
-func on_enemy_killed(enemy_type: String):
-    # 查找相关任务并更新进度
-    for quest in quest_manager.active_quests:
-        if quest.quest_type == QuestData.QuestType.EXTERMINATION:
-            quest_manager.update_quest_progress(quest.quest_id, 1)
+```csharp
+// 在战斗中击杀敌人时
+void OnEnemyKilled(string enemyType)
+{
+    // 查找相关任务并更新进度
+    foreach (var quest in _questManager.ActiveQuests)
+    {
+        if (quest.questType == QuestData.QuestType.Extermination)
+        {
+            _questManager.UpdateQuestProgress(quest.QuestId, 1);
+        }
+    }
+}
 ```
 
 ### 监听任务事件
 
-```gdscript
-func _ready():
-    quest_manager.quest_accepted.connect(_on_quest_accepted)
-    quest_manager.quest_completed.connect(_on_quest_completed)
-    quest_manager.quest_progress_updated.connect(_on_quest_progress_updated)
+```csharp
+public override void _Ready()
+{
+    _questManager.QuestAccepted += OnQuestAccepted;
+    _questManager.QuestCompleted += OnQuestCompleted;
+    _questManager.QuestProgressUpdated += OnQuestProgressUpdated;
+}
 
-func _on_quest_accepted(quest: QuestData):
-    print("接取任务: ", quest.quest_name)
+private void OnQuestAccepted(QuestData quest)
+{
+    GD.Print($"接取任务: {quest.QuestName}");
+}
 
-func _on_quest_completed(quest: QuestData):
-    print("完成任务: ", quest.quest_name)
-    # 可以在这里触发特殊事件或解锁新内容
+private void OnQuestCompleted(QuestData quest)
+{
+    GD.Print($"完成任务: {quest.QuestName}");
+    // 可以在这里触发特殊事件或解锁新内容
+}
 
-func _on_quest_progress_updated(quest: QuestData, progress: int):
-    print("任务进度: %d/%d" % [progress, quest.target_count])
+private void OnQuestProgressUpdated(QuestData quest, int progress)
+{
+    GD.Print($"任务进度: {progress}/{quest.TargetCount}");
+}
 ```
 
 ## 任务奖励系统
@@ -128,56 +162,59 @@ func _on_quest_progress_updated(quest: QuestData, progress: int):
 2. **声望** - 增加玩家在特定势力的声望
 3. **物品** - 添加到玩家背包（需要背包系统支持）
 
-```gdscript
-# 奖励配置示例
-quest.reward_gold = 300
-quest.reward_reputation = 15
-quest.reward_faction = "绿谷村"
-quest.reward_items = ["potion_health", "scroll_fireball"]
+```csharp
+// 奖励配置示例
+quest.RewardGold = 300;
+quest.RewardReputation = 15;
+quest.RewardFaction = "绿谷村";
+quest.RewardItems = new[] { "potion_health", "scroll_fireball" };
 ```
 
 ## 前置条件系统
 
 任务可以设置前置条件，只有满足条件才能接取：
 
-```gdscript
-# 声望要求
-quest.required_reputation = 20
+```csharp
+// 声望要求
+quest.RequiredReputation = 20;
 
-# 前置任务要求
-quest.required_quests = ["quest_01", "quest_02"]
+// 前置任务要求
+quest.RequiredQuests = new[] { "quest_01", "quest_02" };
 
-# 检查是否可接取
-if quest.can_accept(player_reputation, completed_quest_ids):
-    # 可以接取
-    pass
+// 检查是否可接取（需要在 QuestData 中实现 CanAccept 方法）
+// if (quest.CanAccept(playerReputation, completedQuestIds))
+// {
+//     // 可以接取
+// }
 ```
 
 ## 时间限制系统
 
 任务可以设置时间限制，超时后自动失败：
 
-```gdscript
-# 设置时间限制
-quest.has_time_limit = true
-quest.time_limit_days = 5  # 5天内完成
+```csharp
+// 设置时间限制
+quest.HasTimeLimit = true;
+quest.TimeLimitDays = 5;  // 5天内完成
 
-# 获取剩余时间
-var remaining = quest.get_remaining_days(quest_manager.game_time)
-print("剩余时间: %.1f天" % remaining)
+// 获取剩余时间（需要在 QuestData 中实现 GetRemainingDays 方法）
+// float remaining = quest.GetRemainingDays(_questManager.GameTime);
+// GD.Print($"剩余时间: {remaining:F1}天");
 ```
 
 ## 保存/加载系统
 
 任务系统支持保存和加载：
 
-```gdscript
-# 保存
-var save_data = quest_manager.save_quest_data()
-# 将save_data保存到文件
+```csharp
+// 保存
+var saveData = _questManager.Serialize();
+// 将 saveData 保存到文件（Godot.Collections.Dictionary 格式）
 
-# 加载
-quest_manager.load_quest_data(save_data)
+// 加载（需要自行实现反序列化逻辑，从 saveData 还原至 QuestManager 字段）
+// _questManager.ActiveQuests = ...;
+// _questManager.AvailableQuests = ...;
+// _questManager.CompletedQuestIds = ...;
 ```
 
 ## 测试场景
@@ -193,34 +230,53 @@ quest_manager.load_quest_data(save_data)
 
 ### 与战斗系统集成
 
-```gdscript
-# 在战斗结束时更新任务进度
-func on_battle_end(battle_result: Dictionary):
-    var enemies_killed = battle_result.get("enemies_killed", [])
-    
-    for quest in quest_manager.active_quests:
-        if quest.quest_type == QuestData.QuestType.EXTERMINATION:
-            quest_manager.update_quest_progress(quest.quest_id, enemies_killed.size())
+```csharp
+// 在战斗结束时更新任务进度
+void OnBattleEnd(Godot.Collections.Dictionary battleResult)
+{
+    var enemiesKilled = battleResult.GetValueOrDefault("enemies_killed", new Godot.Collections.Array());
+    int count = enemiesKilled.AsGodotArray().Count;
+
+    foreach (var quest in _questManager.ActiveQuests)
+    {
+        if (quest.questType == QuestData.QuestType.Extermination)
+        {
+            _questManager.UpdateQuestProgress(quest.QuestId, count);
+        }
+    }
+}
 ```
 
 ### 与大地图系统集成
 
-```gdscript
-# 在大地图上显示任务目标位置
-func show_quest_markers():
-    for quest in quest_manager.active_quests:
-        var marker = create_map_marker(quest.target_location)
-        marker.set_text(quest.quest_name)
+```csharp
+// 在大地图上显示任务目标位置
+void ShowQuestMarkers()
+{
+    foreach (var quest in _questManager.ActiveQuests)
+    {
+        var targetSite = _questManager.GetActiveTargetSite(quest.QuestId);
+        if (targetSite != null)
+        {
+            // 在大地图上标记目标位置
+            // var marker = CreateMapMarker(targetSite.WorldPosition);
+            // marker.SetText(quest.QuestName);
+        }
+    }
+}
 ```
 
 ### 与声望系统集成
 
-```gdscript
-# 任务完成后更新势力关系
-quest_manager.quest_completed.connect(func(quest: QuestData):
-    if quest.reward_faction:
-        faction_system.add_reputation(quest.reward_faction, quest.reward_reputation)
-)
+```csharp
+// 任务完成后更新势力关系
+_questManager.QuestCompleted += (QuestData quest) =>
+{
+    if (!string.IsNullOrEmpty(quest.RewardFaction))
+    {
+        // factionSystem.AddReputation(quest.RewardFaction, quest.RewardReputation);
+    }
+};
 ```
 
 ## 扩展建议
@@ -235,8 +291,8 @@ quest_manager.quest_completed.connect(func(quest: QuestData):
 
 ## 注意事项
 
-1. QuestManager应该作为单例使用，确保全局只有一个实例
-2. 任务模板和任务实例要区分清楚，使用`duplicate_quest()`创建实例
+1. QuestManager 由 OverworldScene 创建并管理生命周期，CombatScene 可通过 `GetParent().GetNodeOrNull<QuestManager>("QuestManager")` 跨场景查找
+2. 任务模板和任务实例要区分清楚，使用 `(QuestData)quest.Duplicate()` 创建实例
 3. 任务进度更新要在合适的时机调用，避免重复计数
 4. 时间限制的游戏时间需要与实际游戏时间系统同步
 5. 保存系统要确保所有任务状态都被正确序列化

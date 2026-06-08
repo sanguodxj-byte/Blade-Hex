@@ -31,7 +31,7 @@ public class CombatApiObject
 {
     public int roll_dice(int count, int sides) => RPGRuleEngine.RollDice(count, sides);
     public int get_stat_mod(int statValue) => RPGRuleEngine.GetStatModifier(statValue);
-    public int get_proficiency(int level) => RPGRuleEngine.GetProficiencyBonus(level);
+    public int get_proficiency(int level) => 0;
 }
 
 /// <summary>hex 全局表 — Lua 中通过 hex.distance(0,0,1,0) 调用</summary>

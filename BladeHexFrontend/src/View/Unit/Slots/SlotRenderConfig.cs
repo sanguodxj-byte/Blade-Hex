@@ -1,4 +1,4 @@
-﻿// SlotRenderConfig.cs
+// SlotRenderConfig.cs
 // 装备分部位渲染配置 — View 层唯一真相源
 // 迁移自 ItemData.SlotRenderConfig（Core），消除 Core 对 Vector3/Vector2 渲染坐标的依赖
 using Godot;
@@ -42,7 +42,11 @@ public static class SlotConfigTable
         new() { Slot = ItemData.EquipSlot.Head,    AnchorOffset = new Vector3(0, 96, 0),   ZOrder = 3, DefaultSize = new Vector2(48, 48),  SortOffset = -0.25f },
         new() { Slot = ItemData.EquipSlot.Helmet,  AnchorOffset = new Vector3(0, 104, 0),  ZOrder = 4, DefaultSize = new Vector2(56, 56),  SortOffset = -0.32f },
         new() { Slot = ItemData.EquipSlot.Weapon,  AnchorOffset = new Vector3(56, -10, 0), ZOrder = 5, DefaultSize = new Vector2(32, 80),  SortOffset = -0.50f },
-    ];
+        new() { Slot = ItemData.EquipSlot.Feet,    AnchorOffset = new Vector3(0, -40, 0),  ZOrder = 6, DefaultSize = new Vector2(48, 32),  SortOffset = -0.10f },
+        new() { Slot = ItemData.EquipSlot.Shield,  AnchorOffset = new Vector3(-56, 0, 0),  ZOrder = 7, DefaultSize = new Vector2(64, 64),  SortOffset = -0.40f },
+        new() { Slot = ItemData.EquipSlot.Face, AnchorOffset = new Vector3(0, 96, 0), ZOrder = 3, DefaultSize = new Vector2(48, 48), SortOffset = -0.25f }, // Face
+        new() { Slot = ItemData.EquipSlot.Hair, AnchorOffset = new Vector3(0, 96, 0), ZOrder = 3, DefaultSize = new Vector2(48, 48), SortOffset = -0.27f }, // Hair+Beard 合并
+        ];
 
     /// <summary>获取指定部位的渲染配置</summary>
     public static SlotRenderConfig GetSlotConfig(ItemData.EquipSlot slot)
@@ -61,6 +65,10 @@ public static class SlotConfigTable
         ItemData.EquipSlot.Head => "头部",
         ItemData.EquipSlot.Helmet => "头盔",
         ItemData.EquipSlot.Weapon => "武器",
+        ItemData.EquipSlot.Feet => "鞋子",
+        ItemData.EquipSlot.Shield => "盾牌",
+        ItemData.EquipSlot.Face => "脸部",
+        ItemData.EquipSlot.Hair => "发型+胡须",
         _ => "未知",
     };
 

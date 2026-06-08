@@ -80,7 +80,7 @@ BoneRoot (at CanvasCenter)
 1. **纹理不缩放**：素材 1:1 显示在 SubViewport 内
 2. **Torso Y 取反**：`node.Position.Y = -pose.PositionY`
 3. **Weapon Offset 不取反**：直接赋值
-4. **朝向翻转**：`facingLeft=false`(面朝右) → `Scale.X=-1`(翻转)，`facingLeft=true`(面朝左) → `Scale.X=1`(不翻转)。2D正X=屏幕右侧，武器在ArmR(正X)。面朝右时武器应在屏幕左侧，所以翻转。**禁止修改。**
+4. **朝向翻转**：`facingLeft=false`(面朝右) → `Scale.X=1`(不翻转)，`facingLeft=true`(面朝左) → `Scale.X=-1`(翻转)。注：渲染输出整体镜像了一次，所以代码里 `Scale.X` 与字面方向相反——`SetFacing(false) → Scale.X = -1`，`SetFacing(true) → Scale.X = 1`。
 5. **Billboard 无 X 镜像**：实测确认 2D 正 X = 屏幕右侧，不存在 billboard 镜像。
 6. **Gizmo Y 不取反**：2D 和屏幕方向一致
 7. **EquipmentOffsetConfig 在动画后叠加**：会覆盖 Weapon 的 Offset

@@ -23,8 +23,8 @@ public partial class CombatPowerBar : PanelContainer
     private Label _allyCountLabel = null!;
     private Label _enemyCountLabel = null!;
     private Control _powerBarContainer = null!;
-    private ColorRect _allyBar = null!;
-    private ColorRect _enemyBar = null!;
+    private TextureRect _allyBar = null!;
+    private TextureRect _enemyBar = null!;
 
     // ============================================================================
     // 战力数据
@@ -48,17 +48,17 @@ public partial class CombatPowerBar : PanelContainer
     // ============================================================================
     // 颜色
     // ============================================================================
-    private static readonly Color AllyColor = new(0.25f, 0.55f, 0.9f, 0.9f);
-    private static readonly Color EnemyColor = new(0.85f, 0.25f, 0.25f, 0.9f);
-    private static readonly Color BgColor = new(0.1f, 0.1f, 0.12f, 0.85f);
-    private static readonly Color BarBgColor = new(0.08f, 0.08f, 0.1f, 0.7f);
-    private static readonly Color BorderColor = new(0.4f, 0.35f, 0.25f, 0.7f);
+    private static readonly Color AllyColor = new(0.36f, 0.56f, 0.68f, 0.95f);
+    private static readonly Color EnemyColor = new(0.70f, 0.26f, 0.22f, 0.95f);
+    private static readonly Color BgColor = new(0.070f, 0.060f, 0.052f, 0.88f);
+    private static readonly Color BarBgColor = new(0.035f, 0.032f, 0.030f, 0.82f);
+    private static readonly Color BorderColor = new(0.42f, 0.34f, 0.23f, 0.78f);
 
     // ============================================================================
     // 常量
     // ============================================================================
-    private const float BarWidth = 240f;
-    private const float BarHeight = 8f;
+    private const float BarWidth = 360f;
+    private const float BarHeight = 14f;
 
     // ============================================================================
     // 生命周期
@@ -87,20 +87,19 @@ public partial class CombatPowerBar : PanelContainer
 
     private void BuildUI()
     {
-        // 面板样式
         var style = new StyleBoxFlat();
         style.BgColor = BgColor;
         style.SetBorderWidthAll(1);
         style.BorderColor = BorderColor;
-        style.SetCornerRadiusAll(6);
-        style.SetContentMarginAll(8);
+        style.SetCornerRadiusAll(5);
+        style.SetContentMarginAll(10);
         AddThemeStyleboxOverride("panel", style);
 
         CustomMinimumSize = new Vector2(BarWidth + 80, 0);
         SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
 
         var vbox = new VBoxContainer();
-        vbox.AddThemeConstantOverride("separation", 4);
+        vbox.AddThemeConstantOverride("separation", 6);
         AddChild(vbox);
 
         // 第一行：人数显示
@@ -110,7 +109,7 @@ public partial class CombatPowerBar : PanelContainer
 
         _allyCountLabel = new Label();
         _allyCountLabel.Text = "友方 0/0";
-        _allyCountLabel.AddThemeFontSizeOverride("font_size", 12);
+        _allyCountLabel.AddThemeFontSizeOverride("font_size", 16);
         _allyCountLabel.AddThemeColorOverride("font_color", AllyColor);
         _allyCountLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _allyCountLabel.HorizontalAlignment = HorizontalAlignment.Left;
@@ -118,7 +117,7 @@ public partial class CombatPowerBar : PanelContainer
 
         _enemyCountLabel = new Label();
         _enemyCountLabel.Text = "敌方 0/0";
-        _enemyCountLabel.AddThemeFontSizeOverride("font_size", 12);
+        _enemyCountLabel.AddThemeFontSizeOverride("font_size", 16);
         _enemyCountLabel.AddThemeColorOverride("font_color", EnemyColor);
         _enemyCountLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _enemyCountLabel.HorizontalAlignment = HorizontalAlignment.Right;
@@ -136,15 +135,25 @@ public partial class CombatPowerBar : PanelContainer
         _powerBarContainer.AddChild(barBg);
 
         // 我方战力条（从左向右）
-        _allyBar = new ColorRect();
-        _allyBar.Color = AllyColor;
+        _allyBar = new TextureRect();
+        var allyFallback = new ColorRect();
+        allyFallback.Color = AllyColor;
+        _allyBar.AddChild(allyFallback);
+        allyFallback.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _allyBar.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        _allyBar.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
         _allyBar.Position = Vector2.Zero;
         _allyBar.Size = new Vector2(0, BarHeight);
         _powerBarContainer.AddChild(_allyBar);
 
         // 敌方战力条（从右向左）
-        _enemyBar = new ColorRect();
-        _enemyBar.Color = EnemyColor;
+        _enemyBar = new TextureRect();
+        var enemyFallback = new ColorRect();
+        enemyFallback.Color = EnemyColor;
+        _enemyBar.AddChild(enemyFallback);
+        enemyFallback.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _enemyBar.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        _enemyBar.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
         _enemyBar.Position = new Vector2(BarWidth, 0);
         _enemyBar.Size = new Vector2(0, BarHeight);
         _powerBarContainer.AddChild(_enemyBar);

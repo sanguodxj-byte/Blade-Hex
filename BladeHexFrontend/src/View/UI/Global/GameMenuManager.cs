@@ -1,6 +1,7 @@
 // GameMenuManager.cs
 // 全局 ESC 系统菜单 + 设置面板 — Autoload CanvasLayer
 // 所有场景共享同一个实例，避免重复实现。
+using BladeHex.Localization;
 using Godot;
 
 namespace BladeHex.UI.Global;
@@ -57,6 +58,8 @@ public partial class GameMenuManager : CanvasLayer
 
         BuildMenuPanel();
         BuildSettingsPanel();
+
+        LanguageManager.Instance.LocaleChanged += _ => RebuildUiForLocale();
 
         Visible = false;
     }
@@ -123,6 +126,23 @@ public partial class GameMenuManager : CanvasLayer
     // ESC 菜单面板
     // ============================================================
 
+    private void RebuildUiForLocale()
+    {
+        bool wasOpen = Visible;
+        bool wasSettingsOpen = _settingsPanel?.Visible == true;
+
+        _menuPanel?.QueueFree();
+        _settingsPanel?.QueueFree();
+        BuildMenuPanel();
+        BuildSettingsPanel();
+
+        Visible = wasOpen;
+        if (_menuPanel != null)
+            _menuPanel.Visible = wasOpen && !wasSettingsOpen;
+        if (_settingsPanel != null)
+            _settingsPanel.Visible = wasOpen && wasSettingsOpen;
+    }
+
     private void BuildMenuPanel()
     {
         _menuPanel = new PanelContainer();
@@ -145,38 +165,38 @@ public partial class GameMenuManager : CanvasLayer
         vbox.CustomMinimumSize = new Vector2(240, 0);
         inner.AddChild(vbox);
 
-        var title = new Label { Text = "- 系统菜单 -", HorizontalAlignment = HorizontalAlignment.Center };
+        var title = new Label { Text = L10n.Tr("MENU_SYSTEM_TITLE"), HorizontalAlignment = HorizontalAlignment.Center };
         title.AddThemeFontSizeOverride("font_size", FontXl);
         title.AddThemeColorOverride("font_color", TextAccent);
         vbox.AddChild(title);
 
-        var resumeBtn = MakeBtn("返回游戏");
+        var resumeBtn = MakeBtn(L10n.Tr("MENU_RESUME_GAME"));
         resumeBtn.Pressed += Close;
         vbox.AddChild(resumeBtn);
 
-        var saveBtn = MakeBtn("保存游戏");
+        var saveBtn = MakeBtn(L10n.Tr("MENU_SAVE_GAME"));
         saveBtn.Pressed += () => { EmitSignal(SignalName.SaveRequested); Close(); };
         vbox.AddChild(saveBtn);
 
-        var loadBtn = MakeBtn("加载游戏");
+        var loadBtn = MakeBtn(L10n.Tr("MENU_LOAD_GAME"));
         loadBtn.Pressed += () => { EmitSignal(SignalName.LoadRequested); Close(); };
         vbox.AddChild(loadBtn);
 
-        var settingsBtn = MakeBtn("设置");
+        var settingsBtn = MakeBtn(L10n.Tr("MENU_SETTINGS"));
         settingsBtn.Pressed += OpenSettings;
         vbox.AddChild(settingsBtn);
 
-        var mainMenuBtn = MakeBtn("回到主菜单");
+        var mainMenuBtn = MakeBtn(L10n.Tr("MENU_MAIN_MENU"));
         mainMenuBtn.Pressed += () =>
         {
             GetTree().Paused = false;
             Visible = false;
             EmitSignal(SignalName.ReturnToMainMenuRequested);
-            BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/main_menu.tscn");
+            BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
         };
         vbox.AddChild(mainMenuBtn);
 
-        var exitBtn = MakeBtn("退出游戏");
+        var exitBtn = MakeBtn(L10n.Tr("MENU_QUIT_GAME"));
         exitBtn.AddThemeColorOverride("font_color", TextNegative);
         exitBtn.Pressed += () => { GetTree().Paused = false; GetTree().Quit(); };
         vbox.AddChild(exitBtn);
@@ -207,7 +227,7 @@ public partial class GameMenuManager : CanvasLayer
         center.AddChild(outer);
 
         // 标题
-        var title = new Label { Text = "设 置", HorizontalAlignment = HorizontalAlignment.Center };
+        var title = new Label { Text = L10n.Tr("SETTINGS_TITLE"), HorizontalAlignment = HorizontalAlignment.Center };
         title.AddThemeFontSizeOverride("font_size", 28);
         title.AddThemeColorOverride("font_color", TextAccent);
         outer.AddChild(title);
@@ -221,44 +241,51 @@ public partial class GameMenuManager : CanvasLayer
         outer.AddChild(tabs);
 
         // --- Tab 1: 游戏 ---
-        var gameScroll = new ScrollContainer { Name = "游戏", HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
+        var gameScroll = new ScrollContainer { Name = L10n.Tr("SETTINGS_TAB_GAME"), HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
         tabs.AddChild(gameScroll);
         var gv = new VBoxContainer(); gv.AddThemeConstantOverride("separation", 10); gv.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         gameScroll.AddChild(gv);
-        AddSlider(gv, "游戏速度", 1, 5, 2, v => SetGlobal("game_speed_multiplier", (float)v));
-        AddSlider(gv, "自动存档间隔 (分钟)", 1, 30, 5, v => SetGlobal("autosave_interval_min", (int)v));
-        AddSlider(gv, "战斗动画速度", 1, 3, 1, v => SetGlobal("combat_anim_speed", (float)v));
+        AddLocaleSelector(gv);
+        AddSlider(gv, L10n.Tr("SETTINGS_GAME_SPEED"), 1, 5, 2, v => SetGlobal("game_speed_multiplier", (float)v));
+        AddSlider(gv, L10n.Tr("SETTINGS_AUTOSAVE_INTERVAL"), 1, 30, 5, v => SetGlobal("autosave_interval_min", (int)v));
+        AddSlider(gv, L10n.Tr("SETTINGS_COMBAT_ANIM_SPEED"), 1, 3, 1, v => SetGlobal("combat_anim_speed", (float)v));
         gv.AddChild(MakeSeparator());
-        var dmgNum = MakeCheck("显示伤害数字", true); dmgNum.Toggled += p => SetGlobal("show_damage_numbers", p); gv.AddChild(dmgNum);
-        var tutorial = MakeCheck("显示教程提示", true); tutorial.Toggled += p => SetGlobal("show_tutorials", p); gv.AddChild(tutorial);
-        var autoEnd = MakeCheck("无行动力时自动结束回合", false); autoEnd.Toggled += p => SetGlobal("auto_end_turn", p); gv.AddChild(autoEnd);
-        var confirmRetreat = MakeCheck("撤退前确认", true); confirmRetreat.Toggled += p => SetGlobal("confirm_retreat", p); gv.AddChild(confirmRetreat);
+        var dmgNum = MakeCheck(L10n.Tr("SETTINGS_SHOW_DAMAGE_NUMBERS"), true); dmgNum.Toggled += p => SetGlobal("show_damage_numbers", p); gv.AddChild(dmgNum);
+        var tutorial = MakeCheck(L10n.Tr("SETTINGS_SHOW_TUTORIALS"), BladeHex.UI.Tutorial.TutorialManager.Instance?.IsEnabled ?? true);
+        tutorial.Toggled += p =>
+        {
+            SetGlobal("show_tutorials", p);
+            BladeHex.UI.Tutorial.TutorialManager.Instance?.SetEnabled(p);
+        };
+        gv.AddChild(tutorial);
+        var autoEnd = MakeCheck(L10n.Tr("SETTINGS_AUTO_END_TURN"), false); autoEnd.Toggled += p => SetGlobal("auto_end_turn", p); gv.AddChild(autoEnd);
+        var confirmRetreat = MakeCheck(L10n.Tr("SETTINGS_CONFIRM_RETREAT"), true); confirmRetreat.Toggled += p => SetGlobal("confirm_retreat", p); gv.AddChild(confirmRetreat);
 
         // --- Tab 2: 音频 ---
-        var audioScroll = new ScrollContainer { Name = "音频", HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
+        var audioScroll = new ScrollContainer { Name = L10n.Tr("SETTINGS_TAB_AUDIO"), HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
         tabs.AddChild(audioScroll);
         var av = new VBoxContainer(); av.AddThemeConstantOverride("separation", 10); av.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         audioScroll.AddChild(av);
-        AddSlider(av, "主音量", 0, 100, 50, v => SetBusVolume("Master", v));
-        AddSlider(av, "音乐音量", 0, 100, 50, v => SetBusVolume("Music", v));
-        AddSlider(av, "音效音量", 0, 100, 50, v => SetBusVolume("SFX", v));
-        AddSlider(av, "环境音量", 0, 100, 50, v => SetBusVolume("Ambient", v));
+        AddSlider(av, L10n.Tr("SETTINGS_MASTER_VOLUME"), 0, 100, 50, v => SetBusVolume("Master", v));
+        AddSlider(av, L10n.Tr("SETTINGS_MUSIC_VOLUME"), 0, 100, 50, v => SetBusVolume("Music", v));
+        AddSlider(av, L10n.Tr("SETTINGS_SFX_VOLUME"), 0, 100, 50, v => SetBusVolume("SFX", v));
+        AddSlider(av, L10n.Tr("SETTINGS_AMBIENT_VOLUME"), 0, 100, 50, v => SetBusVolume("Ambient", v));
         av.AddChild(MakeSeparator());
-        var mute = MakeCheck("失去焦点时静音", true); mute.Toggled += p => SetGlobal("mute_on_focus_loss", p); av.AddChild(mute);
+        var mute = MakeCheck(L10n.Tr("SETTINGS_MUTE_ON_FOCUS_LOSS"), true); mute.Toggled += p => SetGlobal("mute_on_focus_loss", p); av.AddChild(mute);
 
         // --- Tab 3: 画面 ---
-        var displayScroll = new ScrollContainer { Name = "画面", HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
+        var displayScroll = new ScrollContainer { Name = L10n.Tr("SETTINGS_TAB_DISPLAY"), HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
         tabs.AddChild(displayScroll);
         var dv = new VBoxContainer(); dv.AddThemeConstantOverride("separation", 10); dv.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         displayScroll.AddChild(dv);
-        var fullscreen = MakeCheck("全屏模式", DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen);
+        var fullscreen = MakeCheck(L10n.Tr("SETTINGS_FULLSCREEN"), DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen);
         fullscreen.Toggled += p => DisplayServer.WindowSetMode(p ? DisplayServer.WindowMode.Fullscreen : DisplayServer.WindowMode.Windowed); dv.AddChild(fullscreen);
-        var vsync = MakeCheck("垂直同步", DisplayServer.WindowGetVsyncMode() != DisplayServer.VSyncMode.Disabled);
+        var vsync = MakeCheck(L10n.Tr("SETTINGS_VSYNC"), DisplayServer.WindowGetVsyncMode() != DisplayServer.VSyncMode.Disabled);
         vsync.Toggled += p => DisplayServer.WindowSetVsyncMode(p ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled); dv.AddChild(vsync);
-        var shake = MakeCheck("战斗镜头震动", true); shake.Toggled += p => SetGlobal("camera_shake_enabled", p); dv.AddChild(shake);
-        var particles = MakeCheck("天气粒子效果", true); particles.Toggled += p => SetGlobal("weather_particles_enabled", p); dv.AddChild(particles);
+        var shake = MakeCheck(L10n.Tr("SETTINGS_CAMERA_SHAKE"), true); shake.Toggled += p => SetGlobal("camera_shake_enabled", p); dv.AddChild(shake);
+        var particles = MakeCheck(L10n.Tr("SETTINGS_WEATHER_PARTICLES"), true); particles.Toggled += p => SetGlobal("weather_particles_enabled", p); dv.AddChild(particles);
         dv.AddChild(MakeSeparator());
-        dv.AddChild(MakeLabel("窗口分辨率"));
+        dv.AddChild(MakeLabel(L10n.Tr("SETTINGS_RESOLUTION")));
         var resOpt = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
         resOpt.AddThemeFontSizeOverride("font_size", 15);
         resOpt.AddItem("1280 × 720", 0); resOpt.AddItem("1600 × 900", 1); resOpt.AddItem("1920 × 1080", 2); resOpt.AddItem("2560 × 1440", 3);
@@ -268,22 +295,22 @@ public partial class GameMenuManager : CanvasLayer
         dv.AddChild(resOpt);
 
         // --- Tab 4: 控制 ---
-        var controlScroll = new ScrollContainer { Name = "控制", HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
+        var controlScroll = new ScrollContainer { Name = L10n.Tr("SETTINGS_TAB_CONTROLS"), HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever };
         tabs.AddChild(controlScroll);
         var cv = new VBoxContainer(); cv.AddThemeConstantOverride("separation", 10); cv.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         controlScroll.AddChild(cv);
-        cv.AddChild(MakeLabel("相机平移：WASD / 鼠标中键拖拽"));
-        cv.AddChild(MakeLabel("缩放：鼠标滚轮"));
-        cv.AddChild(MakeLabel("结束回合：Space"));
-        cv.AddChild(MakeLabel("切换单位：Tab"));
-        cv.AddChild(MakeLabel("取消操作：Esc / 右键"));
-        cv.AddChild(MakeLabel("系统菜单：Esc（无操作时）"));
+        cv.AddChild(MakeLabel(L10n.Tr("SETTINGS_CONTROL_CAMERA_PAN")));
+        cv.AddChild(MakeLabel(L10n.Tr("SETTINGS_CONTROL_ZOOM")));
+        cv.AddChild(MakeLabel(L10n.Tr("SETTINGS_CONTROL_END_TURN")));
+        cv.AddChild(MakeLabel(L10n.Tr("SETTINGS_CONTROL_SWITCH_UNIT")));
+        cv.AddChild(MakeLabel(L10n.Tr("SETTINGS_CONTROL_CANCEL")));
+        cv.AddChild(MakeLabel(L10n.Tr("SETTINGS_CONTROL_SYSTEM_MENU")));
         cv.AddChild(MakeSeparator());
-        var edgePan = MakeCheck("鼠标边缘滚动", false); edgePan.Toggled += p => SetGlobal("edge_pan_enabled", p); cv.AddChild(edgePan);
-        AddSlider(cv, "相机平移速度", 1, 10, 5, v => SetGlobal("camera_pan_speed", (float)v));
+        var edgePan = MakeCheck(L10n.Tr("SETTINGS_EDGE_PAN"), false); edgePan.Toggled += p => SetGlobal("edge_pan_enabled", p); cv.AddChild(edgePan);
+        AddSlider(cv, L10n.Tr("SETTINGS_CAMERA_PAN_SPEED"), 1, 10, 5, v => SetGlobal("camera_pan_speed", (float)v));
 
         // --- 返回按钮 ---
-        var closeBtn = MakeBtn("返 回");
+        var closeBtn = MakeBtn(L10n.Tr("MENU_BACK"));
         closeBtn.CustomMinimumSize = new Vector2(180, 48);
         closeBtn.Pressed += () =>
         {
@@ -312,6 +339,29 @@ public partial class GameMenuManager : CanvasLayer
         if (idx < 0) idx = 0;
         float db = val > 0 ? Mathf.LinearToDb((float)val / 100.0f) : -80.0f;
         AudioServer.SetBusVolumeDb(idx, db);
+    }
+
+    private static void AddLocaleSelector(VBoxContainer vbox)
+    {
+        vbox.AddChild(MakeLabel(L10n.Tr("SETTINGS_LANGUAGE")));
+        var localeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38) };
+        localeOption.AddThemeFontSizeOverride("font_size", FontMd);
+
+        for (int i = 0; i < LanguageManager.SupportedLocales.Length; i++)
+        {
+            string locale = LanguageManager.SupportedLocales[i];
+            localeOption.AddItem(LanguageManager.LocaleNames.TryGetValue(locale, out string? displayName) ? displayName : locale, i);
+            if (locale == LanguageManager.Instance.GetLocale())
+                localeOption.Selected = i;
+        }
+
+        localeOption.ItemSelected += index =>
+        {
+            int i = (int)index;
+            if (i >= 0 && i < LanguageManager.SupportedLocales.Length)
+                LanguageManager.Instance.SetLocale(LanguageManager.SupportedLocales[i]);
+        };
+        vbox.AddChild(localeOption);
     }
 
     private void SetGlobal(string key, Variant value)

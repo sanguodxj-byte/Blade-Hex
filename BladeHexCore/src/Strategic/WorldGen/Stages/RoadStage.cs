@@ -28,9 +28,8 @@ public sealed class RoadStage : IWorldStage
             .Where(p => p.PoiTypeEnum == OverworldPOI.POIType.Town
                      || p.PoiTypeEnum == OverworldPOI.POIType.Village
                      || p.PoiTypeEnum == OverworldPOI.POIType.Castle
-                     || p.PoiTypeEnum == OverworldPOI.POIType.Outpost
-                     || p.PoiTypeEnum == OverworldPOI.POIType.Tavern
-                     || p.PoiTypeEnum == OverworldPOI.POIType.Port)
+                     || p.PoiTypeEnum == OverworldPOI.POIType.Mine
+                     || p.PoiTypeEnum == OverworldPOI.POIType.Farm)
             .ToList();
 
         if (settlements.Count < 2)
@@ -66,10 +65,26 @@ public sealed class RoadStage : IWorldStage
             var fromAxial = HexOverworldTile.PixelToAxial(from.Position.X, from.Position.Y);
             var toAxial = HexOverworldTile.PixelToAxial(to.Position.X, to.Position.Y);
 
+            // 决定道路等级
+            int roadClass = 1; // 默认乡间马车道
+            bool fromIsRoyal = from.PoiTypeEnum == OverworldPOI.POIType.Town || from.PoiTypeEnum == OverworldPOI.POIType.Castle;
+            bool toIsRoyal = to.PoiTypeEnum == OverworldPOI.POIType.Town || to.PoiTypeEnum == OverworldPOI.POIType.Castle;
+            bool fromIsTrail = from.PoiTypeEnum == OverworldPOI.POIType.Mine || from.PoiTypeEnum == OverworldPOI.POIType.Farm || from.PoiTypeEnum == OverworldPOI.POIType.Lair;
+            bool toIsTrail = to.PoiTypeEnum == OverworldPOI.POIType.Mine || to.PoiTypeEnum == OverworldPOI.POIType.Farm || to.PoiTypeEnum == OverworldPOI.POIType.Lair;
+
+            if (fromIsRoyal || toIsRoyal)
+            {
+                roadClass = 2; // 国王大道
+            }
+            else if (fromIsTrail && toIsTrail)
+            {
+                roadClass = 0; // 林间野径
+            }
+
             var path = FindRoadPath(aStar, fromAxial, toAxial, grid);
             if (path.Count >= 2)
             {
-                StampRoadPath(path, ctx.Chunks);
+                StampRoadPath(path, ctx.Chunks, roadClass);
                 roadsStamped++;
             }
         }
@@ -143,7 +158,7 @@ public sealed class RoadStage : IWorldStage
         return path;
     }
 
-    private static void StampRoadPath(List<Vector2I> path, Dictionary<Vector2I, ChunkData> chunks)
+    private static void StampRoadPath(List<Vector2I> path, Dictionary<Vector2I, ChunkData> chunks, int roadClass)
     {
         for (int i = 0; i < path.Count; i++)
         {
@@ -155,6 +170,7 @@ public sealed class RoadStage : IWorldStage
             if (tile == null) continue;
 
             tile.IsRoad = true;
+            tile.RoadClassVal = Math.Max(tile.RoadClassVal, roadClass);
             tile.MoveCost = 0.2f;
             // 重新评估 IsPassable / MoveCost：道路覆盖在水/河流上变成桥
             tile.UpdateTerrainProperties();

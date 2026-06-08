@@ -12,6 +12,7 @@ using BladeHex.Map;
 using BladeHex.Combat;
 using BladeHex.Strategic;
 using BladeHex.Strategic.Economy;
+using BladeHex.UI.Combat;
 
 namespace BladeHex.Scenes.Campaign;
 
@@ -157,7 +158,7 @@ public partial class CampaignBattleScene : CombatSceneBase
 		}
 
 		if (playerUnits.Count > 0)
-			_activePlayerUnit = playerUnits[0];
+			ActivePlayerUnit = playerUnits[0];
 
 		// === 敌方：用生成器按关卡配置生成 ===
 		int enemyCount = _levelDef.EnemyCount;
@@ -202,12 +203,12 @@ public partial class CampaignBattleScene : CombatSceneBase
 				if (stm?.TreeData != null)
 				{
 					var tree = SkillTreeAllocator.AllocateForUnit(enemyData, stm.TreeData);
-					if (tree != null) { enemyUnit.SkillTree = tree; enemyData.Runtime.SkillTree = tree; }
+					if (tree != null) { enemyUnit.SkillTree = tree; enemyUnit.Model.SkillTree = tree; }
 				}
 			}
 		}
 
-		UpdateFov();
+		/* FOV 机制已移除，见 notes.md */
 	}
 
 	// ============================================================
@@ -216,63 +217,113 @@ public partial class CampaignBattleScene : CombatSceneBase
 
 	protected override void HandleCombatEnd(bool victory)
 	{
-		if (victory)
-		{
-			// 经验奖励
-			int xpGranted = CampaignPricingService.GetBattleXpReward(CreateCampaignEconomyContext());
+		// 计算奖励
+		var econCtx = CreateCampaignEconomyContext();
+		int xpGranted = victory ? CampaignPricingService.GetBattleXpReward(econCtx) : 0;
+		int goldGranted = victory ? CampaignPricingService.GetBattleGoldReward(econCtx) : 0;
 
-			foreach (var unit in _combatManager.PlayerUnits)
+		// 构建队员状态列表
+		var unitStatuses = new List<UnitStatusEntry>();
+		var deadUnits = new List<UnitData>();
+
+		foreach (var unit in _combatManager.PlayerUnits)
+		{
+			if (unit?.Data == null) continue;
+
+			if (unit.CurrentHp > 0)
 			{
-				if (unit?.Data == null) continue;
-				if (unit.CurrentHp > 0)
+				// 存活：加经验、回血
+				if (victory)
 				{
 					unit.Data.Xp += xpGranted;
 					int maxHp = unit.Data.BaseMaxHp;
 					int healed = unit.CurrentHp + (int)(maxHp * 0.3f);
 					PartyRoster.SetCurrentHp(unit.Data, Mathf.Min(healed, maxHp));
 				}
-			}
 
-			// 移除阵亡与重伤处理
-			var dead = new List<UnitData>();
-			foreach (var unit in _combatManager.PlayerUnits)
+				// 检查升级前后的等级变化
+				int oldLevel = unit.Data.Level;
+				if (victory)
+					CampSystem.CheckAndApplyLevelUps(_campaignCtx.Roster);
+
+				unitStatuses.Add(new UnitStatusEntry(unit.Data, UnitStatus.Alive, unit.Data.Level > oldLevel));
+			}
+			else
 			{
-				if (unit?.Data != null && unit.CurrentHp <= 0)
+				// 阵亡/重伤
+				if (_campaignCtx.Roster.IsLeader(unit.Data))
 				{
-					if (_campaignCtx.Roster.IsLeader(unit.Data))
-					{
-						dead.Add(unit.Data);
-					}
-					else
-					{
-						unit.Data.IsWounded = true;
-						PartyRoster.SetCurrentHp(unit.Data, 0);
-					}
+					deadUnits.Add(unit.Data);
+					unitStatuses.Add(new UnitStatusEntry(unit.Data, UnitStatus.Dead));
+				}
+				else
+				{
+					unit.Data.IsWounded = true;
+					PartyRoster.SetCurrentHp(unit.Data, 0);
+					unitStatuses.Add(new UnitStatusEntry(unit.Data, UnitStatus.Wounded));
 				}
 			}
-			foreach (var d in dead)
-				_campaignCtx.Roster.Remove(d);
-
-			// 金币奖励 + 升级检查
-			_campaignCtx.Gold += CampaignPricingService.GetBattleGoldReward(CreateCampaignEconomyContext());
-			CampSystem.CheckAndApplyLevelUps(_campaignCtx.Roster);
-
-			// 推进关卡
-			_campaignCtx.CurrentLevel++;
-
-			BladeHex.View.SceneTransition.ChangeSceneTo(
-				GetTree(), "res://src/scenes/campaign/campaign_scene.tscn");
 		}
-		else
+
+		// 移除阵亡队员
+		foreach (var d in deadUnits)
+			_campaignCtx.Roster.Remove(d);
+
+		// 生成战利品（调用基类方法）
+		var lootEntries = new List<LootEntry>();
+		var lootItems = new List<BladeHex.Data.ItemData>();
+		if (victory)
 		{
-			_campaignCtx.IsActive = false;
-			var timer = GetTree().CreateTimer(2.0f);
-			timer.Timeout += () =>
+			GenerateLoot(lootEntries, lootItems);
+		}
+
+		// 胜利时：金币奖励接入经济系统（通过 EventBus 通知 UI）
+		if (victory)
+		{
+			int oldGold = _campaignCtx.Gold;
+			_campaignCtx.Gold += goldGranted;
+			// 发布金币变化事件，接入经济系统
+			BladeHex.Events.EventBus.Instance?.PublishGoldChanged(oldGold, _campaignCtx.Gold, goldGranted);
+			// 将掉落物品加入队伍背包
+			if (lootEntries.Count > 0)
+			{
+				int added = _campaignCtx.Inventory.AddAll(lootEntries);
+				GD.Print($"[Campaign] 战利品已加入背包: {added} 件物品");
+				// 发布物品获取事件
+				foreach (var entry in lootEntries)
+				{
+					BladeHex.Events.EventBus.Instance?.Publish(BladeHex.Events.EventBus.Signals.ItemAcquired,
+						new Godot.Collections.Dictionary { { "item_name", entry.ItemName } });
+				}
+			}
+			_campaignCtx.CurrentLevel++;
+		}
+
+		// 显示结算面板（含战利品）
+		var resultPanel = new BattleResultPanel();
+		AddChild(resultPanel);
+		resultPanel.ShowResult(
+			victory,
+			xpGranted,
+			goldGranted,
+			lootEntries.Count > 0 ? lootEntries : null,
+			unitStatuses,
+			victory ? "战斗胜利！你的队伍获得了经验和金币。" : "队伍被击败，被迫撤退..."
+		);
+		resultPanel.ContinueClicked += () =>
+		{
+			if (victory)
 			{
 				BladeHex.View.SceneTransition.ChangeSceneTo(
-					GetTree(), "res://src/ui/main_menu/main_menu.tscn");
-			};
-		}
+					GetTree(), "res://BladeHexFrontend/src/scenes/campaign/campaign_scene.tscn");
+			}
+			else
+			{
+				_campaignCtx.IsActive = false;
+				BladeHex.View.SceneTransition.ChangeSceneTo(
+					GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
+			}
+		};
 	}
 
 	// ============================================================
@@ -290,7 +341,7 @@ public partial class CampaignBattleScene : CombatSceneBase
 		if (existing != null)
 		{
 			unit.SkillTree = existing;
-			unit.Data.Runtime.SkillTree = existing;
+			unit.Model.SkillTree = existing;
 		}
 		else
 		{
@@ -298,8 +349,8 @@ public partial class CampaignBattleScene : CombatSceneBase
 			if (tree != null)
 			{
 				unit.SkillTree = tree;
-				unit.Data.Runtime.SkillTree = tree;
-				stm.CharacterTrees[charId] = tree;
+				unit.Model.SkillTree = tree;
+				stm.SetSkillTree(charId, tree);
 			}
 		}
 	}

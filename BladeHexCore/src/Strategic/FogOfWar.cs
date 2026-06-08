@@ -314,6 +314,35 @@ public partial class FogOfWar : RefCounted
         }
     }
 
+    /// <summary>将指定圆形区域内的格子设为未探索（覆盖迷雾）</summary>
+    public void HideArea(Vector2 centerPx, float radiusPx)
+    {
+        int centerGX = (int)(centerPx.X / CellSize);
+        int centerGY = (int)(centerPx.Y / CellSize);
+        int rangeCells = (int)(radiusPx / CellSize) + 1;
+        float rangeSq = radiusPx * radiusPx;
+
+        int yMin = Math.Max(centerGY - rangeCells, 0);
+        int yMax = Math.Min(centerGY + rangeCells, GridH - 1);
+        int xMin = Math.Max(centerGX - rangeCells, 0);
+        int xMax = Math.Min(centerGX + rangeCells, GridW - 1);
+
+        for (int gy = yMin; gy <= yMax; gy++)
+        {
+            for (int gx = xMin; gx <= xMax; gx++)
+            {
+                float px = (gx + 0.5f) * CellSize;
+                float py = (gy + 0.5f) * CellSize;
+                float dx = px - centerPx.X;
+                float dy = py - centerPx.Y;
+                if (dx * dx + dy * dy <= rangeSq)
+                {
+                    SetCell(gy, gx, (byte)FogState.Unexplored);
+                }
+            }
+        }
+    }
+
     public void RevealRegionByName(string regionName)
     {
         var regionRect = GetRegionRectByName(regionName);

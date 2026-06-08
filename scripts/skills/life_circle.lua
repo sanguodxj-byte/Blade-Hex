@@ -9,11 +9,8 @@ function execute(ctx)
         return
     end
 
-    local con = caster.con
-    local bonus = math.floor(math.sqrt(con / 4))
-
     aoe_neighbors(caster, "allies", function(ally, pos)
-        local heal_roll = combat:roll_dice(1, 10) + bonus
+        local _, _, heal_roll = calc_skill_value(ctx, "life_circle")
         local actual = unit:heal(ally, heal_roll)
         result:add_heal(ally, actual)
     end)

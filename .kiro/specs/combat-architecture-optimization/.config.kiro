@@ -1,0 +1,35 @@
+{
+  "name": "战斗架构优化",
+  "status": "spec-writing",
+  "priority": "high",
+  "tags": ["combat", "refactor", "architecture"],
+  "created": "2026-05-26",
+  "completed": "2026-05-26",
+  "based_on": "用户提交的战斗架构审查报告",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "CombatSceneBase 拆分 + 死亡 SSOT + 技能类型化",
+      "requirements": ["C1", "C2", "C3"],
+      "status": "spec-ready",
+      "priority": "critical",
+      "roi": "CombatSceneBase 和 CombatManager 瘦身一半，消除字符串字典解析"
+    },
+    {
+      "id": "phase-2",
+      "name": "AI 三段 + 修正流水线 + Core 回收",
+      "requirements": ["C4", "C5", "C6"],
+      "status": "spec-ready",
+      "priority": "high",
+      "roi": "Headless 模拟器与 Frontend 规则对齐，AI 调参有意义"
+    },
+    {
+      "id": "phase-3",
+      "name": "技能执行器收编 + 清理",
+      "requirements": ["C7", "C8"],
+      "status": "spec-ready",
+      "priority": "medium",
+      "roi": "技能调度路径统一，死代码清理"
+    }
+  ]
+}

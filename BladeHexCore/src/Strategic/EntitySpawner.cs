@@ -5,6 +5,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BladeHex.Data;
 
 namespace BladeHex.Strategic;
 
@@ -98,6 +99,7 @@ public partial class EntitySpawner : RefCounted
             entity.Faction = "adventurers";
             entity.AdventurerType = i switch { 0 => "novice", 1 => "veteran", _ => "elite" };
             entity.GoldCarried = 30 + _random.Next(100);
+            entity.AIStrategy = _random.Next(2) == 0 ? AIStrategyEnum.Cautious : AIStrategyEnum.Tactical;
             templates.Add(entity);
         }
     }
@@ -166,6 +168,20 @@ public partial class EntitySpawner : RefCounted
         entity.Faction = "hostile";
         entity.CurrentAIState = OverworldEntity.AIState.MovingToTarget;
         entity.LootCarried = 0;
+
+        // 按实体类型分配策略
+        entity.AIStrategy = entityType switch
+        {
+            OverworldEntity.EntityType.BanditParty =>
+                new[] { AIStrategyEnum.Reckless, AIStrategyEnum.Cunning, AIStrategyEnum.Intimidate }[_random.Next(3)],
+            OverworldEntity.EntityType.RobberParty =>
+                _random.Next(2) == 0 ? AIStrategyEnum.Cunning : AIStrategyEnum.Cautious,
+            OverworldEntity.EntityType.PirateCrew =>
+                new[] { AIStrategyEnum.Reckless, AIStrategyEnum.Intimidate, AIStrategyEnum.Berserk }[_random.Next(3)],
+            _ => // RaidingParty (怪物)
+                new[] { AIStrategyEnum.Instinct, AIStrategyEnum.Territorial, AIStrategyEnum.Berserk }[_random.Next(3)],
+        };
+
         return entity;
     }
 
@@ -198,6 +214,7 @@ public partial class EntitySpawner : RefCounted
                 entity.Faction = "merchants";
                 entity.TradeGoods = 50 + _random.Next(150);
                 entity.CurrentAIState = OverworldEntity.AIState.MovingToTarget;
+                entity.AIStrategy = AIStrategyEnum.Cautious;
                 templates.Add(entity);
             }
     }
@@ -230,6 +247,7 @@ public partial class EntitySpawner : RefCounted
             entity.IsHostileToPlayer = true;
             entity.IsAggressive = false;
             entity.Faction = "hostile";
+            entity.AIStrategy = AIStrategyEnum.Territorial;
             templates.Add(entity);
         }
     }

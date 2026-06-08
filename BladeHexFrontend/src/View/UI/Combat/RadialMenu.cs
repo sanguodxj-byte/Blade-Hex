@@ -169,7 +169,16 @@ public partial class RadialMenu : Control
         if (_buttons.Count <= 5)
         {
             // 径向模式:圆形底图
-            DrawCircle(Vector2.Zero, Radius + 30, new Color(0.05f, 0.05f, 0.1f, 0.8f));
+            float bgRadius = Radius + 30;
+            if (ThemeRef.CombatRadialMenuBg != null)
+            {
+                var rect = new Rect2(new Vector2(-bgRadius, -bgRadius), new Vector2(bgRadius * 2.0f, bgRadius * 2.0f));
+                DrawTextureRect(ThemeRef.CombatRadialMenuBg, rect, false, new Color(1.0f, 1.0f, 1.0f, 0.78f));
+            }
+            else
+            {
+                DrawCircle(Vector2.Zero, bgRadius, new Color(0.05f, 0.05f, 0.1f, 0.8f));
+            }
             DrawArc(Vector2.Zero, Radius + 30, 0, Mathf.Tau, 32, ThemeRef.BorderDefault, 2.0f, true);
         }
         else

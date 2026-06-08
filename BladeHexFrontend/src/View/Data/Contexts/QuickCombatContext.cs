@@ -28,9 +28,12 @@ public partial class QuickCombatContext : Resource
     /// <summary>敌方难度档（0=Easy, 1=Normal, 2=Hard）。</summary>
     [Export] public int Difficulty { get; set; } = 1;
 
-    /// <summary>玩家方等级（1-120）。</summary>
-    [Export] public int PlayerLevel { get; set; } = 1;
+    /// <summary>玩家方等级（1-120）。保证有足够技能点解锁主动技能。</summary>
+    [Export] public int PlayerLevel { get; set; } = 5;
 
-    /// <summary>敌方种类（0=人形, 1=亡灵, 2=野兽, 3=混合）。</summary>
+    /// <summary>敌方种类（0=人形, 1=亡灵, 2=野兽, 3=混合, 4=传奇生物）。</summary>
     [Export] public int EnemyType { get; set; }
+
+    /// <summary>传奇生物子类型（仅当 EnemyType==4 时有效）。-1=随机, 0~N 对应具体传奇模板索引。</summary>
+    [Export] public int LegendaryType { get; set; } = -1;
 }

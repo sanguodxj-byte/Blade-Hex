@@ -3,6 +3,7 @@
 using Godot;
 using BladeHex.Strategic;
 using BladeHex.UI.Common;
+using BladeHex.Localization;
 
 namespace BladeHex.View.UI.Overworld;
 
@@ -26,11 +27,7 @@ public partial class POITooltip : FloatingPanel
     // FloatingPanel 配置
     // ============================================================================
 
-    protected override Color PanelBgColor => new(0.06f, 0.06f, 0.08f, 0.95f);
-    protected override Color PanelBorderColor => new(0.4f, 0.5f, 0.3f, 0.8f);
-    protected override int PanelBorderWidth => 2;
-    protected override float MinPanelWidth => 200f;
-    protected override Vector2 MouseOffset => new(20, 10);
+    // POITooltip 使用基类默认颜色（从 UITheme 读取），无特殊 override
 
     // ============================================================================
     // 构建内容
@@ -41,29 +38,29 @@ public partial class POITooltip : FloatingPanel
         _nameLabel = MakeTitleLabel("", 18);
         Content.AddChild(_nameLabel);
 
-        _typeLabel = MakeLabel("", 13, new Color(0.7f, 0.7f, 0.6f));
+        _typeLabel = MakeStatLabel("");
         Content.AddChild(_typeLabel);
 
-        _factionLabel = MakeLabel("", 12, new Color(0.6f, 0.7f, 0.9f));
+        _factionLabel = MakeStatLabel("");
         Content.AddChild(_factionLabel);
 
         Content.AddChild(MakeSeparator());
 
-        _prosperityLabel = MakeLabel("", 13, new Color(0.9f, 0.8f, 0.4f));
+        _prosperityLabel = MakeBodyLabel("");
         Content.AddChild(_prosperityLabel);
 
-        _garrisonLabel = MakeLabel("", 13, new Color(0.6f, 0.75f, 0.9f));
+        _garrisonLabel = MakeBodyLabel("");
         Content.AddChild(_garrisonLabel);
 
-        _facilityLabel = MakeLabel("", 12, new Color(0.7f, 0.85f, 0.7f));
+        _facilityLabel = MakeStatLabel("");
         Content.AddChild(_facilityLabel);
 
         Content.AddChild(MakeSeparator());
 
-        _threatLabel = MakeLabel("", 12, new Color(0.9f, 0.5f, 0.4f));
+        _threatLabel = MakeStatLabel("");
         Content.AddChild(_threatLabel);
 
-        _statusLabel = MakeLabel("", 11, new Color(0.6f, 0.6f, 0.6f));
+        _statusLabel = MakeMutedLabel("");
         Content.AddChild(_statusLabel);
     }
 
@@ -72,21 +69,29 @@ public partial class POITooltip : FloatingPanel
     // ============================================================================
 
     /// <summary>显示 POI 详情</summary>
-    public void ShowForPOI(OverworldPOI poi, Vector2 screenPos)
+    public void ShowForPOI(OverworldPOI poi, Vector2 screenPos, System.Collections.Generic.List<NationConfig>? nations = null)
     {
         if (poi == null) return;
 
         _nameLabel.Text = poi.PoiName;
         _typeLabel.Text = poi.GetTypeName();
 
-        // 势力
-        string factionDisplay = poi.OwningFaction switch
+        // 势力名称翻译（利用 NationConfig 的 DisplayName 避开暴露代码翻译键）
+        string factionDisplay = poi.OwningFaction;
+        if (nations != null && !string.IsNullOrEmpty(poi.OwningFaction))
         {
-            "neutral" => "中立",
-            "player" => "己方",
-            _ => poi.OwningFaction,
+            var nation = nations.Find(n => n.Id == poi.OwningFaction);
+            if (nation != null)
+                factionDisplay = nation.DisplayName;
+        }
+
+        factionDisplay = factionDisplay switch
+        {
+            "neutral" => L10n.Tr("FACTION_NEUTRAL"),
+            "player" => L10n.Tr("FACTION_PLAYER"),
+            _ => factionDisplay,
         };
-        _factionLabel.Text = $"势力: {factionDisplay}";
+        _factionLabel.Text = L10n.Tr("POI_FACTION", factionDisplay);
         _factionLabel.AddThemeColorOverride("font_color", poi.OwningFaction switch
         {
             "player" => new Color(0.3f, 0.85f, 0.4f),
@@ -95,7 +100,7 @@ public partial class POITooltip : FloatingPanel
         });
 
         // 繁荣度
-        _prosperityLabel.Text = $"繁荣: {poi.Prosperity}";
+        _prosperityLabel.Text = L10n.Tr("POI_PROSPERITY", poi.Prosperity);
         _prosperityLabel.AddThemeColorOverride("font_color", poi.Prosperity switch
         {
             >= 70 => new Color(0.3f, 0.9f, 0.4f),
@@ -106,7 +111,7 @@ public partial class POITooltip : FloatingPanel
         // 驻军
         if (poi.GarrisonMax > 0)
         {
-            _garrisonLabel.Text = $"驻军: {poi.GarrisonCurrent}/{poi.GarrisonMax}";
+            _garrisonLabel.Text = L10n.Tr("POI_GARRISON", poi.GarrisonCurrent, poi.GarrisonMax);
             _garrisonLabel.Visible = true;
         }
         else
@@ -116,13 +121,13 @@ public partial class POITooltip : FloatingPanel
 
         // 设施
         var facilities = new System.Collections.Generic.List<string>();
-        if (poi.HasTavern) facilities.Add("酒馆");
-        if (poi.HasShop) facilities.Add("商店");
-        if (poi.HasBlacksmith) facilities.Add("铁匠");
-        if (poi.HasBarracks) facilities.Add("兵营");
+        if (poi.HasTavern) facilities.Add(L10n.Tr("FACILITY_TAVERN"));
+        if (poi.HasShop) facilities.Add(L10n.Tr("FACILITY_SHOP"));
+        if (poi.HasBlacksmith) facilities.Add(L10n.Tr("FACILITY_BLACKSMITH"));
+        if (poi.HasBarracks) facilities.Add(L10n.Tr("FACILITY_BARRACKS"));
         if (facilities.Count > 0)
         {
-            _facilityLabel.Text = $"设施: {string.Join(" / ", facilities)}";
+            _facilityLabel.Text = L10n.Tr("POI_FACILITIES", string.Join(" / ", facilities));
             _facilityLabel.Visible = true;
         }
         else
@@ -133,7 +138,7 @@ public partial class POITooltip : FloatingPanel
         // 威胁等级
         if (poi.ThreatLevel > 0)
         {
-            _threatLabel.Text = $"威胁: Lv.{poi.ThreatLevel}";
+            _threatLabel.Text = L10n.Tr("POI_THREAT_LEVEL", poi.ThreatLevel);
             _threatLabel.Visible = true;
         }
         else
@@ -143,8 +148,8 @@ public partial class POITooltip : FloatingPanel
 
         // 状态
         var statuses = new System.Collections.Generic.List<string>();
-        if (poi.IsUnderSiege) statuses.Add("被围攻!");
-        if (poi.NeedsReinforcement()) statuses.Add("需要援助");
+        if (poi.IsUnderSiege) statuses.Add(L10n.Tr("POI_STATUS_UNDER_SIEGE"));
+        if (poi.NeedsReinforcement()) statuses.Add(L10n.Tr("POI_STATUS_NEEDS_REINFORCEMENT"));
         if (statuses.Count > 0)
         {
             _statusLabel.Text = string.Join(" | ", statuses);

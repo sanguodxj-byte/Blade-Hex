@@ -64,15 +64,15 @@ public partial class BattleLogPanel : PanelContainer
             // 不再启动淡出计时器 — 战斗日志始终可见
         };
 
-        // 战斗日志始终可见
-        Modulate = new Color(Modulate, 0.85f);
+        // 战斗日志始终可见，但弱化为战术提示面板，避免抢走战场视觉焦点。
+        Modulate = new Color(Modulate, 0.78f);
     }
 
     private void WakeUp()
     {
         if (_fadeTween != null && _fadeTween.IsValid())
             _fadeTween.Kill();
-        Modulate = new Color(Modulate, 0.85f);
+        Modulate = new Color(Modulate, 0.82f);
     }
 
     private void OnFadeTimerTimeout()
@@ -87,10 +87,16 @@ public partial class BattleLogPanel : PanelContainer
         if (CustomMinimumSize.X < 200)
             CustomMinimumSize = new Vector2(300, 140);
 
-        AddThemeStyleboxOverride("panel", UITheme.Instance!.MakePanelStyle(
-            UITheme.Instance.BgTertiary,
-            UITheme.Instance.BorderDefault,
-            cornerRadius: UITheme.Instance.RadiusMd));
+        var theme = UITheme.Instance!;
+        var style = new StyleBoxFlat();
+        style.BgColor = new Color(0.070f, 0.060f, 0.052f, 0.92f);
+        style.SetBorderWidthAll(1);
+        style.BorderColor = new Color(0.38f, 0.31f, 0.22f, 0.78f);
+        style.SetCornerRadiusAll(5);
+        style.SetContentMarginAll(10);
+        style.ShadowColor = new Color(0, 0, 0, 0.32f);
+        style.ShadowSize = 6;
+        AddThemeStyleboxOverride("panel", style);
 
         _scroll = _factory.CreateScrollContainer(false);
         _scroll.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
@@ -103,6 +109,7 @@ public partial class BattleLogPanel : PanelContainer
         _log.ScrollFollowing = true;
         _log.BbcodeEnabled = true;
         _log.CustomMinimumSize = new Vector2(0, 80);
+        _log.AddThemeFontSizeOverride("normal_font_size", theme.FontSizeSm);
         _scroll.AddChild(_log);
     }
 
@@ -196,17 +203,6 @@ public partial class BattleLogPanel : PanelContainer
     }
 
     /// <summary>
-    /// 记录士气变化
-    /// </summary>
-    public void LogMorale(string unitName, string moraleText, bool isPositive = true)
-    {
-        if (isPositive)
-            AddEntry($"{unitName} 士气{moraleText}", "morale_up");
-        else
-            AddEntry($"{unitName} 士气{moraleText}", "morale_down");
-    }
-
-    /// <summary>
     /// 记录单位死亡
     /// </summary>
     public void LogDeath(string unitName, bool isPlayer = true)
@@ -257,8 +253,6 @@ public partial class BattleLogPanel : PanelContainer
             case "spell":         color = UITheme.Instance.TextMagic; break;
             case "status_gain":   color = new Color(0.3f, 0.8f, 0.3f); break;
             case "status_loss":   color = new Color(0.8f, 0.5f, 0.3f); break;
-            case "morale_up":     color = new Color(0.3f, 0.8f, 0.9f); break;
-            case "morale_down":   color = new Color(0.9f, 0.5f, 0.2f); break;
             case "death_ally":    color = new Color(0.9f, 0.3f, 0.3f); break;
             case "death_enemy":   color = new Color(0.9f, 0.7f, 0.2f); break;
             case "turn":          color = UITheme.Instance.TextAccent; break;

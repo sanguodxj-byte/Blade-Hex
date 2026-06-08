@@ -5,10 +5,15 @@ using BladeHex.Data;
 namespace BladeHex.Combat.Buff;
 
 /// <summary>
-/// 多乘区伤害计算管线。
-/// 替代旧的 CombatRuleEngine.CalculateDamage,支持:
-///   Base(加法) → Increased(加法合并后乘) → More(各自独立相乘) → FinalMult(最终乘)
-/// 每一步都记录来源,输出 DamageBreakdown 供 UI 显示。
+/// 多乘区伤害计算管线（未接入 — 目前无任何调用方）。
+///
+/// 注意：实战与模拟的伤害都走 CombatRuleEngine.CalculateDamage，本管线尚未替代它。
+/// buff 的伤害百分比乘区当前由 CombatResolver / HeadlessCombatLoop 调用
+/// BuffSystem.ResolveMultiplier("damage") 折进 DamageInput.FinalMultiplier。
+/// 本类保留作为未来"带 DamageBreakdown 明细 UI"的备选实现，接入前不要假设它已生效。
+///
+/// 支持:Base(加法) → Increased(加法合并后乘) → More(各自独立相乘) → FinalMult(最终乘)，
+/// 每一步记录来源，输出 DamageBreakdown 供 UI 显示。
 /// </summary>
 public static class DamageCalcPipeline
 {

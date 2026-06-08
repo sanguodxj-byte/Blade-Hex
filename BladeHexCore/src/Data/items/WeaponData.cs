@@ -1,4 +1,4 @@
-﻿// WeaponData.cs
+// WeaponData.cs
 // 武器数据，包含伤害骰子和武器特性
 // 对应策划案 06-装备与物品.md → 武器系统
 using Godot;
@@ -66,11 +66,9 @@ public partial class WeaponData : ItemData
     [Export] public WeaponSubtype Subtype = WeaponSubtype.Unarmed;
     [Export] public int Tier { get; set; } = 1;
 
-    /// <summary>
-    /// **已废弃** — 不再有"武器穿透修正"字段。穿透公式简化为 d20_Pen + STRPenBonus ≥ ArmorDR。
-    /// 字段保留仅为兼容旧存档；新存档应忽略，加载时强制设为 0。
-    /// </summary>
-    [Export] public int WeaponPen { get; set; } = 0;
+    // v0.7 备注：旧版 WeaponPen 字段已彻底移除。穿透完全由 (DamageType × WeaponWeight)
+    // 分流表（DamagePenetrationTable）按伤害类型差异化驱动，不在单件武器上加可调修正。
+    // 公式：穿透判定 = d20_Pen + STRPenBonus ≥ ArmorDR；伤害分流走查表。
 
     // ========================================
     // 动态属性接口
@@ -117,7 +115,7 @@ public partial class WeaponData : ItemData
     }
     public bool IsRanged
     {
-        get => Traits.Has(WeaponTraits.Ranged);
+        get => Class == WeaponClass.Ranged || Traits.Has(WeaponTraits.Ranged);
         set => Traits = value ? Traits.With(WeaponTraits.Ranged) : Traits.Without(WeaponTraits.Ranged);
     }
     public bool IsLongbow

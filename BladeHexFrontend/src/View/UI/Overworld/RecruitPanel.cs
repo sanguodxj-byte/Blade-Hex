@@ -3,6 +3,7 @@
 // 使用统一布局基类，只填充数据
 using Godot;
 using BladeHex.Data;
+using BladeHex.Localization;
 using BladeHex.Strategic;
 
 namespace BladeHex.View.UI.Overworld;
@@ -30,31 +31,33 @@ public partial class RecruitPanel : POIPanelBase
     // ── 数据填充 ──
 
     protected override Color GetIllustrationColor() => new(0.10f, 0.06f, 0.04f, 1.0f);
-    protected override string GetIllustrationText() => "[ 酒馆 ]";
+    protected override string GetIllustrationText() => L10n.Tr("FACILITY_TAVERN_BRACKET");
+    protected override string? GetIllustrationPath()
+        => POIIllustrationResolver.GetPanelIllustration("recruit");
     protected override string GetPanelTitle() => "";
 
     protected override string GetInfoText()
     {
-        string gold = _economy != null ? $"金币: {_economy.Gold}" : "";
-        string roster = _roster != null ? $"队伍: {_roster.Count}/{_roster.Capacity}" : "";
-        return $"酒馆招募 | {gold} | {roster}";
+        string gold = _economy != null ? L10n.Tr("COMMON_GOLD_VALUE", _economy.Gold) : "";
+        string roster = _roster != null ? L10n.Tr("COMMON_PARTY_CAPACITY", _roster.Count, _roster.Capacity) : "";
+        return L10n.Tr("RECRUIT_INFO", gold, roster);
     }
 
-    protected override string GetDescriptionText() => "冒险者的聚集地。形形色色的佣兵在此等待雇主，支付招募费即可加入队伍。";
-    protected override string GetLeaveButtonText() => "离开酒馆";
+    protected override string GetDescriptionText() => L10n.Tr("RECRUIT_DESC");
+    protected override string GetLeaveButtonText() => L10n.Tr("RECRUIT_LEAVE");
 
     protected override void PopulateActions(VBoxContainer container)
     {
         if (_recruitService == null)
         {
-            container.AddChild(CreateMutedLabel("暂无可招募的佣兵。过几天再来看看。"));
+            container.AddChild(CreateMutedLabel(L10n.Tr("RECRUIT_NONE")));
             return;
         }
 
         var available = _recruitService.GetAvailableGd(_currentPoiId, _currentDay);
         if (available.Count == 0)
         {
-            container.AddChild(CreateMutedLabel("暂无可招募的佣兵。过几天再来看看。"));
+            container.AddChild(CreateMutedLabel(L10n.Tr("RECRUIT_NONE")));
             return;
         }
 
@@ -74,7 +77,7 @@ public partial class RecruitPanel : POIPanelBase
     // ============================================================================
 
     public void ShowRecruitList(RecruitService recruitService, string poiId,
-        EconomyManager economy, OverworldParty party, int currentDay)
+        EconomyManager economy, OverworldParty party, int currentDay, bool instantOverlay = false)
     {
         ShowRecruitList(new PoiPanelContext
         {
@@ -82,22 +85,22 @@ public partial class RecruitPanel : POIPanelBase
             Economy = economy,
             PlayerParty = party,
             CurrentTown = null,
-        }, poiId, currentDay);
+        }, poiId, currentDay, instantOverlay);
     }
 
-    public void ShowRecruitList(PoiPanelContext context)
+    public void ShowRecruitList(PoiPanelContext context, bool instantOverlay = false)
     {
-        ShowRecruitList(context, context.PoiId, context.CurrentDay);
+        ShowRecruitList(context, context.PoiId, context.CurrentDay, instantOverlay);
     }
 
-    private void ShowRecruitList(PoiPanelContext context, string poiId, int currentDay)
+    private void ShowRecruitList(PoiPanelContext context, string poiId, int currentDay, bool instantOverlay = false)
     {
         _recruitService = context.RecruitService;
         _economy = context.Economy;
         _roster = context.Roster;
         _currentPoiId = poiId;
         _currentDay = currentDay;
-        ShowPanel();
+        ShowPanel(instantOverlay);
     }
 
     protected override void OnCloseRequested()
@@ -133,12 +136,12 @@ public partial class RecruitPanel : POIPanelBase
         var nameLabel = CreateBodyLabel(unit.UnitName);
         infoVbox.AddChild(nameLabel);
 
-        string raceName = unit.Race?.RaceName ?? "未知";
-        string statsText = $"等级{unit.Level} {raceName} | 力{unit.Str} 敏{unit.Dex} 体{unit.Con}";
+        string raceName = unit.Race?.RaceName ?? L10n.Tr("COMMON_UNKNOWN");
+        string statsText = L10n.Tr("RECRUIT_STATS", unit.Level, raceName, unit.Str, unit.Dex, unit.Con);
         var statsLabel = CreateMutedLabel(statsText);
         infoVbox.AddChild(statsLabel);
 
-        string costText = $"招募费: {recruit.Cost}金 | 周薪: {recruit.WeeklyWage}金";
+        string costText = L10n.Tr("RECRUIT_COST", recruit.Cost, recruit.WeeklyWage);
         var costLabel = CreateMutedLabel(costText);
         costLabel.AddThemeColorOverride("font_color", ThemeTextAccent);
         infoVbox.AddChild(costLabel);
@@ -146,19 +149,19 @@ public partial class RecruitPanel : POIPanelBase
         hbox.AddChild(infoVbox);
 
         // 右侧按钮
-        var btn = CreateButton("招募", new Vector2(80, 50));
+        var btn = CreateButton(L10n.Tr("RECRUIT_BUTTON"), new Vector2(80, 50));
         int capturedIndex = index;
         btn.Pressed += () => DoRecruit(capturedIndex);
 
         if (_roster?.IsFull == true)
         {
             btn.Disabled = true;
-            btn.TooltipText = "队伍已满";
+            btn.TooltipText = L10n.Tr("REASON_PARTY_FULL");
         }
         else if (_economy != null && _economy.Gold < recruit.Cost)
         {
             btn.Disabled = true;
-            btn.TooltipText = "金币不足";
+            btn.TooltipText = L10n.Tr("REASON_NOT_ENOUGH_GOLD");
         }
 
         hbox.AddChild(btn);
@@ -167,21 +170,22 @@ public partial class RecruitPanel : POIPanelBase
 
     private void DoRecruit(int index)
     {
-        if (_recruitService == null || _roster == null || _economy == null) return;
-
-        var result = _recruitService.Recruit(
-            _currentPoiId, index, _roster, _currentDay, _economy);
-
-        if (result != null)
-        {
-            SetResult($"[color=green]{result.UnitName} 已加入队伍![/color]");
-            EmitSignal(SignalName.RecruitFinished, true);
-        }
-        else
-        {
-            SetResult("[color=red]招募失败（金币不足或队伍已满）[/color]");
-        }
-
-        RefreshLayout();
+    	if (_recruitService == null || _roster == null || _economy == null) return;
+   
+    	var result = _recruitService.Recruit(
+    		_currentPoiId, index, _roster, _currentDay, _economy);
+   
+    	if (result != null)
+    	{
+    		SetResult($"[color=green]{L10n.Tr("RECRUIT_SUCCESS", result.UnitName)}[/color]");
+    		// 先隐藏面板再发出信号，避免 RecruitPanel 与 TownPanel 叠放
+    		HidePanel();
+    		EmitSignal(SignalName.RecruitFinished, true);
+    	}
+    	else
+    	{
+    		SetResult($"[color=red]{L10n.Tr("RECRUIT_FAILED")}[/color]");
+    		RefreshLayout();
+    	}
     }
 }

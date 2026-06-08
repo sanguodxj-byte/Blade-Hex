@@ -27,6 +27,10 @@ public static class FiefEconomyPricingService
             FiefBuilding.BuildingType.WatchTower => 4.0,
             FiefBuilding.BuildingType.MagicTower => 20.0,
             FiefBuilding.BuildingType.TrapPit => 2.0,
+            FiefBuilding.BuildingType.BlacksmithWorkshop => 22.0,
+            FiefBuilding.BuildingType.TanneryWorkshop => 16.0,
+            FiefBuilding.BuildingType.TextileWorkshop => 14.0,
+            FiefBuilding.BuildingType.BrewWorkshop => 12.0,
             _ => 5.0,
         };
         int anchored = Round(anchor.DiscretionaryGoldPerQuest * cycles, minimum: type == FiefBuilding.BuildingType.LordManor ? 0 : 25);

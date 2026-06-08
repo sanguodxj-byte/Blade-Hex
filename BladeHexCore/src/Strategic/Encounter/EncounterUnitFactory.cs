@@ -1,4 +1,4 @@
-﻿﻿﻿// EncounterUnitFactory.cs
+// EncounterUnitFactory.cs
 // 遭遇单位工厂 — 把 EncounterData 的模板 ID 列表转成可部署的 UnitData 列表
 //
 // 用途：大地图遭遇触发时，生成敌方 UnitData 传给 CombatScene
@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Strategic.Economy;
+using BladeHex.Combat;
+
 
 namespace BladeHex.Strategic;
 
@@ -38,16 +40,32 @@ public static class EncounterUnitFactory
     /// </summary>
     public static List<UnitData> BuildEnemyUnitsFromEntity(OverworldEntity entity)
     {
-        var units = new List<UnitData>();
-        var config = entity.GetEncounterConfig();
-        var enemies = (Godot.Collections.Array<string>)config["enemies"];
-        var rng = new Random((int)(entity.Position.X * 31 + entity.Position.Y * 37));
+        int seed = (int)(entity.Position.X * 31 + entity.Position.Y * 37);
+        return BattleDeploymentFactory.BuildUnits(EntityCombatBridge.GetDeployment(entity, false), seed);
+    }
 
-        for (int i = 0; i < entity.PartySize; i++)
+    /// <summary>
+    /// 从委托目标点生成敌方 UnitData 列表。
+    /// </summary>
+    public static List<UnitData> BuildEnemyUnitsFromQuestTarget(QuestTargetSite site, int playerLevel = 1)
+    {
+        var units = new List<UnitData>();
+        if (site.EncounterData == null) return units;
+
+        int seed = site.QuestId.GetHashCode() ^ (int)(site.WorldPosition.X * 31 + site.WorldPosition.Y * 37);
+        var rng = new Random(seed);
+        int baseLevel = Math.Max(1, playerLevel + Math.Max(0, site.DangerStars - 1));
+
+        foreach (var group in site.EncounterData.EnemyGroups)
         {
-            string templateId = enemies.Count > 0 ? enemies[i % enemies.Count] : "goblin_warrior";
-            var unit = CreateEnemyFromTemplate(templateId, entity.PartyLevel, rng);
-            units.Add(unit);
+            int count = Math.Max(1, group.Count);
+            int level = Math.Max(1, baseLevel + group.LevelOffset);
+
+            for (int i = 0; i < count; i++)
+            {
+                var unit = CreateEnemyFromTemplate(NormalizeTemplateId(group.TemplateId), level, rng);
+                units.Add(unit);
+            }
         }
 
         return units;
@@ -58,126 +76,57 @@ public static class EncounterUnitFactory
     /// </summary>
     private static UnitData CreateEnemyFromTemplate(string templateId, int level, Random rng)
     {
-        var unit = new UnitData();
-        unit.IsEnemy = true;
-        unit.Level = Math.Max(1, level);
+        string normId = NormalizeTemplateId(templateId);
+        var tpl = UnitTemplateDB.GetTemplateById(normId);
 
-        // 基础属性按模板类型分配
-        var (name, type, strategy, stats) = GetTemplateStats(templateId);
-        unit.UnitName = $"{name}_{rng.Next(100):D2}";
-        unit.enemyType = type;
-        unit.aiStrategy = strategy;
-
-        // 属性 = 基础 + 等级缩放
-        unit.Str = stats.str + level / 3;
-        unit.Dex = stats.dex + level / 3;
-        unit.Con = stats.con + level / 3;
-        unit.Intel = stats.intel;
-        unit.Wis = stats.wis;
-        unit.Cha = stats.cha;
-
-        // HP = 基础 + Con 修正 × 等级
-        int conMod = Math.Max(0, (unit.Con - 10) / 2);
-        unit.BaseMaxHp = stats.baseHp + conMod * level;
-
-        // AC
-        unit.BaseAc = stats.baseAc;
-
-        // 武器
-        unit.PrimaryMainHand = CreateWeaponForTemplate(templateId);
-
-        // 士气
-        unit.Morale = strategy == UnitData.AIStrategy.Reckless ? 20 : 0;
-
-        // 威胁等级
-        unit.ThreatLevel = level * 0.5f;
-
-        return unit;
-    }
-
-    private static (string name, UnitData.EnemyType type, UnitData.AIStrategy strategy,
-        (int str, int dex, int con, int intel, int wis, int cha, int baseHp, int baseAc) stats)
-        GetTemplateStats(string templateId)
-    {
-        return templateId switch
+        if (tpl != null)
         {
-            "goblin_warrior" => ("哥布林战士", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Cautious,
-                (10, 14, 10, 6, 8, 6, 7, 11)),
-            "goblin_archer" => ("哥布林射手", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Cautious,
-                (8, 16, 8, 6, 8, 6, 6, 11)),
-            "kobold_trapper" => ("狗头人陷阱师", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Cunning,
-                (8, 15, 8, 10, 8, 6, 5, 10)),
-            "minotaur_warrior" => ("牛头人战士", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Reckless,
-                (18, 10, 16, 6, 8, 6, 20, 12)),
-            "cultist" => ("暗影教徒", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Tactical,
-                (10, 12, 10, 14, 12, 10, 9, 10)),
-            "wolf" => ("灰狼", UnitData.EnemyType.Beast, UnitData.AIStrategy.Instinct,
-                (12, 15, 12, 3, 12, 6, 11, 11)),
-            "bandit" => ("山贼", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Cautious,
-                (12, 12, 12, 10, 10, 10, 11, 10)),
-            "treant" => ("树人", UnitData.EnemyType.Construct, UnitData.AIStrategy.Territorial,
-                (16, 6, 16, 6, 10, 6, 25, 13)),
-            "lizardman" => ("蜥蜴人", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Tactical,
-                (14, 12, 14, 8, 10, 8, 15, 12)),
-            "ogre" => ("食人魔", UnitData.EnemyType.Giant, UnitData.AIStrategy.Reckless,
-                (18, 8, 16, 4, 6, 4, 30, 9)),
-            "harpy" => ("鹰身女妖", UnitData.EnemyType.Beast, UnitData.AIStrategy.Cunning,
-                (10, 16, 10, 8, 10, 12, 12, 11)),
-            "ice_wolf" => ("冰霜狼", UnitData.EnemyType.Beast, UnitData.AIStrategy.Instinct,
-                (14, 14, 14, 3, 12, 6, 14, 11)),
-            "yeti" => ("雪人", UnitData.EnemyType.Giant, UnitData.AIStrategy.Territorial,
-                (18, 10, 16, 6, 10, 6, 28, 10)),
-            "caravan_guard" => ("商队护卫", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Cautious,
-                (14, 12, 14, 10, 10, 10, 14, 12)),
-            "soldier" => ("士兵", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Tactical,
-                (14, 12, 14, 10, 10, 10, 14, 13)),
-            "archer" => ("弓箭手", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Cautious,
-                (10, 16, 10, 10, 12, 10, 10, 11)),
-            "dragon" => ("巨龙", UnitData.EnemyType.Dragon, UnitData.AIStrategy.Tactical,
-                (22, 10, 20, 16, 14, 18, 80, 16)),
-            "iron_golem" => ("铁魔像", UnitData.EnemyType.Construct, UnitData.AIStrategy.Territorial,
-                (20, 6, 20, 3, 10, 1, 60, 16)),
-            _ => ("未知敌人", UnitData.EnemyType.Humanoid, UnitData.AIStrategy.Instinct,
-                (10, 10, 10, 10, 10, 10, 10, 8)),
-        };
+            var unit = CharacterGenerator.GenerateFromTemplate(tpl, level);
+            unit.UnitName = $"{unit.UnitName}_{rng.Next(100):D2}";
+
+            // 如果有武器配置，为怪物生成合适的等级武器
+            if (tpl.ContainsKey("weapon_subtype"))
+            {
+                var subtype = (WeaponData.WeaponSubtype)tpl["weapon_subtype"].AsInt32();
+                var wpn = CreateWeaponForSubtype(subtype, level);
+                if (wpn != null)
+                {
+                    unit.PrimaryMainHand = wpn;
+                }
+            }
+
+            return unit;
+        }
+
+        // Fallback: 如果拿不到模板，使用默认的 grunt_goblin_warrior
+        var fallbackTpl = UnitTemplateDB.GruntGoblinWarrior();
+        var fallbackUnit = CharacterGenerator.GenerateFromTemplate(fallbackTpl, level);
+        fallbackUnit.UnitName = $"{fallbackUnit.UnitName}_{rng.Next(100):D2}";
+        return fallbackUnit;
     }
 
-    private static WeaponData CreateWeaponForTemplate(string templateId)
+    private static WeaponData? CreateWeaponForSubtype(WeaponData.WeaponSubtype subtype, int level)
     {
-        return templateId switch
+        var allWeapons = PrototypeData.GetWeapons();
+        WeaponData? baseItem = null;
+        foreach (var w in allWeapons.Values)
         {
-            "goblin_archer" or "archer" => new WeaponData
+            if (w.Subtype == subtype)
             {
-                ItemName = "短弓", IsRanged = true, RangeCells = 6,
-                DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true
-            },
-            "minotaur_warrior" or "ogre" or "yeti" => new WeaponData
-            {
-                ItemName = "巨斧", DamageDiceCount = 1, DamageDiceSides = 12,
-                WeaponDamageType = WeaponData.DamageType.Slash
-            },
-            "dragon" => new WeaponData
-            {
-                ItemName = "龙爪", DamageDiceCount = 2, DamageDiceSides = 10,
-                WeaponDamageType = WeaponData.DamageType.Slash
-            },
-            "iron_golem" => new WeaponData
-            {
-                ItemName = "铁拳", DamageDiceCount = 2, DamageDiceSides = 8,
-                WeaponDamageType = WeaponData.DamageType.Crush
-            },
-            "treant" => new WeaponData
-            {
-                ItemName = "树枝横扫", DamageDiceCount = 2, DamageDiceSides = 6,
-                WeaponDamageType = WeaponData.DamageType.Crush
-            },
-            _ => new WeaponData
-            {
-                ItemName = "短剑", DamageDiceCount = 1, DamageDiceSides = 6,
-                IsFinesse = true
-            },
-        };
+                baseItem = w;
+                break;
+            }
+        }
+        if (baseItem == null) return null;
+
+        // 动态生成的物品等级大约对应怪物等级
+        int itemLevel = Math.Max(1, level);
+        return EquipmentGenerator.GenerateRandomWeapon(new string[] { baseItem.ItemId }, itemLevel: itemLevel);
     }
+
+    private static string NormalizeTemplateId(string templateId) => BattleDeploymentFactory.NormalizeTemplateId(templateId);
+
+
 
     /// <summary>
     /// 计算战斗奖励（金币 + 经验）

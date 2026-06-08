@@ -30,9 +30,9 @@ public sealed class BattleSquad
         Units.Add(unit);
         Positions[unit] = startPos;
         unit.Runtime.GridPos = startPos;
-        // Compute max HP including skill-tree HP bonus (if a tree was attached)
-        int maxHp = unit.GetMaxHp() + (unit.Runtime.SkillTree?.GetHpBonus() ?? 0);
+        int maxHp = unit.GetMaxHp();
         unit.Runtime.CurrentHp = maxHp;
+        unit.CurrentHp = maxHp;
         unit.InitDr();
         unit.EnsureApInitialized();
     }

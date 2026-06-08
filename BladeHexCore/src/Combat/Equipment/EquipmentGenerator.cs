@@ -166,6 +166,9 @@ public static class EquipmentGenerator
 
         /// <summary>Pool of shield IDs (heavier shields at higher tiers).</summary>
         public string[] ShieldPool { get; init; }
+
+        /// <summary>Pool of gauntlets/gloves IDs (subset of armors with slot=Hands).</summary>
+        public string[] GauntletsPool { get; init; }
     }
 
     /// <summary>
@@ -187,6 +190,7 @@ public static class EquipmentGenerator
                 BodyArmorPool = new[] { "cloth", "mage_robe", "leather", "studded_leather" },
                 HelmetPool    = new[] { "leather_cap", "iron_helm" },
                 ShieldPool    = new[] { "light_wooden_shield", "infantry_round_shield" },
+                GauntletsPool = new[] { "leather_gloves" },
             };
         }
         // 30..49 : 100% optional fill, still tier 1, light/medium pool
@@ -199,6 +203,7 @@ public static class EquipmentGenerator
                 BodyArmorPool = new[] { "leather", "studded_leather", "chain_mail" },
                 HelmetPool    = new[] { "iron_helm", "great_helm" },
                 ShieldPool    = new[] { "infantry_round_shield", "infantry_heavy_shield" },
+                GauntletsPool = new[] { "leather_gloves", "chain_gauntlets" },
             };
         }
         // 50..89 : tier 2, chain mail / studded leather
@@ -211,6 +216,7 @@ public static class EquipmentGenerator
                 BodyArmorPool = new[] { "studded_leather", "chain_mail" },
                 HelmetPool    = new[] { "great_helm", "iron_helm" },
                 ShieldPool    = new[] { "infantry_heavy_shield", "knight_shield" },
+                GauntletsPool = new[] { "chain_gauntlets", "plate_gauntlets" },
             };
         }
         // 90+ : tier 3, plate
@@ -221,6 +227,7 @@ public static class EquipmentGenerator
             BodyArmorPool = new[] { "half_plate", "full_plate" },
             HelmetPool    = new[] { "great_helm", "knight_helm" },
             ShieldPool    = new[] { "knight_shield", "legion_tower_shield" },
+            GauntletsPool = new[] { "plate_gauntlets" },
         };
     }
 
@@ -262,6 +269,15 @@ public static class EquipmentGenerator
     public static void EquipFullSet(UnitData unit, int itemLevel, string difficulty, BuildPreference pref)
     {
         if (unit == null) return;
+
+        // v0.8: 非人形生物中，野兽(Beast)、构造体(Construct)、龙族(Dragon)等不装备物理武器和防具，
+        // 它们完全依赖天然 AC/DR 以及天生技能。
+        if (unit.IsEnemy && (unit.enemyType == UnitData.EnemyType.Beast 
+                             || unit.enemyType == UnitData.EnemyType.Construct 
+                             || unit.enemyType == UnitData.EnemyType.Dragon))
+        {
+            return;
+        }
 
         var policy = GetLoadoutPolicy(unit.Level);
         bool fullKit = policy.OptionalSlotChance >= 1.0f;
@@ -404,6 +420,17 @@ public static class EquipmentGenerator
             }
         }
 
+        // ----- Gauntlets -----
+        if (unit.Gauntlets == null && Roll(policy.OptionalSlotChance))
+        {
+            var gauntletsBase = PickFromPool(policy.GauntletsPool, slot: ItemData.EquipSlot.Hands);
+            if (gauntletsBase != null)
+            {
+                unit.Gauntlets = (ArmorData)GenerateEquipment(gauntletsBase, (ItemData.Rarity)(-1), itemLevel, difficulty);
+                unit.Gauntlets.InitializeArmorPoints();
+            }
+        }
+
         // ----- Boots -----
         if (unit.Boots == null && Roll(policy.OptionalSlotChance))
         {
@@ -425,6 +452,44 @@ public static class EquipmentGenerator
                 unit.Accessory1 = accessories[idx];
             }
         }
+
+        // ----- Weapon mastery preset (v0.7) -----
+        // 按角色等级预填武器精通 XP，避免 lvl 120 的角色仍是新手命中。
+        // 主武器与副武器各自的精通轨道独立预填。
+        PresetWeaponMasteryForLevel(unit);
+    }
+
+    /// <summary>
+    /// v0.7: 按 unit.Level 给武器精通 XP 预填值。
+    /// 主武器精通 = clamp(ceil(level/9) + 1, 1, MaxMasteryLevel - 1)
+    ///   Lv.1 → 2, Lv.9 → 3, Lv.30 → 5, Lv.60 → 8, Lv.120 → 14。
+    /// 副武器精通 = max(1, primaryLevel - 3)（主副武器若同轨道则取主等级）。
+    /// 已存在更高 XP 的不覆盖（保护战斗中累积的精通进度）。
+    /// </summary>
+    public static void PresetWeaponMasteryForLevel(UnitData unit)
+    {
+        if (unit == null || unit.Level <= 0) return;
+
+        int primaryLv = System.Math.Clamp(
+            (unit.Level + 8) / 9 + 1,
+            1,
+            WeaponMastery.MaxMasteryLevel - 1);
+        int secondaryLv = System.Math.Max(1, primaryLv - 3);
+        int primaryXp   = WeaponMastery.XpForLevel(primaryLv);
+        int secondaryXp = WeaponMastery.XpForLevel(secondaryLv);
+
+        ApplyPresetXp(unit, unit.PrimaryMainHand as WeaponData, primaryXp);
+        ApplyPresetXp(unit, unit.SecondaryMainHand as WeaponData, primaryXp);  // 武器组 B 主等同主轨道
+        ApplyPresetXp(unit, unit.PrimaryOffHand as WeaponData,   secondaryXp);
+        ApplyPresetXp(unit, unit.SecondaryOffHand as WeaponData, secondaryXp);
+    }
+
+    private static void ApplyPresetXp(UnitData unit, WeaponData? weapon, int xp)
+    {
+        if (weapon == null || xp <= 0) return;
+        int existing = unit.WeaponMastery.GetXpBySubtype(weapon.Subtype);
+        if (existing >= xp) return; // 不覆盖已积累更高的轨道
+        unit.WeaponMastery.SetXpBySubtype(weapon.Subtype, xp);
     }
 
     // ========================================================================

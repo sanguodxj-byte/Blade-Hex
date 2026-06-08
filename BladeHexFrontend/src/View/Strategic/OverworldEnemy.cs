@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using System;
 using BladeHex.Data;
 
@@ -16,6 +16,17 @@ public partial class OverworldEnemy : Node2D, IOverworldMapEntity
 
     private BladeHex.View.Unit.CharacterView2D? _characterView;
     private Polygon2D? _fallbackPoly;
+    private Label _nameLabel = null!;
+
+    // ========================================
+    // NavigationAgent2D 集成
+    // ========================================
+
+    /// <summary>导航代理</summary>
+    private NavigationAgent2D? _navAgent;
+
+    /// <summary>是否使用 NavigationAgent2D 移动</summary>
+    private bool _useNavAgent = false;
 
     /// <summary>访问占位多边形（用于改色/缩放）</summary>
     public Polygon2D? VisualPoly => _fallbackPoly;
@@ -36,7 +47,111 @@ public partial class OverworldEnemy : Node2D, IOverworldMapEntity
 
     public override void _Ready()
     {
+        ZIndex = 90;
         SetupVisuals();
+        SetupNavigationAgent();
+    }
+
+    /// <summary>设置 NavigationAgent2D</summary>
+    private void SetupNavigationAgent()
+    {
+        _navAgent = new NavigationAgent2D();
+        _navAgent.Name = "NavAgent";
+        
+        // 配置 agent 参数
+        _navAgent.PathDesiredDistance = 10.0f;
+        _navAgent.TargetDesiredDistance = 20.0f;
+        _navAgent.PathMaxDistance = 50.0f;
+        
+        // 启用避障（NPC 互相避让）
+        _navAgent.AvoidanceEnabled = true;
+        _navAgent.Radius = 15.0f;
+        _navAgent.MaxSpeed = 200.0f;
+        _navAgent.NeighborDistance = 100.0f;
+        _navAgent.MaxNeighbors = 5;
+        
+        AddChild(_navAgent);
+    }
+
+    /// <summary>设置 NavigationAgent2D 目标位置</summary>
+    public void SetNavTarget(Vector2 target)
+    {
+        if (_navAgent == null)
+            return;
+        
+        _navAgent.TargetPosition = target;
+        _useNavAgent = true;
+    }
+
+    /// <summary>停止 NavigationAgent2D 移动</summary>
+    public void StopNavAgent()
+    {
+        _useNavAgent = false;
+        
+        if (_navAgent != null)
+            _navAgent.TargetPosition = Position;
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_nameLabel != null)
+        {
+            _nameLabel.Text = GetDisplayNameWithStatus();
+        }
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if (!_useNavAgent || _navAgent == null || EntityRef == null)
+            return;
+        
+        // 检查导航是否完成
+        if (_navAgent.IsNavigationFinished())
+        {
+            _useNavAgent = false;
+            return;
+        }
+        
+        // 检查地图是否已同步
+        if (NavigationServer2D.MapGetIterationId(_navAgent.GetNavigationMap()) == 0)
+            return;
+        
+        // 获取下一个路径点
+        Vector2 nextPos = _navAgent.GetNextPathPosition();
+        Vector2 direction = (nextPos - Position).Normalized();
+        
+        // 计算速度
+        float speed = EntityRef.MoveSpeed;
+        if (EntityRef.CurrentAIState == OverworldEntity.AIState.Chasing)
+            speed *= 1.1f;
+        
+        // 移动
+        float moveDelta = speed * (float)delta;
+        Position = Position.MoveToward(Position + direction * moveDelta, moveDelta);
+        
+        // 同步位置到 EntityRef
+        EntityRef.Position = Position;
+    }
+
+    private string GetDisplayNameWithStatus()
+    {
+        string name = GetDisplayName();
+        if (EntityRef == null) return name;
+
+        string statusIcon = EntityRef.CurrentAIState switch
+        {
+            OverworldEntity.AIState.Besieging => " ⚔️围攻",
+            OverworldEntity.AIState.Chasing => " 🎯追击",
+            OverworldEntity.AIState.Fleeing => " 🏃溃退",
+            OverworldEntity.AIState.MovingToTarget => " 🧭行军",
+            _ => ""
+        };
+
+        if (!string.IsNullOrEmpty(statusIcon))
+        {
+            return $"{name}[{statusIcon}]";
+        }
+        return name;
     }
 
     private void SetupVisuals()
@@ -64,13 +179,13 @@ public partial class OverworldEnemy : Node2D, IOverworldMapEntity
         AddChild(_fallbackPoly);
 
         // 名称标签
-        var label = new Label();
-        label.Text = GetDisplayName();
-        label.Position = new Vector2(-40, -25);
-        label.HorizontalAlignment = HorizontalAlignment.Center;
-        label.CustomMinimumSize = new Vector2(80, 20);
-        label.AddThemeFontSizeOverride("font_size", 12);
-        AddChild(label);
+        _nameLabel = new Label();
+        _nameLabel.Text = GetDisplayNameWithStatus();
+        _nameLabel.Position = new Vector2(-40, -25);
+        _nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _nameLabel.CustomMinimumSize = new Vector2(80, 20);
+        _nameLabel.AddThemeFontSizeOverride("font_size", 12);
+        AddChild(_nameLabel);
 
         SyncVisualFromUnit();
     }
@@ -172,11 +287,11 @@ public partial class OverworldEnemy : Node2D, IOverworldMapEntity
         {
             OverworldEntity.EntityType.Adventurer => NPCProfile.NpcType.Adventurer,
             OverworldEntity.EntityType.Caravan => NPCProfile.NpcType.Merchant,
-            OverworldEntity.EntityType.LordArmy => NPCProfile.NpcType.WanderingKnight,
-            OverworldEntity.EntityType.RaidingParty => NPCProfile.NpcType.HostileHumanoid,
-            OverworldEntity.EntityType.BanditParty => NPCProfile.NpcType.HostileHumanoid,
-            OverworldEntity.EntityType.RobberParty => NPCProfile.NpcType.HostileHumanoid,
-            OverworldEntity.EntityType.PirateCrew => NPCProfile.NpcType.HostileHumanoid,
+            OverworldEntity.EntityType.LordArmy => NPCProfile.NpcType.LordArmy,
+            OverworldEntity.EntityType.RaidingParty => NPCProfile.NpcType.RaidingParty,
+            OverworldEntity.EntityType.BanditParty => NPCProfile.NpcType.BanditParty,
+            OverworldEntity.EntityType.RobberParty => NPCProfile.NpcType.RobberParty,
+            OverworldEntity.EntityType.PirateCrew => NPCProfile.NpcType.PirateCrew,
             _ => NPCProfile.NpcType.Traveler,
         };
 

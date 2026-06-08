@@ -1128,11 +1128,11 @@ Mod 支持：`user://mods/items/` 下的 JSON 自动合并加载
 
 | 种族 | 属性修正 | 种族特性 |
 |------|----------|----------|
-| Human | 均衡 | 适应性（额外技能点） |
-| Elf | +DEX +INT -CON | 暗视、魔法亲和 |
-| Dwarf | +CON +STR -DEX | 矮人韧性（每级+1HP）、毒素抗性 |
-| HalfOrc | +STR +CON -INT -CHA | 威胁本能（+2先攻）、凶猛 |
-| HalfElf | +CHA +DEX | 双重血统、外交天赋 |
+| Human | 无 | 适应（每10级额外获取一个技能点） |
+| Elf | 无 | 技艺（剑类和弓类命中+1，伤害修正x1.1） |
+| Dwarf | 无 | 韧性（AC+1，生命值+20%） |
+| HalfOrc | 无 | 狂暴（血量低于50%时伤害加20%），先攻+2 |
+| HalfElf | 无 | 双重血统，社交天赋 |
 
 JSON 驱动：`res://BladeHexCore/src/Data/character/races.json` + mod 支持
 

@@ -187,6 +187,7 @@ public static class ItemDataLoader
     {
         foreach (var (id, w) in _weapons)
         {
+            w.EquipSlotTarget = ItemData.EquipSlot.Weapon;
             if (string.IsNullOrEmpty(w.EquipTextureId))
             {
                 // 优先完整 ID 的 PascalCase，fallback 到子类型名（去掉 _t2/_t3 后缀）
@@ -207,6 +208,59 @@ public static class ItemDataLoader
 
         foreach (var (id, a) in _armors)
         {
+            if (a.armorType == ArmorData.ArmorType.Shield)
+            {
+                a.EquipSlotTarget = ItemData.EquipSlot.Shield;
+            }
+            else if (a.EquipSlotTarget == ItemData.EquipSlot.Body)
+            {
+                if (id.Contains("helm") || id.Contains("cap"))
+                {
+                    a.EquipSlotTarget = ItemData.EquipSlot.Helmet;
+                }
+                else if (id.Contains("gloves") || id.Contains("gauntlets"))
+                {
+                    a.EquipSlotTarget = ItemData.EquipSlot.Hands;
+                }
+                else if (id.Contains("boots"))
+                {
+                    a.EquipSlotTarget = ItemData.EquipSlot.Feet;
+                }
+                else
+                {
+                    a.EquipSlotTarget = ItemData.EquipSlot.Costume;
+                }
+            }
+
+            // 映射实际存在的美术资源名 (解决 PascalCase 自动推断与实际美术资源文件名不符的问题)
+            string? mappedResName = id switch
+            {
+                // 盾牌
+                "light_wooden_shield"   => "WoodenShield",
+                "infantry_round_shield"  => "RoundShield",
+                "infantry_heavy_shield"  => "Targe",
+                "knight_shield"          => "IronHeater",
+                "legion_tower_shield"    => "TowerShield",
+                
+                // 盔甲
+                "half_plate"             => "GothicPlate",
+                "full_plate"             => "DarkKnightPlate",
+                
+                // 头盔
+                "leather_cap"            => "KettleHat",
+                "iron_helm"              => "Bascinet",
+                "great_helm"             => "GreatHelm",
+                "knight_helm"            => "CloseHelm",
+                
+                _                        => null
+            };
+
+            if (mappedResName != null)
+            {
+                a.EquipTextureId = mappedResName;
+                a.IconId = mappedResName;
+            }
+
             if (string.IsNullOrEmpty(a.EquipTextureId)) a.EquipTextureId = ToPascalCase(id);
             if (string.IsNullOrEmpty(a.IconId)) a.IconId = a.EquipTextureId;
             if (a.InvWidth == 1 && a.InvHeight == 1)
@@ -420,7 +474,6 @@ public static class ItemDataLoader
             Price = OptInt(dict, "price", 10),
             Traits = traits,
             WeaponDamageType = cfg.DamageType,
-            WeaponPen = 0,                                         // v0.6 已废弃：武器穿透修正字段，强制 0
             Weight = WeaponRegistry.GetWeight(subtype),            // v0.6 6.9 重量分支
             Class = WeaponRegistry.IsRangedSubtype(subtype)
                 ? WeaponData.WeaponClass.Ranged
@@ -487,12 +540,97 @@ public static class ItemDataLoader
         if (_consumables.ContainsKey(id))
             throw new Exception($"Duplicate consumable ID: {id}");
 
+        // v0.7: 完整解析消耗品 — 之前只读 id/name/desc/price，导致治疗药水 0 治疗、火油 0 伤害
+        // 等所有 JSON 加载的消耗品在 ConsumableManager.UseConsumable 路径下完全无效。
+        // ConsumableType 通过 id 前缀推断；具体数值字段允许 JSON 显式覆盖（mod 友好）。
+        var consumableType = InferConsumableTypeFromId(id);
+
+        // 兜底数值（按 id 智能推断）— JSON 显式 override 时优先 JSON。
+        int healDiceCount = 0, healDiceSides = 0, healBonus = 0;
+        int dmgDiceCount = 0, dmgDiceSides = 0;
+        string dmgType = "";
+        int aoeRadius = 0;
+        int throwRange = 4;
+        string appliedStatus = "";
+        int appliedStatusDuration = 0;
+        string[] removesStatus = System.Array.Empty<string>();
+
+        switch (id)
+        {
+            case "health_potion":   healDiceCount = 2; healDiceSides = 4; healBonus = 2; break;
+            case "bandage":         healDiceCount = 1; healDiceSides = 6; break;
+            case "elixir":          healDiceCount = 99; healDiceSides = 1; healBonus = 999; break; // 满血标志
+            case "antidote":        removesStatus = new[] { "poisoned" }; break;
+            case "fire_oil":        dmgDiceCount = 1; dmgDiceSides = 6; dmgType = "fire";
+                                    appliedStatus = "burning"; appliedStatusDuration = 2;
+                                    aoeRadius = 1; break;
+            case "holy_water":      dmgDiceCount = 2; dmgDiceSides = 6; dmgType = "magic"; break;
+        }
+
+        // JSON 显式覆盖
+        healDiceCount   = OptInt(dict, "heal_dice_count", healDiceCount);
+        healDiceSides   = OptInt(dict, "heal_dice_sides", healDiceSides);
+        healBonus       = OptInt(dict, "heal_bonus", healBonus);
+        dmgDiceCount    = OptInt(dict, "damage_dice_count", dmgDiceCount);
+        dmgDiceSides    = OptInt(dict, "damage_dice_sides", dmgDiceSides);
+        dmgType         = OptString(dict, "damage_type", dmgType) ?? dmgType;
+        aoeRadius       = OptInt(dict, "aoe_radius", aoeRadius);
+        throwRange      = OptInt(dict, "throw_range", throwRange);
+        appliedStatus   = OptString(dict, "applied_status", appliedStatus) ?? appliedStatus;
+        appliedStatusDuration = OptInt(dict, "applied_status_duration", appliedStatusDuration);
+
+        if (dict.ContainsKey("removes_status"))
+        {
+            var rArr = dict["removes_status"].AsGodotArray();
+            removesStatus = new string[rArr.Count];
+            for (int i = 0; i < rArr.Count; i++) removesStatus[i] = rArr[i].AsString();
+        }
+
+        // type 字段允许 JSON 强制覆盖（如 id 推断不准）
+        if (dict.ContainsKey("type"))
+        {
+            string typeStr = dict["type"].AsString();
+            if (Enum.TryParse<ConsumableData.ConsumableType>(typeStr, out var parsed))
+                consumableType = parsed;
+        }
+
         _consumables[id] = new ConsumableData
         {
             ItemId = id,
             ItemName = OptString(dict, "name", id) ?? id,
             Description = OptString(dict, "desc", "") ?? "",
             Price = OptInt(dict, "price", 10),
+            consumableType = consumableType,
+            HealDiceCount = healDiceCount,
+            HealDiceSides = healDiceSides,
+            HealBonus = healBonus,
+            DamageDiceCount = dmgDiceCount,
+            DamageDiceSides = dmgDiceSides,
+            DamageType = dmgType,
+            AoeRadius = aoeRadius,
+            ThrowRange = throwRange,
+            AppliedStatus = appliedStatus,
+            AppliedStatusDuration = appliedStatusDuration,
+            RemovesStatus = removesStatus,
+            UsableOutsideCombat = OptBool(dict, "usable_outside_combat", false),
+            LinkedSpellId = OptString(dict, "linked_spell_id", "") ?? "",
+        };
+    }
+
+    /// <summary>按 id 推断 ConsumableType；陌生 id 默认 HealingPotion（保持向后兼容）。</summary>
+    private static ConsumableData.ConsumableType InferConsumableTypeFromId(string id)
+    {
+        return id switch
+        {
+            "elixir"          => ConsumableData.ConsumableType.StrongHealing,
+            "health_potion" or "bandage" => ConsumableData.ConsumableType.HealingPotion,
+            "antidote"        => ConsumableData.ConsumableType.Antidote,
+            "fire_oil"        => ConsumableData.ConsumableType.FireOil,
+            "holy_water"      => ConsumableData.ConsumableType.HolyWater,
+            "whetstone"       => ConsumableData.ConsumableType.Whetstone,
+            // mana_potion / rations / camp_kit 暂无对应 enum；归 HealingPotion 兜底，
+            // 让 ConsumableManager 的 switch 走 default（无效果）。
+            _                 => ConsumableData.ConsumableType.HealingPotion,
         };
     }
 

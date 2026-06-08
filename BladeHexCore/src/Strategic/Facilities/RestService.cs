@@ -1,9 +1,14 @@
 // RestService.cs
-// 休息设施规则：短休息、长休息、HP/MP 恢复。
+// 休息设施规则：统一的按时间比例恢复，rateMultiplier 控制加速倍率。
+//
+// 恢复唯一路径：TimeBasedRecovery(roster, hours, canRestore, rateMultiplier)
+// - 正常行军：1x（AdvanceTime 默认）
+// - 扎营：2x（CampSystem 传入 2.0f）
+// - 城内等待：4x（RestPanel 传入 4.0f）
+// 欠饷 + 断粮阻断所有恢复（canRestore = false）。
 using System;
 using BladeHex.Combat;
 using BladeHex.Data;
-using BladeHex.Strategic.Economy;
 
 namespace BladeHex.Strategic.Facilities;
 
@@ -12,7 +17,11 @@ namespace BladeHex.Strategic.Facilities;
 /// </summary>
 public static class RestService
 {
-    [Obsolete("Use FacilityPricingService.GetLongRestCost(...) instead.")] public const int LongRestCost = 10;
+    /// <summary>每 24 小时恢复 HP 比例（20% 最大 HP）</summary>
+    public const float RecoveryHpPerDay = 0.20f;
+
+    /// <summary>每 24 小时恢复法力比例（30% 最大法力）</summary>
+    public const float RecoveryManaPerDay = 0.30f;
 
     public static int CountMembersNeedingRest(PartyRoster? roster)
     {
@@ -27,69 +36,58 @@ public static class RestService
         return count;
     }
 
-    public static FacilityServiceResult ShortRest(PartyRoster? roster)
+    /// <summary>
+    /// 统一的按时间比例恢复。每过一小时恢复 (RecoveryPerDay / 24 * rateMultiplier) 比例。
+    /// 欠饷/断粮时 canRestore == false，完全不恢复。
+    /// </summary>
+    /// <param name="roster">队伍名册</param>
+    /// <param name="hours">经过的小时数</param>
+    /// <param name="canRestore">是否允许恢复（false 时欠饷/断粮阻断）</param>
+    /// <param name="rateMultiplier">恢复倍率（1=正常，2=扎营，4=城内）</param>
+    /// <returns>(恢复总HP, 恢复总法力)</returns>
+    public static (int HpRestored, int ManaRestored) TimeBasedRecovery(
+        PartyRoster? roster, float hours, bool canRestore, float rateMultiplier = 1.0f)
     {
-        if (roster == null || roster.Count == 0)
-            return FacilityServiceResult.Fail("没有可休息的队伍。");
+        if (roster == null || roster.Count == 0 || !canRestore || hours <= 0 || rateMultiplier <= 0)
+            return (0, 0);
 
-        int restored = RestoreMana(roster, 0.5f, full: false);
-        return FacilityServiceResult.Ok(
-            $"短休息完成，恢复 {restored} 点法力。",
-            affectedMembers: roster.Count,
-            amountChanged: restored);
-    }
+        float ratio = hours / 24.0f * rateMultiplier;
+        int totalHp = 0;
+        int totalMana = 0;
 
-    public static FacilityServiceResult LongRest(PartyRoster? roster, Func<int, bool> spendGold)
-    {
-        if (roster == null || roster.Count == 0)
-            return FacilityServiceResult.Fail("没有可休息的队伍。");
-
-        if (CountMembersNeedingRest(roster) <= 0)
-            return FacilityServiceResult.Fail("队伍状态良好，无需长休息。");
-
-        int cost = FacilityPricingService.GetLongRestCost(roster);
-        if (!spendGold(cost))
-            return FacilityServiceResult.Fail("金币不足，无法长休息。");
-
-        int healed = RestoreHpFull(roster);
-        int mana = RestoreMana(roster, 1.0f, full: true);
-        return FacilityServiceResult.Ok(
-            $"长休息完成，恢复 {healed} 点生命和 {mana} 点法力。",
-            goldSpent: cost,
-            affectedMembers: roster.Count,
-            amountChanged: healed + mana);
-    }
-
-    private static int RestoreHpFull(PartyRoster roster)
-    {
-        int total = 0;
         foreach (var unit in roster.Members)
         {
-            int max = CombatStats.GetMaxHp(unit);
-            int current = PartyRoster.GetCurrentHp(unit);
-            if (current < max)
+            // 按时间比例恢复 HP
+            int maxHp = CombatStats.GetMaxHp(unit);
+            int curHp = PartyRoster.GetCurrentHp(unit);
+            if (curHp < maxHp)
             {
-                PartyRoster.SetCurrentHp(unit, max);
-                total += max - current;
+                int hpRecovery = Math.Max(1, (int)(maxHp * RecoveryHpPerDay * ratio));
+                int newHp = Math.Min(curHp + hpRecovery, maxHp);
+                int actual = newHp - curHp;
+                if (actual > 0)
+                {
+                    totalHp += actual;
+                    PartyRoster.SetCurrentHp(unit, newHp);
+                }
+            }
+
+            // 按时间比例恢复法力
+            int maxMana = CombatStats.GetMaxMana(unit);
+            if (unit.CurrentMana < maxMana)
+            {
+                int manaRecovery = Math.Max(1, (int)(maxMana * RecoveryManaPerDay * ratio));
+                int newMana = Math.Min(unit.CurrentMana + manaRecovery, maxMana);
+                int actual = newMana - unit.CurrentMana;
+                if (actual > 0)
+                {
+                    totalMana += actual;
+                    unit.CurrentMana = newMana;
+                }
             }
         }
-        return total;
+
+        return (totalHp, totalMana);
     }
 
-    private static int RestoreMana(PartyRoster roster, float ratio, bool full)
-    {
-        int total = 0;
-        foreach (var unit in roster.Members)
-        {
-            int max = CombatStats.GetMaxMana(unit);
-            int target = full ? max : Math.Max(unit.CurrentMana, (int)Math.Ceiling(max * ratio));
-            target = Math.Clamp(target, 0, max);
-            if (target > unit.CurrentMana)
-            {
-                total += target - unit.CurrentMana;
-                unit.CurrentMana = target;
-            }
-        }
-        return total;
-    }
 }

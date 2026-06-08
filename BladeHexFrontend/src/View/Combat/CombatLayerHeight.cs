@@ -18,11 +18,14 @@ public static class CombatLayerHeight
     /// <summary>纹理覆盖层（草地/泥土/雪地/水面精灵）</summary>
     public const float TextureLayer = 0.5f;
 
-    /// <summary>遮盖层（移动范围/攻击范围高亮色块）</summary>
-    public const float OverlayLayer = 1.5f;
+    /// <summary>遮盖层（移动范围/攻击范围高亮色块）
+    /// 必须高于草地精灵最大 Y(TextureLayer + yJitter≈2.5)，低于角色脚底(CharacterLayer)。
+    /// 24 + 3.5 = 27.5，安全区间：草地(26.0) < Overlay(27.5) < Character(29.0)</summary>
+    public const float OverlayLayer = 3.5f;
 
-    /// <summary>UI 提示层（路径预览线、悬浮魔法阵 Decal）</summary>
-    public const float UIHintLayer = 3.0f;
+    /// <summary>UI 提示层（路径预览线、悬浮魔法阵 Decal）
+    /// 在高亮层之上、角色脚底之下，确保路径线不被高亮遮挡。</summary>
+    public const float UIHintLayer = 4.2f;
 
     /// <summary>角色 body 底部</summary>
     public const float CharacterLayer = 5.0f;

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Godot;
 
 namespace BladeHex.Strategic;
 
@@ -18,36 +19,34 @@ public static class NodeFiller
         HashSet<string> availableSet)
     {
         availableSet.Clear();
+
+        // Build occupied tile set from completed figures. Availability is based on
+        // the whole triangular figure sharing an edge, not only GridPosition.
+        var activatedTiles = new HashSet<Vector2I>();
+        foreach (var nodeId in activatedSet)
+        {
+            if (!nodes.TryGetValue(nodeId, out var activatedNode)) continue;
+            foreach (var tile in SkillNodeShape.GetTiles(activatedNode))
+                activatedTiles.Add(tile);
+        }
+
         foreach (var kvp in nodes)
         {
             string nodeId = kvp.Key;
             if (activatedSet.Contains(nodeId)) continue;
             var node = kvp.Value;
-            if (CheckAvailable(node, activatedSet, characterLevel))
+            if (CheckAvailable(node, activatedSet, characterLevel, activatedTiles))
                 availableSet.Add(nodeId);
         }
     }
 
-    /// <summary>检查单个节点是否可解锁</summary>
-    public static bool CheckAvailable(SkillNodeData node, HashSet<string> activatedSet, int characterLevel)
+    /// <summary>检查单个节点是否可解锁（基于三角形瓦片共享边邻接）</summary>
+    public static bool CheckAvailable(SkillNodeData node, HashSet<string> activatedSet, int characterLevel,
+        HashSet<Vector2I>? activatedTiles = null)
     {
-        // 规则1：必须有已解锁的邻居
-        bool hasUnlockedNeighbor = false;
-        foreach (var neighborId in node.Neighbors)
-        {
-            if (activatedSet.Contains(neighborId))
-            {
-                hasUnlockedNeighbor = true;
-                break;
-            }
-        }
-        if (!hasUnlockedNeighbor) return false;
-
-        // 不再要求前置节点 — 只检查邻居和等级
-
-        // 规则2：角色等级达标
         if (node.RequiredLevel > characterLevel) return false;
+        if (activatedTiles == null || activatedTiles.Count == 0) return false;
 
-        return true;
+        return SkillNodeShape.TouchesAnyActivatedTile(node, activatedTiles);
     }
 }

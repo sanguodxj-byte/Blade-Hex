@@ -1,0 +1,115 @@
+{
+  "dialogue_id": "bandit_party",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army * 3 && relation >= 0",
+          "text": "“（山贼头目有些退缩，按在武器上的手微微颤抖）\n‘大人的名声近来颇为响亮，我们兄弟在此只求财，不求命。既然您有如此实力，我们犯不着拼个你死我活。不如各退一步，如何？’”"
+        },
+        {
+          "condition": "player_army >= npc_army * 3 && relation < 0",
+          "text": "“（山贼头目咽了口唾沫，极力想维持脸上的镇定）\n‘慢着！看来今天是个硬骨头。我们兄弟认栽，不过你要是执意要剿灭我们，我们也绝不坐以待毙！’”"
+        },
+        {
+          "condition": "relation >= 30",
+          "text": "“‘哈哈！老朋友，今天又是哪阵风把你吹到我们的地盘来了？放心，只要你在，我们兄弟绝不动你的货，甚至还能给你指点指点这荒原上的近况！’”"
+        },
+        {
+          "condition": "relation <= -50",
+          "text": "“‘是你这个该死的家伙！上次的旧账今天正好一起清算！兄弟们，把道路两头堵死，把他们全部切成碎片！’”"
+        },
+        {
+          "condition": "npc_race == \"dwarf\"",
+          "text": "“（矮人山贼抚摸着他粗糙的胡须，眼底闪烁着对财宝的极度渴望）\n‘喂！此山是我开，此树是我栽！想要过去，就老老实实把你们包里沉甸甸的金币都留下，少一个子，就用头颅来抵！’”"
+        },
+        {
+          "condition": "player_race == \"elf\"",
+          "text": "“‘看看这是谁？一个高傲的精灵。不过在这片脏乱的泥地里，你们的箭术和魔法可救不了你们。留下 {bribe_cost} 金币作为过路税，否则就准备埋在这里吧！’”"
+        },
+        {
+          "text": "“‘站住！这条路如今归我们兄弟管辖。不想惹麻烦的话，就痛快点交出 {bribe_cost} 金币，我们也省点力气！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "想要金币？用你们的血来换吧！(正面迎击)",
+          "next": "end",
+          "action": "combat"
+        },
+        {
+          "condition": "player_gold >= bribe_cost",
+          "text": "这是过路费。(支付 {bribe_cost} 金币)",
+          "next": "bribe_success",
+          "action": "lose_gold;add_relation;add_faction_rep",
+          "action_param": "{bribe_cost};10;3"
+        },
+        {
+          "condition": "player_army >= npc_army * 3",
+          "text": "交出你们今天抢来的金币，我放你们一条生路！(敲诈)",
+          "next": "blackmail_success",
+          "action": "gain_gold;add_relation",
+          "action_param": "150;-15"
+        },
+        {
+          "text": "（寻找机会脱身）",
+          "next": "flee_check"
+        }
+      ]
+    },
+    "bribe_success": {
+      "node_id": "bribe_success",
+      "texts": [
+        {
+          "text": "“（山贼头目数了数亮晶晶的金币，脸上露出一丝满意的冷笑）\n‘很识时务。拿了钱，我们自然信守承诺。滚吧，路让开了！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "走。(离开)",
+          "next": "end"
+        }
+      ]
+    },
+    "blackmail_success": {
+      "node_id": "blackmail_success",
+      "texts": [
+        {
+          "text": "“（山贼们面带温怒，但在绝对的兵力优势面前只能咬牙忍耐。头目极不情愿地扔来一个沉甸甸的钱袋）\n‘哼！算你狠！这 150 金币我们认栽了，快滚！别得寸进尺！’”"
+        }
+      ],
+      "options": [
+        {
+          "text": "拿走金币离开。",
+          "next": "end"
+        }
+      ]
+    },
+    "flee_check": {
+      "node_id": "flee_check",
+      "texts": [
+        {
+          "condition": "player_army >= npc_army",
+          "text": "“（山贼们警惕地看着你们后撤，似乎觉得犯不着冒太大风险强行拦截）\n‘哼，想走？滚吧！下次可就没这么好运了！’”"
+        },
+        {
+          "text": "“（山贼们哄堂大笑，迅速围拢了上来）\n‘想走？在这片荒原上，还没有人能在我们眼皮子底下溜走！把路截住！’”"
+        }
+      ],
+      "options": [
+        {
+          "condition": "player_army >= npc_army",
+          "text": "（安全撤退）",
+          "next": "end"
+        },
+        {
+          "condition": "player_army < npc_army",
+          "text": "看来只能用刀剑开路了！(战斗)",
+          "next": "end",
+          "action": "combat"
+        }
+      ]
+    }
+  }
+}

@@ -130,13 +130,28 @@ public partial class CombatScene : CombatSceneBase
                 SpawnHardcodedPlayer(pDeploy);
         }
 
-        // 敌方始终自动放置
+        // 敌方始终自动放置。
+        // 优先使用显式 EncounterEnemies（委托目标等旧入口），否则从 BattleContext 的部署描述生成。
+        if (EncounterEnemies == null || EncounterEnemies.Count == 0)
+            EncounterEnemies = BuildEncounterEnemiesFromBattleContext();
+
         if (EncounterEnemies != null && EncounterEnemies.Count > 0)
             SpawnFromEncounter(eDeploy);
         else
             SpawnHardcodedEnemies(eDeploy);
 
-        UpdateFov();
+    }
+
+    private List<UnitData>? BuildEncounterEnemiesFromBattleContext()
+    {
+        if (BattleContextRef?.DefenderDeployment == null || BattleContextRef.DefenderDeployment.Length == 0)
+            return null;
+
+        int seed = BattleContextRef.Seed != 0
+            ? BattleContextRef.Seed
+            : BattleContextRef.EncounterCoord.X * 997 + BattleContextRef.EncounterCoord.Y * 1009;
+
+        return BattleDeploymentFactory.BuildUnits(BattleContextRef.DefenderDeployment, seed);
     }
 
     /// <summary>部署模式：创建玩家单位并注册，但不放置到地图上</summary>
@@ -150,10 +165,8 @@ public partial class CombatScene : CombatSceneBase
             {
                 var unit = new Unit { Data = memberData, Name = $"Player_{memberData.UnitName}" };
                 // 不调用 PlaceUnitAt — 单位不放到地图上
-                _combatManager.RegisterUnit(unit, true);
-                _combatUi.RegisterAlly(unit);
-                unit.InitDr();
-                if (idx == 0) _activePlayerUnit = unit;
+                RegisterAndInitUnit(unit, true);
+                if (idx == 0) ActivePlayerUnit = unit;
                 idx++;
             }
         }
@@ -168,10 +181,8 @@ public partial class CombatScene : CombatSceneBase
                 SecondaryMainHand = new WeaponData { ItemName = "长弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Pierce },
             };
             var unit = new Unit { Data = playerData, Name = "PlayerWarrior" };
-            _combatManager.RegisterUnit(unit, true);
-            _combatUi.RegisterAlly(unit);
-            unit.InitDr();
-            _activePlayerUnit = unit;
+            RegisterAndInitUnit(unit, true);
+            ActivePlayerUnit = unit;
         }
     }
 
@@ -184,10 +195,8 @@ public partial class CombatScene : CombatSceneBase
             if (deployed >= positions.Count) break;
             var unit = new Unit { Data = memberData, Name = $"Player_{memberData.UnitName}" };
             PlaceUnitAt(unit, positions[deployed].X, positions[deployed].Y);
-            _combatManager.RegisterUnit(unit, true);
-            _combatUi.RegisterAlly(unit);
-            unit.InitDr();
-            if (deployed == 0) _activePlayerUnit = unit;
+            RegisterAndInitUnit(unit, true);
+            if (deployed == 0) ActivePlayerUnit = unit;
             deployed++;
         }
     }
@@ -200,30 +209,24 @@ public partial class CombatScene : CombatSceneBase
             if (deployed >= positions.Count) break;
             var unit = new Unit { Data = enemyData, Name = $"Enemy_{enemyData.UnitName}" };
             PlaceUnitAt(unit, positions[deployed].X, positions[deployed].Y);
-            _combatManager.RegisterUnit(unit, false);
-            _combatUi.RegisterEnemy(unit);
-            unit.InitDr();
+            RegisterAndInitUnit(unit, false);
             deployed++;
         }
     }
 
     private void SpawnHardcodedPlayer(List<Vector2I> pDeploy)
     {
-        var playerData = new UnitData
-        {
-            UnitName = "战士", Str = 16, Dex = 14, Con = 15, BaseMaxHp = 10, BaseAc = 8,
-            Armor = new ArmorData { ItemName = "链甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 4, MaxDexBonus = 2 },
-            PrimaryMainHand = new WeaponData { ItemName = "长剑", DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Slash },
-            SecondaryMainHand = new WeaponData { ItemName = "长弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 8, WeaponDamageType = WeaponData.DamageType.Pierce },
-        };
+        // 用 CharacterGenerator 生成随机角色替代硬编码数据
+        var playerData = CharacterGenerator.GenerateCharacter(level: 1, seedVal: -1);
+        if (string.IsNullOrEmpty(playerData.UnitName))
+            playerData.UnitName = "战士";
         var unit = new Unit { Data = playerData, Name = "PlayerWarrior" };
         // 优先使用部署区,fallback 用 (0,0) — PlaceUnitAt 会自动找最近可部署 cell
         var pos = pDeploy.Count > 0 ? pDeploy[^1] : Vector2I.Zero;
         if (pDeploy.Count > 0) pDeploy.RemoveAt(pDeploy.Count - 1);
         PlaceUnitAt(unit, pos.X, pos.Y);
-        _combatManager.RegisterUnit(unit, true);
-        unit.InitDr();
-        _activePlayerUnit = unit;
+        RegisterAndInitUnit(unit, true);
+        ActivePlayerUnit = unit;
     }
 
     private void SpawnHardcodedEnemies(List<Vector2I> eDeploy)
@@ -233,7 +236,7 @@ public partial class CombatScene : CombatSceneBase
             new() { UnitName = "哥布林射手_1", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 0.25f, aiStrategy = UnitData.AIStrategy.Cautious, Str = 8, Dex = 16, Con = 10, BaseMaxHp = 7, BaseAc = 8, Armor = new ArmorData { ItemName = "皮甲", armorType = ArmorData.ArmorType.Light, AcBonus = 2, MaxDexBonus = 99 }, PrimaryMainHand = new WeaponData { ItemName = "短弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Traits = new[] { "敏捷撤退" } },
             new() { UnitName = "哥布林射手_2", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 0.25f, aiStrategy = UnitData.AIStrategy.Cautious, Str = 8, Dex = 16, Con = 10, BaseMaxHp = 7, BaseAc = 8, Armor = new ArmorData { ItemName = "皮甲", armorType = ArmorData.ArmorType.Light, AcBonus = 2, MaxDexBonus = 99 }, PrimaryMainHand = new WeaponData { ItemName = "短弓", IsRanged = true, RangeCells = 6, DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Traits = new[] { "敏捷撤退" } },
             new() { UnitName = "骷髅战士", IsEnemy = true, enemyType = UnitData.EnemyType.Undead, ThreatLevel = 0.5f, aiStrategy = UnitData.AIStrategy.Instinct, Str = 10, Dex = 14, Con = 10, BaseMaxHp = 13, BaseAc = 8, Armor = new ArmorData { ItemName = "锈蚀锁甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 3, MaxDexBonus = 2 }, PrimaryMainHand = new WeaponData { ItemName = "锈蚀短剑", DamageDiceCount = 1, DamageDiceSides = 6, IsFinesse = true }, Immunities = new[] { "毒素" }, Resistances = new[] { "穿刺" } },
-            new() { UnitName = "兽人狂战", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 1.0f, aiStrategy = UnitData.AIStrategy.Reckless, Morale = 10, Str = 16, Dex = 12, Con = 14, BaseMaxHp = 15, BaseAc = 8, Armor = new ArmorData { ItemName = "兽皮甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 4, MaxDexBonus = 2 }, PrimaryMainHand = new WeaponData { ItemName = "巨斧", DamageDiceCount = 1, DamageDiceSides = 12 }, Traits = new[] { "鲁莽攻击" } },
+            new() { UnitName = "兽人狂战", IsEnemy = true, enemyType = UnitData.EnemyType.Humanoid, ThreatLevel = 1.0f, aiStrategy = UnitData.AIStrategy.Reckless, Str = 16, Dex = 12, Con = 14, BaseMaxHp = 15, BaseAc = 8, Armor = new ArmorData { ItemName = "兽皮甲", armorType = ArmorData.ArmorType.Medium, AcBonus = 4, MaxDexBonus = 2 }, PrimaryMainHand = new WeaponData { ItemName = "巨斧", DamageDiceCount = 1, DamageDiceSides = 12 }, Traits = new[] { "鲁莽攻击" } },
         };
 
         int deployed = 0;
@@ -250,7 +253,7 @@ public partial class CombatScene : CombatSceneBase
             {
                 PlaceUnitAt(unit, 0, 0);
             }
-            _combatManager.RegisterUnit(unit, false); _combatUi.RegisterEnemy(unit); unit.InitDr();
+            RegisterAndInitUnit(unit, false);
             deployed++;
         }
     }
@@ -259,10 +262,16 @@ public partial class CombatScene : CombatSceneBase
     // 战斗结束 → 战利品 + 任务汇报
     // ============================================================
 
+    protected override BattleOutcome? BuildOutcomeForPresentation(bool victory)
+    {
+        var outcome = BuildBattleOutcome(victory);
+        LastBattleOutcome = outcome;
+        return outcome;
+    }
+
     protected override void HandleCombatEnd(bool victory)
     {
-        if (victory) ReportCombatResultsToQuests();
-        LastBattleOutcome = BuildBattleOutcome(victory);
+        // LastBattleOutcome 已在 BuildOutcomeForPresentation 中设置
     }
 
     private BattleOutcome BuildBattleOutcome(bool victory)
@@ -283,85 +292,9 @@ public partial class CombatScene : CombatSceneBase
                 ? _combatManager.EnemyUnits.Sum(e => e.Data?.Level ?? 1) / enemyCount : 1;
             outcome.GoldGranted = RewardPricingService.GetEncounterGold(avgLevel, enemyCount);
             outcome.XpGranted = RewardPricingService.GetEncounterXp(avgLevel, enemyCount);
-            GenerateLoot(outcome);
+            GenerateLoot(outcome.LootEntries, outcome.LootItems);
         }
         return outcome;
     }
 
-    private void GenerateLoot(BattleOutcome outcome)
-    {
-        float totalCr = 0;
-        foreach (var enemy in _combatManager.EnemyUnits)
-        {
-            if (enemy?.Data == null) continue;
-            var data = enemy.Data;
-            totalCr += data.ThreatLevel;
-
-            if (data.Armor != null)
-            {
-                outcome.LootEntries.Add(new LootEntry(data.Armor.GetFullName(), LootEntry.LootType.Armor, 1, TradePricingService.GetSellPrice(data.Armor), data.Armor.GetArmorDescription()));
-                outcome.LootItems.Add(data.Armor);
-            }
-            if (data.Shield != null)
-            {
-                outcome.LootEntries.Add(new LootEntry(data.Shield.GetFullName(), LootEntry.LootType.Shield, 1, TradePricingService.GetSellPrice(data.Shield), data.Shield.GetArmorDescription()));
-                outcome.LootItems.Add(data.Shield);
-            }
-            if (data.Helmet != null)
-            {
-                outcome.LootEntries.Add(new LootEntry(data.Helmet.GetFullName(), LootEntry.LootType.Helmet, 1, TradePricingService.GetSellPrice(data.Helmet), data.Helmet.GetArmorDescription()));
-                outcome.LootItems.Add(data.Helmet);
-            }
-            if (data.PrimaryMainHand != null && GD.Randf() < 0.5f)
-            {
-                outcome.LootEntries.Add(new LootEntry(data.PrimaryMainHand.GetFullName(), LootEntry.LootType.Weapon, 1, TradePricingService.GetSellPrice(data.PrimaryMainHand), data.PrimaryMainHand.GetWeaponDescription()));
-                outcome.LootItems.Add(data.PrimaryMainHand);
-            }
-        }
-
-        string difficulty = EquipmentGenerator.GetDifficultyFromCr(totalCr);
-        int itemLevel = EquipmentGenerator.GetItemLevelFromCr(totalCr);
-        int bonusDrops = Math.Clamp((int)(totalCr / 3.0f), 0, 4);
-
-        for (int i = 0; i < bonusDrops; i++)
-        {
-            if (GD.Randf() < 0.4f)
-            {
-                var generated = GD.Randf() < 0.5f
-                    ? (ItemData)EquipmentGenerator.GenerateRandomWeapon(null, (ItemData.Rarity)(-1), itemLevel, difficulty)
-                    : (ItemData)EquipmentGenerator.GenerateRandomArmor(null, (ItemData.Rarity)(-1), itemLevel, difficulty);
-                var lootType = generated is WeaponData ? LootEntry.LootType.Weapon : LootEntry.LootType.Armor;
-                outcome.LootEntries.Add(new LootEntry(generated.GetFullName(), lootType, 1, TradePricingService.GetSellPrice(generated), $"{generated.GetRarityName()} | {generated.GetAffixDescriptions()}"));
-                outcome.LootItems.Add(generated);
-            }
-        }
-
-        var consumableList = new List<ConsumableData>(PrototypeData.GetConsumables().Values);
-        int consumDrops = _combatManager.EnemyUnits.Count / 3;
-        for (int i = 0; i < consumDrops; i++)
-        {
-            if (GD.Randf() < 0.35f && consumableList.Count > 0)
-            {
-                var c = consumableList[(int)(GD.Randf() * consumableList.Count)];
-                outcome.LootEntries.Add(new LootEntry(c.ItemName, LootEntry.LootType.Consumable, 1, TradePricingService.GetSellPrice(c), c.Description));
-                outcome.LootItems.Add(c);
-            }
-        }
-    }
-
-    private void ReportCombatResultsToQuests()
-    {
-        var qm = GetParent()?.GetNodeOrNull("QuestManager");
-        if (qm == null || !IsInstanceValid(qm)) return;
-        var activeQuests = qm.Call("get", "active_quests").AsGodotArray();
-        if (activeQuests == null) return;
-
-        foreach (var questVar in activeQuests)
-        {
-            var quest = questVar.AsGodotDictionary();
-            if (quest == null) continue;
-            if (quest.GetValueOrDefault("quest_type", 0).AsInt32() == (int)QuestData.QuestType.Extermination)
-                qm.Call("update_quest_progress", quest.GetValueOrDefault("quest_id", "").AsString(), 3);
-        }
-    }
 }

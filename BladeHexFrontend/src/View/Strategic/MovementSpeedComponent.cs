@@ -2,6 +2,7 @@
 using System;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.View.Map;
 
 namespace BladeHex.Strategic;
 
@@ -25,6 +26,7 @@ public partial class MovementSpeedComponent : Resource
     // 依赖引用
     // ========================================
 
+    public OverworldMapAccess? MapAccess = null;
     public HexOverworldGrid? HexGridRef = null;
     public EconomyManager? EconomyManagerRef = null;
     public UnitData? UnitDataRef = null;
@@ -53,10 +55,7 @@ public partial class MovementSpeedComponent : Resource
         // 1. 地形修正（使用 TerrainCostTable 统一数据源）
         speed *= GetTerrainFactor(position);
 
-        // 2. 季节修正
-        speed *= GetSeasonFactor();
-
-        // 3. 昼夜修正
+        // 2. 昼夜修正
         speed *= GetDayNightFactor();
 
         // 4. 负重修正
@@ -85,7 +84,6 @@ public partial class MovementSpeedComponent : Resource
         {
             { "base", BaseSpeed },
             { "terrain", GetTerrainFactor(position) },
-            { "season", GetSeasonFactor() },
             { "day_night", GetDayNightFactor() },
             { "encumbrance", GetEncumbranceFactor() },
             { "mount", GetMountFactor() },
@@ -137,30 +135,19 @@ public partial class MovementSpeedComponent : Resource
     private bool HasZocResistanceSkill()
     {
         if (UnitDataRef == null) return false;
-        return UnitDataRef.SkillTreeData.ContainsKey("zoc_resistance") &&
-               (bool)UnitDataRef.SkillTreeData["zoc_resistance"];
+        return HasSkillTreeFlag("zoc_resistance");
     }
 
-    /// <summary>获取指定像素位置的 tile（优先 ChunkManager，回退 HexGrid）</summary>
+    /// <summary>获取指定像素位置的 tile（优先统一地图访问器，回退旧引用）</summary>
     private HexOverworldTile? GetTileAtPosition(Vector2 position)
     {
-        if (ChunkManagerRef != null)
-        {
-            var axial = HexOverworldTile.PixelToAxial(position.X, position.Y);
-            return ChunkManagerRef.GetTile(axial.X, axial.Y);
-        }
-        if (HexGridRef != null)
-        {
-            return HexGridRef.GetTileAtPixel(position.X, position.Y);
-        }
-        return null;
-    }
+        if (MapAccess != null)
+            return MapAccess.GetActiveTileAtPixel(position);
 
-    private float GetSeasonFactor()
-    {
-        if (EconomyManagerRef == null) return 1.0f;
-        if (EconomyManagerRef.GetSeason() == EconomyManager.Season.Winter) return 0.5f;
-        return 1.0f;
+        if (ChunkManagerRef != null || HexGridRef != null)
+            return new OverworldMapAccess(ChunkManagerRef, HexGridRef).GetActiveTileAtPixel(position);
+
+        return null;
     }
 
     private float GetDayNightFactor()
@@ -174,7 +161,7 @@ public partial class MovementSpeedComponent : Resource
     private float GetEncumbranceFactor()
     {
         if (UnitDataRef == null || EconomyManagerRef == null) return 1.0f;
-        int inventoryCount = EconomyManagerRef.PlayerInventory.Count;
+        int inventoryCount = EconomyManagerRef.PlayerInventoryCount;
         if (inventoryCount <= 10) return 1.0f;
         float overload = Mathf.Min((inventoryCount - 10) / 20.0f, 1.0f);
         return 1.0f - overload * EncumbrancePenalty;
@@ -198,13 +185,34 @@ public partial class MovementSpeedComponent : Resource
 
         // Keystone 惩罚逻辑
         int keystonePenalty = 0;
-        if (UnitDataRef.SkillTreeData.ContainsKey("diamond_body") && (bool)UnitDataRef.SkillTreeData["diamond_body"])
+        if (HasSkillTreeFlag("iron_body", "diamond_body"))
             keystonePenalty += 2;
-        if (UnitDataRef.SkillTreeData.ContainsKey("life_spring") && (bool)UnitDataRef.SkillTreeData["life_spring"])
+        if (HasSkillTreeFlag("life_spring"))
             keystonePenalty += 1;
 
         factor -= keystonePenalty * 0.1f;
 
         return Mathf.Max(factor, 0.3f);
+    }
+
+    private bool HasSkillTreeFlag(string effectId, params string[] legacyEffectIds)
+    {
+        if (UnitDataRef == null) return false;
+        if (HasSkillTreeFlagValue(effectId)) return true;
+
+        foreach (var legacyId in legacyEffectIds)
+        {
+            if (HasSkillTreeFlagValue(legacyId))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool HasSkillTreeFlagValue(string effectId)
+    {
+        return UnitDataRef != null
+            && UnitDataRef.SkillTreeData.ContainsKey(effectId)
+            && UnitDataRef.SkillTreeData[effectId].AsBool();
     }
 }

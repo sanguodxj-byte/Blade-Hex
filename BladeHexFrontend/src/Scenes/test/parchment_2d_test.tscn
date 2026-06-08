@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Shader" path="res://BladeHexFrontend/src/assets/shaders/overworld_parchment_2d.gdshader" id="1"]
+[ext_resource type="Texture2D" path="res://BladeHexFrontend/src/assets/tiles/tileable/parchment_tile.png" id="2"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_1"]
+shader = ExtResource("1")
+shader_parameter/top_texture = ExtResource("2")
+shader_parameter/texture_scale = 0.003
+shader_parameter/detail_scale = 0.02
+shader_parameter/detail_strength = 0.75
+shader_parameter/hex_tile_size = 1800.0
+shader_parameter/blend_sharpness = 4.0
+shader_parameter/use_rotation = true
+shader_parameter/use_terrain_data = false
+shader_parameter/terrain_data_size = Vector2(256, 256)
+shader_parameter/map_offset = Vector2(0, 0)
+shader_parameter/hex_size_pixels = 156.0
+
+[sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_1"]
+size = Vector2(6000, 6000)
+
+[node name="Parchment2DTest" type="Node2D"]
+
+[node name="ParchmentGround" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_1")
+texture = SubResource("PlaceholderTexture2D_1")
+centered = false
+offset = Vector2(-3000, -3000)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(512, 300)
+zoom = Vector2(0.5, 0.5)

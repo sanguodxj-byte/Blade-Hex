@@ -7,8 +7,10 @@ function execute(ctx)
 
     local threshold = math.floor(target.max_hp * 0.3)
     if target.hp < threshold then
-        unit:take_damage(target, 9999)
-        result:add_damage(target, 9999)
+        local _, _, execute_dmg = calc_skill_value(ctx, "assassinate")
+        execute_dmg = execute_dmg + math.floor(target.max_hp * 1.5)
+        unit:take_damage(target, execute_dmg)
+        result:add_damage(target, execute_dmg)
     else
         local r = result:resolve_attack(ctx.attacker, target, { damage_mult = 2.0 })
         result:add_attack(r)

@@ -6,6 +6,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.Audio;
 
@@ -64,9 +65,9 @@ public partial class AudioManager : Node
 
 	public const int MaxSfxPlayers = 12;
 	public const int MaxAmbientPlayers = 4;
-	public const string SfxBasePath = "res://src/assets/audio/sfx/";
-	public const string BgmBasePath = "res://src/assets/audio/bgm/";
-	public const string AmbientBasePath = "res://src/assets/audio/ambient/";
+	public const string SfxBasePath = "res://BladeHexFrontend/src/assets/audio/sfx/";
+	public const string BgmBasePath = "res://BladeHexFrontend/src/assets/audio/bgm/";
+	public const string AmbientBasePath = "res://BladeHexFrontend/src/assets/audio/ambient/";
 
 	// ========================================================================
 	// 内部节点
@@ -1201,52 +1202,13 @@ public partial class AudioManager : Node
 
 	private static AudioStream? GetAudioStream(string path)
 	{
-		if (string.IsNullOrEmpty(path)) return null;
-
-		if (path.StartsWith("res://") || path.StartsWith("uid://"))
-		{
-			if (!ResourceLoader.Exists(path))
-			{
-				GD.PushWarning($"AudioManager: 资源文件不存在 - {path}");
-				return null;
-			}
-			return GD.Load<AudioStream>(path);
-		}
-
-		return LoadExternalAudio(path);
+		return AudioAssetResolver.LoadAny(path);
 	}
 
 	/// <summary>动态加载外部音频文件 (支持 .mp3 和 .ogg)</summary>
 	public static AudioStream? LoadExternalAudio(string path)
 	{
-		if (!FileAccess.FileExists(path))
-		{
-			GD.PushWarning($"AudioManager: 找不到外部音频文件 - {path}");
-			return null;
-		}
-
-		string extension = path.GetExtension().ToLower();
-
-		if (extension == "ogg")
-		{
-			return AudioStreamOggVorbis.LoadFromFile(path);
-		}
-		else if (extension == "mp3")
-		{
-			using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
-			if (file != null)
-			{
-				var mp3Stream = new AudioStreamMP3();
-				mp3Stream.Data = file.GetBuffer((long)file.GetLength());
-				return mp3Stream;
-			}
-		}
-		else
-		{
-			GD.PushWarning($"AudioManager: 不支持的外部音频格式，目前仅支持 ogg 和 mp3 - {extension}");
-		}
-
-		return null;
+		return AudioAssetResolver.LoadExternalAudio(path);
 	}
 
 	/// <summary>检查是否注册了指定名称的音效（含组合音效）</summary>

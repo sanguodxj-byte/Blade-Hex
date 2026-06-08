@@ -14,19 +14,19 @@ public static class RangedSkillHandlers
     public static void AimedShot(in SkillHandlerContext ctx)
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
+        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
         var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 2.0f);
-        ctx.Result["results"].AsGodotArray().Add(r);
+        ctx.Builder.AddDamageFromResolver(target, r);
     }
 
     public static void DoubleShot(in SkillHandlerContext ctx)
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
+        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
         var r1 = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
-        ctx.Result["results"].AsGodotArray().Add(r1);
+        ctx.Builder.AddDamageFromResolver(target, r1);
         var r2 = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
-        ctx.Result["results"].AsGodotArray().Add(r2);
+        ctx.Builder.AddDamageFromResolver(target, r2);
     }
 
     public static void ScatterShot(in SkillHandlerContext ctx)
@@ -40,7 +40,7 @@ public static class RangedSkillHandlers
             if (target != null)
             {
                 var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
-                ctx.Result["results"].AsGodotArray().Add(r);
+                ctx.Builder.AddDamageFromResolver(target, r);
             }
         }
     }
@@ -62,7 +62,7 @@ public static class RangedSkillHandlers
                 if (t != null)
                 {
                     var r = CombatResolver.ResolveAttack(ctx.Attacker, t, ctx.Grid, false, false, -2, 1.0f, null, 0.5f);
-                    ctx.Result["results"].AsGodotArray().Add(r);
+                    ctx.Builder.AddDamageFromResolver(t, r);
                     shotCount++;
                 }
             }
@@ -73,39 +73,32 @@ public static class RangedSkillHandlers
         {
             if (target.CurrentHp <= 0) break;
             var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, 1.0f, null, 0.5f);
-            ctx.Result["results"].AsGodotArray().Add(r);
+            ctx.Builder.AddDamageFromResolver(target, r);
         }
     }
 
     public static void BlindArrow(in SkillHandlerContext ctx)
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
+        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
         var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
-        ctx.Result["results"].AsGodotArray().Add(r);
+        ctx.Builder.AddDamageFromResolver(target, r);
         if (r.ContainsKey("hit") && r["hit"].AsBool())
         {
-            ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-                { "target", target }, { "effect_id", "blind" }, { "duration", 2 },
-                { "stat_modifiers", new Godot.Collections.Dictionary { { "attack_bonus", -4 } } }
-            });
+            ctx.Builder.AddStatusEffect("blind", target, 2);
         }
     }
 
     public static void TrickArrow(in SkillHandlerContext ctx)
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Result, "目标格没有敌人"); return; }
+        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
         int dmg = RPGRuleEngine.RollDice(1, 10);
         target.TakeDamage(dmg);
-        ctx.Result["results"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "type", "damage" }, { "target", target }, { "value", dmg }
-        });
+        ctx.Builder.AddDamage(target, dmg);
         string[] debuffs = { "blind", "stun", "fear" };
         string chosen = debuffs[new Random().Next(debuffs.Length)];
-        ctx.Result["status_effects"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-            { "target", target }, { "effect_id", chosen }, { "duration", 1 }
-        });
+        ctx.Builder.AddStatusEffect(chosen, target, 1);
     }
 
     public static void MeteorShower(in SkillHandlerContext ctx)
@@ -119,9 +112,7 @@ public static class RangedSkillHandlers
             {
                 int dmg = RPGRuleEngine.RollDice(2, 8);
                 target.TakeDamage(dmg);
-                ctx.Result["results"].AsGodotArray().Add(new Godot.Collections.Dictionary {
-                    { "type", "damage" }, { "target", target }, { "value", dmg }, { "damage_type", "ranged" }
-                });
+                ctx.Builder.AddDamage(target, dmg);
             }
         }
     }

@@ -3,6 +3,8 @@
 // 统一布局从上到下：插画区 → 信息行 → 描述文本 → 功能列表区 → 结果反馈 → 离开按钮
 // 子类只需重写数据填充方法，不得修改布局结构
 using Godot;
+using BladeHex.UI.Common;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.View.UI.Overworld;
 
@@ -46,11 +48,11 @@ public partial class POIPanelBase : CanvasLayer
     protected static readonly Color ThemeBtnFontHover = new(1.0f, 0.9f, 0.6f);
     protected static readonly Color ThemeBtnFontDisabled = new(0.4f, 0.4f, 0.4f);
 
-    protected const int FontSizeXl = 20;
-    protected const int FontSizeLg = 16;
-    protected const int FontSizeMd = 14;
-    protected const int FontSizeSm = 12;
-    protected const int FontSizeXs = 10;
+    protected const int FontSizeXl = 28;
+    protected const int FontSizeLg = 22;
+    protected const int FontSizeMd = 18;
+    protected const int FontSizeSm = 16;
+    protected const int FontSizeXs = 14;
 
     protected const int SpacingXs = 2;
     protected const int SpacingSm = 4;
@@ -61,14 +63,14 @@ public partial class POIPanelBase : CanvasLayer
     protected const int RadiusSm = 4;
     protected const int RadiusMd = 8;
 
-    protected const int IllustrationHeight = 180;
+    protected const int IllustrationHeight = 260;
 
     // ============================================================================
     // 面板规格
     // ============================================================================
 
-    protected virtual int PanelWidth => 600;
-    protected virtual int PanelHeight => 680;
+    protected virtual int PanelWidth => 960;
+    protected virtual int PanelHeight => 760;
     protected virtual int PanelMargin => 0;
     protected virtual int PanelLayer => 25;
     protected virtual bool CloseOnOverlayClick => true;
@@ -82,6 +84,9 @@ public partial class POIPanelBase : CanvasLayer
 
     /// <summary>插画区居中文字</summary>
     protected virtual string GetIllustrationText() => "[ 设施 ]";
+
+    /// <summary>插画图片路径（res:// 路径）。返回 null 时回退到文字占位符。</summary>
+    protected virtual string? GetIllustrationPath() => null;
 
     /// <summary>信息行左侧标题</summary>
     protected virtual string GetPanelTitle() => "设施";
@@ -108,6 +113,8 @@ public partial class POIPanelBase : CanvasLayer
     protected BladeHex.UI.UIFactory Factory { get; private set; } = null!;
 
     private Label _illustLabel = null!;
+    private TextureRect? _illustTexture;
+    private PanelContainer _illustPanel = null!;
     private Label _titleLabel = null!;
     private Label _infoLabel = null!;
     private RichTextLabel _descLabel = null!;
@@ -116,6 +123,7 @@ public partial class POIPanelBase : CanvasLayer
     private Button _leaveBtn = null!;
 
     // 兼容旧接口
+
     protected VBoxContainer ContentVBox => ActionsVBox;
 
     // ============================================================================
@@ -140,39 +148,47 @@ public partial class POIPanelBase : CanvasLayer
 
     private Tween? _showTween;
 
-    public void ShowPanel()
+    public void ShowPanel(bool instantOverlay = false)
     {
         RefreshLayout();
         _showTween?.Kill();
         Root.Visible = true;
 
-        // 遮罩从透明渐入，避免黑屏闪烁
-        _overlay.Color = new Color(ThemeOverlay.R, ThemeOverlay.G, ThemeOverlay.B, 0f);
+        if (instantOverlay)
+        {
+            _overlay.Color = ThemeOverlay;
+            MainPanel.Scale = Vector2.One;
+            MainPanel.Modulate = new Color(1, 1, 1, 1);
+        }
+        else
+        {
+            // 遮罩从透明渐入，避免黑屏闪烁
+            _overlay.Color = new Color(ThemeOverlay.R, ThemeOverlay.G, ThemeOverlay.B, 0f);
 
-        MainPanel.Scale = new Vector2(0.92f, 0.92f);
-        MainPanel.Modulate = new Color(1, 1, 1, 0);
-        MainPanel.PivotOffset = MainPanel.Size * 0.5f;
+            MainPanel.Scale = new Vector2(0.92f, 0.92f);
+            MainPanel.Modulate = new Color(1, 1, 1, 0);
+            MainPanel.PivotOffset = MainPanel.Size * 0.5f;
 
-        _showTween = CreateTween();
-        _showTween.SetParallel(true);
-        _showTween.TweenProperty(_overlay, "color:a", ThemeOverlay.A, 0.12f)
-            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
-        _showTween.TweenProperty(MainPanel, "modulate:a", 1.0f, 0.15f)
-            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
-        _showTween.TweenProperty(MainPanel, "scale", Vector2.One, 0.18f)
-            .SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+            _showTween = CreateTween();
+            _showTween.SetParallel(true);
+            _showTween.TweenProperty(_overlay, "color:a", ThemeOverlay.A, 0.12f)
+                .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+            _showTween.TweenProperty(MainPanel, "modulate:a", 1.0f, 0.15f)
+                .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+            _showTween.TweenProperty(MainPanel, "scale", Vector2.One, 0.18f)
+                .SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+        }
     }
 
     public virtual void HidePanel()
     {
-        _showTween?.Kill();
-        _showTween = CreateTween();
-        _showTween.SetParallel(true);
-        _showTween.TweenProperty(MainPanel, "modulate:a", 0.0f, 0.1f)
-            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
-        _showTween.TweenProperty(_overlay, "color:a", 0.0f, 0.1f)
-            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
-        _showTween.Chain().TweenCallback(Callable.From(() => Root.Visible = false));
+    	_showTween?.Kill();
+    	// 立即隐藏遮罩，避免淡出期间遮罩仍然可见导致画面闪烁
+    	_overlay.Color = new Color(ThemeOverlay.R, ThemeOverlay.G, ThemeOverlay.B, 0f);
+    	_showTween = CreateTween();
+    	_showTween.TweenProperty(MainPanel, "modulate:a", 0.0f, 0.1f)
+    		.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
+    	_showTween.Chain().TweenCallback(Callable.From(() => Root.Visible = false));
     }
 
     public bool IsPanelVisible() => Root.Visible;
@@ -187,7 +203,34 @@ public partial class POIPanelBase : CanvasLayer
     /// <summary>刷新布局数据</summary>
     public void RefreshLayout()
     {
-        _illustLabel.Text = GetIllustrationText();
+        if (_illustPanel.GetThemeStylebox("panel") is StyleBoxFlat illustStyle)
+            illustStyle.BgColor = GetIllustrationColor();
+
+        // 插画区：优先加载真实插图，无则回退到文字占位符
+        var illustPath = GetIllustrationPath();
+        if (!string.IsNullOrEmpty(illustPath))
+        {
+            var tex = TextureAssetResolver.LoadPoiIllustration(illustPath);
+            if (tex != null)
+            {
+                _illustTexture!.Texture = tex;
+                _illustTexture.Visible = true;
+                _illustLabel.Visible = false;
+            }
+            else
+            {
+                _illustTexture!.Visible = false;
+                _illustLabel.Visible = true;
+                _illustLabel.Text = GetIllustrationText();
+            }
+        }
+        else
+        {
+            _illustTexture!.Visible = false;
+            _illustLabel.Visible = true;
+            _illustLabel.Text = GetIllustrationText();
+        }
+
         _titleLabel.Text = GetPanelTitle();
         _infoLabel.Text = GetInfoText();
         _descLabel.Text = GetDescriptionText();
@@ -229,11 +272,7 @@ public partial class POIPanelBase : CanvasLayer
 
         MainPanel = new PanelContainer();
         MainPanel.CustomMinimumSize = new Vector2(PanelWidth, PanelHeight);
-        MainPanel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
-        MainPanel.OffsetLeft = -PanelWidth / 2;
-        MainPanel.OffsetTop = -PanelHeight / 2;
-        MainPanel.OffsetRight = PanelWidth / 2;
-        MainPanel.OffsetBottom = PanelHeight / 2;
+        OverlayPanelLayout.Center(MainPanel);
         MainPanel.MouseFilter = Control.MouseFilterEnum.Stop;
 
         var panelStyle = new StyleBoxFlat { BgColor = ThemeBgPrimary };
@@ -251,24 +290,32 @@ public partial class POIPanelBase : CanvasLayer
         mainVbox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         MainPanel.AddChild(mainVbox);
 
-        // 1. 插画区（大面积占位符，预备替换为真实插画）
-        var illustPanel = new PanelContainer();
-        illustPanel.CustomMinimumSize = new Vector2(0, IllustrationHeight);
+        // 1. 插画区（支持真实插图 + 文字占位符回退）
+        _illustPanel = new PanelContainer();
+        _illustPanel.CustomMinimumSize = new Vector2(0, IllustrationHeight);
         var illustStyle = new StyleBoxFlat { BgColor = GetIllustrationColor() };
         illustStyle.SetContentMarginAll(0);
         illustStyle.SetCornerRadiusAll(0);
         illustStyle.SetBorderWidthAll(0);
-        illustPanel.AddThemeStyleboxOverride("panel", illustStyle);
-        mainVbox.AddChild(illustPanel);
+        _illustPanel.AddThemeStyleboxOverride("panel", illustStyle);
+        mainVbox.AddChild(_illustPanel);
 
-        // 占位符提示文字（居中，后续替换为 TextureRect）
+        // 真实插图（初始隐藏，RefreshLayout 时按需加载）
+        _illustTexture = new TextureRect();
+        _illustTexture.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _illustTexture.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        _illustTexture.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+        _illustTexture.Visible = false;
+        _illustPanel.AddChild(_illustTexture);
+
+        // 占位符提示文字（居中，当无插图时显示）
         _illustLabel = new Label();
         _illustLabel.AddThemeFontSizeOverride("font_size", FontSizeLg);
         _illustLabel.AddThemeColorOverride("font_color", new Color(0.4f, 0.38f, 0.35f, 0.6f));
         _illustLabel.HorizontalAlignment = HorizontalAlignment.Center;
         _illustLabel.VerticalAlignment = VerticalAlignment.Center;
         _illustLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        illustPanel.AddChild(_illustLabel);
+        _illustPanel.AddChild(_illustLabel);
 
         // 内容区
         var contentMargin = new MarginContainer();
@@ -300,6 +347,7 @@ public partial class POIPanelBase : CanvasLayer
         _descLabel.BbcodeEnabled = true;
         _descLabel.ScrollActive = false;
         _descLabel.FitContent = true;
+        _descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _descLabel.CustomMinimumSize = new Vector2(0, 30);
         _descLabel.AddThemeFontSizeOverride("normal_font_size", FontSizeMd);
         _descLabel.AddThemeColorOverride("default_color", ThemeTextSecondary);
@@ -326,13 +374,14 @@ public partial class POIPanelBase : CanvasLayer
         _resultLabel.BbcodeEnabled = true;
         _resultLabel.ScrollActive = false;
         _resultLabel.FitContent = true;
+        _resultLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _resultLabel.CustomMinimumSize = new Vector2(0, 24);
         _resultLabel.AddThemeFontSizeOverride("normal_font_size", FontSizeSm);
         _resultLabel.AddThemeColorOverride("default_color", ThemeTextSecondary);
         contentVbox.AddChild(_resultLabel);
 
         // 5. 离开按钮
-        _leaveBtn = CreateButton(GetLeaveButtonText(), new Vector2(0, 40));
+        _leaveBtn = CreateButton(GetLeaveButtonText(), new Vector2(0, 56));
         _leaveBtn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _leaveBtn.Pressed += OnCloseRequested;
         contentVbox.AddChild(_leaveBtn);
@@ -348,7 +397,7 @@ public partial class POIPanelBase : CanvasLayer
     protected Label CreateBodyLabel(string text, Color? color = null) => Factory.CreateBodyLabel(text, color);
     protected Label CreateMutedLabel(string text) => Factory.CreateMutedLabel(text);
     protected RichTextLabel CreateRichText(Vector2? minSize = null) => Factory.CreateRichText(minSize ?? default);
-    protected Button CreateButton(string text, Vector2? minSize = null) => Factory.CreateButton(text, minSize ?? new Vector2(0, 40));
+    protected Button CreateButton(string text, Vector2? minSize = null) => Factory.CreateButton(text, minSize ?? new Vector2(0, 56));
     protected PanelContainer CreateCard(Vector2? minSize = null, bool hoverable = false) => Factory.CreateCard(minSize ?? default, hoverable);
     protected HSeparator CreateSeparatorH() => Factory.CreateSeparatorH();
     protected VSeparator CreateSeparatorV() => Factory.CreateSeparatorV();
@@ -369,6 +418,7 @@ public partial class POIPanelBase : CanvasLayer
         rtl.BbcodeEnabled = true;
         rtl.ScrollActive = false;
         rtl.FitContent = true;
+        rtl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rtl.CustomMinimumSize = new Vector2(0, 30);
         rtl.AddThemeFontSizeOverride("normal_font_size", FontSizeSm);
         rtl.AddThemeColorOverride("default_color", ThemeTextSecondary);
@@ -378,7 +428,7 @@ public partial class POIPanelBase : CanvasLayer
     /// <summary>创建全宽功能按钮</summary>
     protected Button CreateActionButton(string text, string tooltip = "")
     {
-        var btn = CreateButton(text, new Vector2(0, 44));
+        var btn = CreateButton(text, new Vector2(0, 48));
         btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         if (!string.IsNullOrEmpty(tooltip)) btn.TooltipText = tooltip;
         return btn;
@@ -413,7 +463,7 @@ public partial class POIPanelBase : CanvasLayer
 
     protected Button CreateCloseButton(string text = "离开")
     {
-        var btn = CreateButton(text, new Vector2(0, 40));
+        var btn = CreateButton(text, new Vector2(0, 56));
         btn.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         btn.Pressed += OnCloseRequested;
         return btn;

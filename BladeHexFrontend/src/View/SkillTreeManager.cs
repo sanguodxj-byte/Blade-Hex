@@ -40,7 +40,13 @@ public partial class SkillTreeManager : Node
     public SkillTreeCoord? Coord { get; private set; }
 
     /// <summary>所有角色的技能盘（角色实例ID → CharacterSkillTree）</summary>
-    public Dictionary<long, CharacterSkillTree> CharacterTrees { get; } = new();
+    private Dictionary<long, CharacterSkillTree> CharacterTrees { get; } = new();
+
+    /// <summary>直接设置角色的技能盘（用于反序列化/缓存恢复）</summary>
+    public void SetSkillTree(long characterId, CharacterSkillTree tree)
+    {
+        CharacterTrees[characterId] = tree;
+    }
 
     // ========================================
     // 初始化
@@ -71,8 +77,9 @@ public partial class SkillTreeManager : Node
     /// <summary>为角色创建技能盘</summary>
     public CharacterSkillTree CreateSkillTree(long characterId, int level = 1)
     {
-        var skillTree = new CharacterSkillTree(TreeData!, level);
+        var skillTree = new CharacterSkillTree(TreeData!, level, GetCharacterRandomAttributeSeed(characterId));
         CharacterTrees[characterId] = skillTree;
+        InitCharacterLevel(characterId, level);
         return skillTree;
     }
 
@@ -97,32 +104,42 @@ public partial class SkillTreeManager : Node
         var tree = GetSkillTree(characterId);
         if (tree == null) return;
         tree.CharacterLevel = newLevel;
-        tree.AddSkillPoint(1);
+        tree.AddAttributePoint(1);
         if (newLevel % 5 == 0)
         {
             tree.RegisterJump();
             GD.Print($"[SkillTreeManager] 角色 {characterId} 升到 {newLevel} 级，获得1次跳跃机会");
         }
-        GD.Print($"[SkillTreeManager] 角色 {characterId} 升到 {newLevel} 级，获得1技能点");
+        GD.Print($"[SkillTreeManager] 角色 {characterId} 升到 {newLevel} 级，获得1属性点");
     }
 
     public void InitCharacterLevel(long characterId, int level)
     {
         var tree = GetSkillTree(characterId);
         if (tree == null) return;
-        tree.AvailableSkillPoints = 0;
-        tree.UsedJumps = 0;
-        tree.TotalJumps = 0;
+        
         tree.CharacterLevel = level;
-        // 初始5技能点 + 每级额外1点（1级=5点，2级=6点...）
-        int points = 5 + (level - 1);
-        tree.AddSkillPoint(points);
-        // 跳跃总共6次，在1-30级间获取（1级、6级、12级、18级、24级、30级）
-        int jumps = 1 + (level - 1) / 6;
-        if (jumps > 6) jumps = 6;
-        for (int i = 0; i < jumps; i++)
-            tree.RegisterJump();
-        GD.Print($"[SkillTreeManager] 初始化角色 {characterId} Lv.{level}：{points}技能点, {jumps}跳跃");
+        // 初始5属性点 + 每级额外1点（1级=5点，2级=6点...）
+        int totalPoints = 5 + (level - 1);
+        
+        // 扣除已消耗的属性点
+        int consumed = 0;
+        foreach (var count in tree.NodeTileProgress.Values)
+        {
+            consumed += count;
+        }
+        
+        tree.AvailableAttributePoints = Mathf.Max(0, totalPoints - consumed);
+        
+        // 跳跃总共6次，在1-30级间获取（1级、5级、10级、15级、20级、25级、30级，上限6）
+        int totalJumps = 1 + level / 5;
+        if (totalJumps > 6) totalJumps = 6;
+        tree.TotalJumps = totalJumps;
+        
+        if (tree.UsedJumps > tree.TotalJumps)
+            tree.UsedJumps = tree.TotalJumps;
+            
+        GD.Print($"[SkillTreeManager] 同步初始化角色 {characterId} Lv.{level}：可用属性点 {tree.AvailableAttributePoints} (总 {totalPoints}, 已消 {consumed}), 剩余跳跃 {tree.GetRemainingJumps()} (总 {tree.TotalJumps}, 已用 {tree.UsedJumps})");
     }
 
     // ========================================
@@ -165,9 +182,18 @@ public partial class SkillTreeManager : Node
         foreach (var key in data.Keys)
         {
             long characterId = long.Parse(key.ToString()!);
-            var tree = new CharacterSkillTree(TreeData!, 1);
+            var tree = new CharacterSkillTree(TreeData!, 1, GetCharacterRandomAttributeSeed(characterId));
             tree.Deserialize((Godot.Collections.Dictionary)data[key], TreeData!);
             CharacterTrees[characterId] = tree;
+        }
+    }
+
+    private static int GetCharacterRandomAttributeSeed(long characterId)
+    {
+        unchecked
+        {
+            long normalized = characterId == 0 ? 1 : characterId;
+            return (int)((normalized * 1103515245L + 12345L) & 0x7fffffff);
         }
     }
 
@@ -206,7 +232,7 @@ public partial class SkillTreeManager : Node
             return;
         }
         GD.Print($"========== 角色 {characterId} 技能盘 ==========");
-        GD.Print($"等级: {tree.CharacterLevel} | 可用技能点: {tree.AvailableSkillPoints} | 剩余跳跃: {tree.GetRemainingJumps()}/{tree.TotalJumps}");
+        GD.Print($"等级: {tree.CharacterLevel} | 可用属性点: {tree.AvailableAttributePoints} | 剩余跳跃: {tree.GetRemainingJumps()}/{tree.TotalJumps}");
         GD.Print($"已点亮节点 ({tree.ActivatedNodes.Count}):");
         foreach (var nodeId in tree.ActivatedNodes)
         {
@@ -220,10 +246,11 @@ public partial class SkillTreeManager : Node
                     SkillNodeData.NodeType.Start => "启程",
                     _ => "?"
                 };
-                GD.Print($"  [{typeStr}] {node.NodeName} - {node.GetEffectText()}");
+                GD.Print($"  [{typeStr}] {node.NodeName} - {tree.GetNodeEffectTextForCharacter(node)}");
             }
         }
-        GD.Print($"累计属性: {tree.AccumulatedStats}");
+        GD.Print($"累计六维: {tree.AccumulatedAttributes}");
+        GD.Print($"完成奖励: {tree.AccumulatedStats}");
         GD.Print($"代价属性: {tree.AccumulatedCosts}");
         GD.Print("======================================");
     }

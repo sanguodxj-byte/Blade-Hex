@@ -2,7 +2,9 @@
 // 游戏主入口界面 — 优化适配与居中布局
 using Godot;
 using BladeHex.Data;
+using BladeHex.Localization;
 using BladeHex.UI.Loading;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.UI;
 
@@ -50,7 +52,7 @@ public partial class MainMenu : CanvasLayer
     private void _SetupUI()
     {
         // 1. 背景图（替代纯色）
-        var bgTex = GD.Load<Texture2D>(BgTexturePath);
+        var bgTex = TextureAssetResolver.LoadUiTexture(BgTexturePath);
         if (bgTex != null)
         {
             GD.Print($"[MainMenu] 背景纹理加载成功: {BgTexturePath}");
@@ -91,7 +93,7 @@ public partial class MainMenu : CanvasLayer
 
         // 4. 版权信息
         var footer = new Label();
-        footer.Text = "© 2026 剑与六芒星 Sword & Hex. 保留所有权利。";
+        footer.Text = L10n.Tr("MAIN_COPYRIGHT");
         footer.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
         footer.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
         footer.Modulate = new Color(1, 1, 1, 0.3f);
@@ -107,7 +109,7 @@ public partial class MainMenu : CanvasLayer
         centerCont.AddChild(mainVbox);
 
         // 标题：优先用生成的图片，回退到文字
-        var titleTex = GD.Load<Texture2D>(TitleTexturePath);
+        var titleTex = TextureAssetResolver.LoadUiTexture(TitleTexturePath);
         if (titleTex != null)
         {
             var titleRect = new TextureRect();
@@ -130,14 +132,14 @@ public partial class MainMenu : CanvasLayer
             mainVbox.AddChild(titleVbox);
 
             var titleLabel = new Label();
-            titleLabel.Text = "剑 与 六 芒 星";
+            titleLabel.Text = L10n.Tr("MAIN_TITLE_SPACED");
             titleLabel.AddThemeFontSizeOverride("font_size", 110);
             titleLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.85f, 0.6f));
             titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
             titleVbox.AddChild(titleLabel);
 
             var subtitle = new Label();
-            subtitle.Text = "SWORD & HEX";
+            subtitle.Text = L10n.Tr("MAIN_TITLE");
             subtitle.AddThemeFontSizeOverride("font_size", 32);
             subtitle.AddThemeColorOverride("font_color", new Color(0.5f, 0.5f, 0.6f));
             subtitle.HorizontalAlignment = HorizontalAlignment.Center;
@@ -150,14 +152,14 @@ public partial class MainMenu : CanvasLayer
         menuVbox.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
         mainVbox.AddChild(menuVbox);
 
-        _CreateMenuButton("新的起点", "new_game", menuVbox);
-        _CreateMenuButton("继续旅程", "continue", menuVbox);
-        _CreateMenuButton("开始战役", "campaign", menuVbox);
+        _CreateMenuButton(L10n.Tr("MAIN_NEW_GAME"), "new_game", menuVbox);
+        _CreateMenuButton(L10n.Tr("MAIN_CONTINUE"), "continue", menuVbox);
+        _CreateMenuButton(L10n.Tr("MAIN_CAMPAIGN"), "campaign", menuVbox);
         if (BladeHex.Data.Contexts.CampaignContext.HasCheckpoint())
-            _CreateMenuButton("继续战役", "campaign_continue", menuVbox);
-        _CreateMenuButton("快速战斗", "quick_combat", menuVbox);
-        _CreateMenuButton("设置", "settings", menuVbox);
-        _CreateMenuButton("退出", "exit", menuVbox);
+            _CreateMenuButton(L10n.Tr("MAIN_CONTINUE_CAMPAIGN"), "campaign_continue", menuVbox);
+        _CreateMenuButton(L10n.Tr("MAIN_QUICK_COMBAT"), "quick_combat", menuVbox);
+        _CreateMenuButton(L10n.Tr("MENU_SETTINGS"), "settings", menuVbox);
+        _CreateMenuButton(L10n.Tr("MAIN_EXIT"), "exit", menuVbox);
 
         // ─── 左下角骨骼编辑器入口（开发工具，白色半透明齿轮图标） ───
         #if DEBUG
@@ -167,7 +169,7 @@ public partial class MainMenu : CanvasLayer
         skeletonBtn.Modulate = new Color(1f, 1f, 1f, 0.4f);
         skeletonBtn.MouseFilter = Control.MouseFilterEnum.Stop;
         skeletonBtn.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
-        skeletonBtn.TooltipText = "骨骼动画编辑器";
+        skeletonBtn.TooltipText = L10n.Tr("MAIN_SKELETON_EDITOR");
         skeletonBtn.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
         skeletonBtn.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
         skeletonBtn.MouseEntered += () => skeletonBtn.Modulate = new Color(1f, 1f, 1f, 0.85f);
@@ -176,7 +178,7 @@ public partial class MainMenu : CanvasLayer
         {
             if (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
             {
-                GetTree().ChangeSceneToFile("res://src/scenes/skeleton_preview.tscn");
+                GetTree().ChangeSceneToFile("res://BladeHexFrontend/src/scenes/skeleton_preview.tscn");
             }
         };
         mainMargin.AddChild(skeletonBtn);
@@ -195,7 +197,7 @@ public partial class MainMenu : CanvasLayer
         btn.AddThemeColorOverride("font_pressed_color", new Color(0.3f, 0.25f, 0.18f));
 
         // 尝试加载羊皮纸按钮纹理
-        var btnTex = GD.Load<Texture2D>(ButtonTexturePath);
+        var btnTex = TextureAssetResolver.LoadUiTexture(ButtonTexturePath);
         if (btnTex != null)
         {
             var styleNormal = new StyleBoxTexture();
@@ -256,18 +258,18 @@ public partial class MainMenu : CanvasLayer
             case "new_game":
                 gs.Save.IsLoadingSave = false;
                 gs.WorldGen.IsQuickGame = false;
-                BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/ui/main_menu/origin_select.tscn");
+                BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/ui/main_menu/origin_select.tscn");
                 break;
             case "continue":
                 ShowSaveManagementPanel();
                 break;
             case "campaign":
                 gs.Campaign.Reset();
-                BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/scenes/campaign/campaign_scene.tscn");
+                BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/scenes/campaign/campaign_scene.tscn");
                 break;
             case "campaign_continue":
                 if (gs.Campaign.LoadCheckpoint())
-                    BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://src/scenes/campaign/campaign_scene.tscn");
+                    BladeHex.View.SceneTransition.ChangeSceneTo(GetTree(), "res://BladeHexFrontend/src/scenes/campaign/campaign_scene.tscn");
                 break;
             case "quick_combat":
                 ShowQuickCombatSetup();
@@ -325,7 +327,7 @@ public partial class MainMenu : CanvasLayer
         vbox.AddThemeConstantOverride("separation", 16);
         inner.AddChild(vbox);
 
-        var title = new Label { Text = "存 档 管 理" };
+        var title = new Label { Text = L10n.Tr("SAVE_MANAGEMENT_TITLE") };
         title.AddThemeFontSizeOverride("font_size", 28);
         title.AddThemeColorOverride("font_color", new Color(0.95f, 0.85f, 0.6f));
         title.HorizontalAlignment = HorizontalAlignment.Center;
@@ -348,7 +350,7 @@ public partial class MainMenu : CanvasLayer
         btnRow.Alignment = BoxContainer.AlignmentMode.Center;
         vbox.AddChild(btnRow);
 
-        var closeBtn = new Button { Text = "返 回" };
+        var closeBtn = new Button { Text = L10n.Tr("MENU_BACK") };
         closeBtn.CustomMinimumSize = new Vector2(120, 45);
         closeBtn.AddThemeFontSizeOverride("font_size", 18);
         closeBtn.Pressed += () => { _savePanel.Visible = false; };
@@ -376,7 +378,7 @@ public partial class MainMenu : CanvasLayer
 
         if (saves.Count == 0)
         {
-            var emptyLabel = new Label { Text = "暂无存档" };
+            var emptyLabel = new Label { Text = L10n.Tr("SAVE_EMPTY") };
             emptyLabel.AddThemeFontSizeOverride("font_size", 16);
             emptyLabel.AddThemeColorOverride("font_color", new Color(0.6f, 0.6f, 0.6f));
             emptyLabel.HorizontalAlignment = HorizontalAlignment.Center;
@@ -423,14 +425,14 @@ public partial class MainMenu : CanvasLayer
         infoVbox.AddChild(detailLabel);
 
         // 加载按钮
-        var loadBtn = new Button { Text = "进入" };
+        var loadBtn = new Button { Text = L10n.Tr("SAVE_ENTER") };
         loadBtn.CustomMinimumSize = new Vector2(70, 36);
         loadBtn.AddThemeFontSizeOverride("font_size", 14);
         loadBtn.Pressed += () => LoadSave(save.SaveId);
         hbox.AddChild(loadBtn);
 
         // 删除按钮
-        var delBtn = new Button { Text = "删除" };
+        var delBtn = new Button { Text = L10n.Tr("SAVE_DELETE") };
         delBtn.CustomMinimumSize = new Vector2(70, 36);
         delBtn.AddThemeFontSizeOverride("font_size", 14);
         delBtn.AddThemeColorOverride("font_color", new Color(0.9f, 0.3f, 0.3f));
@@ -447,7 +449,7 @@ public partial class MainMenu : CanvasLayer
         gs.Save.IsLoadingSave = true;
         gs.WorldGen.IsQuickGame = false;
         gs.Save.CurrentSaveId = saveId;
-        LoadingScreen.LoadScene("res://src/scenes/overworld/overworld_scene_3d.tscn", LoadingScreen.PhaseType.LoadSave);
+        LoadingScreen.LoadScene("res://BladeHexFrontend/src/scenes/overworld/overworld_scene_2d.tscn", LoadingScreen.PhaseType.LoadSave);
     }
 
     /// <summary>确认删除存档</summary>
@@ -486,13 +488,13 @@ public partial class MainMenu : CanvasLayer
                     {
                         int seed = meta.ContainsKey("seed") ? (int)meta["seed"] : 0;
                         int poiCount = meta.ContainsKey("poi_count") ? (int)meta["poi_count"] : 0;
-                        info.DisplayName = $"世界 (种子: {seed})";
-                        info.DetailText = $"{poiCount} 个据点 | {saveId}";
+                        info.DisplayName = L10n.Tr("SAVE_WORLD_SEED", seed);
+                        info.DetailText = L10n.Tr("SAVE_DETAIL_POI", poiCount, saveId);
                     }
                     else
                     {
                         info.DisplayName = saveId;
-                        info.DetailText = "存档数据";
+                        info.DetailText = L10n.Tr("SAVE_DATA");
                     }
 
                     saves.Add(info);
@@ -509,7 +511,7 @@ public partial class MainMenu : CanvasLayer
     private class SaveInfo
     {
         public string SaveId { get; set; } = "";
-        public string DisplayName { get; set; } = "未知存档";
+        public string DisplayName { get; set; } = L10n.Tr("SAVE_UNKNOWN");
         public string DetailText { get; set; } = "";
     }
 
@@ -640,7 +642,7 @@ public partial class MainMenu : CanvasLayer
         _lightningRect.MouseFilter = Control.MouseFilterEnum.Ignore;
         _lightningRect.Color = Colors.White;
 
-        var shader = GD.Load<Shader>("res://src/assets/shaders/lightning.gdshader");
+        var shader = ShaderAssetResolver.Load("lightning", "res://BladeHexFrontend/src/assets/shaders/lightning.gdshader");
         if (shader != null)
         {
             _lightningMat = new ShaderMaterial();
@@ -724,9 +726,9 @@ public partial class MainMenu : CanvasLayer
         timer.Timeout += () =>
         {
             if (_thunderAudio == null || !IsInstanceValid(_thunderAudio)) return;
-            var thunderStream = GD.Load<AudioStream>("res://assets/audio/sfx/thunder.ogg");
-            if (thunderStream == null)
-                thunderStream = GD.Load<AudioStream>("res://assets/audio/sfx/thunder.wav");
+            var thunderStream = AudioAssetResolver.Load(AssetKind.Sfx, "thunder")
+                ?? AudioAssetResolver.LoadAny("res://assets/audio/sfx/thunder.ogg")
+                ?? AudioAssetResolver.LoadAny("res://assets/audio/sfx/thunder.wav");
             if (thunderStream != null)
             {
                 _thunderAudio.Stream = thunderStream;

@@ -56,7 +56,6 @@ public partial class AudioEventReactor : Node
         bus.Subscribe(EventBus.Signals.ItemAcquired, OnItemAcquired);
         bus.Subscribe(EventBus.Signals.QuestCompleted, OnQuestCompleted);
         bus.Subscribe(EventBus.Signals.EquipmentChanged, OnEquipmentChanged);
-        bus.Subscribe(EventBus.Signals.MoraleChanged, OnMoraleChanged);
     }
 
     public override void _ExitTree()
@@ -78,7 +77,6 @@ public partial class AudioEventReactor : Node
         bus.Unsubscribe(EventBus.Signals.ItemAcquired, OnItemAcquired);
         bus.Unsubscribe(EventBus.Signals.QuestCompleted, OnQuestCompleted);
         bus.Unsubscribe(EventBus.Signals.EquipmentChanged, OnEquipmentChanged);
-        bus.Unsubscribe(EventBus.Signals.MoraleChanged, OnMoraleChanged);
     }
 
     // ========================================================================
@@ -189,18 +187,6 @@ public partial class AudioEventReactor : Node
     private void OnEquipmentChanged(Godot.Collections.Dictionary data)
     {
         PlaySfx("char_equip_change");
-    }
-
-    private void OnMoraleChanged(Godot.Collections.Dictionary data)
-    {
-        // 士气崩溃/高涨时播放对应音效
-        if (!data.ContainsKey("new_morale")) return;
-        // MoraleState: 0=Normal, 1=High, 2=Low, 3=Rout, 4=Rally
-        int morale = data.ContainsKey("new_state") ? data["new_state"].AsInt32() : -1;
-        if (morale == 4) // Rally
-            PlaySfx("status_rally");
-        else if (morale == 3) // Rout
-            PlaySfx("status_rout");
     }
 
     // ========================================================================

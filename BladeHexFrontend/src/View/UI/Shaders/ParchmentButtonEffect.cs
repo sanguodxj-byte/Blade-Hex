@@ -1,23 +1,19 @@
-// ParchmentButtonEffect.cs
-// 给任意 Button/TextureButton 挂载羊皮纸按钮Shader效果
-// 用法: var effect = new ParchmentButtonEffect(myButton);
+using BladeHex.View.AssetSystem;
 using Godot;
 
 namespace BladeHex.View.UI;
 
-/// <summary>
-/// 将 parchment_button.gdshader 应用到按钮上，自动处理 hover/pressed 状态切换。
-/// 支持 Button 和 TextureButton。
-/// </summary>
 public partial class ParchmentButtonEffect
 {
+    private const string ParchmentShaderId = "parchment_button";
+    private const string ParchmentShaderPath = "res://BladeHexFrontend/src/View/UI/Shaders/parchment_button.gdshader";
+
     private readonly Control _button;
     private readonly ShaderMaterial _material;
 
-    private static readonly Shader ParchmentShader = GD.Load<Shader>(
-        "res://BladeHexFrontend/src/View/UI/Shaders/parchment_button.gdshader");
+    private static readonly Shader? ParchmentShader =
+        ShaderAssetResolver.Load(ParchmentShaderId, ParchmentShaderPath);
 
-    /// <summary>创建并绑定效果到按钮</summary>
     public ParchmentButtonEffect(Control button, Color? glowColor = null)
     {
         _button = button;
@@ -28,13 +24,12 @@ public partial class ParchmentButtonEffect
 
         _button.Material = _material;
 
-        // 绑定信号
-        if (_button is BaseButton baseBtn)
+        if (_button is BaseButton baseButton)
         {
-            baseBtn.MouseEntered += OnHover;
-            baseBtn.MouseExited += OnNormal;
-            baseBtn.ButtonDown += OnPressed;
-            baseBtn.ButtonUp += OnHover; // 松开后如果还在按钮上就是hover
+            baseButton.MouseEntered += OnHover;
+            baseButton.MouseExited += OnNormal;
+            baseButton.ButtonDown += OnPressed;
+            baseButton.ButtonUp += OnHover;
         }
         else
         {
@@ -47,20 +42,20 @@ public partial class ParchmentButtonEffect
     public void OnHover() => _material.SetShaderParameter("state", 1.0f);
     public void OnPressed() => _material.SetShaderParameter("state", 2.0f);
 
-    /// <summary>手动设置发光颜色</summary>
-    public void SetGlowColor(Color color) =>
+    public void SetGlowColor(Color color)
+    {
         _material.SetShaderParameter("glow_color", color);
+    }
 
-    /// <summary>解除绑定</summary>
     public void Detach()
     {
         _button.Material = null;
-        if (_button is BaseButton baseBtn)
+        if (_button is BaseButton baseButton)
         {
-            baseBtn.MouseEntered -= OnHover;
-            baseBtn.MouseExited -= OnNormal;
-            baseBtn.ButtonDown -= OnPressed;
-            baseBtn.ButtonUp -= OnHover;
+            baseButton.MouseEntered -= OnHover;
+            baseButton.MouseExited -= OnNormal;
+            baseButton.ButtonDown -= OnPressed;
+            baseButton.ButtonUp -= OnHover;
         }
     }
 }

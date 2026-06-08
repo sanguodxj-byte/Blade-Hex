@@ -8,6 +8,7 @@ using BladeHex.Data.Contexts;
 using BladeHex.Combat;
 using BladeHex.Strategic;
 using BladeHex.Strategic.Economy;
+using BladeHex.View.AssetSystem;
 using BladeHex.View.UI.Overworld;
 using BladeHex.UI;
 using BladeHex.UI.Loading;
@@ -239,7 +240,7 @@ public partial class CampaignScene : CanvasLayer
         // 关卡插图（填充顶栏和底栏之间的区域）
         var illustPath = $"res://assets/generated_campaign_illust/campaign_{(_ctx.CurrentLevel + 1):D2}_{GetLevelImageSuffix()}.png";
         GD.Print($"[Campaign] 加载插图: {illustPath}");
-        var illustTex = GD.Load<Texture2D>(illustPath);
+        var illustTex = TextureAssetResolver.LoadCampaignIllustration(illustPath);
         GD.Print($"[Campaign] 插图加载结果: {(illustTex != null ? $"OK {illustTex.GetWidth()}x{illustTex.GetHeight()}" : "NULL")}");
         if (illustTex != null)
         {
@@ -282,6 +283,7 @@ public partial class CampaignScene : CanvasLayer
         _levelDesc.BbcodeEnabled = true;
         _levelDesc.ScrollActive = false;
         _levelDesc.FitContent = true;
+        _levelDesc.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _levelDesc.Text = $"[i]{_currentLevelDef.Description}[/i]";
         _levelDesc.AddThemeFontSizeOverride("normal_font_size", 14);
         _levelDesc.AddThemeColorOverride("default_color", new Color(0.65f, 0.65f, 0.7f));
@@ -492,7 +494,8 @@ public partial class CampaignScene : CanvasLayer
             stm.InitCharacterLevel(charId, leader.Level);
         }
 
-        _skillTreeUi.OpenSkillTree(charTree, stm.TreeData);
+        // v0.7: 传入角色 + 队伍列表，启用底部角色切换
+        _skillTreeUi.OpenSkillTree(charTree, stm.TreeData, leader, _ctx.Roster.Members);
     }
 
     private void OnStartBattle()
@@ -502,7 +505,7 @@ public partial class CampaignScene : CanvasLayer
 
         // CampaignBattleScene 直接从 CampaignContext + CampaignLevels 读取配置
         LoadingScreen.LoadScene(
-            "res://src/scenes/campaign/campaign_battle.tscn",
+            "res://BladeHexFrontend/src/scenes/campaign/campaign_battle.tscn",
             LoadingScreen.PhaseType.Combat);
     }
 
@@ -510,7 +513,7 @@ public partial class CampaignScene : CanvasLayer
     {
         _ctx.IsActive = false;
         BladeHex.View.SceneTransition.ChangeSceneTo(
-            GetTree(), "res://src/ui/main_menu/main_menu.tscn");
+            GetTree(), "res://BladeHexFrontend/src/ui/main_menu/main_menu.tscn");
     }
 
     // ========================================

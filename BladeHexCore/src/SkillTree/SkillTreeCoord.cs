@@ -47,15 +47,16 @@ public partial class SkillTreeCoord : RefCounted
     // 坐标转换 — Pointy-Top 六边形
     // ============================================================================
 
-    /// <summary>轴坐标 (q, r) → 像素坐标 (pointy-top)</summary>
+    /// <summary>轴坐标 (q, r) → 像素坐标 (pointy-top: 顶点朝上下)</summary>
     public Vector2 HexToPixel(int q, int r)
     {
         float fq = q;
         float fr = r;
-        return new Vector2(
-            HexSize * (Mathf.Sqrt(3.0f) * fq + Mathf.Sqrt(3.0f) / 2.0f * fr),
-            HexSize * (1.5f * fr)
-        );
+        // 标准 axial → pixel，然后旋转 -90° 使六边形变为 pointy-top
+        float rawX = HexSize * (Mathf.Sqrt(3.0f) * fq + Mathf.Sqrt(3.0f) / 2.0f * fr);
+        float rawY = HexSize * (1.5f * fr);
+        // 旋转 -90°: (x, y) → (y, -x)
+        return new Vector2(rawY, -rawX);
     }
 
     /// <summary>像素坐标 → 轴坐标（四舍五入到最近格子）</summary>
@@ -130,5 +131,116 @@ public partial class SkillTreeCoord : RefCounted
         var mainDir = HexDirections[directionIdx % 6];
         var cwDir = HexDirections[(directionIdx + 1) % 6];
         return mainDir * ring + cwDir * slot;
+    }
+
+    // ============================================================================
+    // 三角形瓦片坐标系 (Triangle Tile / Face addressing)
+    // ============================================================================
+    //
+    // 编码: GridPosition = Vector2I(q*2 + t, r)
+    //   q, r = axial hex 格点坐标 (标识三角形所属的"格点对")
+    //   t = 0: ▽ 三角形 (顶点 V(q,r), V(q+1,r), V(q,r+1))
+    //   t = 1: ▲ 三角形 (顶点 V(q+1,r), V(q,r+1), V(q+1,r+1))
+    //
+    // 解码: q = X >> 1 (即 X/2 向下取整), t = X & 1, r = Y
+    //
+    // 邻接 (共享边, 每个三角形恰好 3 个邻居):
+    //   ▽(q,r,0):
+    //     ▲(q,  r,  1) — 共享边 V(q+1,r)-V(q,r+1)
+    //     ▲(q-1,r,  1) — 共享边 V(q,r)-V(q,r+1)
+    //     ▲(q,  r-1,1) — 共享边 V(q,r)-V(q+1,r)
+    //   ▲(q,r,1):
+    //     ▽(q,  r,  0) — 共享边 V(q+1,r)-V(q,r+1)
+    //     ▽(q+1,r,  0) — 共享边 V(q+1,r)-V(q+1,r+1)
+    //     ▽(q,  r+1,0) — 共享边 V(q,r+1)-V(q+1,r+1)
+    // ============================================================================
+
+    /// <summary>编码三角形瓦片坐标为 Vector2I</summary>
+    public static Vector2I EncodeTile(int q, int r, int t) => new(q * 2 + t, r);
+
+    /// <summary>从 Vector2I 解码三角形瓦片坐标</summary>
+    public static (int q, int r, int t) DecodeTile(Vector2I encoded)
+    {
+        // 注意: C# 整除对负数向零取整，需要用位运算或 Math.DivRem
+        int x = encoded.X;
+        int t = ((x % 2) + 2) % 2; // 保证 t ∈ {0, 1}
+        int q = (x - t) / 2;
+        return (q, encoded.Y, t);
+    }
+
+    /// <summary>格点 V(q,r) 的像素坐标 (与 HexToPixel 相同)</summary>
+    public Vector2 VertexToPixel(int q, int r) => HexToPixel(q, r);
+
+    /// <summary>三角形瓦片的 3 个顶点像素坐标</summary>
+    public Vector2[] TileVertices(Vector2I encoded)
+    {
+        var (q, r, t) = DecodeTile(encoded);
+        if (t == 0)
+            return new[] { VertexToPixel(q, r), VertexToPixel(q + 1, r), VertexToPixel(q, r + 1) };
+        else
+            return new[] { VertexToPixel(q + 1, r), VertexToPixel(q, r + 1), VertexToPixel(q + 1, r + 1) };
+    }
+
+    /// <summary>三角形瓦片重心像素坐标</summary>
+    public Vector2 TileCentroid(Vector2I encoded)
+    {
+        var verts = TileVertices(encoded);
+        return (verts[0] + verts[1] + verts[2]) / 3.0f;
+    }
+
+    /// <summary>获取三角形瓦片的 3 个几何邻居 (共享边)</summary>
+    public static Vector2I[] GetTileNeighbors(Vector2I encoded)
+    {
+        var (q, r, t) = DecodeTile(encoded);
+        if (t == 0)
+        {
+            return new[]
+            {
+                EncodeTile(q, r, 1),
+                EncodeTile(q - 1, r, 1),
+                EncodeTile(q, r - 1, 1),
+            };
+        }
+        else
+        {
+            return new[]
+            {
+                EncodeTile(q, r, 0),
+                EncodeTile(q + 1, r, 0),
+                EncodeTile(q, r + 1, 0),
+            };
+        }
+    }
+
+    /// <summary>判断格点 (q,r) 是否在半径 R 的正六边形内</summary>
+    public static bool IsVertexInsideHex(int q, int r, int radius)
+    {
+        int s = -q - r;
+        return Math.Abs(q) <= radius && Math.Abs(r) <= radius && Math.Abs(s) <= radius;
+    }
+
+    /// <summary>判断三角形瓦片是否完全在半径 R 的六边形内 (3 个顶点都在内)</summary>
+    public static bool IsTileInsideHex(Vector2I encoded, int radius)
+    {
+        var (q, r, t) = DecodeTile(encoded);
+        if (t == 0)
+            return IsVertexInsideHex(q, r, radius) && IsVertexInsideHex(q + 1, r, radius) && IsVertexInsideHex(q, r + 1, radius);
+        else
+            return IsVertexInsideHex(q + 1, r, radius) && IsVertexInsideHex(q, r + 1, radius) && IsVertexInsideHex(q + 1, r + 1, radius);
+    }
+
+    /// <summary>枚举半径 R 六边形内的所有三角形瓦片</summary>
+    public static List<Vector2I> GetAllTiles(int radius)
+    {
+        var tiles = new List<Vector2I>();
+        for (int q = -radius - 1; q <= radius; q++)
+            for (int r = -radius - 1; r <= radius; r++)
+                for (int t = 0; t <= 1; t++)
+                {
+                    var enc = EncodeTile(q, r, t);
+                    if (IsTileInsideHex(enc, radius))
+                        tiles.Add(enc);
+                }
+        return tiles;
     }
 }

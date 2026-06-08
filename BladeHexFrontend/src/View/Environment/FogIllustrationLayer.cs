@@ -4,6 +4,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using BladeHex.View.AssetSystem;
 
 namespace BladeHex.View.Environment;
 
@@ -287,7 +288,7 @@ void fragment() {
     {
         if (!string.IsNullOrEmpty(illustration.CustomTexturePath))
         {
-            var tex = GD.Load<Texture2D>(illustration.CustomTexturePath);
+            var tex = TextureAssetResolver.LoadFogIllustration(illustration.CustomTexturePath);
             if (tex != null) return tex;
         }
 
@@ -296,8 +297,9 @@ void fragment() {
         foreach (var ext in extensions)
         {
             string path = TextureDirectory + fileName + ext;
-            if (ResourceLoader.Exists(path))
-                return GD.Load<Texture2D>(path);
+            var texture = TextureAssetResolver.LoadFogIllustration(path);
+            if (texture != null)
+                return texture;
         }
         return null;
     }

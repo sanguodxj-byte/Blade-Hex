@@ -7,15 +7,17 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Events;
 using BladeHex.Strategic;
+using BladeHex.Strategic.Economy;
+using BladeHex.Strategic.Facilities;
 
 namespace BladeHex.Data;
 
 /// <summary>
 /// 全局经济与库存管理器 — Autoload 单例
-/// 实现 ITimeProvider，将时间源注册到 Core 层
+/// 实现 ITimeProvider 和 IEconomyProvider，将时间和经济操作注册到 Core 层
 /// </summary>
 [GlobalClass]
-public partial class EconomyManager : Node, ITimeProvider
+public partial class EconomyManager : Node, ITimeProvider, IEconomyProvider
 {
     // ========================================
     // 信号
@@ -60,6 +62,12 @@ public partial class EconomyManager : Node, ITimeProvider
     // ITimeProvider 实现 — 将时间源暴露给 Core 层
     int ITimeProvider.CurrentDay => DaysPassed;
 
+    // IEconomyProvider 实现 — 将经济操作暴露给 Core 层
+    int IEconomyProvider.Gold => Gold;
+    int IEconomyProvider.DaysPassed => DaysPassed;
+    void IEconomyProvider.AddGold(int amount) => AddGold(amount);
+    bool IEconomyProvider.SpendGold(int amount) => SpendGold(amount);
+
     // ========================================
     // 生存子系统（Core 层）
     // ========================================
@@ -84,7 +92,13 @@ public partial class EconomyManager : Node, ITimeProvider
     // 玩家背包
     // ========================================
 
-    public Godot.Collections.Array<ItemData> PlayerInventory = new();
+    private Godot.Collections.Array<ItemData> PlayerInventory = new();
+
+    /// <summary>获取背包物品数量</summary>
+    public int PlayerInventoryCount => PlayerInventory.Count;
+
+    /// <summary>枚举背包中所有物品（用于序列化/遍历）</summary>
+    public System.Collections.Generic.IEnumerable<ItemData> GetAllItems() => PlayerInventory;
 
     // ========================================
     // 生命周期 — 注册时间提供者
@@ -93,11 +107,13 @@ public partial class EconomyManager : Node, ITimeProvider
     public override void _EnterTree()
     {
         TimeProvider.Set(this);
+        EconomyProvider.Set(this);
     }
 
     public override void _ExitTree()
     {
         TimeProvider.Clear();
+        EconomyProvider.Clear();
     }
 
     // ========================================
@@ -125,9 +141,24 @@ public partial class EconomyManager : Node, ITimeProvider
     // 时间推进
     // ========================================
 
-    public void AdvanceTime(float hours)
+    /// <summary>
+    /// 推进时间。每次推进都触发逐小时比例恢复。
+    /// </summary>
+    /// <param name="hours">推进小时数</param>
+    /// <param name="recoveryRate">恢复倍率（1=正常，2=扎营，4=城内旅店）</param>
+    public void AdvanceTime(float hours, float recoveryRate = 1.0f)
     {
         CurrentHour += hours;
+
+        // 逐小时比例恢复（在日结之前处理，使用当前 canRestore 状态）
+        if (ActiveRoster != null && hours > 0)
+        {
+            bool canRestore = WageSys.CanRestore && FoodSys.ConsecutiveStarveDays == 0;
+            var (hp, mana) = RestService.TimeBasedRecovery(ActiveRoster, hours, canRestore, recoveryRate);
+            if (hp > 0 || mana > 0)
+                GD.Print($"[EconomyManager] 时间推进 {hours}h: HP+{hp}, 法力+{mana} (x{recoveryRate})");
+        }
+
         while (CurrentHour >= 24.0f)
         {
             CurrentHour -= 24.0f;
@@ -146,11 +177,30 @@ public partial class EconomyManager : Node, ITimeProvider
         if (consumed <= 0) return;
         float old = Food;
         Food = Mathf.Max(0.0f, Food - consumed);
+
+        // 断粮检测与惩罚（替代已移除的每日双重扣粮）
+        if (Food <= 0f && old > 0f)
+        {
+            FoodSys.IncrementStarveDays();
+            ApplyStarvationPenalty();
+        }
+        else if (Food > 0f)
+        {
+            FoodSys.ResetStarveDays();
+        }
+
         EventBus.Instance?.Publish(EventBus.Signals.FoodChanged, new Godot.Collections.Dictionary
         {
             { "old_amount", old }, { "new_amount", Food }, { "delta", -consumed },
         });
         EmitSignal(SignalName.ResourcesChanged);
+    }
+
+    /// <summary>断粮惩罚：打印警告</summary>
+    private void ApplyStarvationPenalty()
+    {
+        if (ActiveRoster == null) return;
+        GD.Print($"[EconomyManager] 断粮！连续 {FoodSys.ConsecutiveStarveDays} 天无口粮。");
     }
 
     private void OnDayPassed()
@@ -182,31 +232,15 @@ public partial class EconomyManager : Node, ITimeProvider
                     { "unpaid_days", wageResult.UnpaidDays },
                 });
             }
-            if (wageResult.DesertedUnits.Count > 0)
-            {
-                GD.Print($"[EconomyManager] {wageResult.DesertedUnits.Count} 名佣兵因欠饷离队：{string.Join("、", wageResult.DesertedUnits)}");
-            }
+            // (欠饷不离队，仅阻止自然恢复 HP/法力)
         }
 
         // ──────────────────────────────────────
-        // 2. 食物每日结算（FoodSystem）
+        // 2. 食物：已移除每日双重扣粮
+        //    口粮消耗统一由 ConsumeFoodByTravel 按小时结算，
+        //    避免行军时"按小时 + 按天"双重扣除。
+        //    停留在城镇时不吃行军粮（食宿在设施中解决）。
         // ──────────────────────────────────────
-        if (ActiveRoster != null)
-        {
-            var oldFood = Food;
-            float foodTemp = Food;                              // ref 参数不能直接是属性
-            var foodResult = FoodSys.ProcessDaily(ActiveRoster, ref foodTemp);
-            Food = foodTemp;                                    // 同步回 Export 属性
-            if (foodResult.Starving)
-            {
-                GD.Print($"[EconomyManager] 断粮！已连续 {foodResult.StarveDays} 天无口粮。");
-                EventBus.Instance?.Publish(EventBus.Signals.FoodChanged, new Godot.Collections.Dictionary
-                {
-                    { "event_type", "starving" }, { "starve_days", foodResult.StarveDays },
-                    { "old_amount", oldFood }, { "new_amount", Food }, { "delta", -(oldFood - Food) },
-                });
-            }
-        }
 
         // ──────────────────────────────────────
         // 3. 工具每日消耗（装备保养）
@@ -254,12 +288,7 @@ public partial class EconomyManager : Node, ITimeProvider
                     Medicine = 0;
                     if (hasWounded)
                     {
-                        GD.Print("[EconomyManager] 药品匮乏！重伤成员自愈时间延长，并持续扣减士气。");
-                        foreach (var member in ActiveRoster.Members)
-                        {
-                            if (member.IsWounded)
-                                member.Morale = System.Math.Max(-100, member.Morale - 2);
-                        }
+                        GD.Print("[EconomyManager] 药品匮乏！重伤成员自愈时间延长。");
                     }
                 }
             }

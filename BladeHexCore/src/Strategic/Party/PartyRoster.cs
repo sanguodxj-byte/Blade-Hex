@@ -134,6 +134,14 @@ public partial class PartyRoster : Resource
     /// <summary>队长是否存活</summary>
     public bool IsLeaderAlive => Leader != null && GetCurrentHp(Leader) > 0;
 
+    /// <summary>计算名册的总战斗力（用于大地图 AI 决策）</summary>
+    public float CalculateCombatPower()
+    {
+        var deployable = GetDeployableMembers();
+        if (deployable.Count == 0) return 10.0f;
+        return Math.Max(10.0f, deployable.Sum(m => m.Level) * 1.5f);
+    }
+
     /// <summary>
     /// 应用战斗结果：更新 HP、移除阵亡者
     /// </summary>
@@ -213,7 +221,6 @@ public partial class PartyRoster : Resource
                 ["xp"] = m.Xp,
                 ["race_id"] = m.Race != null ? (int)m.Race.raceId : 0,
                 ["is_leader"] = IsLeader(m),
-                ["morale"] = m.Morale,
                 ["portrait_id"] = m.PortraitId,
                 ["sprite_frames_id"] = m.SpriteFramesId,
                 ["is_wounded"] = m.IsWounded,
@@ -254,7 +261,6 @@ public partial class PartyRoster : Resource
                 unit.BaseMaxHp = memberDict.ContainsKey("base_max_hp") ? memberDict["base_max_hp"].AsInt32() : 10;
                 unit.BaseAc = memberDict.ContainsKey("base_ac") ? memberDict["base_ac"].AsInt32() : 8;
                 unit.Xp = memberDict.ContainsKey("xp") ? memberDict["xp"].AsInt32() : 0;
-                unit.Morale = memberDict.ContainsKey("morale") ? memberDict["morale"].AsInt32() : 50;
                 unit.PortraitId = memberDict.ContainsKey("portrait_id") ? memberDict["portrait_id"].AsString() : "";
                 unit.SpriteFramesId = memberDict.ContainsKey("sprite_frames_id") ? memberDict["sprite_frames_id"].AsString() : "";
                 unit.IsWounded = memberDict.ContainsKey("is_wounded") && memberDict["is_wounded"].AsBool();

@@ -24,37 +24,22 @@ public partial class EnemyUnitBar : Node3D
     private static readonly Color HP_BORDER = new(0.3f, 0.15f, 0.15f, 0.6f);
 
     // ============================================================================
-    // 士气颜色 (MoraleLevel → Color)
-    // ============================================================================
-    private static readonly Dictionary<MoraleLevel, Color> MORALE_COLORS = new()
-    {
-        { MoraleLevel.High, new Color(0.2f, 0.8f, 0.9f) },
-        { MoraleLevel.Normal, new Color(0.5f, 0.5f, 0.5f) },
-        { MoraleLevel.Low, new Color(0.9f, 0.7f, 0.1f) },
-        { MoraleLevel.Broken, new Color(0.9f, 0.2f, 0.1f) },
-        { MoraleLevel.Routing, new Color(1.0f, 0.1f, 0.1f) },
-    };
-
-    // ============================================================================
     // 控件引用
     // ============================================================================
     private Label3D _nameLabel = null!;
     private Label3D _hpLabel = null!;
-    private MeshInstance3D _moraleSphere = null!;
 
     // ============================================================================
     // 条目尺寸
     // ============================================================================
     private const float BAR_WIDTH = 70.0f;
     private const float BAR_HEIGHT = 7.0f;
-    private const float MORALE_SIZE = 5.0f;
 
     // ============================================================================
     // 状态跟踪
     // ============================================================================
     private int _lastHp = -1;
     private int _lastMaxHp = -1;
-    private MoraleLevel? _lastMoraleLevel;
     private readonly Dictionary<string, Label3D> _activeStatusEffects = new();
 
     // ============================================================================
@@ -95,21 +80,6 @@ public partial class EnemyUnitBar : Node3D
         _hpLabel.Position = new Vector3(0, -7, 0);
         AddChild(_hpLabel);
 
-        // 士气指示球体 (MeshInstance3D + SphereMesh + StandardMaterial3D)
-        _moraleSphere = new MeshInstance3D();
-        _moraleSphere.Name = "MoraleSphere";
-        var sphereMesh = new SphereMesh();
-        sphereMesh.Radius = 0.15f;
-        sphereMesh.Height = 0.3f;
-        _moraleSphere.Mesh = sphereMesh;
-        _moraleSphere.Position = new Vector3(1.5f, -7, 0);
-
-        var defaultMat = new StandardMaterial3D();
-        defaultMat.AlbedoColor = MORALE_COLORS[MoraleLevel.Normal];
-        defaultMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
-        _moraleSphere.MaterialOverride = defaultMat;
-
-        AddChild(_moraleSphere);
     }
 
     // ============================================================================
@@ -155,40 +125,6 @@ public partial class EnemyUnitBar : Node3D
         else
             _StopLowHpFlash();
 
-        // 更新士气指示
-        if (unit.Data.IsEnemy)
-            UpdateMoraleIndicator((MoraleLevel)unit.Data.GetMoraleLevel());
-    }
-
-    /// <summary>更新士气指示器</summary>
-    public void UpdateMoraleIndicator(MoraleLevel moraleLevel)
-    {
-        if (moraleLevel == _lastMoraleLevel)
-            return;
-        _lastMoraleLevel = moraleLevel;
-
-        if (_moraleSphere == null || !GodotObject.IsInstanceValid(_moraleSphere))
-            return;
-
-        // 使用材质颜色表示士气
-        Color sphereColor = Colors.Gray;
-        if (MORALE_COLORS.TryGetValue(moraleLevel, out var mc))
-            sphereColor = mc;
-
-        var mat = new StandardMaterial3D();
-        mat.AlbedoColor = sphereColor;
-        mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
-        _moraleSphere.MaterialOverride = mat;
-
-        // 溃逃时球体变大闪烁
-        if (moraleLevel == MoraleLevel.Routing)
-        {
-            _moraleSphere.Scale = new Vector3(1.5f, 1.5f, 1.5f);
-        }
-        else
-        {
-            _moraleSphere.Scale = Vector3.One;
-        }
     }
 
     /// <summary>添加状态效果指示（在名称旁显示简短文字）</summary>

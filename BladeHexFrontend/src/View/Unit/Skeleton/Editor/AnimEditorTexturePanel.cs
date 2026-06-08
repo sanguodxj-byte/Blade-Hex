@@ -1,27 +1,25 @@
-// AnimEditorTexturePanel.cs
-// 运行时骨骼动画编辑器 — 纹理选择面板
-// 扫描 assets 目录中的装备纹理，按部件类型分组，选中后应用到预览骨骼
+using BladeHex.View.AssetSystem;
 using Godot;
+using System;
 using System.Collections.Generic;
-using BladeHex.Data;
 
 namespace BladeHex.View.Unit.Skeleton.Editor;
 
-/// <summary>纹理选择面板 — 按部件分 Tab 展示可用纹理</summary>
 public partial class AnimEditorTexturePanel : PanelContainer
 {
     [Signal] public delegate void TextureSelectedEventHandler(string slotName, string texturePath);
 
-    /// <summary>部件 → 扫描目录映射</summary>
-    private static readonly Dictionary<string, string[]> SlotDirs = new()
-    {
-        ["身体"] = new[] { "res://assets/generated_class_icons" },
-        ["护甲"] = new[] { "res://assets/generated_armor" },
-        ["头盔"] = new[] { "res://assets/generated_helmets" },
-        ["手甲"] = new[] { "res://assets/generated_armor" },
-        ["武器"] = new[] { "res://assets/generated_weapons", "res://assets/generated_staves" },
-        ["盾牌"] = new[] { "res://assets/generated_shields" },
-    };
+    private readonly record struct SlotTextureSource(string SlotName, AssetKind Kind, string[] Directories);
+
+    private static readonly SlotTextureSource[] SlotSources =
+    [
+        new("身体", AssetKind.Icon, ["res://assets/generated_class_icons"]),
+        new("护甲", AssetKind.EquipmentTexture, ["res://assets/generated_armor"]),
+        new("头盔", AssetKind.EquipmentTexture, ["res://assets/generated_helmets"]),
+        new("手甲", AssetKind.EquipmentTexture, ["res://assets/generated_armor"]),
+        new("武器", AssetKind.EquipmentTexture, ["res://assets/generated_weapons", "res://assets/generated_staves"]),
+        new("盾牌", AssetKind.EquipmentTexture, ["res://assets/generated_shields"]),
+    ];
 
     private TabContainer _tabs = null!;
     private readonly Dictionary<string, ItemList> _lists = new();
@@ -35,81 +33,101 @@ public partial class AnimEditorTexturePanel : PanelContainer
         style.SetContentMarginAll(4);
         AddThemeStyleboxOverride("panel", style);
 
-        _tabs = new TabContainer();
-        _tabs.SizeFlagsVertical = SizeFlags.ExpandFill;
-        _tabs.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _tabs = new TabContainer
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
         AddChild(_tabs);
 
-        foreach (var (slotName, dirs) in SlotDirs)
+        foreach (var source in SlotSources)
+            AddSlotTab(source);
+    }
+
+    private void AddSlotTab(SlotTextureSource source)
+    {
+        var scroll = new ScrollContainer
         {
-            var scroll = new ScrollContainer { Name = slotName };
-            scroll.SizeFlagsVertical = SizeFlags.ExpandFill;
+            Name = source.SlotName,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+        };
 
-            var list = new ItemList();
-            list.SizeFlagsVertical = SizeFlags.ExpandFill;
-            list.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            list.CustomMinimumSize = new Vector2(200, 300);
-            list.IconMode = ItemList.IconModeEnum.Top;
-            list.MaxColumns = 3;
-            list.FixedIconSize = new Vector2I(48, 48);
-            list.AllowReselect = true;
+        var list = new ItemList
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(200, 300),
+            IconMode = ItemList.IconModeEnum.Top,
+            MaxColumns = 3,
+            FixedIconSize = new Vector2I(48, 48),
+            AllowReselect = true,
+        };
 
-            // 第一项：占位色块（清除纹理）
-            list.AddItem("默认", null);
-            list.SetItemMetadata(0, "");
+        AddDefaultItem(list);
+        AddTextureItems(list, source);
 
-            // 扫描目录
-            int idx = 1;
-            foreach (var dir in dirs)
+        list.ItemSelected += index =>
+        {
+            string path = list.GetItemMetadata((int)index).AsString();
+            EmitSignal(SignalName.TextureSelected, source.SlotName, path);
+        };
+
+        _lists[source.SlotName] = list;
+        scroll.AddChild(list);
+        _tabs.AddChild(scroll);
+    }
+
+    private static void AddDefaultItem(ItemList list)
+    {
+        list.AddItem("默认", null);
+        list.SetItemMetadata(0, "");
+    }
+
+    private static void AddTextureItems(ItemList list, SlotTextureSource source)
+    {
+        int index = list.ItemCount;
+        foreach (var directory in source.Directories)
+        {
+            foreach (var path in ScanPngFiles(directory))
             {
-                var textures = ScanPngFiles(dir);
-                foreach (var path in textures)
-                {
-                    string fileName = path.GetFile().GetBaseName();
-                    var tex = GD.Load<Texture2D>(path);
-                    if (tex != null)
-                    {
-                        list.AddItem(fileName, tex);
-                        list.SetItemMetadata(idx, path);
-                        list.SetItemTooltip(idx, path);
-                        idx++;
-                    }
-                }
+                var texture = TextureAssetResolver.Load(source.Kind, path, path);
+                if (texture == null)
+                    continue;
+
+                string fileName = path.GetFile().GetBaseName();
+                list.AddItem(fileName, texture);
+                list.SetItemMetadata(index, path);
+                list.SetItemTooltip(index, path);
+                index++;
             }
-
-            string capturedSlot = slotName;
-            list.ItemSelected += (long i) =>
-            {
-                string path = list.GetItemMetadata((int)i).AsString();
-                EmitSignal(SignalName.TextureSelected, capturedSlot, path);
-            };
-
-            _lists[slotName] = list;
-            scroll.AddChild(list);
-            _tabs.AddChild(scroll);
         }
     }
 
-    /// <summary>扫描目录下所有 .png 文件</summary>
     private static List<string> ScanPngFiles(string dirPath)
     {
         var results = new List<string>();
         var dir = DirAccess.Open(dirPath);
-        if (dir == null) return results;
+        if (dir == null)
+            return results;
 
         dir.ListDirBegin();
-        string fileName = dir.GetNext();
-        while (!string.IsNullOrEmpty(fileName))
+        try
         {
-            if (!dir.CurrentIsDir() && fileName.EndsWith(".png"))
+            string fileName = dir.GetNext();
+            while (!string.IsNullOrEmpty(fileName))
             {
-                results.Add($"{dirPath}/{fileName}");
-            }
-            fileName = dir.GetNext();
-        }
-        dir.ListDirEnd();
+                if (!dir.CurrentIsDir() && fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    results.Add($"{dirPath}/{fileName}");
 
-        results.Sort();
+                fileName = dir.GetNext();
+            }
+        }
+        finally
+        {
+            dir.ListDirEnd();
+        }
+
+        results.Sort(StringComparer.OrdinalIgnoreCase);
         return results;
     }
 }

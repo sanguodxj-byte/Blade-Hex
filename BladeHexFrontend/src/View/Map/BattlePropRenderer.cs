@@ -1,4 +1,4 @@
-﻿// BattlePropRenderer.cs
+// BattlePropRenderer.cs
 // 战斗地图立牌渲染器 — 把 BattlePropPlacement 实例化为 Sprite3D billboard
 //
 // HD-2D 风格约定：
@@ -84,13 +84,14 @@ public partial class BattlePropRenderer : Node3D
         // HD-2D 立牌参数
         sprite.Billboard = BaseMaterial3D.BillboardModeEnum.FixedY;
         sprite.Shaded = false;
+        sprite.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
         sprite.TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmaps;
         sprite.AlphaCut = SpriteBase3D.AlphaCutMode.OpaquePrepass;
         sprite.AlphaScissorThreshold = 0.5f;
         sprite.DoubleSided = false;
 
         // 纸片底边对齐格子地面
-        sprite.Offset = new Vector2(0, -sprite.Texture.GetHeight() / 2.0f);
+        sprite.Offset = new Vector2(0, sprite.Texture.GetHeight() / 2.0f);
 
         // 朝向：billboard 时 Y 旋转无视觉效果（shader 会覆盖），但保留以防切换到 non-billboard 模式
         sprite.RotationDegrees = new Vector3(0, placement.YawDegrees, 0);

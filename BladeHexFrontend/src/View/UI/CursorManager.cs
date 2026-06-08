@@ -1,46 +1,93 @@
-// CursorManager.cs
-// 自定义光标管理 — 全局Autoload。
-// 启动时把默认箭头光标替换成游戏专用的木刻风光标。
+using BladeHex.View.AssetSystem;
 using Godot;
+using System.Collections.Generic;
 
 namespace BladeHex.UI;
 
-/// <summary>
-/// 游戏光标管理器（Autoload）。
-/// 启动时设置默认箭头光标为木刻风游戏光标。
-/// </summary>
+public enum CursorState
+{
+    Default,
+    Dragging,
+    DragForbidden,
+    CombatTargeting,
+    Busy,
+}
+
 [GlobalClass]
 public partial class CursorManager : Node
 {
     public static CursorManager? Instance { get; private set; }
 
-    private const string CursorPath = "res://src/assets/ui/cursors/cursor_default.png";
-    // 实际不透明像素从 (7, 5) 开始 — 把 hotspot 对齐到那里,避免点击位置看起来"偏右下"。
-    // 之前是 Vector2.Zero(图左上角),那里其实是透明边距,导致整体视觉偏移。
-    private static readonly Vector2 Hotspot = new(7, 5);
+    private const string CursorDir = "res://BladeHexFrontend/src/assets/ui/cursors/";
+
+    private static readonly (string id, string file, Vector2 hotspot, Input.CursorShape shape)[] CursorDefs =
+    [
+        ("cursor_default", "cursor_default.png", new Vector2(7, 5), Input.CursorShape.Arrow),
+        ("cursor_pointing_hand", "cursor_pointing_hand.png", new Vector2(11, 0), Input.CursorShape.PointingHand),
+        ("cursor_move", "cursor_move.png", new Vector2(16, 16), Input.CursorShape.Move),
+        ("cursor_attack", "cursor_attack.png", new Vector2(16, 16), Input.CursorShape.Cross),
+        ("cursor_forbidden", "cursor_forbidden.png", new Vector2(16, 16), Input.CursorShape.Forbidden),
+        ("cursor_busy", "cursor_busy.png", new Vector2(16, 16), Input.CursorShape.Busy),
+    ];
+
+    private static readonly Dictionary<Input.CursorShape, (Texture2D Tex, Vector2 Hotspot)> LoadedCursors = new();
+    private static CursorState _currentState = CursorState.Default;
+
+    public static CursorState CurrentState => _currentState;
 
     public override void _Ready()
     {
         Instance = this;
         ProcessMode = ProcessModeEnum.Always;
-        _ApplyDefaultCursor();
-        GD.Print("[CursorManager] Initialized");
+        ApplyAllCursors();
+        GD.Print("[CursorManager] Initialized.");
     }
 
     public override void _ExitTree()
     {
-        if (Instance == this) Instance = null;
+        if (Instance == this)
+            Instance = null;
     }
 
-    private static void _ApplyDefaultCursor()
+    public static void SetState(CursorState state)
     {
-        if (!ResourceLoader.Exists(CursorPath))
-        {
-            GD.Print($"[CursorManager] Cursor texture not found: {CursorPath}, using system default");
+        if (_currentState == state)
             return;
+
+        _currentState = state;
+        RemapArrowTo(state switch
+        {
+            CursorState.Default => Input.CursorShape.Arrow,
+            CursorState.Dragging => Input.CursorShape.Move,
+            CursorState.DragForbidden => Input.CursorShape.Forbidden,
+            CursorState.CombatTargeting => Input.CursorShape.Cross,
+            CursorState.Busy => Input.CursorShape.Busy,
+            _ => Input.CursorShape.Arrow,
+        });
+    }
+
+    private static void ApplyAllCursors()
+    {
+        LoadedCursors.Clear();
+        foreach (var (id, file, hotspot, shape) in CursorDefs)
+        {
+            string path = CursorDir + file;
+            var tex = TextureAssetResolver.LoadUiTexture(id, path);
+            if (tex == null)
+            {
+                if (shape == Input.CursorShape.Arrow)
+                    GD.Print($"[CursorManager] Default cursor not found: {path}; using system default.");
+                continue;
+            }
+
+            Input.SetCustomMouseCursor(tex, shape, hotspot);
+            LoadedCursors[shape] = (tex, hotspot);
         }
-        var tex = GD.Load<Texture2D>(CursorPath);
-        if (tex != null)
-            Input.SetCustomMouseCursor(tex, Input.CursorShape.Arrow, Hotspot);
+    }
+
+    private static void RemapArrowTo(Input.CursorShape sourceShape)
+    {
+        if (LoadedCursors.TryGetValue(sourceShape, out var data))
+            Input.SetCustomMouseCursor(data.Tex, Input.CursorShape.Arrow, data.Hotspot);
     }
 }

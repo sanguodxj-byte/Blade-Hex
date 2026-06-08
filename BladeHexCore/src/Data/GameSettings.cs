@@ -1,4 +1,4 @@
-﻿// GameSettings.cs
+// GameSettings.cs
 // 游戏设置数据模型 — 持久化到 user://settings.dat
 using Godot;
 using System.Collections.Generic;
@@ -239,6 +239,9 @@ public partial class GameSettings : Resource
 
     private void ApplyVideoSettings()
     {
+        if (DisplayServer.GetName() == "headless")
+            return;
+
         switch (FullscreenMode)
         {
             case FullscreenModeEnum.Windowed:
