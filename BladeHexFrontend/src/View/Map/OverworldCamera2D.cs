@@ -36,8 +36,14 @@ public partial class OverworldCamera2D : Camera2D
     /// <summary>平移平滑系数</summary>
     [Export] public float PanSmooth = 6.0f;
 
-    /// <summary>渲染位置对齐到当前 zoom 下的屏幕像素网格，避免 2D 纹理随相机平移抖动。</summary>
-    [Export] public bool SnapPositionToPixelGrid = true;
+    /// <summary>
+    /// 将相机位置吸附到当前 zoom 下的屏幕像素网格。
+    /// 大地图默认关闭：混合缩放贴图、Label 和自绘层时，吸附整个 canvas 会让实体/props 在平移时蠕动闪烁。
+    /// </summary>
+    [Export] public bool SnapPositionToPixelGrid = false;
+
+    /// <summary>相机平移距离小于该屏幕像素数时直接收敛，避免停止后残余吸附抖动。</summary>
+    [Export] public float PanSettleScreenPixels = 0.5f;
 
     /// <summary>滚轮缩放目标按 ZoomStep 量化，避免长期停留在任意小数 zoom。</summary>
     [Export] public bool QuantizeZoomTarget = true;
@@ -107,12 +113,14 @@ public partial class OverworldCamera2D : Camera2D
             _panTarget += input * PanSpeed * speedFactor * dt;
         }
 
-        // 平滑插值
-        _panCurrent = _panCurrent.Lerp(_panTarget, PanSmooth * dt);
-        if (_panCurrent.DistanceSquaredTo(_panTarget) < 1.0f)
+        // 使用指数平滑，避免低帧率或 chunk 加载卡顿时 Lerp 权重大于 1 造成过冲。
+        _panCurrent = _panCurrent.Lerp(_panTarget, SmoothFactor(PanSmooth, dt));
+        float zoomForSettle = Mathf.Max(Mathf.Abs(_zoomLevel), 0.001f);
+        float settleWorldDistance = Mathf.Max(PanSettleScreenPixels / zoomForSettle, 0.25f);
+        if (_panCurrent.DistanceSquaredTo(_panTarget) <= settleWorldDistance * settleWorldDistance)
             _panCurrent = _panTarget;
 
-        _zoomLevel = Mathf.Lerp(_zoomLevel, _zoomTarget, ZoomSmooth * dt);
+        _zoomLevel = Mathf.Lerp(_zoomLevel, _zoomTarget, SmoothFactor(ZoomSmooth, dt));
         if (Mathf.Abs(_zoomLevel - _zoomTarget) < 0.001f)
             _zoomLevel = _zoomTarget;
 
@@ -233,5 +241,13 @@ public partial class OverworldCamera2D : Camera2D
         return new Vector2(
             Mathf.Round(worldPosition.X * zoom) / zoom,
             Mathf.Round(worldPosition.Y * zoom) / zoom);
+    }
+
+    private static float SmoothFactor(float speed, float dt)
+    {
+        if (speed <= 0.0f)
+            return 1.0f;
+
+        return 1.0f - Mathf.Exp(-speed * Mathf.Max(dt, 0.0f));
     }
 }

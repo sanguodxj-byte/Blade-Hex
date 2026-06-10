@@ -49,7 +49,7 @@ public partial class LanguageManager : Node
     /// </summary>
     private void InitializeLocale()
     {
-        string savedLocale = LoadSavedLocale();
+        string? savedLocale = LoadSavedLocale();
 
         if (!string.IsNullOrEmpty(savedLocale) && IsSupported(savedLocale))
         {

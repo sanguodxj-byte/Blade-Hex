@@ -5,7 +5,7 @@ found = []
 
 for root, dirs, files in os.walk(search_dir):
     # 排除 .git, .godot, .claude 等无关系统文件夹
-    if any(p in root for p in [".git", ".godot", ".claude", "generated_weapons_backup"]):
+    if any(p in root for p in [".git", ".godot", ".claude", "weapons_backup"]):
         continue
     for f in files:
         if f.endswith(".json"):

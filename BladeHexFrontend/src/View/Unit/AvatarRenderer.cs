@@ -2,6 +2,7 @@ using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.View.AssetSystem;
+using BladeHex.View.Unit.Components;
 
 namespace BladeHex.View.Unit;
 
@@ -104,8 +105,7 @@ public static class AvatarRenderer
         string race = avatar.RaceString;
         string gender = avatar.Gender;
 
-        var headTex = LoadPartTexture("face", race, gender, avatar.HeadIndex)
-            ?? LoadPartTexture("head", race, gender, avatar.HeadIndex);
+        var headTex = LoadPartTexture("head", race, gender, avatar.HeadIndex);
         if (headTex != null)
         {
             var img = headTex.GetImage();
@@ -120,7 +120,12 @@ public static class AvatarRenderer
             {
                 var img = hairTex.GetImage();
                 if (img != null)
+                {
+                    // 若指定了自定义发色，对发型层进行重着色
+                    if (avatar.HasCustomHairColor)
+                        ColorUtils.RecolorHairImage(img, avatar.HairColorHue, avatar.HairColorSat, avatar.HairColorLightness);
                     list.Add(img);
+                }
             }
         }
 
@@ -174,14 +179,20 @@ public partial class AvatarView2D : Node2D
         var avatar = AvatarDataRef;
         ApplyTexture(
             AvatarRenderer.Layer.Head,
-            AvatarRenderer.LoadPartTexture("face", avatar.RaceString, avatar.Gender, avatar.HeadIndex)
-                ?? AvatarRenderer.LoadPartTexture("head", avatar.RaceString, avatar.Gender, avatar.HeadIndex),
+            AvatarRenderer.LoadPartTexture("head", avatar.RaceString, avatar.Gender, avatar.HeadIndex),
             true);
 
         if (avatar.HasHair)
-            ApplyLayer(AvatarRenderer.Layer.Hair, "hair", avatar.RaceString, avatar.Gender, avatar.HairIndex);
+        {
+            var hairTex = AvatarRenderer.LoadPartTexture("hair", avatar.RaceString, avatar.Gender, avatar.HairIndex);
+            if (hairTex != null && avatar.HasCustomHairColor)
+                hairTex = HairColorComponent.Apply(hairTex, avatar.HairColorHue, avatar.HairColorSat, avatar.HairColorLightness) ?? hairTex;
+            ApplyTexture(AvatarRenderer.Layer.Hair, hairTex, true);
+        }
         else
+        {
             HideLayer(AvatarRenderer.Layer.Hair);
+        }
 
         int decorationIndex = AvatarRenderer.GetDecorationIndex(avatar);
         if (decorationIndex > 0)

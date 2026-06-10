@@ -19,7 +19,7 @@ public readonly struct SpeedBreakdown
     /// <summary>基础移速 (entity.MoveSpeed)</summary>
     public float Base { get; }
 
-    /// <summary>地形因子 (道路 1.5x, 森林 0.7x 等)</summary>
+    /// <summary>地形因子 (道路 1.2x, 森林 0.7x 等)</summary>
     public float TerrainFactor { get; }
 
     /// <summary>ZoC 惩罚因子 (1.0=无惩罚, 0.7=标准惩罚)</summary>
@@ -27,6 +27,9 @@ public readonly struct SpeedBreakdown
 
     /// <summary>追逐倍率 (Chasing 状态下 AIStrategy 修正)</summary>
     public float ChaseMultiplier { get; }
+
+    /// <summary>天气移速倍率</summary>
+    public float WeatherFactor { get; }
 
     /// <summary>最终移速</summary>
     public float Final { get; }
@@ -37,13 +40,14 @@ public readonly struct SpeedBreakdown
     /// <summary>当前 AI 状态（中文）</summary>
     public string StateName { get; }
 
-    public SpeedBreakdown(float baseSpeed, float terrainFactor, float zocFactor, float chaseMultiplier,
+    public SpeedBreakdown(float baseSpeed, float terrainFactor, float zocFactor, float chaseMultiplier, float weatherFactor,
         float final, string terrainName, string stateName)
     {
         Base = baseSpeed;
         TerrainFactor = terrainFactor;
         ZocFactor = zocFactor;
         ChaseMultiplier = chaseMultiplier;
+        WeatherFactor = weatherFactor;
         Final = final;
         TerrainName = terrainName;
         StateName = stateName;
@@ -53,7 +57,7 @@ public readonly struct SpeedBreakdown
 /// <summary>
 /// AI 实体移速计算器 — 纯计算，无状态。
 /// 从 MovementProcessor.CalculateEffectiveSpeed 提取。
-/// 公式: base × terrainFactor × zocFactor × chaseMultiplier 保底 15%
+/// 公式: base × terrainFactor × zocFactor × chaseMultiplier × weatherFactor，保底 15%
 /// </summary>
 public static class EntitySpeedCalculator
 {
@@ -62,39 +66,41 @@ public static class EntitySpeedCalculator
     /// </summary>
     public static float GetChaseSpeedMultiplier(AIStrategyEnum strategy) => strategy switch
     {
-        AIStrategyEnum.Reckless    => 1.25f,
-        AIStrategyEnum.Berserk     => 1.30f,
-        AIStrategyEnum.Cunning     => 1.15f,
-        AIStrategyEnum.Intimidate  => 1.10f,
-        AIStrategyEnum.Tactical    => 1.05f,
-        AIStrategyEnum.Territorial => 1.05f,
+        AIStrategyEnum.Reckless    => 1.10f,
+        AIStrategyEnum.Berserk     => 1.12f,
+        AIStrategyEnum.Cunning     => 1.07f,
+        AIStrategyEnum.Intimidate  => 1.05f,
+        AIStrategyEnum.Tactical    => 1.03f,
+        AIStrategyEnum.Territorial => 1.03f,
         AIStrategyEnum.Cautious    => 1.0f,
-        AIStrategyEnum.Instinct    => 1.1f,
-        _                          => 1.1f,
+        AIStrategyEnum.Instinct    => 1.05f,
+        _                          => 1.05f,
     };
 
     /// <summary>
     /// 计算实体最终移速。
-    /// 公式: entity.MoveSpeed × 地形因子 × ZoC惩罚 × 追逐倍率，保底 15%
+    /// 公式: entity.MoveSpeed × 地形因子 × ZoC惩罚 × 追逐倍率 × 天气倍率，保底 15%
     /// </summary>
     public static float CalculateSpeed(
         OverworldEntity entity,
         Vector2 position,
         ChunkManager? chunkManager = null,
-        ZoneOfControlManager? zocManager = null)
+        ZoneOfControlManager? zocManager = null,
+        float weatherSpeedFactor = 1.0f)
     {
         var terrainQuery = chunkManager != null
             ? OverworldTerrainQuery.ForActiveChunks(chunkManager)
             : null;
 
-        return CalculateSpeed(entity, position, terrainQuery, zocManager);
+        return CalculateSpeed(entity, position, terrainQuery, zocManager, weatherSpeedFactor);
     }
 
     public static float CalculateSpeed(
         OverworldEntity entity,
         Vector2 position,
         OverworldTerrainQuery? terrainQuery,
-        ZoneOfControlManager? zocManager = null)
+        ZoneOfControlManager? zocManager = null,
+        float weatherSpeedFactor = 1.0f)
     {
         float speed = entity.MoveSpeed;
         float terrainFactor = GetTerrainFactor(position, terrainQuery);
@@ -104,6 +110,7 @@ public static class EntitySpeedCalculator
         speed *= terrainFactor;
         speed *= zocFactor;
         speed *= chaseMult;
+        speed *= weatherSpeedFactor;
 
         return System.Math.Max(speed, entity.MoveSpeed * 0.15f);
     }
@@ -115,20 +122,22 @@ public static class EntitySpeedCalculator
         OverworldEntity entity,
         Vector2 position,
         ChunkManager? chunkManager = null,
-        ZoneOfControlManager? zocManager = null)
+        ZoneOfControlManager? zocManager = null,
+        float weatherSpeedFactor = 1.0f)
     {
         var terrainQuery = chunkManager != null
             ? OverworldTerrainQuery.ForActiveChunks(chunkManager)
             : null;
 
-        return GetBreakdown(entity, position, terrainQuery, zocManager);
+        return GetBreakdown(entity, position, terrainQuery, zocManager, weatherSpeedFactor);
     }
 
     public static SpeedBreakdown GetBreakdown(
         OverworldEntity entity,
         Vector2 position,
         OverworldTerrainQuery? terrainQuery,
-        ZoneOfControlManager? zocManager = null)
+        ZoneOfControlManager? zocManager = null,
+        float weatherSpeedFactor = 1.0f)
     {
         float baseSpeed = entity.MoveSpeed;
         float terrainFactor = GetTerrainFactor(position, terrainQuery);
@@ -139,6 +148,7 @@ public static class EntitySpeedCalculator
         final *= terrainFactor;
         final *= zocFactor;
         final *= chaseMult;
+        final *= weatherSpeedFactor;
         final = System.Math.Max(final, entity.MoveSpeed * 0.15f);
 
         string terrainName = "未知";
@@ -150,6 +160,7 @@ public static class EntitySpeedCalculator
             terrainFactor,
             zocFactor,
             chaseMult,
+            weatherSpeedFactor,
             final,
             terrainName,
             entity.GetStateText()

@@ -4,27 +4,26 @@ from pathlib import Path
 
 
 ASSETS_ROOT_MAPPINGS = [
-    ("generated_character_parts/head", "character_part"),
-    ("generated_character_parts/hair", "character_part"),
-    ("generated_character_parts/backup", "character_part"),
-    ("generated_armor", "equipment_texture"),
-    ("generated_helmets", "equipment_texture"),
-    ("generated_weapons", "equipment_texture"),
-    ("generated_weapons_backup", "equipment_texture"),
-    ("generated_shields", "equipment_texture"),
-    ("generated_staves", "equipment_texture"),
-    ("generated_spellbooks", "equipment_texture"),
-    ("generated_class_icons", "icon"),
-    ("generated_consumables", "icon"),
-    ("generated_skill_icons", "icon"),
-    ("generated_ui_icons", "icon"),
-    ("generated_ui", "ui_texture"),
-    ("generated_ui_main", "ui_texture"),
-    ("generated_legendary_sprites", "unit_sprite"),
-    ("generated_campaign_illust", "campaign_illustration"),
-    ("generated_origin_illust", "origin_illustration"),
-    ("generated_poi_illust", "poi_illustration"),
-    ("generated_wound_vfx", "vfx"),
+    ("character_parts/head", "character_part"),
+    ("character_parts/hair", "character_part"),
+    ("armor", "equipment_texture"),
+    ("helmets", "equipment_texture"),
+    ("weapons", "equipment_texture"),
+    ("weapons_backup", "equipment_texture"),
+    ("shields", "equipment_texture"),
+    ("staves", "equipment_texture"),
+    ("spellbooks", "equipment_texture"),
+    ("class_icons", "icon"),
+    ("consumables", "icon"),
+    ("skill_icons", "icon"),
+    ("ui_icons", "icon"),
+    ("ui", "ui_texture"),
+    ("ui_main", "ui_texture"),
+    ("legendary_sprites", "unit_sprite"),
+    ("campaign_illust", "campaign_illustration"),
+    ("origin_illust", "origin_illustration"),
+    ("poi_illust", "poi_illustration"),
+    ("wound_vfx", "vfx"),
     ("fog_illustrations", "fog_illustration"),
     ("tiles", "map_texture"),
     ("props", "map_texture"),
@@ -141,7 +140,7 @@ def iter_entries(assets_root: Path, project_root: Path):
 def build_tags(relative_path: str, kind: str):
     parts = Path(relative_path).parts
     tags = [kind]
-    tags.extend(part for part in parts[:-1] if part not in {"generated_character_parts"})
+    tags.extend(part for part in parts[:-1] if part not in {"character_parts"})
     return sorted(set(tags))
 
 

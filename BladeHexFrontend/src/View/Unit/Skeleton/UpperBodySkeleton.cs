@@ -83,8 +83,7 @@ public sealed class UpperBodySkeleton
 
     public Sprite2D SpriteBody => _slots.GetValueOrDefault("Body")!;
     public Sprite2D SpriteCostume => _slots.GetValueOrDefault("Costume")!;
-    public Sprite2D SpriteHead => _slots.GetValueOrDefault("Face")!; // 兼容旧版，重定向到 Face 贴图层
-    public Sprite2D SpriteFace => _slots.GetValueOrDefault("Face")!;
+    public Sprite2D SpriteHead => _slots.GetValueOrDefault("Head")!;
     public Sprite2D SpriteHair => _slots.GetValueOrDefault("Hair")!;
     public Sprite2D SpriteHelmet => _slots.GetValueOrDefault("Helmet")!;
     public Sprite2D SpriteHands => _slots.GetValueOrDefault("Hands")!;
@@ -219,7 +218,7 @@ public sealed class UpperBodySkeleton
     private void BuildSprites2D(BoneConfig config)
     {
         // ZIndex 层级（越大越靠前）：
-        // Body=0, Costume=10, Head=20, Helmet=30, ArmL=-5, Shield=-10, ArmR=5, Hands=40, Weapon=50
+        // Body=0, Head=5, Costume=10, Helmet=30, ArmL=-5, Shield=-10, ArmR=5, Hands=40, Weapon=50
 
         // 身体
         var body = CreateSprite2D("Sprite_Body", 0);
@@ -236,14 +235,12 @@ public sealed class UpperBodySkeleton
         _slots["Costume"] = costume;
         _slotSprites[ItemData.EquipSlot.Costume] = costume;
 
-        // 脸部
-        var face = CreateSprite2D("Sprite_Face", 20);
-        face.Position = Vector2.Zero;
-        BoneHead.AddChild(face);
-        _slots["Face"] = face;
-        _slots["Head"] = face; // 兼容旧版名称
-        _slotSprites[ItemData.EquipSlot.Face] = face;
-        _slotSprites[ItemData.EquipSlot.Head] = face; // 兼容旧版槽位
+        // 头部
+        var head = CreateSprite2D("Sprite_Head", 5);
+        head.Position = Vector2.Zero;
+        BoneHead.AddChild(head);
+        _slots["Head"] = head;
+        _slotSprites[ItemData.EquipSlot.Head] = head;
 
         // 发型+胡须合并层 (ZIndex = 25，纹理内已包含胡须)
         var hair = CreateSprite2D("Sprite_Hair", 25);

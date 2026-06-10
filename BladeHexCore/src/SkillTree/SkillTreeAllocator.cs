@@ -51,10 +51,6 @@ public static class SkillTreeAllocator
         string secondary = GetSecondaryAttr(data, primary);
         tree.AiAllocatePoints(aiAccuracy, primary, secondary);
 
-        // spell_slot_X 是研习节点，不是战斗技能。自动生成角色点亮后，
-        // 直接随机获得同环法术，并把实际法术放入技能栏。
-        GrantRandomSpellsFromStudyNodes(data, tree);
-
         // v0.7: 自动装备前 N 个解锁的主动技能到 EquippedSkills（最多 10 个）。
         // 玩家可在技能盘 UI 底部手动调整。新角色一上来就能直接使用，不需要打开
         // 技能盘做初始化操作。已有装备配置不覆盖（保护跨战斗装备）。
@@ -75,17 +71,37 @@ public static class SkillTreeAllocator
         while (data.EquippedSkills.Count < UnitData.MaxEquippedSkills)
             data.EquippedSkills.Add("");
 
-        EquipKnownSpells(data);
+        LearnAndEquipKnownSpells(data, tree);
 
         foreach (var node in tree.GetActiveSkills())
         {
-            if (string.IsNullOrEmpty(node.SkillEffect)) continue;
-            if (!IsAutoEquippableSkillEffect(node.SkillEffect)) continue;
-            if (data.IsSkillEquipped(node.SkillEffect)) continue;
+            string effect = node.SkillEffect;
+            if (string.IsNullOrEmpty(effect)) continue;
+            if (!IsAutoEquippableSkillEffect(effect)) continue;
+            if (data.IsSkillEquipped(effect)) continue;
             int slot = data.FindFirstEmptyEquippedSlot();
             if (slot < 0) break; // 槽位已满
-            data.SetEquippedSkill(slot, node.SkillEffect);
+            data.SetEquippedSkill(slot, effect);
         }
+    }
+
+    private static void LearnAndEquipKnownSpells(UnitData data, CharacterSkillTree tree)
+    {
+        foreach (var effect in tree.GetActiveSkillEffects())
+        {
+            if (!SpellStudyCatalog.IsSpellSlotEffect(effect))
+                continue;
+
+            int tier = SpellStudyCatalog.GetTierFromSpellSlotEffect(effect);
+            if (tier <= 0 || SpellStudyCatalog.GetKnownSpellNameForTier(data, tier) != "")
+                continue;
+
+            var spell = SpellStudyCatalog.CreateRandomSpellForTier(data, tier);
+            if (spell != null && !SpellStudyCatalog.HasSpell(data, spell.SpellId))
+                data.KnownSpells.Add(spell);
+        }
+
+        EquipKnownSpells(data);
     }
 
     private static void EquipKnownSpells(UnitData data)
@@ -100,22 +116,6 @@ public static class SkillTreeAllocator
             int slot = data.FindFirstEmptyEquippedSlot();
             if (slot < 0) break;
             data.SetEquippedSkill(slot, entry);
-        }
-    }
-
-    private static void GrantRandomSpellsFromStudyNodes(UnitData data, CharacterSkillTree tree)
-    {
-        foreach (var node in tree.GetActiveSkills())
-        {
-            if (!SpellStudyCatalog.IsSpellSlotEffect(node.SkillEffect)) continue;
-
-            int tier = SpellStudyCatalog.GetTierFromSpellSlotEffect(node.SkillEffect);
-            if (tier <= 0) continue;
-            if (!string.IsNullOrEmpty(SpellStudyCatalog.GetKnownSpellNameForTier(data, tier))) continue;
-
-            var spell = SpellStudyCatalog.CreateRandomSpellForTier(data, tier);
-            if (spell != null && !SpellStudyCatalog.HasSpell(data, spell.SpellId))
-                data.KnownSpells.Add(spell);
         }
     }
 

@@ -128,18 +128,47 @@ public static class SkillNodeShape
 
     private static Vector2I[] BuildTemplateTiles(string templateId, Vector2I anchor, int fallbackCount)
     {
-        int count = templateId switch
+        return templateId switch
         {
-            "attribute_pair_2" => 2,
-            "pip_1" => 1,
-            "passive_triangle_4" => 4,
-            "active_kite_4" => 4,
-            "keystone_crown_6" => 6,
-            "apex_rune_12" => 12,
-            _ => fallbackCount,
+            "pip_1" => [anchor],
+            "attribute_pair_2" => BuildDiamondCells(anchor, (0, 0)),
+            "passive_triad_3" => BuildRelativeTiles(anchor, (0, 0, 0), (0, 0, 1), (1, 0, 0)),
+            "passive_triangle_4" => BuildRelativeTiles(anchor, (0, 0, 1), (0, 0, 0), (1, 0, 0), (0, 1, 0)),
+            "active_kite_4" => BuildRelativeTiles(anchor, (0, 0, 0), (0, 0, 1), (-1, 0, 1), (0, -1, 1)),
+            "keystone_crown_6" => BuildDiamondCells(anchor, (0, 0), (1, 0), (0, 1)),
+            "apex_rune_12" => BuildDiamondCells(anchor, (0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)),
+            "apex_sunburst_12" => BuildDiamondCells(anchor, (1, 0), (0, 1), (1, 1), (2, 1), (1, 2), (2, 2)),
+            "apex_arrowhead_12" => BuildDiamondCells(anchor, (0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (0, 2)),
+            "apex_bastion_12" => BuildDiamondCells(anchor, (1, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2)),
+            "apex_crystal_12" => BuildDiamondCells(anchor, (0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)),
+            "apex_hourglass_12" => BuildDiamondCells(anchor, (0, 0), (0, 1), (1, 0), (1, 1), (1, 2), (2, 1)),
+            "apex_crown_12" => BuildDiamondCells(anchor, (2, 0), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2)),
+            _ => BuildContiguousTiles(anchor, fallbackCount),
         };
+    }
 
-        return BuildContiguousTiles(anchor, count);
+    private static Vector2I[] BuildDiamondCells(Vector2I anchor, params (int q, int r)[] cells)
+    {
+        var result = new List<Vector2I>(cells.Length * 2);
+        foreach (var (dq, dr) in cells)
+        {
+            result.AddRange(BuildRelativeTiles(anchor, (dq, dr, 0), (dq, dr, 1)));
+        }
+
+        return result.ToArray();
+    }
+
+    private static Vector2I[] BuildRelativeTiles(Vector2I anchor, params (int q, int r, int t)[] offsets)
+    {
+        var (anchorQ, anchorR, _) = SkillTreeCoord.DecodeTile(anchor);
+        var result = new Vector2I[offsets.Length];
+        for (int i = 0; i < offsets.Length; i++)
+        {
+            var (dq, dr, t) = offsets[i];
+            result[i] = SkillTreeCoord.EncodeTile(anchorQ + dq, anchorR + dr, t);
+        }
+
+        return result;
     }
 
     private static int TileRadialDistance(Vector2I tile)

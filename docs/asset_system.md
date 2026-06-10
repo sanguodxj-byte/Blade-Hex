@@ -48,13 +48,13 @@ Preferred future layout:
 assets/
   catalog/
     built_in_assets.json
-  generated_character_parts/
+  character_parts/
     head/
     hair/
     backup/
-  generated_armor/
-  generated_helmets/
-  generated_weapons/
+  armor/
+  helmets/
+  weapons/
   audio/
     sfx/
     bgm/
@@ -190,8 +190,8 @@ source-controlled project asset is emitted first and wins.
   - catalog entries such as `equipment_texture`
   - `ResourceRegistry` compatibility IDs
   - direct `res://`, `uid://`, `user://`, and absolute file paths
-  - generated equipment directories such as `generated_armor`,
-    `generated_helmets`, `generated_weapons`, and `generated_shields`
+  - generated equipment directories such as `armor`,
+    `helmets`, `weapons`, and `shields`
 - It also exposes typed entry points for `icon`, `portrait`, `unit_sprite`,
   `campaign_illustration`, `poi_illustration`, `origin_illustration`,
   `ui_texture`, and `fog_illustration`.
@@ -199,7 +199,7 @@ source-controlled project asset is emitted first and wins.
   equipped single-image layers.
 - `CharacterPresenter` also resolves final portrait and battle-sprite fallback
   IDs through `LoadPortrait()` and `LoadUnitSprite()`.
-- Creature sprites under `assets/generated_legendary_sprites` are cataloged as
+- Creature sprites under `assets/legendary_sprites` are cataloged as
   `unit_sprite`. `CreatureTextureConfig` now resolves creature template IDs
   through `TextureAssetResolver.LoadUnitSprite()` before using the legacy path.
 - `CharacterRenderNode` resolves the unit base pedestal as an icon ID, with the

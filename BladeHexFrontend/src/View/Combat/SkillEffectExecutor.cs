@@ -354,7 +354,8 @@ public static class SkillEffectExecutor
 			var resultDict = CombatResolver.ResolveAttack(
 				attacker, target, ctx.Grid, isCharge, false, accuracyBonus, damageMultiplier,
 				attackerAllies: allies,
-				defenderAllies: targetAllies);
+				defenderAllies: targetAllies,
+				triggerVisuals: false);
 			
 			if (resultDict.ContainsKey("hit") && resultDict["hit"].AsBool())
 			{

@@ -44,11 +44,25 @@ public static class SkillNodeFigureCatalog
             SkillNodeData.ActivationShape.Start => "start_core_6",
             SkillNodeData.ActivationShape.Attribute when node.CurrentNodeType == SkillNodeData.NodeType.Pip => "pip_1",
             SkillNodeData.ActivationShape.Attribute => "attribute_pair_2",
-            SkillNodeData.ActivationShape.PassiveSkill => "passive_triangle_4",
+            SkillNodeData.ActivationShape.PassiveSkill => "passive_triad_3",
             SkillNodeData.ActivationShape.ActiveSkill => "active_kite_4",
             SkillNodeData.ActivationShape.Keystone => "keystone_crown_6",
-            SkillNodeData.ActivationShape.Apex => "apex_rune_12",
+            SkillNodeData.ActivationShape.Apex => GetDefaultApexTemplateId(node.CurrentRegion),
             _ => "attribute_pair_2",
+        };
+    }
+
+    private static string GetDefaultApexTemplateId(SkillNodeData.Region region)
+    {
+        return region switch
+        {
+            SkillNodeData.Region.Str => "apex_sunburst_12",
+            SkillNodeData.Region.Dex => "apex_arrowhead_12",
+            SkillNodeData.Region.Con => "apex_bastion_12",
+            SkillNodeData.Region.Int => "apex_crystal_12",
+            SkillNodeData.Region.Wis => "apex_hourglass_12",
+            SkillNodeData.Region.Cha => "apex_crown_12",
+            _ => "apex_crystal_12",
         };
     }
 }

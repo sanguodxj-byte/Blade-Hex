@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using BladeHex.Diagnostics;
 
 namespace BladeHex.Strategic.WorldGen;
 
@@ -45,6 +46,7 @@ public sealed class WorldPipeline
     public WorldData Build(int seed, WorldCreationConfig config, Action<float, string>? onProgress = null)
     {
         var ctx = new WorldBuildContext(seed, config) { OnProgress = onProgress };
+        var report = new WorldGenerationReport(seed, config, _stages);
 
         float totalWeight = _stages.Sum(s => s.ProgressWeight);
         if (totalWeight <= 0f) totalWeight = 1f;
@@ -52,37 +54,123 @@ public sealed class WorldPipeline
         float cumulative = 0f;
         var startTime = Time.GetTicksMsec();
 
-        GD.Print($"[WorldPipeline] 开始: seed={seed}, {config.WorldChunksW}×{config.WorldChunksH} chunks, {_stages.Count} stages");
-
-        foreach (var stage in _stages)
+        try
         {
-            float pct = cumulative / totalWeight;
-            ctx.OnProgress?.Invoke(pct, stage.Name);
+            string startMessage = $"[WorldPipeline] 开始: seed={seed}, {config.WorldChunksW}×{config.WorldChunksH} chunks, {_stages.Count} stages";
+            GD.Print(startMessage);
+            DiagnosticLog.Event("WorldPipeline", "start", new Dictionary<string, object?>
+            {
+                ["seed"] = seed,
+                ["chunks"] = $"{config.WorldChunksW}x{config.WorldChunksH}",
+                ["tiles"] = $"{config.WorldTileWidth}x{config.WorldTileHeight}",
+                ["stage_count"] = _stages.Count,
+                ["nations"] = config.Nations.Count,
+                ["report_id"] = report.ReportId,
+            });
 
-            var stageStart = Time.GetTicksMsec();
-            stage.Execute(ctx);
-            var stageElapsed = Time.GetTicksMsec() - stageStart;
+            foreach (var stage in _stages)
+            {
+                float pct = cumulative / totalWeight;
+                ctx.OnProgress?.Invoke(pct, stage.Name);
 
-            cumulative += stage.ProgressWeight;
-            GD.Print($"[WorldPipeline] {stage.Name} 完成 ({stageElapsed}ms)");
+                var stageStart = Time.GetTicksMsec();
+                var stageReport = report.BeginStage(stage, ctx, pct);
+                DiagnosticLog.Event("WorldPipeline", "stage_start", new Dictionary<string, object?>
+                {
+                    ["name"] = stage.Name,
+                    ["progress"] = pct.ToString("P0"),
+                    ["chunks"] = ctx.Chunks.Count,
+                    ["pois"] = ctx.Pois.Count,
+                    ["zones"] = ctx.Zones.Count,
+                    ["territories"] = ctx.Territories.Count,
+                    ["specials"] = ctx.SpecialCharacters.Count,
+                    ["report_id"] = report.ReportId,
+                });
+
+                try
+                {
+                    stage.Execute(ctx);
+                    report.EndStage(stageReport, ctx);
+                }
+                catch (Exception ex)
+                {
+                    report.FailStage(stageReport, ctx, ex);
+                    DiagnosticLog.Exception($"WorldPipeline stage failed: {stage.Name}", ex);
+                    throw;
+                }
+
+                var stageElapsed = Time.GetTicksMsec() - stageStart;
+
+                cumulative += stage.ProgressWeight;
+                GD.Print($"[WorldPipeline] {stage.Name} 完成 ({stageElapsed}ms)");
+                DiagnosticLog.Event("WorldPipeline", "stage_end", new Dictionary<string, object?>
+                {
+                    ["name"] = stage.Name,
+                    ["elapsed_ms"] = stageElapsed,
+                    ["chunks"] = ctx.Chunks.Count,
+                    ["pois"] = ctx.Pois.Count,
+                    ["zones"] = ctx.Zones.Count,
+                    ["territories"] = ctx.Territories.Count,
+                    ["specials"] = ctx.SpecialCharacters.Count,
+                    ["report_id"] = report.ReportId,
+                });
+            }
+
+            ctx.OnProgress?.Invoke(1f, "完成");
+            var totalElapsed = Time.GetTicksMsec() - startTime;
+            GD.Print($"[WorldPipeline] 完成: 总耗时 {totalElapsed}ms");
+            DiagnosticLog.Event("WorldPipeline", "complete", new Dictionary<string, object?>
+            {
+                ["elapsed_ms"] = totalElapsed,
+                ["chunks"] = ctx.Chunks.Count,
+                ["pois"] = ctx.Pois.Count,
+                ["zones"] = ctx.Zones.Count,
+                ["territories"] = ctx.Territories.Count,
+                ["specials"] = ctx.SpecialCharacters.Count,
+                ["report_id"] = report.ReportId,
+            });
+
+            report.Complete(ctx);
+
+            return new WorldData
+            {
+                Seed = ctx.Seed,
+                WorldChunksW = config.WorldChunksW,
+                WorldChunksH = config.WorldChunksH,
+                Chunks = ctx.Chunks,
+                Pois = ctx.Pois,
+                Skeleton = null,
+                Zones = ctx.Zones,
+                Territories = ctx.Territories,
+                Nations = config.Nations,
+                SpecialCharacters = ctx.SpecialCharacters,
+            };
         }
-
-        ctx.OnProgress?.Invoke(1f, "完成");
-        var totalElapsed = Time.GetTicksMsec() - startTime;
-        GD.Print($"[WorldPipeline] 完成: 总耗时 {totalElapsed}ms");
-
-        return new WorldData
+        catch (Exception ex)
         {
-            Seed = ctx.Seed,
-            WorldChunksW = config.WorldChunksW,
-            WorldChunksH = config.WorldChunksH,
-            Chunks = ctx.Chunks,
-            Pois = ctx.Pois,
-            Skeleton = null,
-            Zones = ctx.Zones,
-            Territories = ctx.Territories,
-            Nations = config.Nations,
-            SpecialCharacters = ctx.SpecialCharacters,
-        };
+            report.Fail(ex);
+            DiagnosticLog.Event("WorldPipeline", "failed", new Dictionary<string, object?>
+            {
+                ["seed"] = seed,
+                ["report_id"] = report.ReportId,
+                ["exception"] = ex.GetType().Name,
+                ["message"] = ex.Message,
+            });
+            throw;
+        }
+        finally
+        {
+            var paths = report.FinishAndWrite();
+            if (paths.Count > 0)
+            {
+                DiagnosticLog.Event("WorldPipeline", "report_written", new Dictionary<string, object?>
+                {
+                    ["report_id"] = report.ReportId,
+                    ["level"] = paths.GetValueOrDefault("level"),
+                    ["json"] = paths.GetValueOrDefault("json"),
+                    ["markdown"] = paths.GetValueOrDefault("markdown"),
+                });
+            }
+        }
     }
 }

@@ -17,6 +17,7 @@ namespace BladeHex.View.Combat;
 public partial class CombatSunLight : Node
 {
     private DirectionalLight3D? _light;
+    private DirectionalLight3D? _fillLight;
     private float _currentHour = 12f;
 
     // 太阳轨迹参数
@@ -45,9 +46,10 @@ public partial class CombatSunLight : Node
     // 色温渐变
     private Gradient? _colorGradient;
 
-    public void Initialize(DirectionalLight3D light, float hour)
+    public void Initialize(DirectionalLight3D light, float hour, DirectionalLight3D? fillLight = null)
     {
         _light = light;
+        _fillLight = fillLight;
         _currentHour = hour;
         BuildColorGradient();
         ApplyLighting();
@@ -134,6 +136,25 @@ public partial class CombatSunLight : Node
         // ShadowBlur 再叠一层均匀模糊兜底。需 forward_plus(本项目已切)。
         _light.LightAngularDistance = 2.5f;
         _light.ShadowBlur = 1.5f;
+
+        ApplyFillLighting(isDaytime, elevation, azimuth, energy);
+    }
+
+    private void ApplyFillLighting(bool isDaytime, float elevation, float azimuth, float keyEnergy)
+    {
+        if (_fillLight == null) return;
+
+        float fillElevation = Mathf.Clamp(elevation + 10f, 25f, 55f);
+        float fillAzimuth = azimuth + 165f;
+
+        _fillLight.RotationDegrees = new Vector3(-fillElevation, fillAzimuth, 0);
+        _fillLight.ShadowEnabled = false;
+        _fillLight.LightColor = isDaytime
+            ? new Color(0.58f, 0.66f, 0.82f)
+            : new Color(0.34f, 0.42f, 0.65f);
+        _fillLight.LightEnergy = isDaytime
+            ? Mathf.Clamp(keyEnergy * 0.12f, 0.08f, 0.16f)
+            : 0.08f;
     }
 
     private void BuildColorGradient()

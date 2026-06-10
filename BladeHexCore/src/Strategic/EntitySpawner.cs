@@ -92,7 +92,7 @@ public partial class EntitySpawner : RefCounted
                 PartyLevel = 1 + _random.Next(3)
             };
             entity.CombatPower = entity.PartySize * entity.PartyLevel * 2.0f;
-            entity.MoveSpeed = 180.0f;
+            entity.MoveSpeed = 150.0f;
             entity.PatrolRadius = 400.0f;
             entity.VisionRange = 350.0f;
             entity.IsHostileToPlayer = false;
@@ -162,7 +162,7 @@ public partial class EntitySpawner : RefCounted
             PartyLevel = 1 + (int)(source.ThreatLevel * 2)
         };
         entity.CombatPower = entity.PartySize * entity.PartyLevel * 1.5f;
-        entity.MoveSpeed = 160.0f + (float)_random.NextDouble() * 80.0f;
+        entity.MoveSpeed = 110.0f + (float)_random.NextDouble() * 50.0f;
         entity.VisionRange = 300.0f;
         entity.IsHostileToPlayer = true;
         entity.Faction = "hostile";
@@ -241,7 +241,7 @@ public partial class EntitySpawner : RefCounted
             };
             entity.CombatPower = 30.0f + lair.LairLevel * 5.0f;
             entity.PartyLevel = lair.LairLevel;
-            entity.MoveSpeed = 250.0f;
+            entity.MoveSpeed = 130.0f;
             entity.PatrolRadius = entity.TerritoryRadius;
             entity.VisionRange = 500.0f;
             entity.IsHostileToPlayer = true;

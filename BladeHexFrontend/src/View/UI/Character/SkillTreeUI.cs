@@ -17,7 +17,7 @@ public partial class SkillTreeUI : PanelContainer
     private const float HexSize = 48.0f;
     private const float PanSpeed = 500.0f;
 
-    private const int HexagonRadius = 20;
+    private const int HexagonRadius = SkillTreeData.FixedLayoutRadius;
 
     private const float RadiusSmall = 8.0f;
     private const float RadiusBig = 13.0f;
@@ -43,6 +43,7 @@ public partial class SkillTreeUI : PanelContainer
     private readonly Vector2[] _startHexHighlightScratch = new Vector2[3];
     private readonly Color[] _crystalColorsScratch = new Color[3];
     private readonly Vector2[] _highlightVertsScratch = new Vector2[3];
+    private Vector2[]? _cachedRingBoundaryWorldLines;
     private CharacterSkillTree? _characterTree;
     private SkillTreeData? _treeData;
     private SkillTreeViewportState _viewport = null!;
@@ -69,6 +70,7 @@ public partial class SkillTreeUI : PanelContainer
 
     private Button? _careerLookupBtn;
     private PanelContainer? _careerLookupPopup;
+    private int _pendingCareerLookupFlags = 0;
     private int _highlightCareerFlags = 0;
 
     private Texture2D? _bgTexture;
@@ -133,16 +135,12 @@ public partial class SkillTreeUI : PanelContainer
 
                 for (int i = 0; i < 6; i++)
                 {
-                    var vertex = _startHexVertexScratch[i];
-                    var prev = _startHexVertexScratch[(i + 5) % 6];
-                    var next = _startHexVertexScratch[(i + 1) % 6];
-                    var prevMid = (prev + vertex) / 2.0f;
-                    var nextMid = (vertex + next) / 2.0f;
+                    var left = _startHexVertexScratch[i];
+                    var right = _startHexVertexScratch[(i + 1) % 6];
                     var col = Theme.GetRegionColor(StartHexRegions[i]);
                     var state = activated ? TileVisualState.Activated : TileVisualState.Locked;
 
-                    AddCrystalTileToMeshArrays(new[] { pos, prevMid, vertex }, col, state, fillVerts, fillColors, lineVerts, lineColors);
-                    AddCrystalTileToMeshArrays(new[] { pos, vertex, nextMid }, col, state, fillVerts, fillColors, lineVerts, lineColors);
+                    AddCrystalTileToMeshArrays(new[] { pos, left, right }, col, state, fillVerts, fillColors, lineVerts, lineColors);
                 }
 
                 for (int i = 0; i < 6; i++)
@@ -174,7 +172,10 @@ public partial class SkillTreeUI : PanelContainer
 
                 if (_nodeShapeBoundaryWorldLines.TryGetValue(nodeId, out var boundaryLines))
                 {
-                    float colorAlpha = activated ? 0.95f : partiallyFilled ? 0.78f : canFill ? 0.66f : 0.34f;
+                    bool majorNode = IsMajorShapeNode(node);
+                    float colorAlpha = majorNode
+                        ? activated ? 0.96f : partiallyFilled ? 0.76f : canFill ? 0.62f : 0.46f
+                        : activated ? 0.26f : partiallyFilled ? 0.16f : canFill ? 0.12f : 0.045f;
                     var colColor = new Color(regionColor.R, regionColor.G, regionColor.B, colorAlpha);
 
                     for (int i = 0; i + 1 < boundaryLines.Length; i += 2)
@@ -186,6 +187,22 @@ public partial class SkillTreeUI : PanelContainer
                         lineVerts.Add(to);
                         lineColors.Add(colColor);
                         lineColors.Add(colColor);
+                    }
+
+                    if (majorNode)
+                    {
+                        var edgeGlow = new Color(
+                            MathF.Min(regionColor.R * 1.25f, 1.0f),
+                            MathF.Min(regionColor.G * 1.25f, 1.0f),
+                            MathF.Min(regionColor.B * 1.25f, 1.0f),
+                            activated ? 0.54f : partiallyFilled ? 0.40f : canFill ? 0.30f : 0.24f);
+                        for (int i = 0; i + 1 < boundaryLines.Length; i += 2)
+                        {
+                            lineVerts.Add(boundaryLines[i]);
+                            lineVerts.Add(boundaryLines[i + 1]);
+                            lineColors.Add(edgeGlow);
+                            lineColors.Add(edgeGlow);
+                        }
                     }
                 }
             }
@@ -328,7 +345,7 @@ public partial class SkillTreeUI : PanelContainer
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
 
-        var spLbl = _factory.CreateBodyLabel("属性点: 0", Theme.TextAccent);
+        var spLbl = _factory.CreateBodyLabel("星辉: 0", Theme.TextAccent);
         header.AddChild(spLbl);
         _statLabels["skill_points"] = spLbl;
 
@@ -479,10 +496,14 @@ public partial class SkillTreeUI : PanelContainer
     	foreach (var child in _careerLookupPopup.GetChildren())
     		child.QueueFree();
 
+        var root = new VBoxContainer();
+        root.AddThemeConstantOverride("separation", Theme.SpacingSm);
+        _careerLookupPopup.AddChild(root);
+
     	var scroll = new ScrollContainer();
     	scroll.CustomMinimumSize = new Vector2(320, 400);
     	scroll.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-    	_careerLookupPopup.AddChild(scroll);
+    	root.AddChild(scroll);
 
     	var vbox = new VBoxContainer();
     	vbox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -530,9 +551,23 @@ public partial class SkillTreeUI : PanelContainer
     			TooltipText = skill.Description,
     		};
     		int capturedFlags = flags;
-    		btn.Pressed += () => OnCareerSelected(capturedFlags);
+    		btn.Pressed += () => PreviewCareerLookup(capturedFlags);
     		vbox.AddChild(btn);
     	}
+
+        var actions = new HBoxContainer();
+        actions.AddThemeConstantOverride("separation", Theme.SpacingSm);
+        root.AddChild(actions);
+
+        var resetBtn = _factory.CreateButton("重置", new Vector2(0, 36));
+        resetBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        resetBtn.Pressed += ResetCareerLookupPreview;
+        actions.AddChild(resetBtn);
+
+        var confirmBtn = _factory.CreateButton("确定", new Vector2(0, 36));
+        confirmBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        confirmBtn.Pressed += ConfirmCareerLookupPreview;
+        actions.AddChild(confirmBtn);
     }
 
     private static int CountBits(int n)
@@ -555,8 +590,9 @@ public partial class SkillTreeUI : PanelContainer
     	_careerLookupPopup.Visible = true;
     }
 
-    private void OnCareerSelected(int flags)
+    private void PreviewCareerLookup(int flags)
     {
+        _pendingCareerLookupFlags = flags;
     	_highlightCareerFlags = flags;
     	RequestRedraw();
 
@@ -571,7 +607,20 @@ public partial class SkillTreeUI : PanelContainer
     	{
     		_infoPanel.ShowCareerInfo(title, "", "", "");
     	}
+    }
 
+    private void ResetCareerLookupPreview()
+    {
+        _pendingCareerLookupFlags = 0;
+        _highlightCareerFlags = 0;
+        UpdateInfoPanel();
+        RequestRedraw();
+    }
+
+    private void ConfirmCareerLookupPreview()
+    {
+        if (_pendingCareerLookupFlags != 0)
+            _highlightCareerFlags = _pendingCareerLookupFlags;
     	_careerLookupPopup?.Hide();
     }
 
@@ -862,17 +911,12 @@ public partial class SkillTreeUI : PanelContainer
         if (cfg.Count == 0) return effect;
         string name = cfg.ContainsKey("name") ? cfg["name"].AsString() : effect;
         string desc = cfg.ContainsKey("description") ? cfg["description"].AsString() : "";
-        string apText = BuildActionCostText(cfg);
-        string cooldown = cfg.ContainsKey("cooldown") ? cfg["cooldown"].AsInt32().ToString() : "";
-        string uses = BuildUsesPerBattleText(cfg);
         string equipment = SkillRegistry.GetEquipmentRequirementText(effect);
 
         var sb = new System.Text.StringBuilder(name);
         if (!string.IsNullOrEmpty(desc))
             sb.Append($"\n{desc}");
-        string meta = BuildSkillMetaLine(apText, cooldown, uses);
-        if (!string.IsNullOrEmpty(meta))
-            sb.Append($"\n{meta}");
+        AppendSkillSpecLines(sb, cfg);
         if (!string.IsNullOrEmpty(equipment))
             sb.Append($"\n装备需求: {equipment}");
         return sb.ToString();
@@ -897,25 +941,56 @@ public partial class SkillTreeUI : PanelContainer
         return cost == 0 ? "0 (免费行动)" : cost.ToString();
     }
 
-    private static string BuildUsesPerBattleText(Godot.Collections.Dictionary cfg)
-    {
-        if (!cfg.ContainsKey("uses_per_battle"))
-            return "";
-
-        int uses = cfg["uses_per_battle"].AsInt32();
-        return uses > 0 ? $"每场战斗 {uses} 次" : "";
-    }
-
-    private static string BuildSkillMetaLine(string apText, string cooldown, string uses)
+    private static string BuildUsageLimitText(Godot.Collections.Dictionary cfg)
     {
         var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(apText))
+        if (cfg.ContainsKey("uses_per_battle"))
+        {
+            int uses = cfg["uses_per_battle"].AsInt32();
+            if (uses > 0)
+                parts.Add($"每场战斗 {uses} 次");
+        }
+        if (cfg.ContainsKey("cooldown"))
+        {
+            int cooldown = cfg["cooldown"].AsInt32();
+            if (cooldown > 0)
+                parts.Add($"冷却 {cooldown} 回合");
+        }
+        return string.Join("；", parts);
+    }
+
+    private static string BuildCostText(Godot.Collections.Dictionary cfg)
+    {
+        var parts = new List<string>();
+        string apText = BuildActionCostText(cfg);
+        if (!string.IsNullOrWhiteSpace(apText) && apText != "0 (免费行动)")
             parts.Add($"AP {apText}");
-        if (!string.IsNullOrWhiteSpace(cooldown))
-            parts.Add($"CD {cooldown}");
-        if (!string.IsNullOrWhiteSpace(uses))
-            parts.Add(uses);
+
+        int manaCost = cfg.ContainsKey("mana_cost") ? cfg["mana_cost"].AsInt32() : 0;
+        if (manaCost > 0)
+            parts.Add($"法力 {manaCost}");
+
+        if (parts.Count == 0 && (cfg.ContainsKey("action_cost") || cfg.ContainsKey("mana_cost")))
+            return "无";
+
         return string.Join(" / ", parts);
+    }
+
+    private static void AppendSkillSpecLines(System.Text.StringBuilder sb, Godot.Collections.Dictionary cfg)
+    {
+        string usageLimit = BuildUsageLimitText(cfg);
+        if (!string.IsNullOrWhiteSpace(usageLimit))
+            sb.Append($"\n使用限制：{usageLimit}");
+
+        string cost = BuildCostText(cfg);
+        if (!string.IsNullOrWhiteSpace(cost))
+            sb.Append($"\n消耗：{cost}");
+    }
+
+    private static void AppendDefaultGiantActiveSpecLines(System.Text.StringBuilder sb)
+    {
+        sb.Append("\n使用限制：每场战斗 1 次");
+        sb.Append("\n消耗：无");
     }
 
     private Vector2 NodeToPixel(SkillNodeData node)
@@ -980,6 +1055,8 @@ public partial class SkillTreeUI : PanelContainer
         SkillNodeData.Region.Cha,
         SkillNodeData.Region.Wis
     ];
+
+    private static readonly int[] RingBoundaryRadii = [8, 15];
 
     private static readonly SkillNodeData.Region[] HexSectorRegions =
     [
@@ -1232,7 +1309,15 @@ public partial class SkillTreeUI : PanelContainer
         string nodeId = HitTestNode(pos);
         if (!string.IsNullOrEmpty(nodeId))
         {
+            bool clickedSelectedNode = nodeId == _selectedNodeId;
             _selectedNodeId = nodeId;
+
+            if (clickedSelectedNode && _characterTree?.IsActivated(nodeId) != true)
+            {
+                OnActivatePressed();
+                return;
+            }
+
             UpdateInfoPanel();
             if (_characterTree?.IsActivated(nodeId) == true)
                 TryOpenSpellStudyForNode(nodeId);
@@ -1264,20 +1349,20 @@ public partial class SkillTreeUI : PanelContainer
         switch (state)
         {
             case TileVisualState.Activated:
-                innerColor = new Color(regionColor.R * 1.25f, regionColor.G * 1.25f, regionColor.B * 1.25f, 0.70f);
-                outerColor = new Color(regionColor.R * 0.55f, regionColor.G * 0.55f, regionColor.B * 0.55f, 0.32f);
-                outlineColor = new Color(regionColor.R * 1.35f, regionColor.G * 1.35f, regionColor.B * 1.35f, 0.90f);
+                innerColor = new Color(regionColor.R * 1.10f, regionColor.G * 1.10f, regionColor.B * 1.10f, 0.54f);
+                outerColor = new Color(regionColor.R * 0.42f, regionColor.G * 0.42f, regionColor.B * 0.42f, 0.24f);
+                outlineColor = new Color(regionColor.R * 0.55f, regionColor.G * 0.55f, regionColor.B * 0.55f, 0.24f);
                 break;
             case TileVisualState.Available:
-                innerColor = new Color(regionColor.R * 0.95f, regionColor.G * 0.95f, regionColor.B * 0.95f, 0.30f);
-                outerColor = new Color(regionColor.R * 0.35f, regionColor.G * 0.35f, regionColor.B * 0.35f, 0.08f);
-                outlineColor = new Color(regionColor.R * 1.05f, regionColor.G * 1.05f, regionColor.B * 1.05f, 0.45f);
+                innerColor = new Color(regionColor.R * 0.62f, regionColor.G * 0.62f, regionColor.B * 0.62f, 0.16f);
+                outerColor = new Color(regionColor.R * 0.24f, regionColor.G * 0.24f, regionColor.B * 0.24f, 0.045f);
+                outlineColor = new Color(regionColor.R * 0.40f, regionColor.G * 0.40f, regionColor.B * 0.40f, 0.11f);
                 break;
             case TileVisualState.Locked:
             default:
-                innerColor = new Color(regionColor.R * 0.35f, regionColor.G * 0.35f, regionColor.B * 0.35f, 0.05f);
-                outerColor = new Color(regionColor.R * 0.15f, regionColor.G * 0.15f, regionColor.B * 0.15f, 0.01f);
-                outlineColor = new Color(regionColor.R * 0.25f, regionColor.G * 0.25f, regionColor.B * 0.25f, 0.18f);
+                innerColor = new Color(regionColor.R * 0.22f, regionColor.G * 0.22f, regionColor.B * 0.22f, 0.028f);
+                outerColor = new Color(regionColor.R * 0.10f, regionColor.G * 0.10f, regionColor.B * 0.10f, 0.006f);
+                outlineColor = new Color(regionColor.R * 0.10f, regionColor.G * 0.10f, regionColor.B * 0.10f, 0.04f);
                 break;
         }
 
@@ -1311,8 +1396,14 @@ public partial class SkillTreeUI : PanelContainer
         if (state == TileVisualState.Activated)
         {
             for (int i = 0; i < 3; i++)
+                _highlightVertsScratch[i] = centroid + (_shrunkVertsScratch[i] - centroid) * 1.16f;
+            _drawContainer.DrawColoredPolygon(_highlightVertsScratch, new Color(regionColor.R, regionColor.G, regionColor.B, 0.11f));
+            for (int i = 0; i < 3; i++)
+                _highlightVertsScratch[i] = centroid + (_shrunkVertsScratch[i] - centroid) * 1.04f;
+            _drawContainer.DrawColoredPolygon(_highlightVertsScratch, new Color(regionColor.R * 1.15f, regionColor.G * 1.15f, regionColor.B * 1.15f, 0.10f));
+            for (int i = 0; i < 3; i++)
                 _highlightVertsScratch[i] = centroid + (_shrunkVertsScratch[i] - centroid) * 0.32f;
-            _drawContainer.DrawColoredPolygon(_highlightVertsScratch, new Color(1.0f, 0.98f, 0.95f, 0.30f));
+            _drawContainer.DrawColoredPolygon(_highlightVertsScratch, new Color(regionColor.R * 1.25f, regionColor.G * 1.25f, regionColor.B * 1.25f, 0.16f));
         }
         else if (state == TileVisualState.Available)
         {
@@ -1476,13 +1567,10 @@ public partial class SkillTreeUI : PanelContainer
         var center = Vector2.Zero;
         for (int i = 0; i < HexSectorRegions.Length; i++)
         {
-            var vertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
-            var prevVertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + HexOutlineVertices.Length - 1) % HexOutlineVertices.Length].X,
-                HexOutlineVertices[(i + HexOutlineVertices.Length - 1) % HexOutlineVertices.Length].Y);
-            var nextVertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].X,
+            var leftVertex = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
+            var rightVertex = _viewport.Coord.VertexToPixel(
+                HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].X,
                 HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].Y);
-            var prevBoundary = (prevVertex + vertex) / 2.0f;
-            var nextBoundary = (vertex + nextVertex) / 2.0f;
             var color = Theme.GetRegionColor(HexSectorRegions[i]);
    
             // 职业速查高亮：如果该扇区属于选中的职业 flags，增加亮度
@@ -1494,11 +1582,10 @@ public partial class SkillTreeUI : PanelContainer
                     alpha = 0.35f;
             }
    
-            _sectorVertsScratch[0] = center;
-            _sectorVertsScratch[1] = prevBoundary;
-            _sectorVertsScratch[2] = vertex;
-            _sectorVertsScratch[3] = nextBoundary;
-            _drawContainer.DrawColoredPolygon(_sectorVertsScratch, new Color(color.R, color.G, color.B, alpha));
+            _triVertsScratch[0] = center;
+            _triVertsScratch[1] = leftVertex;
+            _triVertsScratch[2] = rightVertex;
+            _drawContainer.DrawColoredPolygon(_triVertsScratch, new Color(color.R, color.G, color.B, alpha));
         }
     }
 
@@ -1507,12 +1594,9 @@ public partial class SkillTreeUI : PanelContainer
         var center = Vector2.Zero;
         for (int i = 0; i < HexOutlineVertices.Length; i++)
         {
-            var a = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
-            var b = _viewport.Coord.VertexToPixel(HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].X,
-                HexOutlineVertices[(i + 1) % HexOutlineVertices.Length].Y);
-            var boundary = (a + b) / 2.0f;
-            var leftRegion = HexSectorRegions[i % HexSectorRegions.Length];
-            var rightRegion = HexSectorRegions[(i + 1) % HexSectorRegions.Length];
+            var boundary = _viewport.Coord.VertexToPixel(HexOutlineVertices[i].X, HexOutlineVertices[i].Y);
+            var leftRegion = HexSectorRegions[(i + HexSectorRegions.Length - 1) % HexSectorRegions.Length];
+            var rightRegion = HexSectorRegions[i % HexSectorRegions.Length];
             var leftColor = Theme.GetRegionColor(leftRegion);
             var rightColor = Theme.GetRegionColor(rightRegion);
             var splitColor = new Color(
@@ -1524,6 +1608,65 @@ public partial class SkillTreeUI : PanelContainer
             _drawContainer.DrawLine(center, boundary, new Color(0.0f, 0.0f, 0.0f, 0.72f), 5.5f);
             _drawContainer.DrawLine(center, boundary, splitColor, 1.65f);
         }
+    }
+
+    private void DrawRingBoundaryLinesWorld()
+    {
+        _EnsureRingBoundaryCache();
+
+        var worldLines = _cachedRingBoundaryWorldLines;
+        if (worldLines == null || worldLines.Length == 0)
+            return;
+
+        _drawContainer.DrawSetTransformMatrix(Transform2D.Identity);
+
+        for (int i = 0; i + 1 < worldLines.Length; i += 2)
+        {
+            var from = SnapScreenPoint(_viewport.WorldToScreen(worldLines[i]));
+            var to = SnapScreenPoint(_viewport.WorldToScreen(worldLines[i + 1]));
+            _drawContainer.DrawLine(from, to, new Color(0.0f, 0.0f, 0.0f, 0.72f), 4.0f);
+            _drawContainer.DrawLine(from, to, new Color(1.0f, 1.0f, 1.0f, 0.72f), 1.5f);
+        }
+
+        _drawContainer.DrawSetTransformMatrix(CreateWorldDrawTransform());
+    }
+
+    private static Vector2 SnapScreenPoint(Vector2 point)
+    {
+        return new Vector2(MathF.Round(point.X) + 0.5f, MathF.Round(point.Y) + 0.5f);
+    }
+
+    private void _EnsureRingBoundaryCache()
+    {
+        if (_cachedRingBoundaryWorldLines != null)
+            return;
+
+        var lines = new List<Vector2>(RingBoundaryRadii.Length * 12);
+        foreach (int radius in RingBoundaryRadii)
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                var fromVertex = GetRingBoundaryVertex(radius, i);
+                var toVertex = GetRingBoundaryVertex(radius, (i + 1) % 6);
+                lines.Add(_viewport.Coord.VertexToPixel(fromVertex.X, fromVertex.Y));
+                lines.Add(_viewport.Coord.VertexToPixel(toVertex.X, toVertex.Y));
+            }
+        }
+
+        _cachedRingBoundaryWorldLines = lines.ToArray();
+    }
+
+    private static Vector2I GetRingBoundaryVertex(int radius, int index)
+    {
+        return (index % 6) switch
+        {
+            0 => new Vector2I(radius, 0),
+            1 => new Vector2I(0, radius),
+            2 => new Vector2I(-radius, radius),
+            3 => new Vector2I(-radius, 0),
+            4 => new Vector2I(0, -radius),
+            _ => new Vector2I(radius, -radius),
+        };
     }
 
     private Rect2 GetHexCircumcircleWorldBounds()
@@ -1609,6 +1752,7 @@ public partial class SkillTreeUI : PanelContainer
         if (IsPerformancePanning() || _viewport.Zoom < 0.42f)
         {
             _DrawHexagonOutlineWorld();
+            DrawRingBoundaryLinesWorld();
             return;
         }
 
@@ -1619,6 +1763,7 @@ public partial class SkillTreeUI : PanelContainer
             _drawContainer.DrawMultiline(worldLines, latticeColor, lineWidth);
 
         _DrawHexagonOutlineWorld();
+        DrawRingBoundaryLinesWorld();
     }
 
     private void _DrawHexagonOutlineWorld()
@@ -1701,7 +1846,7 @@ public partial class SkillTreeUI : PanelContainer
             return;
 
         DrawNodeStateTextureWorld(node, centroid, activated, available && hasAttributePoints, partiallyFilled);
-        DrawNodeSeparationWorld(nodeId, regionColor, activated, available && hasAttributePoints, partiallyFilled);
+        DrawNodeSeparationWorld(node, nodeId, regionColor, activated, available && hasAttributePoints, partiallyFilled);
 
         if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone)
         {
@@ -1758,7 +1903,7 @@ public partial class SkillTreeUI : PanelContainer
             var nameColor = activated ? new Color(1.0f, 0.98f, 0.95f) : new Color(0.85f, 0.85f, 0.9f, 0.9f);
 
             var font = ThemeDB.FallbackFont;
-            string nameText = node.NodeName;
+            string nameText = _characterTree?.GetEffectiveNode(node).NodeName ?? node.NodeName;
 
             Vector2 stringSize = font.GetStringSize(nameText, HorizontalAlignment.Center, -1, (int)fontSize);
 
@@ -1845,16 +1990,35 @@ public partial class SkillTreeUI : PanelContainer
     }
 
     private void DrawNodeSeparationWorld(
+        SkillNodeData node,
         string nodeId,
         Color regionColor,
         bool activated,
         bool canFill,
         bool partiallyFilled)
     {
-        float colorAlpha = activated ? 0.95f : partiallyFilled ? 0.78f : canFill ? 0.66f : 0.34f;
-        DrawShapeBoundary(nodeId, new Color(0.0f, 0.0f, 0.0f, 0.82f), 3.4f, worldSpace: true);
-        DrawShapeBoundary(nodeId, new Color(regionColor.R, regionColor.G, regionColor.B, colorAlpha), 1.45f, worldSpace: true);
+        bool majorNode = IsMajorShapeNode(node);
+        if (!majorNode)
+        {
+            float lowAlpha = activated ? 0.46f : partiallyFilled ? 0.30f : canFill ? 0.22f : 0.10f;
+            DrawShapeBoundary(nodeId, new Color(regionColor.R, regionColor.G, regionColor.B, lowAlpha), 0.9f, worldSpace: true);
+            return;
+        }
+
+        float colorAlpha = activated ? 0.88f : partiallyFilled ? 0.66f : canFill ? 0.52f : 0.32f;
+        DrawShapeBoundary(nodeId, new Color(0.0f, 0.0f, 0.0f, 0.70f), 3.0f, worldSpace: true);
+        DrawShapeBoundary(nodeId, new Color(regionColor.R, regionColor.G, regionColor.B, colorAlpha), 1.65f, worldSpace: true);
+        DrawShapeBoundary(nodeId, new Color(
+            MathF.Min(regionColor.R * 1.25f, 1.0f),
+            MathF.Min(regionColor.G * 1.25f, 1.0f),
+            MathF.Min(regionColor.B * 1.25f, 1.0f),
+            activated ? 0.32f : 0.18f), 2.6f, worldSpace: true);
     }
+
+    private static bool IsMajorShapeNode(SkillNodeData node)
+        => node.CurrentNodeType != SkillNodeData.NodeType.Pip
+            && node.CurrentNodeType != SkillNodeData.NodeType.Small
+            && node.CurrentNodeType != SkillNodeData.NodeType.Start;
 
     private void DrawShapeBoundary(string nodeId, Color color, float width, bool worldSpace)
     {
@@ -1945,7 +2109,7 @@ public partial class SkillTreeUI : PanelContainer
             new Vector2I(HexagonRadius, -HexagonRadius),
         };
 
-        var sectorLabels = new (int Vertex, SkillNodeData.Region Region, string Name)[]
+        var sectorLabels = new (int Sector, SkillNodeData.Region Region, string Name)[]
         {
             (0, SkillNodeData.Region.Int, "✦ INT 智力 ✦"),
             (1, SkillNodeData.Region.Con, "✦ CON 体魄 ✦"),
@@ -1957,7 +2121,9 @@ public partial class SkillTreeUI : PanelContainer
 
         foreach (var (idx, region, name) in sectorLabels)
         {
-            var sectorPx = VertexToScreen(verts[idx].X, verts[idx].Y);
+            var left = VertexToScreen(verts[idx].X, verts[idx].Y);
+            var right = VertexToScreen(verts[(idx + 1) % verts.Length].X, verts[(idx + 1) % verts.Length].Y);
+            var sectorPx = (left + right) / 2.0f;
             var centerPx = VertexToScreen(0, 0);
             var outDir = (sectorPx - centerPx).Normalized();
             var lp = sectorPx + outDir * 38.0f * _viewport.Zoom;
@@ -2031,7 +2197,8 @@ public partial class SkillTreeUI : PanelContainer
             return true;
         if (!_treeData.Nodes.TryGetValue(_selectedNodeId, out var node))
             return true;
-        if (!string.Equals(node.SkillEffect, "absolute_focus", StringComparison.Ordinal))
+        string effect = _characterTree?.GetEffectiveSkillEffect(node.NodeId) ?? node.SkillEffect;
+        if (!string.Equals(effect, "absolute_focus", StringComparison.Ordinal))
             return true;
         if (SkillTreeKeystoneResolver.CanActivateAbsoluteFocus(_currentUnit, out var reason))
             return true;
@@ -2057,9 +2224,10 @@ public partial class SkillTreeUI : PanelContainer
     {
         if (_treeData == null || _currentUnit == null) return;
         if (!_treeData.Nodes.TryGetValue(nodeId, out var node)) return;
-        if (!SpellStudyCatalog.IsSpellSlotEffect(node.SkillEffect)) return;
+        var effectiveNode = _characterTree?.GetEffectiveNode(node) ?? node;
+        if (!SpellStudyCatalog.IsSpellSlotEffect(effectiveNode.SkillEffect)) return;
 
-        int tier = SpellStudyCatalog.GetTierFromSpellSlotEffect(node.SkillEffect);
+        int tier = SpellStudyCatalog.GetTierFromSpellSlotEffect(effectiveNode.SkillEffect);
         if (tier <= 0) return;
 
         string existing = SpellStudyCatalog.GetKnownSpellNameForTier(_currentUnit, tier);
@@ -2069,7 +2237,7 @@ public partial class SkillTreeUI : PanelContainer
             return;
         }
 
-        ShowSpellStudyDialog(tier, node.NodeName);
+        ShowSpellStudyDialog(tier, effectiveNode.NodeName);
     }
 
     private void ShowSpellStudyDialog(int tier, string nodeName)
@@ -2198,15 +2366,16 @@ public partial class SkillTreeUI : PanelContainer
             && (_characterTree?.AvailableAttributePoints ?? 0) > 0;
         int filledTiles = _characterTree?.GetTileProgress(_selectedNodeId) ?? 0;
         int requiredTiles = node.GetRequiredTileCount();
-        string careerTransition = BuildCareerTransitionBanner(node, activated);
-        string effectText = BuildNodeEffectText(node);
+        var displayNode = _characterTree?.GetEffectiveNode(node) ?? node;
+        string careerTransition = BuildCareerTransitionBanner(displayNode, activated);
+        string effectText = BuildNodeEffectText(displayNode);
         bool canJump = !activated
         && filledTiles == 0
         && (_characterTree?.GetRemainingJumps() ?? 0) > 0
         && (_characterTree?.AvailableAttributePoints ?? 0) > 0
-        && node.RequiredLevel <= (_characterTree?.CharacterLevel ?? 0);
+        && displayNode.RequiredLevel <= (_characterTree?.CharacterLevel ?? 0);
        
-        _infoPanel.ShowNode(node, activated, canNormal, canJump, filledTiles, requiredTiles, careerTransition, effectText);
+        _infoPanel.ShowNode(displayNode, activated, canNormal, canJump, filledTiles, requiredTiles, careerTransition, effectText);
     }
 
     private string BuildNodeEffectText(SkillNodeData node)
@@ -2217,7 +2386,27 @@ public partial class SkillTreeUI : PanelContainer
 
         var cfg = SkillRegistry.GetSkillConfig(node.SkillEffect);
         if (cfg.Count == 0)
+        {
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Giant && node.IsActiveSkill)
+            {
+                var giantSb = new System.Text.StringBuilder();
+                if (!string.IsNullOrWhiteSpace(treeText))
+                    giantSb.Append(treeText);
+                AppendDefaultGiantActiveSpecLines(giantSb);
+                return giantSb.ToString();
+            }
+
             return treeText;
+        }
+
+        if (node.CurrentNodeType == SkillNodeData.NodeType.Giant)
+        {
+            var giantSb = new System.Text.StringBuilder();
+            if (!string.IsNullOrWhiteSpace(treeText))
+                giantSb.Append(treeText);
+            AppendSkillSpecLines(giantSb, cfg);
+            return giantSb.ToString();
+        }
 
         bool shouldUseConfig = node.IsActiveSkill
             || SpellStudyCatalog.IsSpellSlotEffect(node.SkillEffect)
@@ -2227,9 +2416,6 @@ public partial class SkillTreeUI : PanelContainer
 
         string name = cfg.ContainsKey("name") ? cfg["name"].AsString() : node.NodeName;
         string desc = cfg.ContainsKey("description") ? cfg["description"].AsString() : "";
-        string ap = BuildActionCostText(cfg);
-        string cooldown = cfg.ContainsKey("cooldown") ? cfg["cooldown"].AsInt32().ToString() : "";
-        string uses = BuildUsesPerBattleText(cfg);
         string equipment = SkillRegistry.GetEquipmentRequirementText(node.SkillEffect);
 
         var sb = new System.Text.StringBuilder();
@@ -2242,9 +2428,7 @@ public partial class SkillTreeUI : PanelContainer
             if (tier > 0)
                 sb.Append($"\n点亮时研习 {tier} 环法术。");
         }
-        string meta = BuildSkillMetaLine(ap, cooldown, uses);
-        if (!string.IsNullOrWhiteSpace(meta))
-            sb.Append($"\n{meta}");
+        AppendSkillSpecLines(sb, cfg);
         if (!string.IsNullOrWhiteSpace(equipment))
             sb.Append($"\n装备需求: {equipment}");
         return sb.ToString();
@@ -2277,7 +2461,7 @@ public partial class SkillTreeUI : PanelContainer
     {
         if (_characterTree == null) return;
         if (_statLabels.TryGetValue("skill_points", out var spL))
-            spL.Text = $"属性点: {_characterTree.AvailableAttributePoints}";
+            spL.Text = $"星辉: {_characterTree.AvailableAttributePoints}";
         if (_statLabels.TryGetValue("jumps", out var jL))
             jL.Text = $"跳跃: {_characterTree.GetRemainingJumps()}/{_characterTree.TotalJumps}";
         if (_statLabels.TryGetValue("career", out var careerL))
@@ -2315,20 +2499,20 @@ public partial class SkillTreeUI : PanelContainer
         switch (state)
         {
             case TileVisualState.Activated:
-                innerColor = new Color(regionColor.R * 1.25f, regionColor.G * 1.25f, regionColor.B * 1.25f, 0.70f);
-                outerColor = new Color(regionColor.R * 0.55f, regionColor.G * 0.55f, regionColor.B * 0.55f, 0.32f);
-                outlineColor = new Color(regionColor.R * 1.35f, regionColor.G * 1.35f, regionColor.B * 1.35f, 0.90f);
+                innerColor = new Color(regionColor.R * 1.10f, regionColor.G * 1.10f, regionColor.B * 1.10f, 0.54f);
+                outerColor = new Color(regionColor.R * 0.42f, regionColor.G * 0.42f, regionColor.B * 0.42f, 0.24f);
+                outlineColor = new Color(regionColor.R * 0.55f, regionColor.G * 0.55f, regionColor.B * 0.55f, 0.24f);
                 break;
             case TileVisualState.Available:
-                innerColor = new Color(regionColor.R * 0.95f, regionColor.G * 0.95f, regionColor.B * 0.95f, 0.30f);
-                outerColor = new Color(regionColor.R * 0.35f, regionColor.G * 0.35f, regionColor.B * 0.35f, 0.08f);
-                outlineColor = new Color(regionColor.R * 1.05f, regionColor.G * 1.05f, regionColor.B * 1.05f, 0.45f);
+                innerColor = new Color(regionColor.R * 0.62f, regionColor.G * 0.62f, regionColor.B * 0.62f, 0.16f);
+                outerColor = new Color(regionColor.R * 0.24f, regionColor.G * 0.24f, regionColor.B * 0.24f, 0.045f);
+                outlineColor = new Color(regionColor.R * 0.40f, regionColor.G * 0.40f, regionColor.B * 0.40f, 0.11f);
                 break;
             case TileVisualState.Locked:
             default:
-                innerColor = new Color(regionColor.R * 0.35f, regionColor.G * 0.35f, regionColor.B * 0.35f, 0.05f);
-                outerColor = new Color(regionColor.R * 0.15f, regionColor.G * 0.15f, regionColor.B * 0.15f, 0.01f);
-                outlineColor = new Color(regionColor.R * 0.25f, regionColor.G * 0.25f, regionColor.B * 0.25f, 0.18f);
+                innerColor = new Color(regionColor.R * 0.22f, regionColor.G * 0.22f, regionColor.B * 0.22f, 0.028f);
+                outerColor = new Color(regionColor.R * 0.10f, regionColor.G * 0.10f, regionColor.B * 0.10f, 0.006f);
+                outlineColor = new Color(regionColor.R * 0.10f, regionColor.G * 0.10f, regionColor.B * 0.10f, 0.04f);
                 break;
         }
 
@@ -2361,10 +2545,10 @@ public partial class SkillTreeUI : PanelContainer
             fillVerts.Add(hv[0]);
             fillVerts.Add(hv[1]);
             fillVerts.Add(hv[2]);
-            var whiteCol = new Color(1.0f, 0.98f, 0.95f, 0.30f);
-            fillColors.Add(whiteCol);
-            fillColors.Add(whiteCol);
-            fillColors.Add(whiteCol);
+            var glowOuter = new Color(regionColor.R, regionColor.G, regionColor.B, 0.11f);
+            fillColors.Add(glowOuter);
+            fillColors.Add(glowOuter);
+            fillColors.Add(glowOuter);
         }
         else if (state == TileVisualState.Available)
         {

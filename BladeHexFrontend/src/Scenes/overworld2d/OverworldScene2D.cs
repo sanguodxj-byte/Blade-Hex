@@ -10,6 +10,8 @@ using BladeHex.Strategic;
 using BladeHex.Data;
 using BladeHex.Scenes.Overworld;
 using BladeHex.Scenes.Overworld.Components;
+using BladeHex.Diagnostics;
+using BladeHex.View.Strategic;
 
 namespace BladeHex.Scenes.Overworld2d;
 
@@ -68,13 +70,40 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 	private BladeHex.View.UI.Overworld.POITooltip? _poiTooltip;
 	private OverworldPOI? _lastHoveredPoi;
 	private BladeHex.View.UI.Overworld.EntityTooltip? _entityTooltip;
+	private BladeHex.View.UI.Overworld.BattlefieldTooltip? _battlefieldTooltip;
 	private OverworldEntity? _lastHoveredEntity;
 	private string _lastHoveredEntityStateText = "";
 	private string _lastHoveredEntityIntentText = "";
+	private string _lastHoveredBattlefieldKey = "";
 
 	// 时间
 	public float GameTimeScale = 0.5f;
 	public bool IsTimePaused = false;
+
+	/// <summary>统一大地图时钟 — 集中计算时间推进逻辑（替代散落的 shouldTimePass）</summary>
+	private readonly CampaignClock _campaignClock = new();
+
+	// ========================================
+	// 架构优化新增模块（管线分层）
+	// ========================================
+
+	/// <summary>View Projection — 从 Core 层投影只读视图数据</summary>
+	private OverworldViewProjection? _viewProjection;
+
+	/// <summary>输入命令路由 — 把左键点击拆成语义命令</summary>
+	private readonly OverworldCommandRouter _commandRouter = new();
+
+	/// <summary>交互冷却集中管理 — 替代散落的 _playerEntityInteractionCooldownUntilSec</summary>
+	private readonly InteractionCooldown _interactionCooldown = new();
+
+	/// <summary>战场注册表只读快照 — 供 View 层查询当前活跃战场</summary>
+	private readonly BattlefieldRegistry _battlefieldRegistry = new();
+
+	/// <summary>战场视觉层 — 战场 marker、hover、click 加入入口</summary>
+	private OverworldBattlefieldLayer2D? _battlefieldLayer;
+
+	/// <summary>围城视觉层 — 围城 marker、hover、click 加入入口</summary>
+	private OverworldSiegeLayer2D? _siegeLayer;
 
 	// ========================================
 	// 生命周期
@@ -82,104 +111,218 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 
 	public override async void _Ready()
 	{
+		DiagnosticLog.Event("OverworldScene2D", "ready_start");
 		GD.Randomize();
 
 		var gs = BladeHex.Data.Globals.StateOrNull;
 		int seed = (gs != null && gs.WorldGen.Seed > 0) ? gs.WorldGen.Seed : (int)GD.Randi();
+		var readyReport = new DiagnosticPipelineReport(
+			"overworld_scene_ready",
+			$"overworld_ready_{System.DateTime.Now:yyyyMMdd_HHmmss}_{System.Environment.ProcessId}_{seed}",
+			new Dictionary<string, object?>
+			{
+				["seed"] = seed,
+				["loading_save"] = gs?.Save.IsLoadingSave ?? false,
+				["quick_game"] = gs?.WorldGen.IsQuickGame ?? false,
+				["world_size"] = gs?.WorldGen.Size ?? -1,
+			});
+		DiagnosticLog.Event("OverworldScene2D", "seed_selected", new Dictionary<string, object?>
+		{
+			["seed"] = seed,
+			["loading_save"] = gs?.Save.IsLoadingSave ?? false,
+			["quick_game"] = gs?.WorldGen.IsQuickGame ?? false,
+			["world_size"] = gs?.WorldGen.Size ?? -1,
+		});
 
 		// 经济系统
-		InitEconomy();
+		DiagnosticLog.Event("OverworldScene2D", "init_economy_start");
+		if (!RunReadyStep(readyReport, "init_economy", () => InitEconomy()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "init_economy_end");
 
 		// 世界生成（最重的操作，分帧前先让出一帧，让加载屏幕渲染）
 		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-		InitWorldGeneration(seed);
+		DiagnosticLog.Event("OverworldScene2D", "init_world_start", new Dictionary<string, object?> { ["seed"] = seed });
+		if (!RunReadyStep(readyReport, "init_world_generation", () => InitWorldGeneration(seed)))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "init_world_end", new Dictionary<string, object?>
+		{
+			["tiles"] = _grid?.TileCount() ?? -1,
+			["pois"] = WorldPois?.Count ?? -1,
+		});
 
 		// 2D 渲染
 		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+		DiagnosticLog.Event("OverworldScene2D", "renderer_start");
 		_renderer = new HexOverworldRenderer2D();
 		AddChild(_renderer);
-		_renderer.Initialize();
+		if (!RunReadyStep(readyReport, "renderer_initialize", () => _renderer.Initialize()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "renderer_end");
 
+		DiagnosticLog.Event("OverworldScene2D", "ash_start");
 		_ashController = new MapAshController { Name = "MapAshController" };
 		AddChild(_ashController);
-		_ashController.Initialize(_renderer);
+		if (!RunReadyStep(readyReport, "ash_initialize", () => _ashController.Initialize(_renderer)))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "ash_end");
 
 		// 场景物体渲染器（树木/岩石/山脉）
+		DiagnosticLog.Event("OverworldScene2D", "prop_renderer_start");
 		_propRenderer = new OverworldPropRenderer2D();
 		AddChild(_propRenderer);
 		// 实机用 ChunkManager 初始化（内含全局地形数据），避免空网格导致山脉 BFS 失效
-		if (_chunkManager != null)
-			_propRenderer.InitializeFromChunks(seed, _chunkManager);
-		else
-			_propRenderer.Initialize(seed, _grid);
+		if (!RunReadyStep(readyReport, "prop_renderer_initialize", () =>
+		{
+			if (_chunkManager != null)
+				_propRenderer.InitializeFromChunks(seed, _chunkManager);
+			else
+				_propRenderer.Initialize(seed, _grid!);
+		}))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "prop_renderer_end");
 
 		// 墨色地形覆盖层
+		DiagnosticLog.Event("OverworldScene2D", "decal_renderer_start");
 		_decalRenderer = new OverworldDecalRenderer2D();
 		AddChild(_decalRenderer);
-		_decalRenderer.Initialize(seed);
+		if (!RunReadyStep(readyReport, "decal_renderer_initialize", () => _decalRenderer.Initialize(seed)))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "decal_renderer_end");
 
 		// 相机
+		DiagnosticLog.Event("OverworldScene2D", "camera_start");
 		_camera = new OverworldCamera2D();
 		_camera.BaseZoom = 1.0f;
-		AddChild(_camera);
+		_camera.ProcessPriority = 20;
+		if (!RunReadyStep(readyReport, "camera_add", () => AddChild(_camera)))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "camera_end");
 
 		// 导航系统（NavigationServer2D）
-		InitNavigation();
+		DiagnosticLog.Event("OverworldScene2D", "navigation_start");
+		if (!RunReadyStep(readyReport, "init_navigation", () => InitNavigation()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "navigation_end");
 
 		// 玩家
-		InitPlayer(gs);
+		DiagnosticLog.Event("OverworldScene2D", "player_start");
+		if (!RunReadyStep(readyReport, "init_player", () => InitPlayer(gs)))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "player_end");
 
 		// 迷雾
-		InitFog();
+		DiagnosticLog.Event("OverworldScene2D", "fog_start");
+		if (!RunReadyStep(readyReport, "init_fog", () => InitFog()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "fog_end");
 
 		// 相机边界
-		InitCameraBounds();
+		DiagnosticLog.Event("OverworldScene2D", "camera_bounds_start");
+		if (!RunReadyStep(readyReport, "init_camera_bounds", () => InitCameraBounds()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "camera_bounds_end");
 
 		// 初始加载：地面/shader 全图缓存，装饰层按当前可加载范围流式加载。
 		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-		InitialChunkLoad();
+		DiagnosticLog.Event("OverworldScene2D", "initial_chunk_load_start");
+		if (!RunReadyStep(readyReport, "initial_chunk_load", () => InitialChunkLoad()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "initial_chunk_load_end", new Dictionary<string, object?>
+		{
+			["props"] = _propRenderer?.PropCount ?? -1,
+		});
 
 		// 实体
-		InitEntities();
+		DiagnosticLog.Event("OverworldScene2D", "entities_start");
+		if (!RunReadyStep(readyReport, "init_entities", () => InitEntities()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "entities_end", new Dictionary<string, object?>
+		{
+			["entities"] = EntityMgr?.Entities.Count ?? -1,
+		});
 
 		// POI 渲染
-		RenderWorldPOIs();
+		DiagnosticLog.Event("OverworldScene2D", "poi_render_start");
+		if (!RunReadyStep(readyReport, "render_world_pois", () => RenderWorldPOIs()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "poi_render_end");
 
 		// 交互
-		InitInteraction();
+		DiagnosticLog.Event("OverworldScene2D", "interaction_start");
+		if (!RunReadyStep(readyReport, "init_interaction", () => InitInteraction()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "interaction_end");
 
 		// 道路
 		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-		RenderRoadsAndRivers();
+		DiagnosticLog.Event("OverworldScene2D", "roads_rivers_start");
+		if (!RunReadyStep(readyReport, "render_roads_and_rivers", () => RenderRoadsAndRivers()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "roads_rivers_end");
 
 		// 小地图
-		InitMinimap();
+		DiagnosticLog.Event("OverworldScene2D", "minimap_start");
+		if (!RunReadyStep(readyReport, "init_minimap", () => InitMinimap()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "minimap_end");
 
 		// 领地覆盖层
-		InitTerritoryOverlay();
+		DiagnosticLog.Event("OverworldScene2D", "territory_overlay_start");
+		if (!RunReadyStep(readyReport, "init_territory_overlay", () => InitTerritoryOverlay()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "territory_overlay_end");
 
 		// 音频
-		InitAudio();
+		DiagnosticLog.Event("OverworldScene2D", "audio_start");
+		if (!RunReadyStep(readyReport, "init_audio", () => InitAudio()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "audio_end");
 
 		// 天气系统
-		InitWeatherSystem();
+		DiagnosticLog.Event("OverworldScene2D", "weather_start");
+		if (!RunReadyStep(readyReport, "init_weather", () => InitWeatherSystem()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "weather_end");
 
 		// 昼夜系统
-		SetupDayNightCycle();
+		DiagnosticLog.Event("OverworldScene2D", "daynight_start");
+		if (!RunReadyStep(readyReport, "setup_daynight", () => SetupDayNightCycle()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "daynight_end");
 
 		// UI
-		InitUI();
-		InitToast();
-		InitRegionNameOverlay();
+		DiagnosticLog.Event("OverworldScene2D", "ui_start");
+		if (!RunReadyStep(readyReport, "init_ui", () =>
+		{
+			InitUI();
+			InitToast();
+			InitRegionNameOverlay();
+		}))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "ui_end");
 
 		// 调试控制台
-		SetupDebugConsole();
+		DiagnosticLog.Event("OverworldScene2D", "debug_console_start");
+		if (!RunReadyStep(readyReport, "setup_debug_console", () => SetupDebugConsole()))
+			return;
+		DiagnosticLog.Event("OverworldScene2D", "debug_console_end");
 
 		// Focus the camera on the player.
-		ForceCameraToPlayer();
+		if (!RunReadyStep(readyReport, "force_camera_to_player", () => ForceCameraToPlayer()))
+			return;
 
 		GD.Print($"[OverworldScene2D] 就绪: tiles={_grid.TileCount()}, POI={WorldPois.Count}, seed={seed}");
+		DiagnosticLog.Event("OverworldScene2D", "ready_complete", new Dictionary<string, object?>
+		{
+			["tiles"] = _grid?.TileCount() ?? -1,
+			["pois"] = WorldPois?.Count ?? -1,
+			["seed"] = seed,
+			["log"] = DiagnosticLog.CurrentLogPath,
+		});
 		_initialized = true;
+		readyReport.Complete();
+		readyReport.FinishAndWrite();
 		BladeHex.UI.Loading.LoadingScreen.NotifySceneReady();
 
 		// 新存档立即弹出教程确认
@@ -192,6 +335,49 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 		#if DEBUG
 		CallDeferred(nameof(RunTerrainAnalysisDeferred));
 		#endif
+	}
+
+	private bool RunReadyStep(DiagnosticPipelineReport report, string name, System.Action action)
+	{
+		var step = report.BeginStep(name, CaptureReadySnapshot());
+		try
+		{
+			action();
+			report.EndStep(step, CaptureReadySnapshot());
+			return true;
+		}
+		catch (System.Exception ex)
+		{
+			report.FailStep(step, ex, CaptureReadySnapshot());
+			report.Fail(ex);
+			report.FinishAndWrite();
+			DiagnosticLog.Exception($"OverworldScene2D ready step failed: {name}", ex);
+			throw;
+		}
+	}
+
+	private Dictionary<string, object?> CaptureReadySnapshot()
+	{
+		return new Dictionary<string, object?>
+		{
+			["children"] = GetChildCount(),
+			["grid_tiles"] = _grid?.TileCount() ?? -1,
+			["world_pois"] = WorldPois?.Count ?? -1,
+			["special_characters"] = _worldSpecialCharacters?.Count ?? -1,
+			["chunk_manager"] = _chunkManager != null,
+			["known_chunks"] = _chunkManager?.AllKnownChunks.Count ?? -1,
+			["active_chunks"] = _chunkManager?.ActiveChunks.Count ?? -1,
+			["generated_chunk_coords"] = _chunkManager?.GeneratedChunkCoords.Count ?? -1,
+			["entities"] = EntityMgr?.Entities.Count ?? -1,
+			["props"] = _propRenderer?.PropCount ?? -1,
+			["player_x"] = _playerPixelPos.X,
+			["player_y"] = _playerPixelPos.Y,
+			["renderer"] = _renderer != null,
+			["prop_renderer"] = _propRenderer != null,
+			["decal_renderer"] = _decalRenderer != null,
+			["camera"] = _camera != null,
+			["ui"] = _overworldUi != null,
+		};
 	}
 
 	private void RunTerrainAnalysisDeferred()
@@ -248,18 +434,28 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 		// POI 进入检测
 		CheckPOIEnter();
 
-		// 时间推进（移动或等待时）
-		bool shouldTimePass = (_playerMoving || IsWaiting) && !IsTimePaused;
-		if (shouldTimePass && EconomyMgr != null)
-		{
-			float deltaHours = dt * GameTimeScale;
-			if (IsWaiting && !_playerMoving) deltaHours *= 8.0f;
+		// 时间推进：统一由 CampaignClock 计算
+		_campaignClock.IsPaused = IsTimePaused;
+		_campaignClock.PlayerMoving = _playerMoving;
+		_campaignClock.PlayerWaiting = IsWaiting;
+		_campaignClock.AISimulationActive = HasActiveEntityMotion();
+		_campaignClock.BaseGameTimeScale = GameTimeScale;
+		var clockResult = _campaignClock.Tick(dt);
 
-			EconomyMgr.AdvanceTime(deltaHours);
-			// 动态口粮行军消耗（每人每天 0.5 单位，按小时平摊）
-			EconomyMgr.ConsumeFoodByTravel(deltaHours);
+		if (clockResult.ShouldAdvanceHours && EconomyMgr != null)
+		{
+			OverworldDiagnostics.LogClockStateChange(clockResult.Reason, timePassing: true, clockResult.DeltaHours);
+
+			EconomyMgr.AdvanceTime(clockResult.DeltaHours);
+			// 旅行食物消耗只跟玩家移动/等待相关，AI 活跃但玩家静止时不消耗
+			if (clockResult.PlayerTravelDeltaHours > 0f)
+				EconomyMgr.ConsumeFoodByTravel(clockResult.PlayerTravelDeltaHours);
 			// 推进交战计时（分层渐进式战斗更新）
-			EntityMgr?.TickGameHour(deltaHours);
+			EntityMgr?.TickGameHour(clockResult.DeltaHours);
+		}
+		else if (!clockResult.ShouldAdvanceHours)
+		{
+			OverworldDiagnostics.LogClockStateChange(clockResult.Reason, timePassing: false, 0f);
 		}
 
 		UpdateDayNightCycle();
@@ -301,6 +497,7 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 			if (key.Keycode == Key.Space)
 			{
 				IsTimePaused = !IsTimePaused;
+				OverworldDiagnostics.LogClockPause(IsTimePaused, "space_key");
 				GetViewport().SetInputAsHandled();
 				return;
 			}
@@ -333,73 +530,175 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 			return;
 		}
 
-		// 左键点击 -> 寻路
+		// 左键点击 -> CommandRouter 语义命令分发（唯一入口）
 		if (@event is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
 		{
-			// Left click movement resumes paused overworld time.
+			var pixelTarget = GetGlobalMousePosition();
+
+			var routedCmd = _commandRouter.Resolve(
+				pixelTarget,
+				_battlefieldLayer,
+				_siegeLayer,
+				EntityMgr?.Entities ?? new List<OverworldEntity>(),
+				WorldPois,
+				GetCurrentPlayerFaction());
+
+			GD.Print($"[CommandRouter] 路由结果: {routedCmd.Type} at {routedCmd.WorldPosition}");
+
+			switch (routedCmd)
+			{
+				case JoinFieldBattleCommand joinCmd:
+				{
+					Vector2 joinTarget = joinCmd.Opportunity.HasWorldPosition ? joinCmd.Opportunity.WorldPosition : joinCmd.WorldPosition;
+					float playerDist = _playerPixelPos.DistanceTo(joinTarget);
+					SetDirectedBattleJoin(joinCmd.Opportunity, joinTarget);
+					if (playerDist <= BATTLEFIELD_DIST)
+						TryResolveDirectedInteraction(forceBattleJoin: true);
+					else
+					{
+						_toast?.Show("正在靠近战场。");
+						ResumeTravelForDirectedInteraction();
+						StartPathfinding(joinTarget);
+					}
+					GetViewport().SetInputAsHandled();
+					return;
+				}
+
+				case JoinSiegeCommand siegeCmd:
+				{
+					Vector2 joinTarget = siegeCmd.Opportunity.HasWorldPosition ? siegeCmd.Opportunity.WorldPosition : siegeCmd.WorldPosition;
+					float playerDist = _playerPixelPos.DistanceTo(joinTarget);
+					SetDirectedBattleJoin(siegeCmd.Opportunity, joinTarget);
+					if (playerDist <= BATTLEFIELD_DIST)
+						TryResolveDirectedInteraction(forceBattleJoin: true);
+					else
+					{
+						_toast?.Show("正在靠近围城地点。");
+						ResumeTravelForDirectedInteraction();
+						StartPathfinding(joinTarget);
+					}
+					GetViewport().SetInputAsHandled();
+					return;
+				}
+
+				case InspectEntityCommand inspectCmd:
+				{
+					var entity = inspectCmd.Entity;
+
+					// 点击战斗中的实体 → 优先显示战场加入面板
+					if (entity.CurrentAIState == OverworldEntity.AIState.Engaged && EntityMgr != null)
+					{
+						float playerDist = _playerPixelPos.DistanceTo(entity.Position);
+						var joinOpportunity = WarBattleJoinService.Query(
+							entity.Position,
+							EntityMgr.Entities,
+							WorldPois,
+							GetCurrentPlayerFaction(),
+							EntityMgr.Armies,
+							joinRadius: 500.0f,
+							engine: EntityMgr.WorldEngine,
+							battlefieldRegistry: _battlefieldRegistry,
+							battleResolver: EntityMgr.Simulation.BattleResolver,
+							currentGameHour: EntityMgr.SimCtx.GameHour);
+
+						if (joinOpportunity != null)
+						{
+							Vector2 joinTarget = joinOpportunity.HasWorldPosition ? joinOpportunity.WorldPosition : entity.Position;
+							playerDist = _playerPixelPos.DistanceTo(joinTarget);
+							SetDirectedBattleJoin(joinOpportunity, joinTarget);
+							if (playerDist <= BATTLEFIELD_DIST)
+								TryResolveDirectedInteraction(forceBattleJoin: true);
+							else
+							{
+								_toast?.Show("正在靠近战场。");
+								ResumeTravelForDirectedInteraction();
+								StartPathfinding(joinTarget);
+							}
+							GetViewport().SetInputAsHandled();
+							return;
+						}
+					}
+
+					// 点击非战斗实体 → 检查距离并触发交互
+					float dist = _playerPixelPos.DistanceTo(entity.Position);
+
+					if (dist > INTERACT_DIST)
+					{
+						SetDirectedEntityInteraction(entity);
+						_toast?.Show($"正在靠近 {entity.EntityName}。");
+						ResumeTravelForDirectedInteraction();
+						StartPathfinding(entity.Position);
+						GetViewport().SetInputAsHandled();
+						return;
+					}
+
+					ClearDirectedInteraction();
+					// 距离足够，触发交互或战斗
+					if (!IsHostileToCurrentPlayer(entity))
+					{
+						// 友方/中立：触发友方交互
+						TriggerFriendlyInteraction(entity);
+					}
+					else
+					{
+						// 敌对：触发战斗（跳过追逃判定）
+						TriggerHostileEncounter(entity);
+					}
+
+					GetViewport().SetInputAsHandled();
+					return;
+				}
+
+			case MoveToPoiCommand poiCmd:
+				{
+					SetDirectedPoiInteraction(poiCmd.Poi, poiCmd.WorldPosition);
+					GD.Print($"[CommandRouter] 前往 POI: {poiCmd.Poi.PoiName}");
+					break;
+				}
+			}
+
+			// MoveToCommand / 默认：解除暂停/等待并寻路
 			if (IsTimePaused)
 			{
 				IsTimePaused = false;
 			}
-
-			// Left click movement cancels waiting.
 			if (IsWaiting)
 			{
 				IsWaiting = false;
 			}
 
-			var pixelTarget = GetGlobalMousePosition();
-
-			// 检测是否点中了具名领主 / 英雄实体
-			if (EntityMgr != null)
+			// 若 CommandRouter 没命中的 POI，手动查一遍（兼容旧路径）
+			if (routedCmd is not MoveToPoiCommand)
 			{
-				foreach (var entity in EntityMgr.Entities)
+				var clickedAxial = HexOverworldTile.PixelToAxial(pixelTarget.X, pixelTarget.Y);
+				HexOverworldTile? clickedTile = _mapAccess.GetActiveTile(clickedAxial.X, clickedAxial.Y);
+
+				OverworldPOI? clickedPoi = null;
+				if (clickedTile != null && !string.IsNullOrEmpty(clickedTile.PoiId))
 				{
-					if (!entity.IsAlive) continue;
-					if (entity.IsNamedCharacter && !string.IsNullOrEmpty(entity.HeroId) && pixelTarget.DistanceTo(entity.Position) < 180.0f)
+					foreach (var poi in WorldPois)
 					{
-						var hero = EntityMgr.Heroes.Get(entity.HeroId);
-						if (hero != null)
+						if (poi.PoiName == clickedTile.PoiId)
 						{
-							BladeHex.View.UI.Overworld.HeroDetailPanel.ShowDetail(hero, EntityMgr, this);
-							GetViewport().SetInputAsHandled();
-							return;
+							clickedPoi = poi;
+							break;
 						}
 					}
 				}
-			}
 
-			// 检测点击的是否是 POI 占用格，设定目标 POI
-			var clickedAxial = HexOverworldTile.PixelToAxial(pixelTarget.X, pixelTarget.Y);
-			HexOverworldTile? clickedTile = _mapAccess.GetActiveTile(clickedAxial.X, clickedAxial.Y);
+				if (clickedPoi == null)
+					clickedPoi = FindPOIAtPosition(pixelTarget);
 
-			OverworldPOI? clickedPoi = null;
-			if (clickedTile != null && !string.IsNullOrEmpty(clickedTile.PoiId))
-			{
-				foreach (var poi in WorldPois)
+				if (clickedPoi != null)
 				{
-					if (poi.PoiName == clickedTile.PoiId)
-					{
-						clickedPoi = poi;
-						break;
-					}
+					SetDirectedPoiInteraction(clickedPoi, pixelTarget);
+					GD.Print($"[Input] 点击并设定目标 POI: {clickedPoi.PoiName}");
 				}
-			}
-
-			if (clickedPoi == null)
-			{
-				clickedPoi = FindPOIAtPosition(pixelTarget);
-			}
-
-			if (clickedPoi != null)
-			{
-				_targetPoi = clickedPoi;
-				GD.Print($"[Input] 点击并设定目标 POI: {clickedPoi.PoiName}");
-			}
-			else
-			{
-				_targetPoi = null;
-				GD.Print("[Input] 点击空地，清空目标 POI");
+				else
+				{
+					ClearDirectedInteraction();
+					GD.Print("[Input] 点击空地，清空目标 POI");
+				}
 			}
 
 			StartPathfinding(pixelTarget);
@@ -468,6 +767,7 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 
 		// 创建 OverworldParty（逻辑层，Node2D）
 		PlayerParty = new OverworldParty();
+		PlayerParty.ProcessPriority = -20;
 		PlayerParty.SetHexNavigation(_grid, _astar);
 		PlayerParty.SetMapAccess(_mapAccess);
 		AddChild(PlayerParty);
@@ -661,6 +961,9 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 		_entityTooltip = new BladeHex.View.UI.Overworld.EntityTooltip { Name = "EntityTooltip" };
 		_overworldUi.AddChild(_entityTooltip);
 
+		_battlefieldTooltip = new BladeHex.View.UI.Overworld.BattlefieldTooltip { Name = "BattlefieldTooltip" };
+		_overworldUi.AddChild(_battlefieldTooltip);
+
 		if (EntityMgr?.WorldEngine != null)
 		{
 			EntityMgr.WorldEngine.NewsAdded += OnNewsAdded;
@@ -814,10 +1117,67 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 				_entityTooltip.HidePanel();
 				_lastHoveredEntity = null;
 			}
+			if (_battlefieldTooltip != null && (_battlefieldTooltip.IsShowing || !string.IsNullOrEmpty(_lastHoveredBattlefieldKey)))
+			{
+				_battlefieldTooltip.HidePanel();
+				_lastHoveredBattlefieldKey = "";
+			}
 			return;
 		}
 
 		var mouseGlobal = GetGlobalMousePosition();
+
+		// ── 从 _battlefieldLayer 查询战场 hover（取代旧 FindFieldBattleAtPosition）──
+		string? hitBfKey = _battlefieldLayer?.HitTest(mouseGlobal);
+		var hoverBattle = hitBfKey != null ? _battlefieldLayer?.HoveredBattlefield : null;
+		if (hoverBattle.HasValue)
+		{
+			if (_poiTooltip != null && _poiTooltip.IsShowing)
+			{
+				_poiTooltip.HidePanel();
+				_lastHoveredPoi = null;
+			}
+			if (_entityTooltip.IsShowing || _lastHoveredEntity != null)
+			{
+				_entityTooltip.HidePanel();
+				_lastHoveredEntity = null;
+				_lastHoveredEntityStateText = "";
+				_lastHoveredEntityIntentText = "";
+			}
+
+			var screenPos = GetViewport().GetMousePosition();
+			var battle = hoverBattle.Value;
+			if (_battlefieldTooltip != null)
+			{
+				if (_lastHoveredBattlefieldKey != battle.Key)
+				{
+					_battlefieldTooltip.ShowForBattlefield(
+						battle.Attacker,
+						battle.Defender,
+						screenPos,
+						battle.AttackerRelation,
+						battle.DefenderRelation,
+						_worldNations,
+						attackerCount: battle.AttackerNames.Length,
+						defenderCount: battle.DefenderNames.Length,
+						attackerTotalPower: battle.AttackerTotalPower,
+						defenderTotalPower: battle.DefenderTotalPower);
+					_lastHoveredBattlefieldKey = battle.Key;
+				}
+				else
+				{
+					_battlefieldTooltip.ShowAt(screenPos);
+				}
+			}
+			return;
+		}
+
+		if (_battlefieldTooltip != null && (_battlefieldTooltip.IsShowing || !string.IsNullOrEmpty(_lastHoveredBattlefieldKey)))
+		{
+			_battlefieldTooltip.HidePanel();
+			_lastHoveredBattlefieldKey = "";
+		}
+
 		OverworldEntity? hoverEntity = FindEntityAtPosition(mouseGlobal);
 
 		if (hoverEntity != null)
@@ -839,7 +1199,8 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 				var breakdown = EntitySpeedCalculator.GetBreakdown(
 					hoverEntity, hoverEntity.Position,
 					EntityMgr.SimCtx.TerrainQuery,
-					EntityMgr.SimCtx.ZocManager);
+					EntityMgr.SimCtx.ZocManager,
+					EntityMgr.SimCtx.WeatherSpeedFactor);
 				_entityTooltip.ShowForEntity(hoverEntity, screenPos, _worldNations, breakdown);
 				_lastHoveredEntity = hoverEntity;
 				_lastHoveredEntityStateText = stateText;

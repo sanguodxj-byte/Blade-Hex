@@ -15,7 +15,7 @@ public static class RangedSkillHandlers
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
         if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
-        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 2.0f);
+        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, 0, 2.0f, triggerVisuals: false);
         ctx.Builder.AddDamageFromResolver(target, r);
     }
 
@@ -23,9 +23,9 @@ public static class RangedSkillHandlers
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
         if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
-        var r1 = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
+        var r1 = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, triggerVisuals: false);
         ctx.Builder.AddDamageFromResolver(target, r1);
-        var r2 = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
+        var r2 = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, triggerVisuals: false);
         ctx.Builder.AddDamageFromResolver(target, r2);
     }
 
@@ -39,7 +39,7 @@ public static class RangedSkillHandlers
             var target = SkillUtils.FindUnitAt(pos, ctx.Enemies);
             if (target != null)
             {
-                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2);
+                var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, triggerVisuals: false);
                 ctx.Builder.AddDamageFromResolver(target, r);
             }
         }
@@ -61,7 +61,7 @@ public static class RangedSkillHandlers
                 var t = SkillUtils.FindUnitAt(pos, ctx.Enemies);
                 if (t != null)
                 {
-                    var r = CombatResolver.ResolveAttack(ctx.Attacker, t, ctx.Grid, false, false, -2, 1.0f, null, 0.5f);
+                    var r = CombatResolver.ResolveAttack(ctx.Attacker, t, ctx.Grid, false, false, -2, 1.0f, null, 0.5f, triggerVisuals: false);
                     ctx.Builder.AddDamageFromResolver(t, r);
                     shotCount++;
                 }
@@ -72,7 +72,7 @@ public static class RangedSkillHandlers
         for (int i = 0; i < 3; i++)
         {
             if (target.CurrentHp <= 0) break;
-            var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, 1.0f, null, 0.5f);
+            var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, -2, 1.0f, null, 0.5f, triggerVisuals: false);
             ctx.Builder.AddDamageFromResolver(target, r);
         }
     }
@@ -81,7 +81,7 @@ public static class RangedSkillHandlers
     {
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
         if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
-        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
+        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, triggerVisuals: false);
         ctx.Builder.AddDamageFromResolver(target, r);
         if (r.ContainsKey("hit") && r["hit"].AsBool())
         {

@@ -208,9 +208,9 @@ public partial class AnimEditorScene : Node3D
 			skeleton.SpriteHead.Visible = true;
 		}
 
-		// 1. 自动扫描 generated_weapons/ 目录下的所有武器图片文件
+		// 1. 自动扫描 weapons/ 目录下的所有武器图片文件
 		var weaponFiles = new List<string>();
-		var dir = DirAccess.Open("res://assets/generated_weapons/");
+		var dir = DirAccess.Open("res://assets/weapons/");
 		if (dir != null)
 		{
 			dir.ListDirBegin();
@@ -227,11 +227,11 @@ public partial class AnimEditorScene : Node3D
 		}
 		
 		// 物理文件系统兜底
-		if (weaponFiles.Count == 0 && System.IO.Directory.Exists("d:\\123\\Blade&Hex\\assets\\generated_weapons"))
+		if (weaponFiles.Count == 0 && System.IO.Directory.Exists("d:\\123\\Blade&Hex\\assets\\weapons"))
 		{
 			try
 			{
-				var files = System.IO.Directory.GetFiles("d:\\123\\Blade&Hex\\assets\\generated_weapons", "*.png");
+				var files = System.IO.Directory.GetFiles("d:\\123\\Blade&Hex\\assets\\weapons", "*.png");
 				foreach (var file in files)
 				{
 					weaponFiles.Add(System.IO.Path.GetFileName(file));
@@ -297,7 +297,7 @@ public partial class AnimEditorScene : Node3D
 			// 加载武器贴图并应用 (仅代表武器)
 			if (!string.IsNullOrEmpty(repWeapon) && skeleton != null)
 			{
-				string weaponPath = $"res://assets/generated_weapons/{repWeapon}";
+				string weaponPath = $"res://assets/weapons/{repWeapon}";
 				Texture2D? tex = LoadEditorTexture(weaponPath);
 				if (tex != null)
 				{
@@ -319,9 +319,9 @@ public partial class AnimEditorScene : Node3D
 			Texture2D? defaultHands = null;
 			if (skeleton != null)
 			{
-				defaultHelmet = LoadEditorTexture("res://assets/generated_helmets/Armet.png");
-				defaultArmor = LoadEditorTexture("res://assets/generated_armor/ChainMail.png");
-				defaultHands = LoadEditorTexture("res://assets/generated_armor/ChainGauntlets.png");
+				defaultHelmet = LoadEditorTexture("res://assets/helmets/Armet.png");
+				defaultArmor = LoadEditorTexture("res://assets/armor/ChainMail.png");
+				defaultHands = LoadEditorTexture("res://assets/armor/ChainGauntlets.png");
 			}
 
 			foreach (var animName in anims)
@@ -444,7 +444,7 @@ public partial class AnimEditorScene : Node3D
 					// 装载各个具体武器纹理
 					if (!string.IsNullOrEmpty(weaponFile) && skeleton != null)
 					{
-						string Path = $"res://assets/generated_weapons/{weaponFile}";
+						string Path = $"res://assets/weapons/{weaponFile}";
 						Texture2D? tex = LoadEditorTexture(Path);
 						if (tex != null)
 						{
@@ -454,15 +454,15 @@ public partial class AnimEditorScene : Node3D
 
 					// 每次渲染强制重新装载测试护甲，规避可能的引用丢失或清理
 					if (skeleton != null) {
-						Texture2D? th = LoadEditorTexture("res://assets/generated_helmets/Armet.png");
+						Texture2D? th = LoadEditorTexture("res://assets/helmets/Armet.png");
 						if (th != null) {
 							_preview.ApplyTextureWithScale(ItemData.EquipSlot.Helmet, skeleton.SpriteHelmet, th);
 						}
-						Texture2D? ta = LoadEditorTexture("res://assets/generated_armor/ChainMail.png");
+						Texture2D? ta = LoadEditorTexture("res://assets/armor/ChainMail.png");
 						if (ta != null) {
 							_preview.ApplyTextureWithScale(ItemData.EquipSlot.Costume, skeleton.SpriteCostume, ta);
 						}
-						Texture2D? tg = LoadEditorTexture("res://assets/generated_armor/ChainGauntlets.png");
+						Texture2D? tg = LoadEditorTexture("res://assets/armor/ChainGauntlets.png");
 						if (tg != null) {
 							_preview.ApplyTextureWithScale(ItemData.EquipSlot.Hands, skeleton.SpriteHands, tg);
 							_preview.ApplyTextureWithScale(ItemData.EquipSlot.Hands, skeleton.SpriteHandsL, tg);
@@ -520,9 +520,9 @@ public partial class AnimEditorScene : Node3D
 
 		// 测试头盔
 		var helmetFiles = new List<string>();
-		if (System.IO.Directory.Exists("d:\\123\\Blade&Hex\\assets\\generated_helmets"))
+		if (System.IO.Directory.Exists("d:\\123\\Blade&Hex\\assets\\helmets"))
 		{
-			var files = System.IO.Directory.GetFiles("d:\\123\\Blade&Hex\\assets\\generated_helmets", "*.png");
+			var files = System.IO.Directory.GetFiles("d:\\123\\Blade&Hex\\assets\\helmets", "*.png");
 			foreach (var file in files) helmetFiles.Add(System.IO.Path.GetFileName(file));
 		}
 
@@ -539,7 +539,7 @@ public partial class AnimEditorScene : Node3D
 
 				foreach (var hFile in helmetFiles)
 				{
-					string Path = $"res://assets/generated_helmets/{hFile}";
+					string Path = $"res://assets/helmets/{hFile}";
 					Texture2D? tex = LoadEditorTexture(Path);
 					if (tex != null && skeleton != null)
 					{
@@ -575,9 +575,9 @@ public partial class AnimEditorScene : Node3D
 
 		// 测试护甲
 		var armorFiles = new List<string>();
-		if (System.IO.Directory.Exists("d:\\123\\Blade&Hex\\assets\\generated_armor"))
+		if (System.IO.Directory.Exists("d:\\123\\Blade&Hex\\assets\\armor"))
 		{
-			var files = System.IO.Directory.GetFiles("d:\\123\\Blade&Hex\\assets\\generated_armor", "*.png");
+			var files = System.IO.Directory.GetFiles("d:\\123\\Blade&Hex\\assets\\armor", "*.png");
 			foreach (var file in files) 
 			{
 				// 跳过 sheet 以及非躯干防具
@@ -600,7 +600,7 @@ public partial class AnimEditorScene : Node3D
 
 				foreach (var aFile in armorFiles)
 				{
-					string Path = $"res://assets/generated_armor/{aFile}";
+					string Path = $"res://assets/armor/{aFile}";
 					Texture2D? tex = LoadEditorTexture(Path);
 					if (tex != null && skeleton != null)
 					{
@@ -1815,7 +1815,7 @@ public partial class AnimEditorScene : Node3D
 		if (!string.IsNullOrWhiteSpace(assetId))
 			return TextureAssetResolver.Load(AssetKind.EquipmentTexture, assetId, normalizedPath);
 
-		return TextureAssetResolver.LoadPath(normalizedPath);
+		return CharacterTextureNormalizer.Normalize(TextureAssetResolver.LoadPath(normalizedPath));
 	}
 
 	// ─── OptionButton 扩展 ───

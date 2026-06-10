@@ -52,6 +52,9 @@ public partial class CharacterSkillTree : RefCounted
     public Godot.Collections.Dictionary AccumulatedAttributes { get; private set; } = new();
     public Godot.Collections.Dictionary AccumulatedCosts { get; private set; } = new();
 
+    private readonly Dictionary<string, string> _contentNodeByGeometryNode = new();
+    private readonly Dictionary<string, SkillNodeData> _effectiveNodeCache = new();
+
     // ============================================================================
     // 职业技能使用状态（战斗运行时）
     // ============================================================================
@@ -76,6 +79,7 @@ public partial class CharacterSkillTree : RefCounted
         TreeData = treeData;
         CharacterLevel = level;
         RandomAttributeSeed = randomAttributeSeed != 0 ? randomAttributeSeed : CreateRuntimeSeed(level);
+        BuildCharacterContentMap();
         ActivateStartNode();
     }
 
@@ -90,7 +94,7 @@ public partial class CharacterSkillTree : RefCounted
     }
 
     // ============================================================================
-    // 属性点管理
+    // 星辉管理：星辉只用于填充技能盘瓦片；六维属性由已填充瓦片逐片提供。
     // ============================================================================
 
     public void AddAttributePoint(int amount = 1)
@@ -150,8 +154,9 @@ public partial class CharacterSkillTree : RefCounted
         if (ActivatedSet.Contains(nodeId))
             return (false, "节点已点亮", null);
 
-        if (node.RequiredLevel > CharacterLevel)
-            return (false, $"需要角色等级 {node.RequiredLevel}", null);
+        var effectiveNode = GetEffectiveNode(node);
+        if (effectiveNode.RequiredLevel > CharacterLevel)
+            return (false, $"需要角色等级 {effectiveNode.RequiredLevel}", null);
 
         // 不再要求前置节点 — 只检查等级；连通性在 TryActivateNode 中判定。
 
@@ -169,7 +174,7 @@ public partial class CharacterSkillTree : RefCounted
             return new Godot.Collections.Dictionary { { "success", false }, { "message", "该节点与已点亮区域不相邻，请先连接路径或使用跳跃" } };
 
         if (AvailableAttributePoints <= 0)
-            return new Godot.Collections.Dictionary { { "success", false }, { "message", "没有可用属性点" } };
+            return new Godot.Collections.Dictionary { { "success", false }, { "message", "没有可用星辉" } };
 
         return FillNodeTile(node!, consumeJump: false);
     }
@@ -183,8 +188,11 @@ public partial class CharacterSkillTree : RefCounted
         if (GetRemainingJumps() <= 0)
             return new Godot.Collections.Dictionary { { "success", false }, { "message", "没有可用跳跃次数" } };
 
+        if (!CanJumpToNode(node!))
+            return new Godot.Collections.Dictionary { { "success", false }, { "message", "跳跃只能到达同环带的本扇区或相邻扇区" } };
+
         if (AvailableAttributePoints <= 0)
-            return new Godot.Collections.Dictionary { { "success", false }, { "message", "没有可用属性点" } };
+            return new Godot.Collections.Dictionary { { "success", false }, { "message", "没有可用星辉" } };
 
         UseJump();
         return FillNodeTile(node!, consumeJump: true);
@@ -204,6 +212,7 @@ public partial class CharacterSkillTree : RefCounted
         current++;
         NodeTileProgress[node.NodeId] = current;
         ApplyTileAttribute(node);
+        var effectiveNode = GetEffectiveNode(node);
 
         if (current < required)
         {
@@ -214,7 +223,7 @@ public partial class CharacterSkillTree : RefCounted
                 { "completed", false },
                 { "progress", current },
                 { "required", required },
-                { "message", $"{jumpText}点亮 {node.NodeName} 瓦片 {current}/{required}" },
+                { "message", $"{jumpText}点亮 {effectiveNode.NodeName} 瓦片 {current}/{required}" },
             };
         }
 
@@ -226,7 +235,7 @@ public partial class CharacterSkillTree : RefCounted
             { "completed", true },
             { "progress", current },
             { "required", required },
-            { "message", $"{completeText} {node.NodeName}" },
+            { "message", $"{completeText} {effectiveNode.NodeName}" },
         };
     }
 
@@ -245,8 +254,13 @@ public partial class CharacterSkillTree : RefCounted
 
     private void ApplyTileAttribute(SkillNodeData node)
     {
-        // The fixed star-chart design treats triangular tiles as activation cost.
-        // Attribute payloads come from completed random small/pip nodes only.
+        string attributeKey = GetTileAttributeKey(node.CurrentRegion);
+        if (string.IsNullOrEmpty(attributeKey))
+            return;
+
+        AccumulatedAttributes[attributeKey] = AccumulatedAttributes.ContainsKey(attributeKey)
+            ? AccumulatedAttributes[attributeKey].AsInt32() + 1
+            : 1;
     }
 
     private void ApplyTileAttributes(SkillNodeData node, int count)
@@ -255,10 +269,26 @@ public partial class CharacterSkillTree : RefCounted
             ApplyTileAttribute(node);
     }
 
+    private static string GetTileAttributeKey(SkillNodeData.Region region)
+    {
+        return region switch
+        {
+            SkillNodeData.Region.Str => "str",
+            SkillNodeData.Region.Dex => "dex",
+            SkillNodeData.Region.Con => "con",
+            SkillNodeData.Region.Int => "int",
+            SkillNodeData.Region.Wis => "wis",
+            SkillNodeData.Region.Cha => "cha",
+            _ => "",
+        };
+    }
+
     private void ApplyNodeStats(SkillNodeData node)
     {
+        var effectiveNode = GetEffectiveNode(node);
+
         // 占位节点不提供任何加成（仅占位/连通，等后续编辑填充内容）
-        if (node.IsPlaceholder) return;
+        if (effectiveNode.IsPlaceholder) return;
 
         var bonuses = GetNodeStatBonusesForCharacter(node);
         foreach (var key in bonuses.Keys)
@@ -278,12 +308,12 @@ public partial class CharacterSkillTree : RefCounted
             }
         }
 
-        if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone)
+        if (effectiveNode.CurrentNodeType == SkillNodeData.NodeType.Keystone)
         {
-            foreach (var key in node.CostBonuses.Keys)
+            foreach (var key in effectiveNode.CostBonuses.Keys)
             {
                 string k = key.ToString()!;
-                var val = node.CostBonuses[key];
+                var val = effectiveNode.CostBonuses[key];
                 if (AccumulatedCosts.ContainsKey(k))
                 {
                     if (val.VariantType == Variant.Type.Int)
@@ -302,9 +332,9 @@ public partial class CharacterSkillTree : RefCounted
     public int GetHpBonus() => AccumulatedStats.ContainsKey("max_hp") ? AccumulatedStats["max_hp"].AsInt32() : 0;
     public int GetAcBonus() => AccumulatedStats.ContainsKey("ac") ? AccumulatedStats["ac"].AsInt32() : 0;
     public int GetMeleeHitBonus() => AccumulatedStats.ContainsKey("melee_hit") ? AccumulatedStats["melee_hit"].AsInt32() : 0;
-    public int GetMeleeDamageBonus() => AccumulatedStats.ContainsKey("melee_damage") ? AccumulatedStats["melee_damage"].AsInt32() : 0;
+    public float GetMeleeDamagePercentBonus() => AccumulatedStats.ContainsKey("melee_damage_percent") ? AccumulatedStats["melee_damage_percent"].AsSingle() : 0.0f;
     public int GetRangedHitBonus() => AccumulatedStats.ContainsKey("ranged_hit") ? AccumulatedStats["ranged_hit"].AsInt32() : 0;
-    public int GetRangedDamageBonus() => AccumulatedStats.ContainsKey("ranged_damage") ? AccumulatedStats["ranged_damage"].AsInt32() : 0;
+    public float GetRangedDamagePercentBonus() => AccumulatedStats.ContainsKey("ranged_damage_percent") ? AccumulatedStats["ranged_damage_percent"].AsSingle() : 0.0f;
     public float GetCriticalRateBonus() => AccumulatedStats.ContainsKey("critical_rate") ? AccumulatedStats["critical_rate"].AsSingle() : 0.0f;
     public int GetSpeedBonus() => AccumulatedStats.ContainsKey("speed") ? AccumulatedStats["speed"].AsInt32() : 0;
     public int GetManaMaxBonus() => AccumulatedStats.ContainsKey("mana_max") ? AccumulatedStats["mana_max"].AsInt32() : 0;
@@ -312,9 +342,8 @@ public partial class CharacterSkillTree : RefCounted
     public int GetInitiativeBonus() => AccumulatedStats.ContainsKey("initiative") ? AccumulatedStats["initiative"].AsInt32() : 0;
     public int GetAllSaveBonus() => AccumulatedStats.ContainsKey("all_save") ? AccumulatedStats["all_save"].AsInt32() : 0;
     public int GetRangeBonus() => AccumulatedStats.ContainsKey("range_bonus") ? AccumulatedStats["range_bonus"].AsInt32() : 0;
-    public int GetSpellHitBonus() => AccumulatedStats.ContainsKey("spell_hit") ? AccumulatedStats["spell_hit"].AsInt32() : 0;
-    public int GetSpellDamageBonus() => AccumulatedStats.ContainsKey("spell_damage") ? AccumulatedStats["spell_damage"].AsInt32() : 0;
-    public int GetHealBonus() => AccumulatedStats.ContainsKey("heal_amount") ? AccumulatedStats["heal_amount"].AsInt32() : 0;
+    public float GetSpellDamagePercentBonus() => AccumulatedStats.ContainsKey("spell_damage_percent") ? AccumulatedStats["spell_damage_percent"].AsSingle() : 0.0f;
+    public float GetHealPercentBonus() => AccumulatedStats.ContainsKey("heal_amount_percent") ? AccumulatedStats["heal_amount_percent"].AsSingle() : 0.0f;
     public int GetAllyBonus() => AccumulatedStats.ContainsKey("ally_bonus") ? AccumulatedStats["ally_bonus"].AsInt32() : 0;
     public int GetStrBonus() => AccumulatedAttributes.ContainsKey("str") ? AccumulatedAttributes["str"].AsInt32() : 0;
     public int GetDexBonus() => AccumulatedAttributes.ContainsKey("dex") ? AccumulatedAttributes["dex"].AsInt32() : 0;
@@ -338,8 +367,12 @@ public partial class CharacterSkillTree : RefCounted
         var result = new List<SkillNodeData>();
         foreach (var nodeId in ActivatedNodes)
         {
-            if (TreeData!.Nodes.TryGetValue(nodeId, out var node) && node.IsActiveSkill)
-                result.Add(node);
+            if (TreeData!.Nodes.TryGetValue(nodeId, out var node))
+            {
+                var effectiveNode = GetEffectiveNode(node);
+                if (effectiveNode.IsActiveSkill)
+                    result.Add(effectiveNode);
+            }
         }
         return result;
     }
@@ -349,11 +382,14 @@ public partial class CharacterSkillTree : RefCounted
         var result = new List<SkillNodeData>();
         foreach (var nodeId in ActivatedNodes)
         {
-            if (TreeData!.Nodes.TryGetValue(nodeId, out var node) &&
-                !node.IsActiveSkill &&
-                node.CurrentNodeType != SkillNodeData.NodeType.Small &&
-                node.CurrentNodeType != SkillNodeData.NodeType.Start)
-                result.Add(node);
+            if (!TreeData!.Nodes.TryGetValue(nodeId, out var node))
+                continue;
+
+            var effectiveNode = GetEffectiveNode(node);
+            if (!effectiveNode.IsActiveSkill &&
+                effectiveNode.CurrentNodeType != SkillNodeData.NodeType.Small &&
+                effectiveNode.CurrentNodeType != SkillNodeData.NodeType.Start)
+                result.Add(effectiveNode);
         }
         return result;
     }
@@ -362,7 +398,8 @@ public partial class CharacterSkillTree : RefCounted
     {
         foreach (var nodeId in ActivatedNodes)
         {
-            if (TreeData!.Nodes.TryGetValue(nodeId, out var node) && SkillEffectMatches(node.SkillEffect, effectName))
+            string effect = GetEffectiveSkillEffect(nodeId);
+            if (SkillEffectMatches(effect, effectName))
                 return true;
         }
         return false;
@@ -397,8 +434,9 @@ public partial class CharacterSkillTree : RefCounted
         var result = new List<string>();
         foreach (var nodeId in ActivatedNodes)
         {
-            if (TreeData!.Nodes.TryGetValue(nodeId, out var node) && !string.IsNullOrEmpty(node.SkillEffect))
-                result.Add(node.SkillEffect);
+            string effect = GetEffectiveSkillEffect(nodeId);
+            if (!string.IsNullOrEmpty(effect))
+                result.Add(effect);
         }
         return result;
     }
@@ -412,8 +450,20 @@ public partial class CharacterSkillTree : RefCounted
     public List<SkillNodeData> GetAvailableNodes()
     {
         var result = new List<SkillNodeData>();
+        var seen = new HashSet<string>();
         foreach (var nodeId in AvailableSet)
         {
+            if (TreeData!.Nodes.TryGetValue(nodeId, out var node))
+            {
+                result.Add(node);
+                seen.Add(nodeId);
+            }
+        }
+
+        foreach (var (nodeId, progress) in NodeTileProgress)
+        {
+            if (progress <= 0 || ActivatedSet.Contains(nodeId) || seen.Contains(nodeId))
+                continue;
             if (TreeData!.Nodes.TryGetValue(nodeId, out var node))
                 result.Add(node);
         }
@@ -428,11 +478,105 @@ public partial class CharacterSkillTree : RefCounted
         {
             if (ActivatedSet.Contains(node.NodeId)) continue;
             if (node.CurrentNodeType == SkillNodeData.NodeType.Start) continue;
-            if (node.RequiredLevel > CharacterLevel) continue;
-            // 不再检查前置节点，只检查等级
+            if (GetEffectiveNode(node).RequiredLevel > CharacterLevel) continue;
+            if (!CanJumpToNode(node)) continue;
             result.Add(node);
         }
         return result;
+    }
+
+    private bool CanJumpToNode(SkillNodeData target)
+    {
+        if (TreeData == null) return false;
+        if (target.CurrentRegion == SkillNodeData.Region.None || target.CurrentRegion == SkillNodeData.Region.Transition)
+            return false;
+
+        var targetBand = GetNodeRingBand(target);
+        if (targetBand == RingBand.None)
+            return false;
+
+        foreach (string activatedId in ActivatedSet)
+        {
+            if (!TreeData.Nodes.TryGetValue(activatedId, out var source))
+                continue;
+            if (source.CurrentNodeType == SkillNodeData.NodeType.Start)
+                continue;
+            if (GetNodeRingBand(source) != targetBand)
+                continue;
+            if (IsSameOrAdjacentJumpRegion(source.CurrentRegion, target.CurrentRegion))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSameOrAdjacentJumpRegion(SkillNodeData.Region source, SkillNodeData.Region target)
+    {
+        if (source == target) return true;
+        int sourceIndex = JumpRegionOrder.IndexOf(source);
+        int targetIndex = JumpRegionOrder.IndexOf(target);
+        if (sourceIndex < 0 || targetIndex < 0) return false;
+        int count = JumpRegionOrder.Count;
+        return targetIndex == (sourceIndex + 1) % count
+            || targetIndex == (sourceIndex + count - 1) % count;
+    }
+
+    private enum RingBand
+    {
+        None,
+        Inner,
+        Middle,
+        Outer,
+    }
+
+    private static readonly List<SkillNodeData.Region> JumpRegionOrder =
+    [
+        SkillNodeData.Region.Wis,
+        SkillNodeData.Region.Str,
+        SkillNodeData.Region.Dex,
+        SkillNodeData.Region.Con,
+        SkillNodeData.Region.Int,
+        SkillNodeData.Region.Cha,
+    ];
+
+    private static RingBand GetNodeRingBand(SkillNodeData node)
+    {
+        int ring = GetNodeCenterRing(node);
+        if (ring >= 1 && ring <= 8) return RingBand.Inner;
+        if (ring >= 9 && ring <= 15) return RingBand.Middle;
+        if (ring >= 16 && ring <= SkillTreeData.FixedLayoutRadius) return RingBand.Outer;
+        return RingBand.None;
+    }
+
+    private static int GetNodeCenterRing(SkillNodeData node)
+    {
+        var tiles = SkillNodeShape.GetTiles(node);
+        if (tiles.Length == 0)
+            return SkillTreeCoord.HexRing(node.GridPosition);
+
+        double average = 0.0;
+        foreach (var tile in tiles)
+            average += GetTileRing(tile);
+        return (int)Math.Round(average / tiles.Length, MidpointRounding.AwayFromZero);
+    }
+
+    private static int GetTileRing(Vector2I encoded)
+    {
+        int maxRing = 0;
+        foreach (var vertex in GetTileVertices(encoded))
+        {
+            int s = -vertex.X - vertex.Y;
+            maxRing = Math.Max(maxRing, Math.Max(Math.Abs(vertex.X), Math.Max(Math.Abs(vertex.Y), Math.Abs(s))));
+        }
+        return maxRing;
+    }
+
+    private static Vector2I[] GetTileVertices(Vector2I encoded)
+    {
+        var (q, r, t) = SkillTreeCoord.DecodeTile(encoded);
+        return t == 0
+            ? [new Vector2I(q, r), new Vector2I(q + 1, r), new Vector2I(q, r + 1)]
+            : [new Vector2I(q + 1, r), new Vector2I(q, r + 1), new Vector2I(q + 1, r + 1)];
     }
 
     // ============================================================================
@@ -564,6 +708,7 @@ public partial class CharacterSkillTree : RefCounted
         RandomAttributeSeed = data.ContainsKey("random_attribute_seed")
             ? data["random_attribute_seed"].AsInt32()
             : CreateRuntimeSeed(CharacterLevel);
+        BuildCharacterContentMap();
 
         ActivatedNodes.Clear();
         ActivatedSet.Clear();
@@ -627,12 +772,13 @@ public partial class CharacterSkillTree : RefCounted
         };
         var primaryRegion = regionMap.GetValueOrDefault(primaryAttr, SkillNodeData.Region.Str);
         var secondaryRegion = regionMap.GetValueOrDefault(secondaryAttr, SkillNodeData.Region.Dex);
+        bool needsAutoEquippableActive = !HasAutoEquippableActiveSkill();
 
         int loopGuard = 0;
         while (AvailableAttributePoints > 0 && loopGuard++ < 200)
         {
             var available = GetAvailableNodes()
-                .Where(n => n.RequiredLevel <= CharacterLevel)
+                .Where(n => GetEffectiveNode(n).RequiredLevel <= CharacterLevel)
                 .ToList();
 
             if (available.Count == 0)
@@ -643,8 +789,11 @@ public partial class CharacterSkillTree : RefCounted
             }
 
             available.Sort((a, b) =>
-                AiNodeScore(b, primaryRegion, secondaryRegion)
-                .CompareTo(AiNodeScore(a, primaryRegion, secondaryRegion)));
+            {
+                float scoreA = AiNodeScore(a, primaryRegion, secondaryRegion, needsAutoEquippableActive);
+                float scoreB = AiNodeScore(b, primaryRegion, secondaryRegion, needsAutoEquippableActive);
+                return scoreB.CompareTo(scoreA);
+            });
 
             bool success = false;
             while (available.Count > 0)
@@ -668,6 +817,8 @@ public partial class CharacterSkillTree : RefCounted
 
                 if (res.ContainsKey("success") && res["success"].AsBool())
                 {
+                    if (needsAutoEquippableActive && HasAutoEquippableActiveSkill())
+                        needsAutoEquippableActive = false;
                     success = true;
                     break;
                 }
@@ -739,7 +890,7 @@ public partial class CharacterSkillTree : RefCounted
             }
 
             var available = GetAvailableNodes()
-                .Where(n => n.RequiredLevel <= CharacterLevel)
+                .Where(n => GetEffectiveNode(n).RequiredLevel <= CharacterLevel)
                 .ToList();
 
             if (available.Count == 0)
@@ -811,31 +962,305 @@ public partial class CharacterSkillTree : RefCounted
         return score;
     }
 
-    private float AiNodeScore(SkillNodeData node, SkillNodeData.Region primaryRegion, SkillNodeData.Region secondaryRegion)
+    private float AiNodeScore(SkillNodeData node, SkillNodeData.Region primaryRegion, SkillNodeData.Region secondaryRegion,
+        bool needsAutoEquippableActive = false)
     {
         float score = 0.0f;
         if (node.CurrentRegion == primaryRegion) score += 100.0f;
         else if (node.CurrentRegion == secondaryRegion) score += 50.0f;
         else if (node.CurrentRegion == SkillNodeData.Region.Transition) score += 20.0f;
 
-        if (node.CurrentNodeType == SkillNodeData.NodeType.Giant) score += 40.0f;
-        else if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone) score += 30.0f;
-        else if (node.CurrentNodeType == SkillNodeData.NodeType.Big) score += 20.0f;
+        var effectiveNode = GetEffectiveNode(node);
+        if (effectiveNode.CurrentNodeType == SkillNodeData.NodeType.Giant) score += 40.0f;
+        else if (effectiveNode.CurrentNodeType == SkillNodeData.NodeType.Keystone) score += 30.0f;
+        else if (effectiveNode.CurrentNodeType == SkillNodeData.NodeType.Big) score += 20.0f;
+
+        if (needsAutoEquippableActive)
+        {
+            if (IsAutoEquippableActiveSkill(effectiveNode))
+                score += 10000.0f;
+            else
+                score += GetActiveSkillPathScore(node, primaryRegion, secondaryRegion);
+        }
 
         return score;
     }
 
+    private bool HasAutoEquippableActiveSkill()
+    {
+        foreach (var node in GetActiveSkills())
+        {
+            if (IsAutoEquippableActiveSkill(node))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsAutoEquippableActiveSkill(SkillNodeData node)
+    {
+        return node.IsActiveSkill
+            && !string.IsNullOrEmpty(node.SkillEffect);
+    }
+
+    private float GetActiveSkillPathScore(SkillNodeData candidate, SkillNodeData.Region primaryRegion,
+        SkillNodeData.Region secondaryRegion)
+    {
+        if (TreeData == null)
+            return 0.0f;
+
+        int bestDistance = int.MaxValue;
+        int bestPreference = 0;
+        var targetNodes = GetPreferredActiveSkillTargets(primaryRegion, secondaryRegion);
+        foreach (var node in targetNodes)
+        {
+            int distance = GetNodeTileDistance(candidate, node);
+            int preference = node.CurrentRegion == primaryRegion ? 2 : node.CurrentRegion == secondaryRegion ? 1 : 0;
+            if (distance < bestDistance || (distance == bestDistance && preference > bestPreference))
+            {
+                bestDistance = distance;
+                bestPreference = preference;
+            }
+        }
+
+        if (bestDistance == int.MaxValue)
+            return 0.0f;
+
+        return Math.Max(0.0f, 600.0f - bestDistance * 25.0f) + bestPreference * 60.0f;
+    }
+
+    private List<SkillNodeData> GetPreferredActiveSkillTargets(SkillNodeData.Region primaryRegion,
+        SkillNodeData.Region secondaryRegion)
+    {
+        var all = TreeData!.Nodes.Values
+            .Where(node =>
+            {
+                var effectiveNode = GetEffectiveNode(node);
+                return IsAutoEquippableActiveSkill(effectiveNode)
+                    && effectiveNode.RequiredLevel <= CharacterLevel;
+            })
+            .ToList();
+
+        var primary = all.Where(node => node.CurrentRegion == primaryRegion).ToList();
+        if (primary.Count > 0) return primary;
+
+        var secondary = all.Where(node => node.CurrentRegion == secondaryRegion).ToList();
+        if (secondary.Count > 0) return secondary;
+
+        return all;
+    }
+
+    private static int GetNodeTileDistance(SkillNodeData a, SkillNodeData b)
+    {
+        var aTiles = SkillNodeShape.GetTiles(a);
+        var bTiles = SkillNodeShape.GetTiles(b);
+        int best = int.MaxValue;
+        foreach (var aTile in aTiles)
+        {
+            var (aq, ar, _) = SkillTreeCoord.DecodeTile(aTile);
+            foreach (var bTile in bTiles)
+            {
+                var (bq, br, _) = SkillTreeCoord.DecodeTile(bTile);
+                int distance = SkillTreeCoord.HexDistance(new Vector2I(aq, ar), new Vector2I(bq, br));
+                if (distance < best)
+                    best = distance;
+            }
+        }
+        return best == int.MaxValue ? 0 : best;
+    }
+
     public Godot.Collections.Dictionary GetNodeStatBonusesForCharacter(SkillNodeData node)
     {
-        if (node.CurrentContentMode != SkillNodeData.ContentMode.RandomAttribute)
-            return node.StatBonuses;
+        var effectiveNode = GetEffectiveNode(node);
+        if (effectiveNode.CurrentContentMode != SkillNodeData.ContentMode.RandomAttribute)
+            return effectiveNode.StatBonuses;
 
-        return RollRandomAttributeForCharacter(node);
+        return RollRandomAttributeForCharacter(effectiveNode);
     }
 
     public string GetNodeEffectTextForCharacter(SkillNodeData node)
     {
-        return node.GetEffectText(GetNodeStatBonusesForCharacter(node));
+        var effectiveNode = GetEffectiveNode(node);
+        return effectiveNode.GetEffectText(GetNodeStatBonusesForCharacter(node));
+    }
+
+    public SkillNodeData GetEffectiveNode(SkillNodeData node)
+    {
+        if (TreeData == null)
+            return node;
+
+        if (_effectiveNodeCache.TryGetValue(node.NodeId, out var cached))
+            return cached;
+
+        if (!_contentNodeByGeometryNode.TryGetValue(node.NodeId, out string? contentNodeId)
+            || contentNodeId == node.NodeId
+            || !TreeData.Nodes.TryGetValue(contentNodeId, out var contentNode))
+        {
+            _effectiveNodeCache[node.NodeId] = node;
+            return node;
+        }
+
+        var effective = CloneGeometryWithContent(node, contentNode);
+        _effectiveNodeCache[node.NodeId] = effective;
+        return effective;
+    }
+
+    public string GetEffectiveSkillEffect(string nodeId)
+    {
+        if (TreeData == null || !TreeData.Nodes.TryGetValue(nodeId, out var node))
+            return "";
+        return GetEffectiveNode(node).SkillEffect;
+    }
+
+    public string GetEffectiveNodeName(string nodeId)
+    {
+        if (TreeData == null || !TreeData.Nodes.TryGetValue(nodeId, out var node))
+            return nodeId;
+        return GetEffectiveNode(node).NodeName;
+    }
+
+    private void BuildCharacterContentMap()
+    {
+        _contentNodeByGeometryNode.Clear();
+        _effectiveNodeCache.Clear();
+        if (TreeData == null)
+            return;
+
+        foreach (var node in TreeData.Nodes.Values)
+            _contentNodeByGeometryNode[node.NodeId] = node.NodeId;
+
+        var groups = TreeData.Nodes.Values
+            .Where(IsCharacterShuffledContentNode)
+            .GroupBy(node => $"{node.CurrentRegion}:{GetContentShuffleRole(node)}:{GetContentShuffleBand(node)}");
+
+        foreach (var group in groups)
+        {
+            var geometryIds = group
+                .Select(node => node.NodeId)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+            if (geometryIds.Count <= 1)
+                continue;
+
+            var contentIds = geometryIds.ToList();
+            Shuffle(contentIds, new Random(CombineSeed(RandomAttributeSeed, StableSeed(group.Key))));
+            DerangeInPlace(geometryIds, contentIds);
+
+            for (int i = 0; i < geometryIds.Count; i++)
+                _contentNodeByGeometryNode[geometryIds[i]] = contentIds[i];
+        }
+    }
+
+    private static bool IsCharacterShuffledContentNode(SkillNodeData node)
+    {
+        if (node.CurrentRegion is SkillNodeData.Region.None or SkillNodeData.Region.Transition)
+            return false;
+        return node.CurrentNodeType == SkillNodeData.NodeType.Big
+            || node.CurrentNodeType == SkillNodeData.NodeType.Keystone
+            || node.CurrentNodeType == SkillNodeData.NodeType.Giant;
+    }
+
+    private static string GetContentShuffleRole(SkillNodeData node)
+    {
+        return node.CurrentNodeType switch
+        {
+            SkillNodeData.NodeType.Big when node.IsActiveSkill => "active",
+            SkillNodeData.NodeType.Big => "passive",
+            SkillNodeData.NodeType.Keystone => "keystone",
+            SkillNodeData.NodeType.Giant => "giant",
+            _ => "fixed",
+        };
+    }
+
+    private static string GetContentShuffleBand(SkillNodeData node)
+    {
+        return GetNodeRingBand(node) switch
+        {
+            RingBand.Inner => "inner",
+            RingBand.Middle => "middle",
+            RingBand.Outer => "outer",
+            _ => "none",
+        };
+    }
+
+    private static void Shuffle<T>(IList<T> values, Random rng)
+    {
+        for (int i = values.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            (values[i], values[j]) = (values[j], values[i]);
+        }
+    }
+
+    private static void DerangeInPlace(IReadOnlyList<string> geometryIds, IList<string> contentIds)
+    {
+        if (geometryIds.Count <= 1)
+            return;
+
+        bool allFixed = true;
+        for (int i = 0; i < geometryIds.Count; i++)
+        {
+            if (geometryIds[i] != contentIds[i])
+            {
+                allFixed = false;
+                break;
+            }
+        }
+
+        if (allFixed)
+        {
+            RotateLeft(contentIds);
+            return;
+        }
+
+        for (int i = 0; i < geometryIds.Count; i++)
+        {
+            if (geometryIds[i] != contentIds[i])
+                continue;
+
+            int swapIndex = (i + 1) % contentIds.Count;
+            (contentIds[i], contentIds[swapIndex]) = (contentIds[swapIndex], contentIds[i]);
+        }
+    }
+
+    private static void RotateLeft<T>(IList<T> values)
+    {
+        if (values.Count <= 1)
+            return;
+        T first = values[0];
+        for (int i = 0; i < values.Count - 1; i++)
+            values[i] = values[i + 1];
+        values[^1] = first;
+    }
+
+    private static SkillNodeData CloneGeometryWithContent(SkillNodeData geometryNode, SkillNodeData contentNode)
+    {
+        return new SkillNodeData
+        {
+            NodeId = geometryNode.NodeId,
+            CurrentRegion = geometryNode.CurrentRegion,
+            CurrentNodeType = geometryNode.CurrentNodeType,
+            Depth = geometryNode.Depth,
+            IsBridge = geometryNode.IsBridge,
+            RequiredLevel = contentNode.RequiredLevel,
+            GridPosition = geometryNode.GridPosition,
+            ExplicitTiles = geometryNode.ExplicitTiles,
+            IsActivated = geometryNode.IsActivated,
+            NodeName = contentNode.NodeName,
+            NodeSubtitle = contentNode.NodeSubtitle,
+            Description = contentNode.Description,
+            SkillEffect = contentNode.SkillEffect,
+            IsActiveSkill = contentNode.IsActiveSkill,
+            StatBonuses = (Godot.Collections.Dictionary)contentNode.StatBonuses.Duplicate(),
+            CostBonuses = (Godot.Collections.Dictionary)contentNode.CostBonuses.Duplicate(),
+            KeystoneCost = contentNode.KeystoneCost,
+            CurrentContentMode = contentNode.CurrentContentMode,
+            RandomSeed = contentNode.RandomSeed,
+            IconPath = contentNode.IconPath,
+            FigureId = contentNode.FigureId,
+            FigureName = contentNode.FigureName,
+            FigureTemplate = contentNode.FigureTemplate,
+            IsPlaceholder = contentNode.IsPlaceholder,
+        };
     }
 
     private Godot.Collections.Dictionary RollRandomAttributeForCharacter(SkillNodeData node)
@@ -896,6 +1321,17 @@ public partial class CharacterSkillTree : RefCounted
             int hash = 17;
             hash = hash * 31 + characterSeed;
             hash = hash * 31 + nodeSeed;
+            return hash;
+        }
+    }
+
+    private static int StableSeed(string text)
+    {
+        unchecked
+        {
+            int hash = 17;
+            foreach (char c in text)
+                hash = hash * 31 + c;
             return hash;
         }
     }

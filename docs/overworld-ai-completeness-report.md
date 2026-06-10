@@ -9,7 +9,7 @@
 | 组件 | 文件 | 职责 | 状态 |
 |------|------|------|------|
 | OverworldEntity | OverworldEntity.cs | 实体数据模型，8种类型、11种AI状态、LOD、序列化 | 完备 |
-| EntityBehaviorEvaluator | Overworld/EntityBehaviorEvaluator.cs | 感知→敌对判定→战力评估→追/逃意图设定 | 完备 |
+| PerceptionIntentResolver | Overworld/PerceptionIntentResolver.cs | 感知→敌对判定→战力评估→追/逃意图解析 | 完备 |
 | DailyDecisionProcessor | Overworld/DailyDecisionProcessor.cs | 每日决策分派，按实体类型执行行为 | **有缺口** |
 | BattleResolver | Overworld/BattleResolver.cs | 实体交互检测、视野感知、AI战斗结算 | 完备 |
 | SiegeProcessor | Overworld/SiegeProcessor.cs | 围攻结算、回援检查、招募恢复 | 完备 |
@@ -26,7 +26,7 @@
 
 #### 严重 — BanditParty / RobberParty / PirateCrew 决策缺失
 
-`OverworldEntity.EntityType` 枚举定义了 8 种实体类型，其中 `BanditParty`(山贼)、`RobberParty`(劫匪)、`PirateCrew`(海寇) 三种类型已在 `EncounterEntitySpawner` 中被生成（人类系占比约35%），且 `EntityBehaviorEvaluator` 已为它们做了策略分派（复用掠夺队阈值）。
+`OverworldEntity.EntityType` 枚举定义了 8 种实体类型，其中 `BanditParty`(山贼)、`RobberParty`(劫匪)、`PirateCrew`(海寇) 三种类型已在 `EncounterEntitySpawner` 中被生成（人类系占比约35%），且 `PerceptionIntentResolver` 已为它们做了策略分派（复用掠夺队阈值）。
 
 **但** `DailyDecisionProcessor.DecideDailyAction` 的 switch 语句仅处理了 5 种类型：
 
@@ -50,7 +50,7 @@ Reckless / Cautious / Tactical / Instinct / Territorial / Cunning / Intimidate /
 
 该枚举仅在 `Frontend/View/Combat/AI` (战术层战斗AI) 中有部分引用。在战略层（大地图）中完全未使用——`OverworldEntity` 没有策略字段，`DailyDecisionProcessor` 不做策略分派。
 
-实体在大地图层面的"性格差异"完全依赖 `EntityBehaviorEvaluator` 中硬编码的阈值常量和领主的 `LordPersonality`。若需要让不同实体在大地图展现不同策略风格（例如 Cunning 型会伏击、Territorial 型不追出领地），需要打通此枚举与战略层的关联。
+实体在大地图层面的"性格差异"依赖 `PerceptionIntentResolver` 中的阈值常量、`AIStrategy` 修正和领主的 `LordPersonality`。若需要让不同实体在大地图展现不同策略风格（例如 Cunning 型会伏击、Territorial 型不追出领地），需要继续扩展该意图解析模块。
 
 #### 低 — 优化文档建议未采纳项
 
@@ -61,7 +61,7 @@ Reckless / Cautious / Tactical / Instinct / Territorial / Cunning / Intimidate /
 | 一、状态机层级化重构 | 未采纳 | AIState 仍为 11 值扁平枚举，无 IStateHandler |
 | 二、DailyDecisionProcessor 职责拆分 | 未采纳 | ProcessDailyDecisions 仍同时承担 OnDayPassed + 决策 + 清理 |
 | 三、随机数引擎注入 | 未采纳 | 各处理器仍各自持有 `static readonly Random` |
-| 四、视野检测与决策解耦 | 部分采纳 | EntityBehaviorEvaluator 前置了感知管线，但 BattleResolver.CheckVisionDetection 仍独立运行 |
+| 四、视野检测与决策解耦 | 已采纳 | PerceptionIntentResolver 统一远距追逃意图；BattleResolver 只处理接触交战 |
 | 五、追击路径优化(有限前瞻A*) | 未采纳 | 仍为 Chunk A* 全路径寻路 + 休眠直线插值 |
 | 六、LOD 阈值配置化 | 未采纳 | 5000/5500px 仍为硬编码常量 |
 | 七、OverworldAIResolver 返回类型改进 | 未采纳 | 仍返回 `Godot.Collections.Dictionary`，字符串键访问 |
@@ -76,12 +76,13 @@ Reckless / Cautious / Tactical / Instinct / Territorial / Cunning / Intimidate /
 
 EntityLodController.Update()        ← LOD 休眠/激活
         ↓
-EntityBehaviorEvaluator.EvaluateAll() ← 感知→评估→追/逃意图
+DailyDecisionProcessor.ProcessFrameTactics()
+  └─ PerceptionIntentResolver.ResolveBest() ← 感知→评估→追/逃意图
+  └─ OverworldIntentApplier.Apply()         ← 写入 Chasing/Fleeing 状态
         ↓
 BattleResolver.ProcessEntityInteractions()
   ├─ CheckEngagement()              → 接触(<100px) → 双方进入 Engaged 状态
   ├─ ResolveEngagedCombats()        → 交战满 2 天后结算 → OverworldAIResolver.ResolveBattle()
-  └─ CheckVisionDetection()         ← 远距离(VisionRange)感知 → Chasing/Fleeing
         ↓
 DailyDecisionProcessor.ProcessDailyDecisions()  ← 交战(Engaged)实体跳过
   ├─ DecideAdventurer()

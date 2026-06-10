@@ -13,12 +13,12 @@ public partial class AnimEditorTexturePanel : PanelContainer
 
     private static readonly SlotTextureSource[] SlotSources =
     [
-        new("身体", AssetKind.Icon, ["res://assets/generated_class_icons"]),
-        new("护甲", AssetKind.EquipmentTexture, ["res://assets/generated_armor"]),
-        new("头盔", AssetKind.EquipmentTexture, ["res://assets/generated_helmets"]),
-        new("手甲", AssetKind.EquipmentTexture, ["res://assets/generated_armor"]),
-        new("武器", AssetKind.EquipmentTexture, ["res://assets/generated_weapons", "res://assets/generated_staves"]),
-        new("盾牌", AssetKind.EquipmentTexture, ["res://assets/generated_shields"]),
+        new("身体", AssetKind.Icon, ["res://assets/class_icons"]),
+        new("护甲", AssetKind.EquipmentTexture, ["res://assets/armor"]),
+        new("头盔", AssetKind.EquipmentTexture, ["res://assets/helmets"]),
+        new("手甲", AssetKind.EquipmentTexture, ["res://assets/armor"]),
+        new("武器", AssetKind.EquipmentTexture, ["res://assets/weapons", "res://assets/staves"]),
+        new("盾牌", AssetKind.EquipmentTexture, ["res://assets/shields"]),
     ];
 
     private TabContainer _tabs = null!;

@@ -283,25 +283,8 @@ public static class UIConnectivityTests
             return (false, "No initially available entry node");
 
         tree.TotalJumps = 1;
-        var jumpableRegions = new HashSet<SkillNodeData.Region>();
-        foreach (var node in tree.GetJumpableNodes())
-            jumpableRegions.Add(node.CurrentRegion);
-
-        var required = new[]
-        {
-            SkillNodeData.Region.Str,
-            SkillNodeData.Region.Dex,
-            SkillNodeData.Region.Con,
-            SkillNodeData.Region.Int,
-            SkillNodeData.Region.Wis,
-            SkillNodeData.Region.Cha,
-        };
-
-        foreach (var region in required)
-        {
-            if (!jumpableRegions.Contains(region))
-                return (false, $"Jump cannot reach {region}");
-        }
+        if (tree.GetJumpableNodes().Count != 0)
+            return (false, "Jump should require an activated non-start node to define same-band adjacent sectors");
 
         return (true, "");
     }
@@ -512,31 +495,33 @@ public static class UIConnectivityTests
     {
         var treeData = new SkillTreeData();
         var tree = new CharacterSkillTree(treeData, 10);
-        
-        string? distantNodeId = null;
-        foreach (var kvp in treeData.Nodes)
-        {
-            if (kvp.Key == "start") continue;
-            if (!tree.AvailableSet.Contains(kvp.Key) && kvp.Value.CurrentNodeType == SkillNodeData.NodeType.Big)
-            {
-                distantNodeId = kvp.Key;
-                break;
-            }
-        }
-        
-        if (distantNodeId == null)
-            return (false, "Could not find a distant BIG node for jump test");
+
+        string sourceNodeId = "str_p01";
+        string allowedNodeId = "dex_p01";
+        string blockedNodeId = "con_p01";
+        if (!treeData.Nodes.ContainsKey(sourceNodeId) || !treeData.Nodes.ContainsKey(allowedNodeId) || !treeData.Nodes.ContainsKey(blockedNodeId))
+            return (false, "Expected fixed inner-ring passive nodes were not found");
 
         tree.TotalJumps = 1;
         tree.UsedJumps = 1;
         tree.AvailableAttributePoints = 5;
         
-        var resFail = tree.TryJumpActivate(distantNodeId);
+        var resFail = tree.TryJumpActivate(allowedNodeId);
         if (resFail["success"].AsBool())
             return (false, "Jump activation should fail when no jumps remain");
 
         tree.UsedJumps = 0;
-        var res1 = tree.TryJumpActivate(distantNodeId);
+        var resNoAnchor = tree.TryJumpActivate(allowedNodeId);
+        if (resNoAnchor["success"].AsBool())
+            return (false, "Jump should fail before a non-start same-band source is activated");
+
+        ActivateNodeDirectly(tree, sourceNodeId, treeData);
+
+        var resBlocked = tree.TryJumpActivate(blockedNodeId);
+        if (resBlocked["success"].AsBool())
+            return (false, "Jump should not reach non-adjacent sectors in the same ring band");
+
+        var res1 = tree.TryJumpActivate(allowedNodeId);
         if (!res1["success"].AsBool())
             return (false, $"First jump tile failed: {res1["message"].AsString()}");
         if (tree.UsedJumps != 1)

@@ -43,6 +43,7 @@ public static class HexOverworldAStarTests
         yield return Run(nameof(FindPath_DetourAroundObstacle), FindPath_DetourAroundObstacle);
         yield return Run(nameof(FindPath_PrefersRoadOverPlain), FindPath_PrefersRoadOverPlain);
         yield return Run(nameof(FindPath_IgnorePassability_CrossesMountain), FindPath_IgnorePassability_CrossesMountain);
+        yield return Run(nameof(FindPathPixels_SameTileDifferentPixels_ReturnsClickTarget), FindPathPixels_SameTileDifferentPixels_ReturnsClickTarget);
         yield return Run(nameof(FindPath_NoGrid_ReturnsEmpty), FindPath_NoGrid_ReturnsEmpty);
     }
 
@@ -201,6 +202,21 @@ public static class HexOverworldAStarTests
         var pathLoose = aStarLoose.FindPath(new Vector2I(0, 0), new Vector2I(4, 0));
         if (pathLoose.Length == 0)
             return (false, "IgnorePassability mode should find a path");
+        return (true, "");
+    }
+
+    private static (bool, string) FindPathPixels_SameTileDifferentPixels_ReturnsClickTarget()
+    {
+        var (grid, _) = MakePlainsGrid(8, 8);
+        var aStar = new HexOverworldAStar(grid);
+        var start = HexOverworldTile.AxialToPixel(2, 2);
+        var target = start + new Vector2(20.0f, 0.0f);
+
+        var path = aStar.FindPathPixels(start, target);
+
+        if (path.Length != 2) return (false, $"expected 2 pixel points, got {path.Length}");
+        if (path[0] != start) return (false, $"path should start at exact player position, got {path[0]}");
+        if (path[^1] != target) return (false, $"path should end at click target, got {path[^1]}");
         return (true, "");
     }
 

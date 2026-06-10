@@ -3,10 +3,9 @@
 // 从 OverworldEntityManager 拆出的 Core 层组件
 //
 // 交战机制:
-//   1. 视野检测(VisionRange): 远距离感知敌对 → 设定 Chasing/Fleeing 意图
-//   2. 接触交战(ENGAGE_DIST): 实体物理接触 → 双方进入 Engaged 状态、停止移动
-//   3. 动态战斗时长: 根据双方规模计算 3~24 小时
-//   4. 分层更新频率: 玩家视野内 3h / 视野外 12h / chunk 外休眠一次性结算
+//   1. 接触交战(ENGAGE_DIST): 实体物理接触 → 双方进入 Engaged 状态、停止移动
+//   2. 动态战斗时长: 根据双方规模计算 3~24 小时
+//   3. 分层更新频率: 玩家视野内 3h / 视野外 12h / chunk 外休眠一次性结算
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -40,7 +39,6 @@ public class BattleResolver
     public List<Battlefield> Battlefields { get; set; } = new();
 
     private ArmyRegistry? _armyRegistry;
-    private readonly PerceptionIntentResolver _perceptionResolver = new();
 
     /// <summary>
     /// 战斗结算事件 — 当 AiBattleOccurred 时触发，供 OverworldSimulation 收集为结构化事件
@@ -102,7 +100,7 @@ public class BattleResolver
 
     /// <summary>
     /// 检测实体间接触并建立交战关系。
-    /// 视野检测(Chasing/Fleeing)仍在 VisionRange 内执行。
+    /// 远距感知追逃由 DailyDecisionProcessor/PerceptionIntentResolver 统一处理。
     /// </summary>
     public void ProcessEntityInteractions(List<OverworldEntity> entities, WorldEventEngine? engine = null, Vector2? playerPosition = null, EntitySpatialIndex? index = null, float currentGameHour = 0f)
     {
@@ -112,11 +110,6 @@ public class BattleResolver
 
             if (dist < ENGAGE_DIST)
                 CheckEngagement(a, b, engine, currentGameHour);
-            else if (dist < a.VisionRange)
-                CheckVisionDetection(a, b, engine);
-
-            if (dist < b.VisionRange)
-                CheckVisionDetection(b, a, engine);
         }
 
         if (index != null)
@@ -131,9 +124,7 @@ public class BattleResolver
                 var a = entities[i];
                 if (!a.IsAlive || a.Lod == OverworldEntity.EntityLod.Hibernated) continue;
 
-                float maxRadius = System.Math.Max(ENGAGE_DIST, a.VisionRange);
-
-                foreach (var b in index.QueryRadius(a.Position, maxRadius))
+                foreach (var b in index.QueryRadius(a.Position, ENGAGE_DIST))
                 {
                     if (b == a || !b.IsAlive || b.Lod == OverworldEntity.EntityLod.Hibernated) continue;
                     if (!entityOrder.TryGetValue(b, out int bIndex)) continue;
@@ -219,7 +210,7 @@ public class BattleResolver
         Battlefields.Add(bf);
         SyncEntityEngagement(bf, currentGameHour);
 
-        GD.Print($"[Battlefield] 创建战场 {bf.BattlefieldId}: {a.EntityName} ⚔ {b.EntityName} (预计{duration}h)");
+        OverworldDiagnostics.LogBattlefieldCreated(bf.BattlefieldId, a.EntityName, b.EntityName, duration);
     }
 
     /// <summary>
@@ -249,10 +240,33 @@ public class BattleResolver
         int pairDuration = CalculateCombatDuration(joiner, alreadyEngaged);
         bf.DurationHours = Math.Max(bf.DurationHours, pairDuration);
 
-        GD.Print($"[Battlefield] {joiner.EntityName} 加入战场 {bf.BattlefieldId} 阵营={(joinAsAttacker ? "进攻" : "防御")}");
+        OverworldDiagnostics.Log(OverworldDiagnostics.PrefixBattlefield, $"{joiner.EntityName} joined {bf.BattlefieldId} side={(joinAsAttacker ? "attacker" : "defender")}");
 
         // 合并附近的战场
         TryMergeBattles(bf, currentGameHour);
+    }
+
+    public void JoinExistingBattlefield(
+        OverworldEntity joiner,
+        Battlefield battlefield,
+        bool joinAsAttacker,
+        WorldEventEngine? engine = null,
+        float currentGameHour = 0f)
+    {
+        if (joiner == null || battlefield == null || !joiner.IsAlive || battlefield.IsResolved)
+            return;
+        if (battlefield.AllParticipants.Contains(joiner))
+            return;
+
+        battlefield.Join(joiner, joinAsAttacker);
+        SyncSingleEntityEngagement(joiner, battlefield, currentGameHour);
+        battlefield.DurationHours = Math.Max(
+            battlefield.DurationHours,
+            CalculateCombatDuration(joiner, battlefield.GetPrimaryOpponent(joiner) ?? joiner));
+
+        OverworldDiagnostics.Log(OverworldDiagnostics.PrefixBattlefield,
+            $"{joiner.EntityName} joined {battlefield.BattlefieldId} side={(joinAsAttacker ? "attacker" : "defender")}");
+        TryMergeBattles(battlefield, currentGameHour);
     }
 
     /// <summary>
@@ -318,8 +332,9 @@ public class BattleResolver
         }
         bfA.DurationHours = Math.Max(bfA.DurationHours, bfB.DurationHours);
         Battlefields.Remove(bfB);
+        SyncEntityEngagement(bfA, currentGameHour);
 
-        GD.Print($"[Battlefield] 合并战场 {bfB.BattlefieldId} → {bfA.BattlefieldId}");
+        OverworldDiagnostics.LogBattlefieldMerged(bfB.BattlefieldId, bfA.BattlefieldId);
     }
 
     /// <summary>
@@ -344,7 +359,8 @@ public class BattleResolver
                 }
                 bf.DurationHours = Math.Max(bf.DurationHours, other.DurationHours);
                 Battlefields.Remove(other);
-                GD.Print($"[Battlefield] 邻近战场 {other.BattlefieldId} 合并入 {bf.BattlefieldId}");
+                SyncEntityEngagement(bf, currentGameHour);
+                OverworldDiagnostics.LogBattlefieldMerged(other.BattlefieldId, bf.BattlefieldId);
             }
         }
     }
@@ -401,7 +417,7 @@ public class BattleResolver
                 if (bf.ParticipantCount == 0)
                 {
                     Battlefields.Remove(bf);
-                    GD.Print($"[Battlefield] 战场 {bf.BattlefieldId} 已无参与者，清除");
+                    OverworldDiagnostics.LogBattlefieldCleared(bf.BattlefieldId, "no_participants");
                 }
             }
         }
@@ -439,7 +455,7 @@ public class BattleResolver
             if (resolved.Contains(entity)) continue;
 
             var opponent = entity.EngagedWith;
-            if (opponent == null || !opponent.IsAlive || !GodotObject.IsInstanceValid(opponent))
+            if (opponent == null || !opponent.IsAlive)
             {
                 // 对手已不存在 → 解除交战
                 ClearEngagement(entity);
@@ -547,7 +563,10 @@ public class BattleResolver
             opponent.CurrentAIState = OverworldEntity.AIState.Fleeing;
 
         float duration = currentGameHour - entity.EngagedSinceHour;
-        GD.Print($"[Combat] {entity.EntityName} vs {opponent.EntityName} → {(attackerWon ? entity.EntityName : opponent.EntityName)} 胜 (持续{duration:F1}h)");
+        OverworldDiagnostics.LogBattleResolved(
+            attackerWon ? entity.EntityName : opponent.EntityName,
+            attackerWon ? opponent.EntityName : entity.EntityName,
+            duration);
 
         // 军团损失传播
         PropagateArmyLosses(armyA, entity, attackerWon, (float)result["attacker_losses"], opponent, engine);
@@ -597,7 +616,7 @@ public class BattleResolver
 
         // 时间充足 → 一次性结算 (简化版)
         var opponent = entity.EngagedWith;
-        if (opponent != null && opponent.IsAlive && GodotObject.IsInstanceValid(opponent))
+        if (opponent != null && opponent.IsAlive)
         {
             // 双方都在 → 正常结算
             ResolveFinalCombat(entity, opponent, engine, null, currentGameHour);
@@ -669,73 +688,6 @@ public class BattleResolver
                 engine.Influence.Add(nid, 5, $"击败了敌对势力 {enemyFaction} 的领主");
             }
         }
-    }
-
-    // ================================================================
-    // 视野检测 — 远距离感知 (VisionRange)，触发 Chase / Flee
-    // 感知追逃判定委托到 PerceptionIntentResolver，并在本帧立即写入移动意图。
-    // ================================================================
-
-    private void CheckVisionDetection(OverworldEntity detector, OverworldEntity target, WorldEventEngine? engine = null)
-    {
-        if (!CanPerceptionOverride(detector))
-            return;
-
-        var intent = _perceptionResolver.Resolve(detector, target, engine, _relationMatrix);
-        switch (intent.Type)
-        {
-            case Intent.IntentType.Chase:
-                detector.CurrentAIState = OverworldEntity.AIState.Chasing;
-                detector.ChaseTarget = target;
-                StartDirectMove(detector, target.Position);
-                break;
-            case Intent.IntentType.Flee:
-                detector.CurrentAIState = OverworldEntity.AIState.Fleeing;
-                detector.ChaseTarget = null;
-                StartDirectMove(detector, GetFleeTarget(detector, target));
-                break;
-        }
-    }
-
-    private static Vector2 GetFleeTarget(OverworldEntity detector, OverworldEntity target)
-    {
-        Vector2 dir = detector.Position - target.Position;
-        if (dir.LengthSquared() <= 0.001f)
-            dir = new Vector2(1, 0);
-        return detector.Position + dir.Normalized() * 300.0f;
-    }
-
-    private static void StartDirectMove(OverworldEntity entity, Vector2 target)
-    {
-        entity.TargetPosition = target;
-        entity.Path.Clear();
-
-        if (entity.Position.DistanceTo(target) <= 1.0f)
-        {
-            entity.IsMoving = false;
-            return;
-        }
-
-        entity.Path.Add(target);
-        entity.IsMoving = true;
-    }
-
-    private static bool CanPerceptionOverride(OverworldEntity entity)
-    {
-        if (entity.CurrentAIState != OverworldEntity.AIState.Idle &&
-            entity.CurrentAIState != OverworldEntity.AIState.Patrolling)
-            return false;
-
-        if (entity.EntityTypeEnum == OverworldEntity.EntityType.LordArmy &&
-            !string.IsNullOrEmpty(entity.AssignedWarTargetPoiName))
-            return false;
-
-        if (entity.EntityTypeEnum == OverworldEntity.EntityType.EpicMonster &&
-            entity.TerritoryCenter != Vector2.Zero &&
-            !entity.IsInTerritory(entity.Position))
-            return false;
-
-        return true;
     }
 
 }

@@ -29,6 +29,7 @@ public partial class EntityTooltip : FloatingPanel
     // ============================================================================
 
     protected override float MinPanelWidth => 180f;
+    protected override int PanelContentMargin => 6;  // 减小内容边距（原 10）
 
     // ============================================================================
     // 构建内容
@@ -36,6 +37,9 @@ public partial class EntityTooltip : FloatingPanel
 
     protected override void BuildContent()
     {
+        // 减小 VBox 间距，使布局更紧凑
+        Content.AddThemeConstantOverride("separation", 2);
+
         _nameLabel = MakeTitleLabel("", 16);
         Content.AddChild(_nameLabel);
 

@@ -1127,15 +1127,14 @@ public static class HeadlessCombatLoop
         var damageInfo = attacker.RollDamage();
         int baseDamage = damageInfo.ContainsKey("total") ? (int)damageInfo["total"] : 1;
 
-        int passiveDamageBonus = 0;
+        float skillTreeWeaponDamageMultiplier = 1.0f;
         if (atkTree != null)
-            passiveDamageBonus = isMelee ? atkTree.GetMeleeDamageBonus() : atkTree.GetRangedDamageBonus();
-
-        // v0.6 11.4.1 节点平伤 AP 归一化:
-        //   EffectiveNodeWeaponDamage = NodeWeaponDamage × WeaponAP / 4
-        // 防止低 AP 多段武器（飞刀 2AP、匕首 2AP 等）从节点 +N damage 中线性获利。
-        int weaponApForNode = weapon?.ApCost ?? 4;
-        passiveDamageBonus = (passiveDamageBonus * weaponApForNode) / 4;
+        {
+            float percent = isMelee
+                ? atkTree.GetMeleeDamagePercentBonus()
+                : atkTree.GetRangedDamagePercentBonus();
+            skillTreeWeaponDamageMultiplier = Math.Max(0.1f, 1.0f + percent);
+        }
 
         var dmgInput = new CombatRuleEngine.DamageInput
         {
@@ -1145,7 +1144,7 @@ public static class HeadlessCombatLoop
             CritMultiplier = 2,
             CritDamageTakenMultiplier = defender.GetCritDamageTakenMultiplier(),
             SneakDamage = 0,
-            PassiveMeleeBonus = isMelee ? passiveDamageBonus : 0,
+            PassiveMeleeBonus = 0,
             PassiveMeleeMultiplier = 1.0f,
             IsMelee = isMelee,
             FlankMultiplier = 1.0f,
@@ -1154,12 +1153,10 @@ public static class HeadlessCombatLoop
             DamageReduction = 0,
             FinalMultiplier = (isAoO ? 0.5f : 1.0f) * damageMultiplier  // 包含 AoO 半伤 + 主动技能伤害倍率
                 * Buff.BuffSystem.ResolveMultiplier(attacker.Data, "damage")  // buff +%伤害(与实战路径一致)
+                * skillTreeWeaponDamageMultiplier
                 * SkillTreeKeystoneResolver.GetDamageFinalMultiplier(
                     attacker.Data, weapon, isMelee, isRanged, distance, roll.IsCritical, attacker.Runtime.HasMoved),
         };
-        // Apply ranged damage bonus directly to base (CombatRuleEngine has no ranged-passive field)
-        if (!isMelee && passiveDamageBonus != 0)
-            dmgInput.BaseDamage += passiveDamageBonus;
 
         // WIS 死灵之锋：击杀后下次攻击 +20% 伤害（之后清除）
         bool deathblowApplied = false;

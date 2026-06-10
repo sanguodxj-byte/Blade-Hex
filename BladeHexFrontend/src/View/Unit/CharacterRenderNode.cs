@@ -1,4 +1,4 @@
-﻿
+
 
 
 
@@ -284,7 +284,7 @@ public partial class CharacterRenderNode : Node3D
         if (_basePedestalTexture != null) return _basePedestalTexture;
         _basePedestalTexture = TextureAssetResolver.LoadIcon(
             "unit_base_steel",
-            "res://assets/generated_ui_icons/unit_base_steel.png");
+            "res://assets/ui_icons/unit_base_steel.png");
         return _basePedestalTexture;
     }
 

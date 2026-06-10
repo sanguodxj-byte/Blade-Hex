@@ -107,7 +107,7 @@ public partial class OverworldEntity : Resource
     [Export] public Vector2 TerritoryCenter { get; set; } = Vector2.Zero; // 领地中心
     [Export] public float TerritoryRadius { get; set; } = 500.0f; // 领地范围
 
-    /// <summary>大地图行为策略 — 影响 EntityBehaviorEvaluator 的追/逃阈值</summary>
+    /// <summary>大地图行为策略 — 影响 PerceptionIntentResolver 的追/逃阈值</summary>
     [Export] public AIStrategyEnum AIStrategy { get; set; } = AIStrategyEnum.Instinct;
 
     /// <summary>动态生态怪兽（用于拦截 GetEncounterConfig()）</summary>
@@ -357,10 +357,10 @@ public partial class OverworldEntity : Resource
         AIState.Attacking => "战斗中",
         AIState.Besieging => SiegeTarget != null ? $"围攻 {SiegeTarget.PoiName}" : "围攻中",
         AIState.Reinforcing => ReinforceTarget != null ? $"前往支援 {ReinforceTarget.PoiName}" : "回援中",
-        AIState.Chasing => ChaseTarget != null && GodotObject.IsInstanceValid(ChaseTarget) && ChaseTarget.IsAlive ? $"追击 {ChaseTarget.EntityName}" : "追击中",
+        AIState.Chasing => ChaseTarget != null && ChaseTarget.IsAlive ? $"追击 {ChaseTarget.EntityName}" : "追击中",
         AIState.Recruiting => "招募中",
         AIState.Escorting => "护送中",
-        AIState.Engaged => EngagedWith != null && GodotObject.IsInstanceValid(EngagedWith)
+        AIState.Engaged => EngagedWith != null && EngagedWith.IsAlive
             ? CombatDurationHours > 0
                 ? $"交战: {EngagedWith.EntityName} ({System.Math.Min(100, (int)(EngagedSinceHour >= 0 ? (LastGradualUpdateHour - EngagedSinceHour) / CombatDurationHours * 100 : 0))}%%)"
                 : $"交战: {EngagedWith.EntityName}"

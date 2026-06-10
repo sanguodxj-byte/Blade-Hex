@@ -98,6 +98,24 @@ REGION_ORDER = ["wis", "int", "con", "str", "dex", "cha"]
 # INT -> CON -> STR -> DEX -> CHA -> WIS -> INT.
 REGION_SEQUENCE = ["int", "con", "str", "dex", "cha", "wis"]
 
+HEX_OUTLINE_VERTICES = [
+    (HEX_RADIUS, 0),
+    (0, HEX_RADIUS),
+    (-HEX_RADIUS, HEX_RADIUS),
+    (-HEX_RADIUS, 0),
+    (0, -HEX_RADIUS),
+    (HEX_RADIUS, -HEX_RADIUS),
+]
+
+REGION_SECTOR_INDEX = {
+    "int": 0,
+    "con": 1,
+    "str": 2,
+    "dex": 3,
+    "cha": 4,
+    "wis": 5,
+}
+
 GIANTS = {
     "str": ("ᚦᚢᚱᛋ", "Thurs·蛮神", "免费行动，每场 1 次。窗口内每击杀 1 个敌人立即恢复全部 AP，可继续行动。"),
     "dex": ("ᚱᚨᛁᚦ", "Raið·疾驰", "免费行动，每场 1 次。窗口内远程攻击命中即返还本次行动，最多连续 5 次；每次击杀刷新移动力。"),
@@ -246,7 +264,7 @@ PASSIVE_DETAILS = {
         "武器类型：魔杖法术伤害 +5%。",
         "常驻：法力上限 +5%。",
         "常驻：法力回复 +1。",
-        "常驻：法术命中 +1。",
+        "常驻：法术伤害 +5%。",
         "常驻：法术伤害 +5%。",
         "触发：本回合未移动则下次法术伤害 +5%。",
     ],
@@ -273,13 +291,136 @@ PASSIVE_DETAILS = {
 }
 
 RANDOM_POOLS = {
-    "str": [("melee_damage", 1, 2, 30), ("max_hp", 3, 6, 25), ("melee_hit", 1, 1, 20), ("ac", 1, 1, 15), ("critical_rate", 0.02, 0.03, 10)],
-    "dex": [("ranged_damage", 1, 2, 28), ("ranged_hit", 1, 1, 22), ("initiative", 2, 3, 20), ("critical_rate", 0.02, 0.03, 18), ("speed", 1, 1, 12)],
-    "con": [("max_hp", 5, 10, 34), ("ac", 1, 1, 28), ("all_save", 1, 1, 28), ("heal_amount", 1, 1, 10)],
-    "int": [("mana_max", 3, 6, 35), ("spell_damage", 1, 1, 25), ("spell_hit", 1, 1, 22), ("ac", 1, 1, 8), ("all_save", 1, 1, 10)],
+    "str": [("melee_damage_percent", 0.02, 0.03, 30), ("max_hp", 3, 6, 25), ("melee_hit", 1, 1, 20), ("ac", 1, 1, 15), ("critical_rate", 0.02, 0.03, 10)],
+    "dex": [("ranged_damage_percent", 0.02, 0.03, 28), ("ranged_hit", 1, 1, 22), ("initiative", 2, 3, 20), ("critical_rate", 0.02, 0.03, 18), ("speed", 1, 1, 12)],
+    "con": [("max_hp", 5, 10, 34), ("ac", 1, 1, 28), ("all_save", 1, 1, 28), ("heal_amount_percent", 0.02, 0.03, 10)],
+    "int": [("mana_max", 3, 6, 35), ("spell_damage_percent", 0.02, 0.03, 47), ("ac", 1, 1, 8), ("all_save", 1, 1, 10)],
     "wis": [("critical_rate", 0.02, 0.05, 44), ("mana_max", 3, 5, 28), ("mana_regen", 1, 1, 20), ("all_save", 1, 1, 8)],
     "cha": [("ally_bonus", 1, 1, 50), ("initiative", 1, 2, 30), ("max_hp", 3, 5, 20)],
 }
+
+GIANT_TEMPLATE_IDS = {
+    "str": "apex_bastion_12",
+    "dex": "apex_crystal_12",
+    "con": "apex_arrowhead_12",
+    "int": "apex_crown_12",
+    "wis": "apex_hourglass_12",
+    "cha": "apex_sunburst_12",
+}
+
+GIANT_TEMPLATE_TILES = {
+    # Twelve individual triangle tiles around one lattice vertex: a true six-point star.
+    "apex_sunburst_12": [
+        (-2, 0, 1), (-1, -1, 0), (-1, -1, 1), (-1, 0, 0),
+        (-1, 0, 1), (-1, 1, 0), (0, -2, 1), (0, -1, 0),
+        (0, -1, 1), (0, 0, 0), (0, 0, 1), (1, -1, 0),
+    ],
+    # Bilateral arrowhead built from triangle tiles, not paired diamond cells.
+    "apex_arrowhead_12": [
+        (0, -2, 1), (-1, -1, 0), (-1, -1, 1), (0, -1, 0),
+        (0, -1, 1), (1, -1, 0), (-1, 0, 0), (-1, 0, 1),
+        (0, 0, 0), (0, 0, 1), (-1, 1, 0), (0, 1, 0),
+    ],
+    # Faceted crystal with a vertical mirror axis.
+    "apex_crystal_12": [
+        (-1, -1, 1), (0, -1, 0), (0, -1, 1), (1, -1, 0),
+        (-1, 0, 0), (-1, 0, 1), (0, 0, 0), (0, 0, 1),
+        (-1, 1, 0), (0, 1, 0), (0, 1, 1), (1, 0, 0),
+    ],
+    # Shield-like bastion with a wider shoulder and centered base.
+    "apex_bastion_12": [
+        (-1, -1, 0), (-1, -1, 1), (0, -1, 0), (0, -1, 1),
+        (1, -1, 0), (-1, 0, 0), (-1, 0, 1), (0, 0, 0),
+        (0, 0, 1), (1, 0, 0), (-1, 1, 0), (0, 1, 0),
+    ],
+    # Hourglass: two mirrored triangular caps joined at the waist.
+    "apex_hourglass_12": [
+        (-2, 1, 0), (-2, 0, 1), (-2, 1, 1), (-1, -1, 0),
+        (-1, 0, 0), (-1, 1, 0), (-1, -2, 1), (-1, -1, 1),
+        (-1, 1, 1), (0, -2, 0), (0, -2, 1), (1, -2, 0),
+    ],
+    # Crown: three upper points with a compact mirrored base.
+    "apex_crown_12": [
+        (-1, -2, 1), (0, -2, 1), (-2, -1, 1), (-1, -1, 0),
+        (-1, -1, 1), (0, -1, 0), (0, -1, 1), (1, -1, 0),
+        (-1, 0, 0), (-1, 0, 1), (0, 0, 0), (0, 0, 1),
+    ],
+}
+
+
+def giant_template_tiles(template_id: str) -> list[tuple[int, int]]:
+    return [
+        enc(q, r, t)
+        for q, r, t in GIANT_TEMPLATE_TILES[template_id]
+    ]
+
+
+def rotate_vertex(vertex: tuple[int, int], rotation: int) -> tuple[int, int]:
+    q, r = vertex
+    return {
+        0: (q, r),
+        1: (-r, q + r),
+        2: (-q - r, q),
+        3: (-q, -r),
+        4: (r, -q - r),
+        5: (q + r, -q),
+    }[rotation % 6]
+
+
+def transform_vertex(vertex: tuple[int, int], transform_index: int) -> tuple[int, int]:
+    q, r = vertex
+    if transform_index >= 6:
+        q, r = q, -q - r
+    return rotate_vertex((q, r), transform_index % 6)
+
+
+def encode_tile_from_vertices(vertices: list[tuple[int, int]]) -> tuple[int, int] | None:
+    vertex_set = set(vertices)
+    min_q = min(q for q, _ in vertices)
+    max_q = max(q for q, _ in vertices)
+    min_r = min(r for _, r in vertices)
+    max_r = max(r for _, r in vertices)
+    for q in range(min_q - 1, max_q + 1):
+        for r in range(min_r - 1, max_r + 1):
+            if {(q, r), (q + 1, r), (q, r + 1)} == vertex_set:
+                return enc(q, r, 0)
+            if {(q + 1, r), (q, r + 1), (q + 1, r + 1)} == vertex_set:
+                return enc(q, r, 1)
+    return None
+
+
+def transform_tile(tile: tuple[int, int], transform_index: int) -> tuple[int, int] | None:
+    transformed = [transform_vertex(vertex, transform_index) for vertex in tile_vertices(tile)]
+    return encode_tile_from_vertices(transformed)
+
+
+def normalize_tiles(tiles: list[tuple[int, int]]) -> tuple[tuple[int, int, int], ...]:
+    decoded = [dec(tile) for tile in tiles]
+    min_q = min(q for q, _, _ in decoded)
+    min_r = min(r for _, r, _ in decoded)
+    return tuple(sorted((q - min_q, r - min_r, t) for q, r, t in decoded))
+
+
+def giant_template_variants(template_id: str) -> list[list[tuple[int, int]]]:
+    base = giant_template_tiles(template_id)
+    variants: list[list[tuple[int, int]]] = []
+    seen: set[tuple[tuple[int, int, int], ...]] = set()
+    for transform_index in range(12):
+        transformed: list[tuple[int, int]] = []
+        for tile in base:
+            transformed_tile = transform_tile(tile, transform_index)
+            if transformed_tile is None:
+                transformed = []
+                break
+            transformed.append(transformed_tile)
+        if len(set(transformed)) != len(base):
+            continue
+        key = normalize_tiles(transformed)
+        if key in seen:
+            continue
+        seen.add(key)
+        variants.append(transformed)
+    return variants
 
 
 def score(tile: tuple[int, int], region: str, layer: int) -> float:
@@ -300,6 +441,16 @@ def tile_distance(tile: tuple[int, int]) -> float:
 def tile_angle(tile: tuple[int, int]) -> float:
     x, y = centroid(tile)
     return math.atan2(y, x)
+
+
+def tile_ring(tile: tuple[int, int]) -> int:
+    max_ring = 0
+    q, r, t = dec(tile)
+    vertices = [(q, r), (q + 1, r), (q, r + 1)] if t == 0 else [(q + 1, r), (q, r + 1), (q + 1, r + 1)]
+    for vq, vr in vertices:
+        s = -vq - vr
+        max_ring = max(max_ring, abs(vq), abs(vr), abs(s))
+    return max_ring
 
 
 def centroid_distance_sq(a: tuple[int, int], b: tuple[int, int]) -> float:
@@ -413,41 +564,96 @@ def is_acceptably_compact(group: list[tuple[int, int]], size: int) -> bool:
     return ratio <= limit
 
 
-def fixed_region_slots(region: str) -> list[tuple[str, str, int]]:
+def fixed_region_slots(region: str) -> list[tuple[str, str, int, int, str]]:
     return [
-        (f"{region}_a01", "big", 4),
-        (f"{region}_p01", "big", 4),
-        (f"{region}_a02", "big", 4),
-        (f"{region}_p02", "big", 4),
-        (f"{region}_ks01", "keystone", 6),
-        (f"{region}_a03", "big", 4),
-        (f"{region}_p03", "big", 4),
-        (f"{region}_a04", "big", 4),
-        (f"{region}_p04", "big", 4),
-        (f"{region}_ks02", "keystone", 6),
-        (f"{region}_a05", "big", 4),
-        (f"{region}_p05", "big", 4),
-        (f"{region}_ks03", "keystone", 6),
-        (f"{region}_g01", "giant", 12),
-        (f"{region}_a06", "big", 4),
-        (f"{region}_p06", "big", 4),
-        (f"{region}_p07", "big", 4),
-        (f"{region}_p08", "big", 4),
+        (f"{region}_ks01", "keystone", 6, 5, "axis"),
+        (f"{region}_a01", "big", 4, 5, "left"),
+        (f"{region}_a02", "big", 4, 5, "right"),
+        (f"{region}_p01", "big", 3, 5, "left"),
+        (f"{region}_p02", "big", 3, 5, "right"),
+        (f"{region}_ks02", "keystone", 6, 11, "left"),
+        (f"{region}_ks03", "keystone", 6, 11, "right"),
+        (f"{region}_a03", "big", 4, 12, "left"),
+        (f"{region}_a04", "big", 4, 12, "right"),
+        (f"{region}_p03", "big", 3, 11, "left"),
+        (f"{region}_p04", "big", 3, 11, "right"),
+        (f"{region}_p05", "big", 3, 12, "left"),
+        (f"{region}_p06", "big", 3, 12, "right"),
+        (f"{region}_g01", "giant", 12, 18, "axis"),
+        (f"{region}_p07", "big", 3, 18, "left"),
+        (f"{region}_p08", "big", 3, 18, "right"),
+        (f"{region}_a05", "big", 4, 18, "left"),
+        (f"{region}_a06", "big", 4, 18, "right"),
     ]
 
 
-def partition_tiles_by_region() -> dict[str, set[tuple[int, int]]]:
-    reserved = set(start_tiles())
-    tiles = [tile for tile in ALL_TILES if tile not in reserved]
-    tiles.sort(key=lambda tile: (tile_angle(tile), tile_distance(tile)))
-    chunk_size = len(tiles) // len(REGION_ORDER)
-    if chunk_size * len(REGION_ORDER) != len(tiles):
-        raise RuntimeError("skill star chart tile count is not divisible by region count")
+def slot_ring_band(node_type: str, target_ring: int) -> tuple[int, int]:
+    if node_type == "giant":
+        return 16, 20
+    if target_ring <= 8:
+        return 1, 8
+    if target_ring <= 15:
+        return 8, 15
+    return 16, 20
 
-    return {
-        region: set(tiles[index * chunk_size:(index + 1) * chunk_size])
-        for index, region in enumerate(REGION_ORDER)
-    }
+
+def band_center_ring(band: tuple[int, int]) -> float:
+    return (band[0] + band[1]) * 0.5
+
+
+def tile_in_ring_band(tile: tuple[int, int], band: tuple[int, int]) -> bool:
+    ring = tile_ring(tile)
+    return band[0] <= ring <= band[1]
+
+
+def group_in_ring_band(group: list[tuple[int, int]], band: tuple[int, int]) -> bool:
+    return all(tile_in_ring_band(tile, band) for tile in group)
+
+
+def vertex_point_inside_triangle(point: tuple[float, float], a: tuple[float, float], b: tuple[float, float], c: tuple[float, float]) -> bool:
+    def signed(p: tuple[float, float], u: tuple[float, float], v: tuple[float, float]) -> float:
+        return (p[0] - v[0]) * (u[1] - v[1]) - (u[0] - v[0]) * (p[1] - v[1])
+
+    d1 = signed(point, a, b)
+    d2 = signed(point, b, c)
+    d3 = signed(point, c, a)
+    eps = 1e-7
+    has_neg = d1 < -eps or d2 < -eps or d3 < -eps
+    has_pos = d1 > eps or d2 > eps or d3 > eps
+    return not (has_neg and has_pos)
+
+
+def tile_vertices(tile: tuple[int, int]) -> list[tuple[int, int]]:
+    q, r, t = dec(tile)
+    return [(q, r), (q + 1, r), (q, r + 1)] if t == 0 else [(q + 1, r), (q, r + 1), (q + 1, r + 1)]
+
+
+def tile_in_sector(tile: tuple[int, int], sector_index: int) -> bool:
+    a = vertex_to_pixel(0, 0)
+    bq, br = HEX_OUTLINE_VERTICES[sector_index]
+    cq, cr = HEX_OUTLINE_VERTICES[(sector_index + 1) % len(HEX_OUTLINE_VERTICES)]
+    b = vertex_to_pixel(bq, br)
+    c = vertex_to_pixel(cq, cr)
+    return all(vertex_point_inside_triangle(vertex_to_pixel(vq, vr), a, b, c) for vq, vr in tile_vertices(tile))
+
+
+def partition_tiles_by_region() -> dict[str, set[tuple[int, int]]]:
+    assigned: dict[str, set[tuple[int, int]]] = {}
+    owner: dict[tuple[int, int], str] = {}
+    for region in REGION_SEQUENCE:
+        sector_index = REGION_SECTOR_INDEX[region]
+        tiles = {tile for tile in ALL_TILES if tile_in_sector(tile, sector_index)}
+        if len(tiles) != HEX_RADIUS * HEX_RADIUS:
+            raise RuntimeError(f"{region} sector has {len(tiles)} tiles, expected {HEX_RADIUS * HEX_RADIUS}")
+        assigned[region] = tiles - set(start_tiles())
+        for tile in tiles:
+            if tile in owner:
+                raise RuntimeError(f"{region} sector overlaps {owner[tile]} at {tile}")
+            owner[tile] = region
+
+    if len(owner) != len(ALL_TILES):
+        raise RuntimeError(f"sector partition owns {len(owner)}/{len(ALL_TILES)} tiles")
+    return assigned
 
 
 def allocate_connected_group(
@@ -480,6 +686,102 @@ def allocate_connected_group(
         return best_group
 
     raise RuntimeError(f"failed to allocate connected group size={size}, remaining={len(remaining)}")
+
+
+def allocate_giant_group(
+    remaining: set[tuple[int, int]],
+    placed: set[tuple[int, int]],
+    template_id: str,
+    target_ring: int,
+) -> list[tuple[int, int]]:
+    candidates = giant_group_candidates(remaining, template_id, target_ring)
+    if candidates:
+        return candidates[0]
+
+    raise RuntimeError(f"failed to allocate giant template {template_id}")
+
+
+def giant_group_candidates(
+    remaining: set[tuple[int, int]],
+    template_id: str,
+    target_ring: int,
+) -> list[list[tuple[int, int]]]:
+    band = slot_ring_band("giant", target_ring)
+    anchors: set[tuple[int, int]] = set()
+    candidates: list[tuple[tuple[float, float, float, float, int, int], list[tuple[int, int]]]] = []
+    for shape in giant_template_variants(template_id):
+        shape_qr = [dec(tile) for tile in shape]
+        anchors.clear()
+        for tile in remaining:
+            q, r, _ = dec(tile)
+            for sq, sr, _ in shape_qr:
+                anchors.add((q - sq, r - sr))
+
+        for aq, ar in anchors:
+            group = [enc(q + aq, r + ar, t) for q, r, t in shape_qr]
+            group_set = set(group)
+            if len(group_set) != 12:
+                continue
+            if not group_set <= remaining:
+                continue
+            if not is_connected(group):
+                continue
+            if not group_in_ring_band(group, band):
+                continue
+
+            seed = min(group, key=lambda tile: (-tile_distance(tile), tile_angle(tile), tile[0], tile[1]))
+            rings = [tile_ring(tile) for tile in group]
+            ring_score = (
+                abs((sum(rings) / len(rings)) - target_ring),
+                max(rings) - min(rings),
+            )
+            score_tuple = ring_score + group_assignment_score(group, seed, prefer_outer=False)
+            candidates.append((score_tuple, group))
+
+    candidates.sort(key=lambda item: item[0])
+    return [group for _, group in candidates]
+
+
+def place_fixed_slots(
+    region: str,
+    remaining: set[tuple[int, int]],
+    model: dict,
+    slots: list[tuple[str, str, int, int, str]],
+    start_index: int,
+    sector_bias: int,
+) -> tuple[list[tuple[str, str, list[tuple[int, int]]]], set[tuple[int, int]]]:
+    result: list[tuple[str, str, list[tuple[int, int]]]] = []
+    index = start_index
+    while index < len(slots):
+        node_id, node_type, size, ring, side = slots[index]
+        desired_balance = sector_bias * 2 if size == 4 else 0 if size == 6 else sector_bias * 2 if size == 12 else None
+        if side == "axis":
+            if node_type == "giant":
+                tiles = allocate_giant_group(remaining, set(), GIANT_TEMPLATE_IDS[region], ring)
+            else:
+                tiles = build_axis_group(remaining, model, ring, size, node_type, desired_balance=desired_balance)
+            result.append((node_id, node_type, tiles))
+            remaining -= set(tiles)
+            index += 1
+            continue
+
+        if side == "left":
+            if index + 1 >= len(slots) or slots[index + 1][4] != "right":
+                raise RuntimeError(f"{node_id} left slot is not followed by a right slot")
+            right_id, right_type, right_size, right_ring, _ = slots[index + 1]
+            if node_type != right_type or size != right_size or ring != right_ring:
+                raise RuntimeError(f"{node_id}/{right_id} mirrored pair mismatch")
+            left_tiles, right_tiles = build_mirrored_pair(remaining, model, ring, size, node_type, desired_balance=desired_balance)
+            result.append((node_id, node_type, left_tiles))
+            result.append((right_id, right_type, right_tiles))
+            remaining -= set(left_tiles)
+            remaining -= set(right_tiles)
+            index += 2
+            continue
+
+        raise RuntimeError(f"unexpected right slot without left pair: {node_id}")
+
+    return result, remaining
 
 
 def maximum_tile_matching(tiles: set[tuple[int, int]]) -> tuple[list[tuple[tuple[int, int], tuple[int, int]]], list[tuple[int, int]]]:
@@ -538,25 +840,307 @@ def maximum_tile_matching(tiles: set[tuple[int, int]]) -> tuple[list[tuple[tuple
     return pairs, unmatched
 
 
+def make_sector_model(region: str, available_tiles: set[tuple[int, int]]) -> dict:
+    sector_index = REGION_SECTOR_INDEX[region]
+    left_vertex = vertex_to_pixel(*HEX_OUTLINE_VERTICES[sector_index])
+    right_vertex = vertex_to_pixel(*HEX_OUTLINE_VERTICES[(sector_index + 1) % len(HEX_OUTLINE_VERTICES)])
+    base_dir = (right_vertex[0] - left_vertex[0], right_vertex[1] - left_vertex[1])
+
+    rows: dict[int, list[tuple[int, int]]] = {}
+    for tile in available_tiles | (set(start_tiles()) & {tile for tile in ALL_TILES if tile_in_sector(tile, sector_index)}):
+        rows.setdefault(tile_ring(tile), []).append(tile)
+
+    row_col: dict[tuple[int, int], tuple[int, int]] = {}
+    mirror: dict[tuple[int, int], tuple[int, int]] = {}
+    for ring, row in rows.items():
+        row.sort(key=lambda tile: centroid(tile)[0] * base_dir[0] + centroid(tile)[1] * base_dir[1])
+        if len(row) != 2 * ring - 1:
+            raise RuntimeError(f"{region} ring {ring} has {len(row)} tiles, expected {2 * ring - 1}")
+        for col, tile in enumerate(row):
+            row_col[tile] = (ring, col)
+        for col, tile in enumerate(row):
+            mirror[tile] = row[len(row) - 1 - col]
+
+    return {"rows": rows, "row_col": row_col, "mirror": mirror}
+
+
+def placement_score(tile: tuple[int, int], model: dict, target_ring: int, target_col: int) -> tuple[int, int, float, int, int]:
+    ring, col = model["row_col"][tile]
+    return (abs(ring - target_ring), abs(col - target_col), tile_distance(tile), tile[0], tile[1])
+
+
+def tile_balance(tiles: set[tuple[int, int]] | list[tuple[int, int]]) -> int:
+    return sum(1 if dec(tile)[2] == 0 else -1 for tile in tiles)
+
+
+def build_connected_group_near(
+    remaining: set[tuple[int, int]],
+    model: dict,
+    target_ring: int,
+    target_col: int,
+    size: int,
+    forbidden: set[tuple[int, int]] | None = None,
+    preferred_seed: tuple[int, int] | None = None,
+    desired_balance: int | None = None,
+    ring_band: tuple[int, int] | None = None,
+) -> list[tuple[int, int]]:
+    forbidden = forbidden or set()
+    ring_band = ring_band or (max(1, target_ring - 3), min(HEX_RADIUS, target_ring + 3))
+    candidates = [
+        tile for tile in remaining
+        if tile not in forbidden
+        and abs(model["row_col"][tile][0] - target_ring) <= 3
+        and tile_in_ring_band(tile, ring_band)
+    ]
+    candidates.sort(key=lambda tile: placement_score(tile, model, target_ring, target_col))
+    if preferred_seed is not None and preferred_seed in candidates:
+        candidates.remove(preferred_seed)
+        candidates.insert(0, preferred_seed)
+
+    allowed = {
+        tile for tile in remaining
+        if tile not in forbidden
+        and abs(model["row_col"][tile][0] - target_ring) <= 4
+        and tile_in_ring_band(tile, ring_band)
+    }
+
+    def search_from_seed(seed: tuple[int, int]) -> list[tuple[int, int]] | None:
+        seen_states = 0
+        best_result: list[tuple[int, int]] | None = None
+        best_score: tuple[float, float, float, float, int, int] | None = None
+
+        def dfs(group: set[tuple[int, int]], frontier: set[tuple[int, int]]) -> None:
+            nonlocal seen_states
+            nonlocal best_result
+            nonlocal best_score
+            seen_states += 1
+            if seen_states > 500:
+                return
+            if len(group) == size:
+                if desired_balance is not None and tile_balance(group) != desired_balance:
+                    return
+                result = list(group)
+                if not is_connected(result):
+                    return
+                if not group_in_ring_band(result, ring_band):
+                    return
+                score_tuple = group_assignment_score(result, seed, prefer_outer=False)
+                if best_score is None or score_tuple < best_score:
+                    best_result = result
+                    best_score = score_tuple
+                return
+
+            ordered = sorted(frontier, key=lambda tile: placement_score(tile, model, target_ring, target_col))
+            for tile in ordered[:12]:
+                next_group = set(group)
+                next_group.add(tile)
+                next_frontier = set(frontier)
+                next_frontier.discard(tile)
+                for nb in neighbors(tile):
+                    if nb in allowed and nb not in next_group:
+                        next_frontier.add(nb)
+                dfs(next_group, next_frontier)
+
+        initial_frontier = {nb for nb in neighbors(seed) if nb in allowed}
+        dfs({seed}, initial_frontier)
+        return best_result
+
+    for seed in candidates:
+        if desired_balance is not None and size <= 6:
+            searched = search_from_seed(seed)
+            if searched is not None:
+                return searched
+
+        group = [seed]
+        seen = {seed}
+        while len(group) < size:
+            frontier = {
+                nb
+                for tile in group
+                for nb in neighbors(tile)
+                if nb in remaining and nb not in seen and nb not in forbidden
+            }
+            if not frontier:
+                break
+            next_tile = min(frontier, key=lambda tile: placement_score(tile, model, target_ring, target_col))
+            group.append(next_tile)
+            seen.add(next_tile)
+
+        if len(group) == size and is_connected(group) and group_in_ring_band(group, ring_band):
+            if desired_balance is not None and tile_balance(group) != desired_balance:
+                continue
+            return group
+
+    raise RuntimeError(f"failed to place connected group size={size} at r{target_ring}/c{target_col}")
+
+
+def build_axis_group(
+    remaining: set[tuple[int, int]],
+    model: dict,
+    target_ring: int,
+    size: int,
+    node_type: str,
+    desired_balance: int | None = None,
+) -> list[tuple[int, int]]:
+    mirror = model["mirror"]
+    ring_band = slot_ring_band(node_type, target_ring)
+    axis_tiles = [
+        tile for tile in remaining
+        if mirror[tile] == tile
+        and abs(model["row_col"][tile][0] - target_ring) <= 3
+        and tile_in_ring_band(tile, ring_band)
+    ]
+    axis_tiles.sort(key=lambda tile: placement_score(tile, model, target_ring, target_ring - 1))
+    axis_count_options = [1] if size % 2 == 1 else [2, 0, 4]
+    best_group: list[tuple[int, int]] | None = None
+    best_score: tuple[float, float, float, float, int, int] | None = None
+
+    for axis_count in axis_count_options:
+        if axis_count > size or axis_count > len(axis_tiles):
+            continue
+        starts = [0] if axis_count == 0 else range(0, len(axis_tiles) - axis_count + 1)
+        for start_index in starts:
+            group = set(axis_tiles[start_index:start_index + axis_count])
+            target_col = target_ring - 1
+            pair_candidates = [
+                tile for tile in remaining
+                if tile not in group
+                and mirror[tile] != tile
+                and mirror[tile] in remaining
+                and tile_in_ring_band(tile, ring_band)
+                and tile_in_ring_band(mirror[tile], ring_band)
+            ]
+            pair_candidates.sort(key=lambda tile: (
+                0 if any(nb in group for nb in neighbors(tile)) or any(nb in group for nb in neighbors(mirror[tile])) else 1,
+                placement_score(tile, model, target_ring, target_col),
+            ))
+
+            for tile in pair_candidates:
+                pair = mirror[tile]
+                if tile in group or pair in group:
+                    continue
+                if len(group) + 2 > size:
+                    continue
+                group.add(tile)
+                group.add(pair)
+                if len(group) == size:
+                    break
+
+            if len(group) == size and is_connected(list(group)) and group_in_ring_band(list(group), ring_band):
+                if desired_balance is not None and tile_balance(group) != desired_balance:
+                    continue
+                ordered = sorted(group, key=lambda tile: placement_score(tile, model, target_ring, target_col))
+                seed = min(ordered, key=lambda tile: placement_score(tile, model, target_ring, target_col))
+                score_tuple = group_assignment_score(ordered, seed, prefer_outer=False)
+                if best_score is None or score_tuple < best_score:
+                    best_group = ordered
+                    best_score = score_tuple
+
+    if best_group is not None:
+        return best_group
+
+    raise RuntimeError(f"failed to place axis group size={size} at r{target_ring}")
+
+
+def build_mirrored_pair(
+    remaining: set[tuple[int, int]],
+    model: dict,
+    target_ring: int,
+    size: int,
+    node_type: str,
+    desired_balance: int | None = None,
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    center_col = target_ring - 1
+    offset = max(2, size)
+    left_col = max(0, center_col - offset)
+    mirror = model["mirror"]
+    ring_band = slot_ring_band(node_type, target_ring)
+
+    candidates = [
+        tile for tile in remaining
+        if model["row_col"][tile][1] <= center_col
+        and abs(model["row_col"][tile][0] - target_ring) <= 3
+        and tile_in_ring_band(tile, ring_band)
+    ]
+    candidates.sort(key=lambda tile: placement_score(tile, model, target_ring, left_col))
+
+    tried: set[tuple[int, int]] = set()
+    best_pair: tuple[list[tuple[int, int]], list[tuple[int, int]]] | None = None
+    best_score: tuple[float, float, float, float, int, int, float, float, float, float, int, int] | None = None
+    for seed in candidates:
+        if seed in tried:
+            continue
+        tried.add(seed)
+        left = build_connected_group_near(
+            remaining,
+            model,
+            target_ring,
+            left_col,
+            size,
+            forbidden=set(),
+            preferred_seed=seed,
+            desired_balance=desired_balance,
+            ring_band=ring_band,
+        )
+        right = [mirror[tile] for tile in left]
+        if set(left).isdisjoint(right) and set(right) <= remaining and is_connected(right) and group_in_ring_band(right, ring_band):
+            if desired_balance is not None and tile_balance(right) != desired_balance:
+                continue
+            left_seed = min(left, key=lambda tile: placement_score(tile, model, target_ring, left_col))
+            right_seed = min(right, key=lambda tile: placement_score(tile, model, target_ring, center_col + offset))
+            score_tuple = group_assignment_score(left, left_seed, prefer_outer=False) + \
+                group_assignment_score(right, right_seed, prefer_outer=False)
+            if best_score is None or score_tuple < best_score:
+                best_pair = (left, right)
+                best_score = score_tuple
+
+    if best_pair is not None:
+        return best_pair
+
+    raise RuntimeError(f"failed to place mirrored pair size={size} at r{target_ring}")
+
+
 def build_region_layout(region: str, available_tiles: set[tuple[int, int]]) -> list[tuple[str, str, list[tuple[int, int]]]]:
     remaining = set(available_tiles)
-    placed = set(start_tiles())
     result: list[tuple[str, str, list[tuple[int, int]]]] = []
+    model = make_sector_model(region, available_tiles)
+    slots = fixed_region_slots(region)
+    sector_bias = 1 if tile_balance(available_tiles) > 0 else -1
 
-    for node_id, node_type, size in fixed_region_slots(region):
-        tiles = allocate_connected_group(remaining, placed, size, prefer_outer=node_type == "giant")
-        result.append((node_id, node_type, tiles))
-        tile_set = set(tiles)
-        remaining -= tile_set
-        placed |= tile_set
+    giant_slot = next(slot for slot in slots if slot[1] == "giant")
+    non_giant_slots = [slot for slot in slots if slot[1] != "giant"]
+
+    fixed_result, remaining = place_fixed_slots(
+        region,
+        remaining,
+        model,
+        non_giant_slots,
+        0,
+        sector_bias,
+    )
+    result.extend(fixed_result)
+
+    selected_giant: tuple[list[tuple[int, int]], set[tuple[int, int]]] | None = None
+    for candidate in giant_group_candidates(remaining, GIANT_TEMPLATE_IDS[region], giant_slot[3])[:800]:
+        trial_remaining = set(remaining) - set(candidate)
+        _, unmatched = maximum_tile_matching(trial_remaining)
+        if len(unmatched) <= 9 and (9 - len(unmatched)) % 2 == 0:
+            selected_giant = (candidate, trial_remaining)
+            break
+
+    if selected_giant is None:
+        raise RuntimeError(f"failed to place {giant_slot[0]} with exact 9 pip finish")
+
+    giant_tiles, remaining = selected_giant
+    result.append((giant_slot[0], giant_slot[1], giant_tiles))
 
     pairs, unmatched = maximum_tile_matching(remaining)
-    while len(unmatched) < 3 and pairs:
+    while len(unmatched) < 9 and pairs:
         left, right = pairs.pop()
         unmatched.extend([left, right])
 
-    if not (1 <= len(unmatched) <= 9):
-        raise RuntimeError(f"{region} pip count {len(unmatched)} outside design range")
+    if len(unmatched) != 9:
+        raise RuntimeError(f"{region} pip count {len(unmatched)} outside design target")
 
     small_index = 1
     for left, right in pairs:
@@ -572,40 +1156,6 @@ def build_region_layout(region: str, available_tiles: set[tuple[int, int]]) -> l
         raise RuntimeError(f"{region} did not consume all assigned tiles")
 
     return result
-
-
-def pick_bridge_nodes(
-    assigned: dict[str, set[tuple[int, int]]],
-    region_nodes: dict[str, list[tuple[str, str, list[tuple[int, int]]]]],
-) -> dict[str, tuple[str, str]]:
-    bridge_specs = [
-        ("trans_int_con01", "int", "con"),
-        ("trans_con_str01", "con", "str"),
-        ("trans_str_dex01", "str", "dex"),
-        ("trans_dex_cha01", "dex", "cha"),
-        ("trans_cha_wis01", "cha", "wis"),
-        ("trans_wis_int01", "wis", "int"),
-    ]
-    selected: dict[str, tuple[str, str]] = {}
-    used_node_ids: set[str] = set()
-
-    for bridge_id, left, right in bridge_specs:
-        candidates: list[tuple[float, str]] = []
-        right_tiles = assigned[right]
-        for node_id, node_type, tiles in region_nodes[left]:
-            if node_type != "small" or node_id in used_node_ids:
-                continue
-            if any(neighbor in right_tiles for tile in tiles for neighbor in neighbors(tile)):
-                candidates.append((-tile_distance(tiles[0]), node_id))
-
-        if not candidates:
-            raise RuntimeError(f"failed to find bridge candidate for {left}-{right}")
-
-        candidates.sort()
-        selected[candidates[0][1]] = (bridge_id, right)
-        used_node_ids.add(candidates[0][1])
-
-    return selected
 
 
 def build() -> tuple[dict, dict]:
@@ -632,34 +1182,9 @@ def build() -> tuple[dict, dict]:
         region: build_region_layout(region, assigned[region])
         for region in REGION_SEQUENCE
     }
-    bridge_replacements = pick_bridge_nodes(assigned, region_nodes)
 
     for region in REGION_SEQUENCE:
         for depth, (node_id, node_type, tiles) in enumerate(region_nodes[region], 1):
-            if node_id in bridge_replacements:
-                bridge_id, right = bridge_replacements[node_id]
-                layout_nodes.append(
-                    {
-                        "id": bridge_id,
-                        "region": "transition",
-                        "type": "small",
-                        "depth": depth,
-                        "isBridge": True,
-                        "tiles": [to_triplet(t) for t in tiles],
-                    }
-                )
-                content_nodes.append(
-                    {
-                        "id": bridge_id,
-                        "name": "过渡星纹",
-                        "description": f"{region.upper()} 与 {right.upper()} 之间的横跨桥点。",
-                        "contentMode": "random_attribute",
-                        "figureTemplate": "attribute_pair_2",
-                        "statBonuses": {"all_save": 1},
-                    }
-                )
-                continue
-
             layout_nodes.append(
                 {
                     "id": node_id,
@@ -715,7 +1240,7 @@ def make_content(region: str, node_id: str, node_type: str) -> dict:
             "effect": "spell_slot_4" if region == "int" else f"{region}_giant_apex",
             "isActiveSkill": region != "int",
             "figureName": f"{name}巨型命座",
-            "figureTemplate": "apex_rune_12",
+            "figureTemplate": GIANT_TEMPLATE_IDS[region],
         }
 
     if node_type == "keystone":
@@ -751,9 +1276,9 @@ def make_content(region: str, node_id: str, node_type: str) -> dict:
         "id": node_id,
         "name": name,
         "description": PASSIVE_DETAILS[region][idx],
-        "effect": f"{node_id}_passive",
-        "isActiveSkill": False,
-        "figureTemplate": "passive_triangle_4",
+            "effect": f"{node_id}_passive",
+            "isActiveSkill": False,
+        "figureTemplate": "passive_triad_3",
         "statBonuses": passive_bonus(region, idx),
     }
 
@@ -763,7 +1288,7 @@ def passive_bonus(region: str, idx: int) -> dict:
         "str": [{}, {}, {}, {}, {"max_hp": 5}, {}, {}, {}],
         "dex": [{}, {}, {}, {}, {"critical_rate": 0.05}, {"speed": 1}, {}, {}],
         "con": [{}, {}, {"max_hp": 5}, {}, {"all_save": 1}, {}, {}, {}],
-        "int": [{}, {}, {}, {"mana_max": 5}, {"mana_regen": 1}, {"spell_hit": 1}, {}, {}],
+        "int": [{}, {}, {}, {"mana_max": 5}, {"mana_regen": 1}, {"spell_damage_percent": 0.05}, {"spell_damage_percent": 0.05}, {}],
         "wis": [{}, {"critical_rate": 0.05}, {"critical_rate": 0.05}, {}, {"mana_max": 5}, {}, {}, {}],
         "cha": [{"ally_bonus": 1}, {"ally_bonus": 1}, {"ally_bonus": 1}, {"ally_bonus": 1}, {}, {"initiative": 2}, {"max_hp": 5}, {"ally_bonus": 1}],
     }
@@ -772,10 +1297,10 @@ def passive_bonus(region: str, idx: int) -> dict:
 
 def keystone_cost_bonus(region: str, idx: int) -> dict:
     costs = {
-        "str": [{"ac": -3}, {"critical_rate": -1.0}, {"heal_amount": -99}],
+        "str": [{"ac": -3}, {"critical_rate": -1.0}, {"heal_amount_percent": -1.0}],
         "dex": [{"max_hp": -10}, {"ac": -4}, {"range_bonus": -2}],
-        "con": [{"speed": -2}, {"ranged_damage": -2}, {"speed": -2}],
-        "int": [{"spell_hit": 1}, {"mana_max": -99}, {"max_hp": -20}],
+        "con": [{"speed": -2}, {"ranged_damage_percent": -0.50}, {"speed": -2}],
+        "int": [{"spell_damage_percent": -0.05}, {"mana_max": -99}, {"max_hp": -20}],
         "wis": [{"ac": -1}, {"critical_rate": -0.05}, {"max_hp": -10}],
         "cha": [{"max_hp": -10}, {"ally_bonus": -1}, {"ac": -2}],
     }

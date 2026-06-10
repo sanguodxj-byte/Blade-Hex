@@ -844,7 +844,8 @@ public partial class CombatUI : CanvasLayer
     private float _hudTargetAlpha = 1f;
     private float _hudCurrentAlpha = 1f;
     private const float HudOpaqueAlpha = 1f;
-    private const float HudTransparentAlpha = 0.35f;
+    private const float HudTransparentAlpha = 0.22f;
+    private const float HudSoftTransparentAlpha = 0.45f;
     private const float HudFadeSpeed = 6f; // 每秒变化速率
 
     /// <summary>
@@ -862,32 +863,71 @@ public partial class CombatUI : CanvasLayer
     {
         if (_bottomPanel == null || _occlusionCamera == null || _occlusionUnits == null) return;
 
-        // 获取底部面板在屏幕上的矩形区域
         var panelRect = _bottomPanel.GetGlobalRect();
-        // 向上扩展一点检测区域（提前触发半透明，避免突兀）
-        panelRect = panelRect.Grow(20f);
+        var softRect = panelRect.Grow(48f);
+        var hardRect = panelRect.Grow(12f);
 
-        bool hasOcclusion = false;
+        float targetAlpha = HudOpaqueAlpha;
         foreach (var unit in _occlusionUnits)
         {
             if (unit == null || !GodotObject.IsInstanceValid(unit) || unit.CurrentHp <= 0) continue;
 
-            // 将单位世界坐标投影到屏幕坐标
-            if (!_occlusionCamera.IsPositionInFrustum(unit.GlobalPosition)) continue;
-            var screenPos = _occlusionCamera.UnprojectPosition(unit.GlobalPosition);
+            if (!TryGetUnitScreenRect(unit, out var unitRect)) continue;
 
-            if (panelRect.HasPoint(screenPos))
+            if (hardRect.Intersects(unitRect))
             {
-                hasOcclusion = true;
+                targetAlpha = HudTransparentAlpha;
                 break;
             }
+            if (softRect.Intersects(unitRect))
+                targetAlpha = Mathf.Min(targetAlpha, HudSoftTransparentAlpha);
         }
 
-        _hudTargetAlpha = hasOcclusion ? HudTransparentAlpha : HudOpaqueAlpha;
+        _hudTargetAlpha = targetAlpha;
 
         // 平滑过渡
         _hudCurrentAlpha = Mathf.MoveToward(_hudCurrentAlpha, _hudTargetAlpha, (float)delta * HudFadeSpeed);
         _bottomPanel.Modulate = new Color(1f, 1f, 1f, _hudCurrentAlpha);
+    }
+
+    private bool TryGetUnitScreenRect(Unit unit, out Rect2 rect)
+    {
+        rect = default;
+        if (_occlusionCamera == null) return false;
+
+        var points = new[]
+        {
+            unit.GlobalPosition,
+            unit.GlobalPosition + new Vector3(0f, 36f, 0f),
+            unit.GlobalPosition + new Vector3(0f, 72f, 0f),
+        };
+
+        bool any = false;
+        Vector2 min = Vector2.Zero;
+        Vector2 max = Vector2.Zero;
+
+        foreach (var point in points)
+        {
+            if (!_occlusionCamera.IsPositionInFrustum(point)) continue;
+
+            var screenPos = _occlusionCamera.UnprojectPosition(point);
+            if (!any)
+            {
+                min = screenPos;
+                max = screenPos;
+                any = true;
+            }
+            else
+            {
+                min = new Vector2(Mathf.Min(min.X, screenPos.X), Mathf.Min(min.Y, screenPos.Y));
+                max = new Vector2(Mathf.Max(max.X, screenPos.X), Mathf.Max(max.Y, screenPos.Y));
+            }
+        }
+
+        if (!any) return false;
+
+        rect = new Rect2(min, max - min).Grow(28f);
+        return true;
     }
 
     /// <summary>用当前选中单位刷新底部信息面板</summary>

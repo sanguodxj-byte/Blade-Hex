@@ -78,27 +78,8 @@ public partial class CombatAttackAnimator : Node
         attacker.PlayAttackLunge(target.GlobalPosition);
         await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.4f);
 
-        if (_bothVisible)
-        {
-            // 双方都在视野内：不做任何镜头切换，保持当前跟随状态
-            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.2f);
-            return;
-        }
-
-        // 仅在一方不可见时：命中后短暂聚焦目标展示受击，再恢复攻击者
-        if (CameraCtrl != null && GodotObject.IsInstanceValid(target))
-        {
-            CameraCtrl.LockOnUnit(target);
-            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.25f);
-            if (GodotObject.IsInstanceValid(attacker) && attacker.CurrentHp > 0)
-                CameraCtrl.LockOnUnit(attacker);
-            else
-                CameraCtrl.Unlock();
-        }
-        else
-        {
-            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.2f);
-        }
+        CameraCtrl?.Unlock();
+        await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, _bothVisible ? 0.2f : 0.25f);
     }
 
     // ========================================
@@ -137,26 +118,9 @@ public partial class CombatAttackAnimator : Node
         // 只需等待飞行时间完成
         await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, travelTime);
 
-        if (_bothVisible)
-        {
-            // 双方都在视野内：飞行结束后不做镜头切换
-            return;
-        }
-
-        // 仅在一方不可见时：飞行结束后短暂聚焦目标展示命中效果，再恢复攻击者
-        if (CameraCtrl != null)
-        {
-            if (GodotObject.IsInstanceValid(target) && target.CurrentHp > 0)
-            {
-                CameraCtrl.LockOnUnit(target);
-                await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.25f);
-            }
-
-            if (GodotObject.IsInstanceValid(attacker) && attacker.CurrentHp > 0)
-                CameraCtrl.LockOnUnit(attacker);
-            else
-                CameraCtrl.Unlock();
-        }
+        CameraCtrl?.Unlock();
+        if (!_bothVisible)
+            await BladeHex.View.Combat.CombatSpeed.ScaledWait(this, 0.15f);
     }
 
     // ========================================

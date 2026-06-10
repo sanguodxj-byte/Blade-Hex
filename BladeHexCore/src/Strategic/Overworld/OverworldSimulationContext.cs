@@ -131,6 +131,12 @@ public sealed class OverworldSimulationContext
     
     /// <summary>玩家世界像素位置</summary>
     public Godot.Vector2 PlayerPosition { get; set; }
+
+    /// <summary>玩家当前战略阵营；未效忠国家或建国前使用 player。</summary>
+    public string PlayerFaction { get; set; } = OverworldHostility.DefaultPlayerFaction;
+
+    /// <summary>当前大地图天气移速倍率。由 Frontend 天气系统注入，Core 只消费纯数值。</summary>
+    public float WeatherSpeedFactor { get; set; } = 1.0f;
     
     /// <summary>玩家等级（影响敌方等级缩放）</summary>
     public int PlayerLevel { get; set; } = 1;

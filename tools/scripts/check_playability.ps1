@@ -20,7 +20,7 @@ $repoRoot  = Get-RepoRoot
 $timestamp = (Get-Date).ToUniversalTime().ToString("o")
 $outFile   = Join-Path $repoRoot 'evaluation.json'
 $tmpDir    = Join-Path $repoRoot 'playability_screenshots'
-$checkScene = 'res://src/scenes/test/playability_check.tscn'
+$checkScene = 'res://BladeHexFrontend/src/Scenes/test/playability_check.tscn'
 
 $loop = [ordered]@{
     builds_clean        = $false

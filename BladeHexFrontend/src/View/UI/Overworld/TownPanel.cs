@@ -67,17 +67,17 @@ public partial class TownPanel : POIPanelBase
         // 使用 DescriptionProvider（三因素：类型x繁荣度x种族）
         var poiType = _currentTown.TownType switch
         {
-            "village" => Strategic.OverworldPOI.POIType.Village,
-            "castle" => Strategic.OverworldPOI.POIType.Castle,
-            "mine" => Strategic.OverworldPOI.POIType.Mine,
-            _ => Strategic.OverworldPOI.POIType.Town,
+            "village" => OverworldPOI.POIType.Village,
+            "castle" => OverworldPOI.POIType.Castle,
+            "mine" => OverworldPOI.POIType.Mine,
+            _ => OverworldPOI.POIType.Town,
         };
-        var ctx = Strategic.DescriptionContext.Default;
+        var ctx = DescriptionContext.Default;
         ctx.PoiName = _currentTown.TownName;
         ctx.Prosperity = _currentTown.Prosperity;
         ctx.Garrison = _currentTown.Garrison;
         ctx.RaceStyle = !string.IsNullOrEmpty(_currentTown.Faction) ? _currentTown.Faction : "Human";
-        return Strategic.DescriptionProvider.GetPoiDescription(poiType, ctx);
+        return DescriptionProvider.GetPoiDescription(poiType, ctx);
     }
 
     protected override string GetLeaveButtonText() => "离开城镇";
@@ -94,7 +94,7 @@ public partial class TownPanel : POIPanelBase
                 _currentTown.SetupDefaultFacilities();
         }
 
-        // 浣跨敤 GridContainer 杩涜缃戞牸绱у噾鍖栵紝姣忚涓や釜鎸夐挳
+        // 使用 GridContainer 进行网格紧凑化，每行三个按钮
         var grid = new GridContainer();
         grid.Columns = 3;
         grid.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -106,7 +106,7 @@ public partial class TownPanel : POIPanelBase
         {
             if (!facility.IsAvailable) continue;
 
-            // 绉婚櫎鍚庣画鎻忚堪锛屼粎淇濈暀閰掗/绔炴妧鍦虹瓑鏍稿績鍚嶇О
+            // 移除后续描述，仅保留酒馆/竞技场等核心名称
             string btnText = facility.FacilityName;
             int dashIndex = btnText.IndexOf("-");
             if (dashIndex > 0) btnText = btnText.Substring(0, dashIndex).Trim();

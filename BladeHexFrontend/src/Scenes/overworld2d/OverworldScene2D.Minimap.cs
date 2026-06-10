@@ -28,6 +28,12 @@ public partial class OverworldScene2D
 
     private void OnMinimapPoiClicked(Vector2 pixelPos)
     {
+        var poi = FindPOIAtPosition(pixelPos);
+        if (poi != null)
+            SetDirectedPoiInteraction(poi, pixelPos);
+        else
+            ClearDirectedInteraction();
+
         StartPathfinding(pixelPos);
     }
 

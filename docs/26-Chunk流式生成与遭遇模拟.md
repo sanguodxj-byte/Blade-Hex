@@ -128,10 +128,10 @@
 
 ### 对称 AI 决策 network
 
-所有大地图上的实体（包括生成的野怪、领主军队、商队等）均通过统一的 `EntityBehaviorEvaluator` 进行决策，不需要针对玩家编写特例逻辑。
+所有大地图上的实体（包括生成的野怪、领主军队、商队等）均通过统一的 `PerceptionIntentResolver` 解析感知意图，并通过 `OverworldIntentApplier` 写入 `Chasing` / `Fleeing` 状态。玩家在遭遇系统中以代理实体参与同一套意图解析，玩家当前阵营由 `OverworldHostility.AreHostileToPlayer()` 处理。
 
 *   **性格修正决策**：
-    *   AI 定期（每 Tick）对周围感知范围内的实体执行 `EvaluateAll()`。
+    *   AI 定期（每 Tick）对周围感知范围内的实体执行 `ProcessFrameTactics()` / `ResolvePlayer()`。
     *   结合自身性格修正系数（`Rampage` 极易发起攻击，`Instinct` 关注力量差，`Territorial` 对领地侵入敏感）和战力对比。
     *   决策出 `AIState.Chasing`（追击）、`AIState.Fleeing`（逃跑）或 `AIState.Patrolling`（巡逻）。
 *   **物理寻路与避障追逃**：
@@ -151,8 +151,9 @@
 |---|---|---|
 | `Strategic/OverworldEntity.cs` | **扩展** | 引入 `TempEncounterEnemies` 生态定制，以及静态 `CalculateBaseCombatPower` 战力计算 |
 | `Strategic/Party/PartyRoster.cs` | **扩展** | 实现 `CalculateCombatPower()`，提供玩家当前出战队伍等级加权战力 |
-| `Strategic/Overworld/EntityBehaviorEvaluator.cs` | **重构** | 公开性格修正及阈值判定，供 Spawner 执行对称 AI 状态评估 |
-| `Strategic/Encounter/EncounterEntitySpawner.cs` | **重构** | 实现遭遇槽的流式生物生成与 400px 防刷脸 Proximity 拦截，并驱动统一的决策状态更新 |
+| `Strategic/Overworld/PerceptionIntentResolver.cs` | **重构** | 统一性格修正、外交敌对与战力阈值，产出追击/逃跑意图 |
+| `Strategic/Overworld/OverworldIntentApplier.cs` | **新增** | 统一将感知意图写入实体 AI 状态字段 |
+| `Strategic/Encounter/EncounterEntitySpawner.cs` | **重构** | 实现遭遇槽的流式生物生成与 400px 防刷脸 Proximity 拦截，并通过统一意图解析处理玩家追逃 |
 
 ### Frontend (BladeHexFrontend)
 
@@ -183,8 +184,8 @@
          
 对称决策更新 (Tick):
   1. 计算玩家队伍战力 -> 同步给 PlayerEntity 投影 -> 同步空间坐标
-  2. 对所有实体（包含玩家投影）执行 EntityBehaviorEvaluator.EvaluateAll()
-  3. 各实体根据性格、距对方距离与战力对比，决定 Chasing/Fleeing/Patrolling
+  2. 对所有实体执行 DailyDecisionProcessor.ProcessFrameTactics()；对玩家代理执行 PerceptionIntentResolver.ResolvePlayer()
+  3. 各实体根据性格、外交敌对、距对方距离与战力对比，决定 Chasing/Fleeing/Patrolling
   4. 对于 Chasing，向目标实体位置执行 BuildChasePath 直线避障移动
   
 碰撞与切入战斗:

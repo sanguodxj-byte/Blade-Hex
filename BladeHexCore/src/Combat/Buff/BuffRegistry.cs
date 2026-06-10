@@ -41,10 +41,10 @@ public static class BuffRegistry
         // ====== 负面状态 ======
         Register("poison", new BuffInstance
         {
-            Id = "poison", Name = "中毒", Description = "每回合受到 1d4 毒素伤害",
+            Id = "poison", Name = "中毒", Description = "每回合受到最大生命值 5% 的毒素伤害",
             IconId = "IconPoison", IsNegative = true, Duration = 3,
             Tags = new[] { "dot", "poison" },
-            OnTick = new TickEffect { DiceCount = 1, DiceSides = 4, DamageType = "poison" },
+            OnTick = new TickEffect { TargetMaxHpPercent = 0.05f, DamageType = "poison" },
             SaveToRemove = "fortitude", SaveDc = 12,
         });
 

@@ -19,8 +19,17 @@ namespace BladeHex.Combat.Tests;
 
 public static class SkillTreeLayoutTests
 {
-    // 与 AutoLayoutAndConnect 的 HexagonRadius 保持一致
-    private const int HexagonRadius = 20;
+    // Fixed JSON layout radius.
+    private const int HexagonRadius = SkillTreeData.FixedLayoutRadius;
+    private static readonly HashSet<string> GiantTemplates =
+    [
+        "apex_sunburst_12",
+        "apex_arrowhead_12",
+        "apex_bastion_12",
+        "apex_crystal_12",
+        "apex_hourglass_12",
+        "apex_crown_12",
+    ];
 
     public static (int passed, int failed, List<string> details) RunAll()
     {
@@ -45,18 +54,22 @@ public static class SkillTreeLayoutTests
         yield return Run("Tiles_InsideHex", () => TilesInsideHex(nodeTiles));
         yield return Run("Connectivity_AllReachableFromStart", () => AllReachableFromStart(tree, nodeTiles));
         yield return Run("DataDrivenLayout_UsesExplicitTiles", () => DataDrivenLayoutUsesExplicitTiles(tree));
-        yield return Run("RegionCentroids_MatchDocumentSectors", () => RegionCentroidsMatchDocumentSectors(tree, nodeTiles));
+        yield return Run("LayoutContent_IdsAreUniqueAndComplete", () => LayoutContentIdsAreUniqueAndComplete());
+        yield return Run("RegionTiles_MatchDocumentSectorTriangles", () => RegionTilesMatchDocumentSectorTriangles(tree, nodeTiles));
+        yield return Run("RegionTileCounts_FillExactSectors", () => RegionTileCountsFillExactSectors(tree, nodeTiles));
         yield return Run("RegionQuota_MatchesStarChartSpec", () => RegionQuotaMatchesStarChartSpec(tree));
+        yield return Run("FixedLargeNodes_MatchPlannedRingBands", () => FixedLargeNodesMatchPlannedRingBands(tree));
         yield return Run("TileCost_MatchesExplicitTileCount", () => TileCostMatchesExplicitTileCount(tree));
         yield return Run("FigureTemplates_MatchNodeRoles", () => FigureTemplatesMatchNodeRoles(tree));
+        yield return Run("GiantFigures_AreDistinctSymmetricTemplates", () => GiantFiguresAreDistinctSymmetricTemplates(tree));
         yield return Run("LargeFigures_AreCompactNotStrips", () => LargeFiguresAreCompactNotStrips(tree));
         yield return Run("PassiveNodeBonuses_DoNotFlattenConditionalEffects", () => PassiveNodeBonusesDoNotFlattenConditionalEffects(tree));
-        yield return Run("RandomAttributes_UseLegalKeysOnly", () => RandomAttributesUseLegalKeysOnly(tree));
-        yield return Run("RandomAttributes_FollowSmallAndPipRules", () => RandomAttributesFollowSmallAndPipRules(tree));
-        yield return Run("RandomAttributes_AreCharacterSeeded", () => RandomAttributesAreCharacterSeeded(tree));
-        yield return Run("RandomAttributes_EffectTextUsesCharacterSeed", () => RandomAttributesEffectTextUsesCharacterSeed(tree));
-        yield return Run("FixedLargeNodes_DoNotGrantTileAttributes", () => FixedLargeNodesDoNotGrantTileAttributes(tree));
-        yield return Run("IntGiant_OpensTierFourSpellStudy", () => IntGiantOpensTierFourSpellStudy(tree));
+        yield return Run("FixedAttributeTiles_UseLegalKeysOnly", () => FixedAttributeTilesUseLegalKeysOnly(tree));
+        yield return Run("FixedAttributeTiles_FollowSectorAndSmallRules", () => FixedAttributeTilesFollowSectorAndSmallRules(tree));
+        yield return Run("FixedAttributeTiles_AreAppliedFromContentJson", () => FixedAttributeTilesAreAppliedFromContentJson(tree));
+        yield return Run("CharacterSkillContent_IsShuffledBySeedWithinSectorRoles", () => CharacterSkillContentIsShuffledBySeedWithinSectorRoles(tree));
+        yield return Run("AllNonStartTiles_GrantSectorAttributes", () => AllNonStartTilesGrantSectorAttributes(tree));
+        yield return Run("IntSpellStudy_UsesRingBandsForTiers", () => IntSpellStudyUsesRingBandsForTiers(tree));
         yield return Run("ActiveEffects_AreRegisteredAndScripted", () => ActiveEffectsAreRegisteredAndScripted(tree));
         yield return Run("ActiveScripts_KeyModifiersMatchSkillDescriptions", () => ActiveScriptsKeyModifiersMatchSkillDescriptions());
         yield return Run("GiantApex_CombatContractsMatchSpec", () => GiantApexCombatContractsMatchSpec(tree));
@@ -203,20 +216,78 @@ public static class SkillTreeLayoutTests
         return (true, "");
     }
 
-    private static (bool, string) RegionCentroidsMatchDocumentSectors(SkillTreeData tree, Dictionary<string, Vector2I[]> nodeTiles)
+    private static (bool, string) LayoutContentIdsAreUniqueAndComplete()
+    {
+        string? repoRoot = FindRepoRoot();
+        if (repoRoot == null)
+            return (false, "找不到 repo root");
+
+        string layoutPath = Path.Combine(repoRoot, "BladeHexCore", "src", "SkillTree", "skill_tree_layout.json");
+        string contentPath = Path.Combine(repoRoot, "BladeHexCore", "src", "SkillTree", "skill_tree_content.json");
+        if (!File.Exists(layoutPath) || !File.Exists(contentPath))
+            return (false, "找不到 skill_tree_layout.json 或 skill_tree_content.json");
+
+        using var layoutDoc = JsonDocument.Parse(File.ReadAllText(layoutPath));
+        using var contentDoc = JsonDocument.Parse(File.ReadAllText(contentPath));
+
+        var (layoutIds, layoutDuplicate) = ReadJsonNodeIds(layoutDoc.RootElement, "layout");
+        if (!string.IsNullOrEmpty(layoutDuplicate))
+            return (false, layoutDuplicate);
+
+        var (contentIds, contentDuplicate) = ReadJsonNodeIds(contentDoc.RootElement, "content");
+        if (!string.IsNullOrEmpty(contentDuplicate))
+            return (false, contentDuplicate);
+
+        var missingContent = layoutIds.Except(contentIds).Take(8).ToArray();
+        if (missingContent.Length > 0)
+            return (false, $"layout 节点缺少 content: {string.Join(", ", missingContent)}");
+
+        var unusedContent = contentIds.Except(layoutIds).Take(8).ToArray();
+        if (unusedContent.Length > 0)
+            return (false, $"content 节点不在 layout 中: {string.Join(", ", unusedContent)}");
+
+        return (true, "");
+    }
+
+    private static (HashSet<string> ids, string duplicateMessage) ReadJsonNodeIds(JsonElement root, string label)
+    {
+        var ids = new HashSet<string>();
+        foreach (var nodeElement in root.GetProperty("nodes").EnumerateArray())
+        {
+            string id = nodeElement.GetProperty("id").GetString() ?? "";
+            if (string.IsNullOrWhiteSpace(id))
+                return (ids, $"{label} 存在空节点 ID");
+            if (!ids.Add(id))
+                return (ids, $"{label} 存在重复节点 ID: {id}");
+        }
+
+        return (ids, "");
+    }
+
+    private static (bool, string) RegionTilesMatchDocumentSectorTriangles(SkillTreeData tree, Dictionary<string, Vector2I[]> nodeTiles)
     {
         var coord = new SkillTreeCoord { HexSize = 1.0f };
-        var expected = new Dictionary<SkillNodeData.Region, System.Func<Vector2, bool>>
+        var sectorIndexByRegion = new Dictionary<SkillNodeData.Region, int>
         {
-            { SkillNodeData.Region.Int, p => p.Y < -5.0f && System.Math.Abs(p.X) < 5.0f },
-            { SkillNodeData.Region.Con, p => p.X > 5.0f && p.Y < 0.0f },
-            { SkillNodeData.Region.Str, p => p.X > 5.0f && p.Y > 0.0f },
-            { SkillNodeData.Region.Dex, p => p.Y > 5.0f && System.Math.Abs(p.X) < 5.0f },
-            { SkillNodeData.Region.Cha, p => p.X < -5.0f && p.Y > 0.0f },
-            { SkillNodeData.Region.Wis, p => p.X < -5.0f && p.Y < 0.0f },
+            { SkillNodeData.Region.Int, 0 },
+            { SkillNodeData.Region.Con, 1 },
+            { SkillNodeData.Region.Str, 2 },
+            { SkillNodeData.Region.Dex, 3 },
+            { SkillNodeData.Region.Cha, 4 },
+            { SkillNodeData.Region.Wis, 5 },
         };
 
-        foreach (var (region, predicate) in expected)
+        var hexVertices = new[]
+        {
+            new Vector2I(HexagonRadius, 0),
+            new Vector2I(0, HexagonRadius),
+            new Vector2I(-HexagonRadius, HexagonRadius),
+            new Vector2I(-HexagonRadius, 0),
+            new Vector2I(0, -HexagonRadius),
+            new Vector2I(HexagonRadius, -HexagonRadius),
+        };
+
+        foreach (var (region, sectorIndex) in sectorIndexByRegion)
         {
             var tiles = tree.Nodes.Values
                 .Where(n => n.CurrentRegion == region)
@@ -225,14 +296,96 @@ public static class SkillTreeLayoutTests
             if (tiles.Count == 0)
                 return (false, $"{region} 没有布局瓦片");
 
-            var center = Vector2.Zero;
             foreach (var tile in tiles)
-                center += coord.TileCentroid(tile);
-            center /= tiles.Count;
+            {
+                var a = coord.VertexToPixel(0, 0);
+                var bVertex = hexVertices[sectorIndex];
+                var cVertex = hexVertices[(sectorIndex + 1) % hexVertices.Length];
+                var b = coord.VertexToPixel(bVertex.X, bVertex.Y);
+                var c = coord.VertexToPixel(cVertex.X, cVertex.Y);
 
-            if (!predicate(center))
-                return (false, $"{region} 扇区质心不符合文档方位: {center}");
+                foreach (var vertex in GetTileVertexCoords(tile))
+                {
+                    var point = coord.VertexToPixel(vertex.X, vertex.Y);
+                    if (!PointInTriangle(point, a, b, c))
+                        return (false, $"{region} 瓦片 {tile} 顶点 {vertex} 不在文档扇区三角形 {sectorIndex} 内");
+                }
+            }
         }
+
+        return (true, "");
+    }
+
+    private static Vector2I[] GetTileVertexCoords(Vector2I encoded)
+    {
+        var (q, r, t) = SkillTreeCoord.DecodeTile(encoded);
+        return t == 0
+            ? [new Vector2I(q, r), new Vector2I(q + 1, r), new Vector2I(q, r + 1)]
+            : [new Vector2I(q + 1, r), new Vector2I(q, r + 1), new Vector2I(q + 1, r + 1)];
+    }
+
+    private static int TileRing(Vector2I encoded)
+    {
+        int maxRing = 0;
+        foreach (var vertex in GetTileVertexCoords(encoded))
+        {
+            int s = -vertex.X - vertex.Y;
+            maxRing = System.Math.Max(maxRing, System.Math.Max(System.Math.Abs(vertex.X), System.Math.Max(System.Math.Abs(vertex.Y), System.Math.Abs(s))));
+        }
+        return maxRing;
+    }
+
+    private static bool PointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+    {
+        float d1 = SignedTriangleArea(p, a, b);
+        float d2 = SignedTriangleArea(p, b, c);
+        float d3 = SignedTriangleArea(p, c, a);
+        const float epsilon = 0.0001f;
+        bool hasNeg = d1 < -epsilon || d2 < -epsilon || d3 < -epsilon;
+        bool hasPos = d1 > epsilon || d2 > epsilon || d3 > epsilon;
+        return !(hasNeg && hasPos);
+    }
+
+    private static float SignedTriangleArea(Vector2 p1, Vector2 p2, Vector2 p3)
+    {
+        return (p1.X - p3.X) * (p2.Y - p3.Y) - (p2.X - p3.X) * (p1.Y - p3.Y);
+    }
+
+    private static (bool, string) RegionTileCountsFillExactSectors(SkillTreeData tree, Dictionary<string, Vector2I[]> nodeTiles)
+    {
+        int expectedBoardTiles = HexagonRadius * HexagonRadius * 6;
+        int totalTiles = nodeTiles.Values.Sum(tiles => tiles.Length);
+        if (totalTiles != expectedBoardTiles)
+            return (false, $"整盘瓦片数错误: expected={expectedBoardTiles}, actual={totalTiles}");
+
+        if (!nodeTiles.TryGetValue(SkillTreeData.StartNodeId, out var startTiles) || startTiles.Length != 6)
+            return (false, $"start 应占 6 个中心瓦片, actual={(startTiles == null ? 0 : startTiles.Length)}");
+
+        var regions = new[]
+        {
+            SkillNodeData.Region.Str,
+            SkillNodeData.Region.Dex,
+            SkillNodeData.Region.Con,
+            SkillNodeData.Region.Int,
+            SkillNodeData.Region.Wis,
+            SkillNodeData.Region.Cha,
+        };
+
+        int expectedContentTilesPerSector = HexagonRadius * HexagonRadius - 1;
+        foreach (var region in regions)
+        {
+            int actual = tree.Nodes.Values
+                .Where(node => node.CurrentRegion == region)
+                .Sum(node => nodeTiles[node.NodeId].Length);
+            if (actual != expectedContentTilesPerSector)
+                return (false, $"{region} 内容瓦片数错误: expected={expectedContentTilesPerSector}, actual={actual}");
+        }
+
+        int transitionTiles = tree.Nodes.Values
+            .Where(node => node.CurrentRegion == SkillNodeData.Region.Transition)
+            .Sum(node => nodeTiles[node.NodeId].Length);
+        if (transitionTiles != 0)
+            return (false, $"最终重排方案不应保留 transition 瓦片, actual={transitionTiles}");
 
         return (true, "");
     }
@@ -258,17 +411,75 @@ public static class SkillTreeLayoutTests
             int passives = nodes.Count(n => n.CurrentNodeType == SkillNodeData.NodeType.Big && !n.IsActiveSkill);
             int small = nodes.Count(n => n.CurrentNodeType == SkillNodeData.NodeType.Small);
             int pips = nodes.Count(n => n.CurrentNodeType == SkillNodeData.NodeType.Pip);
+            int smallPipTiles = nodes
+                .Where(n => n.CurrentNodeType == SkillNodeData.NodeType.Small || n.CurrentNodeType == SkillNodeData.NodeType.Pip)
+                .Sum(n => SkillNodeShape.GetTiles(n).Length);
 
-            if (giants != 1 || keystones != 3 || actives != 6 || passives != 8 || small < 151 || small > 155 || pips < 3 || pips > 9)
+            if (giants != 1 || keystones != 3 || actives != 6 || passives != 8 || smallPipTiles != 321)
             {
                 return (false,
-                    $"{region} 配额错误: giant={giants}, ks={keystones}, active={actives}, passive={passives}, small={small}, pip={pips}");
+                    $"{region} 配额错误: giant={giants}, ks={keystones}, active={actives}, passive={passives}, small={small}, pip={pips}, smallPipTiles={smallPipTiles}");
             }
         }
 
+        var pipCounts = regions
+            .Select(region => tree.Nodes.Values.Count(n => n.CurrentRegion == region && n.CurrentNodeType == SkillNodeData.NodeType.Pip))
+            .ToArray();
+        if (pipCounts.Max() - pipCounts.Min() > 20)
+            return (false, $"pip 分布过于不均: {string.Join(",", pipCounts)}");
+
         var bridges = tree.Nodes.Values.Where(n => n.CurrentRegion == SkillNodeData.Region.Transition && n.IsBridge).ToList();
-        if (bridges.Count != 6)
-            return (false, $"过渡桥节点数量错误: 期望 6, 实际 {bridges.Count}");
+        if (bridges.Count != 0)
+            return (false, $"最终重排方案不应生成过渡桥节点, 实际 {bridges.Count}");
+
+        return (true, "");
+    }
+
+    private static (bool, string) FixedLargeNodesMatchPlannedRingBands(SkillTreeData tree)
+    {
+        var expected = new Dictionary<string, (int min, int max, float center)>
+        {
+            ["p01"] = (1, 8, 4.5f),
+            ["p02"] = (1, 8, 4.5f),
+            ["ks01"] = (1, 8, 4.5f),
+            ["a01"] = (1, 8, 4.5f),
+            ["a02"] = (1, 8, 4.5f),
+            ["p03"] = (8, 15, 11.5f),
+            ["p04"] = (8, 15, 11.5f),
+            ["p05"] = (8, 15, 11.5f),
+            ["p06"] = (8, 15, 11.5f),
+            ["ks02"] = (8, 15, 11.5f),
+            ["ks03"] = (8, 15, 11.5f),
+            ["a03"] = (8, 15, 11.5f),
+            ["a04"] = (8, 15, 11.5f),
+            ["g01"] = (16, 20, 18.0f),
+            ["p07"] = (16, 20, 18.0f),
+            ["p08"] = (16, 20, 18.0f),
+            ["a05"] = (16, 20, 18.0f),
+            ["a06"] = (16, 20, 18.0f),
+        };
+
+        foreach (var (id, node) in tree.Nodes)
+        {
+            if (node.CurrentRegion == SkillNodeData.Region.Transition || id == SkillTreeData.StartNodeId)
+                continue;
+
+            string suffix = id[(id.IndexOf('_') + 1)..];
+            if (!expected.TryGetValue(suffix, out var plan))
+                continue;
+
+            var rings = SkillNodeShape.GetTiles(node).Select(TileRing).ToArray();
+            int min = rings.Min();
+            int max = rings.Max();
+            float average = rings.Sum() / (float)rings.Length;
+
+            if (min < plan.min || max > plan.max)
+                return (false, $"{id} 不在规划环带内: expected={plan.min}-{plan.max}, actual={min}-{max}");
+
+            float tolerance = node.CurrentNodeType == SkillNodeData.NodeType.Giant ? 1.8f : 2.2f;
+            if (System.MathF.Abs(average - plan.center) > tolerance)
+                return (false, $"{id} 中心半径偏离规划带中心: expected~{plan.center:0.0}, actual={average:0.0}, rings={string.Join(",", rings)}");
+        }
 
         return (true, "");
     }
@@ -286,8 +497,10 @@ public static class SkillTreeLayoutTests
                 return (false, $"{id} 巨型节点不是 12 瓦片");
             if (node.CurrentNodeType == SkillNodeData.NodeType.Keystone && node.ExplicitTiles.Length != 6)
                 return (false, $"{id} keystone 不是 6 瓦片");
-            if (node.CurrentNodeType == SkillNodeData.NodeType.Big && node.ExplicitTiles.Length != 4)
-                return (false, $"{id} 大节点不是 4 瓦片");
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Big && node.IsActiveSkill && node.ExplicitTiles.Length != 4)
+                return (false, $"{id} 主动节点不是 4 瓦片");
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Big && !node.IsActiveSkill && node.ExplicitTiles.Length != 3)
+                return (false, $"{id} 被动节点不是 3 瓦片");
             if (node.CurrentNodeType == SkillNodeData.NodeType.Small && node.ExplicitTiles.Length != 2)
                 return (false, $"{id} 小瓦片节点不是 2 瓦片");
             if (node.CurrentNodeType == SkillNodeData.NodeType.Pip && node.ExplicitTiles.Length != 1)
@@ -307,16 +520,30 @@ public static class SkillTreeLayoutTests
                 SkillNodeData.NodeType.Pip => "pip_1",
                 SkillNodeData.NodeType.Small => "attribute_pair_2",
                 SkillNodeData.NodeType.Big when node.IsActiveSkill => "active_kite_4",
-                SkillNodeData.NodeType.Big => "passive_triangle_4",
+                SkillNodeData.NodeType.Big => "passive_triad_3",
                 SkillNodeData.NodeType.Keystone => "keystone_crown_6",
-                SkillNodeData.NodeType.Giant => "apex_rune_12",
+                SkillNodeData.NodeType.Giant => "apex_*_12",
                 _ => "",
             };
 
             string actual = node.GetFigureTemplate();
+            if (node.CurrentNodeType == SkillNodeData.NodeType.Giant)
+            {
+                if (!GiantTemplates.Contains(actual))
+                    return (false, $"{id} 巨型模板不在允许列表: actual={actual}");
+                continue;
+            }
+
             if (actual != expected)
                 return (false, $"{id} 模板错误: expected={expected}, actual={actual}");
         }
+
+        var usedGiantTemplates = tree.Nodes.Values
+            .Where(n => n.CurrentNodeType == SkillNodeData.NodeType.Giant)
+            .Select(n => n.GetFigureTemplate())
+            .ToHashSet();
+        if (usedGiantTemplates.Count != GiantTemplates.Count)
+            return (false, $"6 个巨型节点应使用 6 种不同模板, actual={string.Join(", ", usedGiantTemplates)}");
 
         return (true, "");
     }
@@ -336,7 +563,7 @@ public static class SkillTreeLayoutTests
             float width = points.Max(p => p.X) - points.Min(p => p.X);
             float height = points.Max(p => p.Y) - points.Min(p => p.Y);
             float ratio = System.MathF.Max(width, height) / System.MathF.Max(0.001f, System.MathF.Min(width, height));
-            float limit = node.CurrentNodeType == SkillNodeData.NodeType.Big ? 2.4f : 2.7f;
+            float limit = node.CurrentNodeType == SkillNodeData.NodeType.Big ? 3.6f : 2.7f;
 
             if (ratio > limit)
                 return (false, $"{id} 形状过长: ratio={ratio:0.00}, limit={limit:0.00}, width={width:0.00}, height={height:0.00}");
@@ -345,29 +572,175 @@ public static class SkillTreeLayoutTests
         return (true, "");
     }
 
-    private static (bool, string) RandomAttributesUseLegalKeysOnly(SkillTreeData tree)
+    private static (bool, string) GiantFiguresAreDistinctSymmetricTemplates(SkillTreeData tree)
+    {
+        var normalizedShapes = new HashSet<string>();
+        foreach (var node in tree.Nodes.Values.Where(n => n.CurrentNodeType == SkillNodeData.NodeType.Giant))
+        {
+            var tiles = SkillNodeShape.GetTiles(node).ToHashSet();
+            if (tiles.Count != 12)
+                return (false, $"{node.NodeId}: 巨型节点应由 12 个三角瓦片组成, actual={tiles.Count}");
+
+            string normalized = NormalizeTiles(tiles);
+            if (!normalizedShapes.Add(normalized))
+                return (false, $"{node.NodeId}: 巨型模板形状与另一个巨型节点重复");
+
+            if (!HasNonTrivialTileSymmetry(tiles))
+                return (false, $"{node.NodeId}: 巨型模板缺少旋转/镜像对称");
+        }
+
+        if (normalizedShapes.Count != GiantTemplates.Count)
+            return (false, $"巨型节点数量/模板数量不匹配: shapes={normalizedShapes.Count}, templates={GiantTemplates.Count}");
+
+        return (true, "");
+    }
+
+    private static bool HasNonTrivialTileSymmetry(HashSet<Vector2I> tiles)
+    {
+        string original = NormalizeTiles(tiles);
+        for (int transformIndex = 1; transformIndex < 12; transformIndex++)
+        {
+            var transformed = new HashSet<Vector2I>();
+            bool ok = true;
+            foreach (var tile in tiles)
+            {
+                if (!TryTransformTile(tile, transformIndex, out var transformedTile))
+                {
+                    ok = false;
+                    break;
+                }
+                transformed.Add(transformedTile);
+            }
+
+            if (ok && NormalizeTiles(transformed) == original)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryTransformTile(Vector2I tile, int transformIndex, out Vector2I transformedTile)
+    {
+        var transformedVertices = GetTileVertexCoords(tile)
+            .Select(vertex => TransformHexCell(vertex, transformIndex))
+            .ToArray();
+        return TryEncodeTileFromVertices(transformedVertices, out transformedTile);
+    }
+
+    private static bool TryEncodeTileFromVertices(Vector2I[] vertices, out Vector2I tile)
+    {
+        var vertexSet = vertices.ToHashSet();
+        int minQ = vertices.Min(v => v.X);
+        int maxQ = vertices.Max(v => v.X);
+        int minR = vertices.Min(v => v.Y);
+        int maxR = vertices.Max(v => v.Y);
+
+        for (int q = minQ - 1; q <= maxQ; q++)
+        {
+            for (int r = minR - 1; r <= maxR; r++)
+            {
+                var down = new[]
+                {
+                    new Vector2I(q, r),
+                    new Vector2I(q + 1, r),
+                    new Vector2I(q, r + 1),
+                }.ToHashSet();
+                if (down.SetEquals(vertexSet))
+                {
+                    tile = SkillTreeCoord.EncodeTile(q, r, 0);
+                    return true;
+                }
+
+                var up = new[]
+                {
+                    new Vector2I(q + 1, r),
+                    new Vector2I(q, r + 1),
+                    new Vector2I(q + 1, r + 1),
+                }.ToHashSet();
+                if (up.SetEquals(vertexSet))
+                {
+                    tile = SkillTreeCoord.EncodeTile(q, r, 1);
+                    return true;
+                }
+            }
+        }
+
+        tile = default;
+        return false;
+    }
+
+    private static Vector2I TransformHexCell(Vector2I cell, int transformIndex)
+    {
+        var reflected = transformIndex >= 6
+            ? new Vector2I(cell.X, -cell.X - cell.Y)
+            : cell;
+        return RotateHexCell(reflected, transformIndex % 6);
+    }
+
+    private static Vector2I RotateHexCell(Vector2I cell, int rotation)
+    {
+        int q = cell.X;
+        int r = cell.Y;
+        return rotation switch
+        {
+            0 => new Vector2I(q, r),
+            1 => new Vector2I(-r, q + r),
+            2 => new Vector2I(-q - r, q),
+            3 => new Vector2I(-q, -r),
+            4 => new Vector2I(r, -q - r),
+            5 => new Vector2I(q + r, -q),
+            _ => cell,
+        };
+    }
+
+    private static string NormalizeCells(HashSet<Vector2I> cells)
+    {
+        int minQ = cells.Min(cell => cell.X);
+        int minR = cells.Min(cell => cell.Y);
+        return string.Join(";",
+            cells.Select(cell => new Vector2I(cell.X - minQ, cell.Y - minR))
+                .OrderBy(cell => cell.X)
+                .ThenBy(cell => cell.Y)
+                .Select(cell => $"{cell.X},{cell.Y}"));
+    }
+
+    private static string NormalizeTiles(HashSet<Vector2I> tiles)
+    {
+        var decoded = tiles.Select(tile =>
+        {
+            var (q, r, t) = SkillTreeCoord.DecodeTile(tile);
+            return (q, r, t);
+        }).ToArray();
+        int minQ = decoded.Min(tile => tile.q);
+        int minR = decoded.Min(tile => tile.r);
+        return string.Join(";",
+            decoded.Select(tile => (q: tile.q - minQ, r: tile.r - minR, tile.t))
+                .OrderBy(tile => tile.q)
+                .ThenBy(tile => tile.r)
+                .ThenBy(tile => tile.t)
+                .Select(tile => $"{tile.q},{tile.r},{tile.t}"));
+    }
+
+    private static (bool, string) FixedAttributeTilesUseLegalKeysOnly(SkillTreeData tree)
     {
         var legal = new HashSet<string>
         {
-            "max_hp", "ac", "melee_hit", "melee_damage", "ranged_hit", "ranged_damage",
+            "max_hp", "ac", "melee_hit", "melee_damage_percent", "ranged_hit", "ranged_damage_percent",
             "critical_rate", "speed", "mana_max", "mana_regen", "initiative", "all_save",
-            "range_bonus", "spell_hit", "spell_damage", "heal_amount", "ally_bonus",
+            "range_bonus", "spell_damage_percent", "heal_amount_percent", "ally_bonus",
         };
 
-        var characterTree = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
         foreach (var (id, node) in tree.Nodes)
         {
-            if (node.CurrentContentMode != SkillNodeData.ContentMode.RandomAttribute)
+            if (node.CurrentNodeType != SkillNodeData.NodeType.Small && node.CurrentNodeType != SkillNodeData.NodeType.Pip)
                 continue;
 
-            if (node.StatBonuses.Count != 0)
-                return (false, $"{id} 随机属性节点不应在共享节点数据上预掷属性");
+            if (node.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute)
+                return (false, $"{id} small/pip 已改为生成期固定属性，不应继续使用 random_attribute");
+            if (node.StatBonuses.Count == 0)
+                return (false, $"{id} fixed attribute node has no statBonuses");
 
-            var bonuses = characterTree.GetNodeStatBonusesForCharacter(node);
-            if (bonuses.Count == 0)
-                return (false, $"{id} 未按角色 seed 生成随机属性");
-
-            foreach (var key in bonuses.Keys)
+            foreach (var key in node.StatBonuses.Keys)
             {
                 string stat = key.ToString()!;
                 if (!legal.Contains(stat))
@@ -389,7 +762,8 @@ public static class SkillTreeLayoutTests
             ["con_p05"] = ["all_save"],
             ["int_p04"] = ["mana_max"],
             ["int_p05"] = ["mana_regen"],
-            ["int_p06"] = ["spell_hit"],
+            ["int_p06"] = ["spell_damage_percent"],
+            ["int_p07"] = ["spell_damage_percent"],
             ["wis_p02"] = ["critical_rate"],
             ["wis_p03"] = ["critical_rate"],
             ["wis_p05"] = ["mana_max"],
@@ -423,102 +797,86 @@ public static class SkillTreeLayoutTests
         return (true, "");
     }
 
-    private static (bool, string) RandomAttributesFollowSmallAndPipRules(SkillTreeData tree)
+    private static (bool, string) FixedAttributeTilesFollowSectorAndSmallRules(SkillTreeData tree)
     {
-        var pools = LoadRandomPools();
-        if (pools.Count == 0)
-            return (false, "randomPools not loaded");
+        var sectorStats = new Dictionary<SkillNodeData.Region, (string stat, double value)>
+        {
+            [SkillNodeData.Region.Str] = ("melee_damage_percent", 0.02),
+            [SkillNodeData.Region.Dex] = ("ranged_damage_percent", 0.02),
+            [SkillNodeData.Region.Con] = ("max_hp", 5),
+            [SkillNodeData.Region.Int] = ("mana_max", 3),
+            [SkillNodeData.Region.Wis] = ("critical_rate", 0.01),
+            [SkillNodeData.Region.Cha] = ("ally_bonus", 1),
+        };
+        var extraStats = new Dictionary<string, double>
+        {
+            ["max_hp"] = 5,
+            ["mana_max"] = 3,
+            ["critical_rate"] = 0.01,
+        };
 
-        var characterTree = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
         foreach (var (id, node) in tree.Nodes)
         {
-            if (node.CurrentContentMode != SkillNodeData.ContentMode.RandomAttribute)
+            if (node.CurrentNodeType != SkillNodeData.NodeType.Small && node.CurrentNodeType != SkillNodeData.NodeType.Pip)
                 continue;
 
-            var bonuses = characterTree.GetNodeStatBonusesForCharacter(node);
-
-            if (node.CurrentRegion == SkillNodeData.Region.Transition)
-            {
-                if (bonuses.Count != 0)
-                {
-                    return (false, $"{id} transition random node should not roll cross-region attributes");
-                }
-                continue;
-            }
-
-            if (!pools.TryGetValue(node.CurrentRegion, out var pool))
-                return (false, $"{id} has no random pool for region {node.CurrentRegion}");
+            if (!sectorStats.TryGetValue(node.CurrentRegion, out var sector))
+                return (false, $"{id} has no fixed sector stat for {node.CurrentRegion}");
 
             if (node.CurrentNodeType == SkillNodeData.NodeType.Pip)
             {
-                if (bonuses.Count != 1)
-                    return (false, $"{id} pip must have exactly one stat, actual {bonuses.Count}");
-
-                foreach (var key in bonuses.Keys)
-                {
-                    string stat = key.ToString()!;
-                    if (!pool.TryGetValue(stat, out var range))
-                        return (false, $"{id} pip stat {stat} is not in its region pool");
-                    if (!VariantNumberEquals(bonuses[key], range.min))
-                        return (false, $"{id} pip stat {stat} must use pool minimum {range.min}");
-                }
+                if (node.StatBonuses.Count != 1)
+                    return (false, $"{id} pip must have exactly one fixed sector stat, actual {node.StatBonuses.Count}");
+                if (!node.StatBonuses.ContainsKey(sector.stat))
+                    return (false, $"{id} pip missing sector stat {sector.stat}");
+                if (!VariantNumberEquals(node.StatBonuses[sector.stat], sector.value))
+                    return (false, $"{id} pip sector stat value wrong");
             }
             else if (node.CurrentNodeType == SkillNodeData.NodeType.Small)
             {
-                if (bonuses.Count < 1 || bonuses.Count > 2)
-                    return (false, $"{id} small node must have one stat plus optional secondary, actual {bonuses.Count}");
+                double expectedSectorValue = sector.value * 2.0d;
+                if (!node.StatBonuses.ContainsKey(sector.stat))
+                    return (false, $"{id} small missing sector stat {sector.stat}");
 
-                foreach (var key in bonuses.Keys)
+                double actualSectorValue = VariantToDouble(node.StatBonuses[sector.stat]);
+                double extraOnSameStat = extraStats.TryGetValue(sector.stat, out var extraValue) ? extraValue : 0.0d;
+                bool hasSameStatExtra = System.Math.Abs(actualSectorValue - (expectedSectorValue + extraOnSameStat)) < 0.0001d;
+                if (System.Math.Abs(actualSectorValue - expectedSectorValue) > 0.0001d && !hasSameStatExtra)
+                    return (false, $"{id} small sector stat value {actualSectorValue} does not match {expectedSectorValue}");
+
+                int extraCount = hasSameStatExtra ? 1 : 0;
+                foreach (var key in node.StatBonuses.Keys)
                 {
                     string stat = key.ToString()!;
-                    if (!pool.TryGetValue(stat, out var range))
-                        return (false, $"{id} small stat {stat} is not in its region pool");
-
-                    double value = VariantToDouble(bonuses[key]);
-                    if (value < range.min - 0.0001d || value > range.max + 0.0001d)
-                        return (false, $"{id} small stat {stat} value {value} outside [{range.min}, {range.max}]");
+                    if (stat == sector.stat)
+                        continue;
+                    if (!extraStats.TryGetValue(stat, out double expectedExtra))
+                        return (false, $"{id} small has non-extra stat {stat}");
+                    if (!VariantNumberEquals(node.StatBonuses[key], expectedExtra))
+                        return (false, $"{id} small extra stat {stat} value wrong");
+                    extraCount++;
                 }
+
+                if (extraCount != 1)
+                    return (false, $"{id} small must have exactly one hp/mana/crit extra, actual {extraCount}");
             }
         }
 
         return (true, "");
     }
 
-    private static (bool, string) RandomAttributesAreCharacterSeeded(SkillTreeData tree)
+    private static (bool, string) FixedAttributeTilesAreAppliedFromContentJson(SkillTreeData tree)
     {
         var node = tree.Nodes.Values.FirstOrDefault(n =>
-            n.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute
-            && n.CurrentNodeType == SkillNodeData.NodeType.Small
+            n.CurrentNodeType == SkillNodeData.NodeType.Small
             && n.CurrentRegion != SkillNodeData.Region.Transition);
         if (node == null)
-            return (false, "no random small node found");
-
-        var seedA1 = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
-        var seedA2 = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
-        var a1 = seedA1.GetNodeStatBonusesForCharacter(node);
-        var a2 = seedA2.GetNodeStatBonusesForCharacter(node);
-        if (!DictionariesEqual(a1, a2))
-            return (false, "same character seed must reproduce identical random attributes");
-
-        bool foundDifferent = false;
-        foreach (var candidate in tree.Nodes.Values.Where(n =>
-            n.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute
-            && n.CurrentNodeType == SkillNodeData.NodeType.Small
-            && n.CurrentRegion != SkillNodeData.Region.Transition).Take(80))
-        {
-            var b1 = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101).GetNodeStatBonusesForCharacter(candidate);
-            var b2 = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 202).GetNodeStatBonusesForCharacter(candidate);
-            if (!DictionariesEqual(b1, b2))
-            {
-                foundDifferent = true;
-                break;
-            }
-        }
-        if (!foundDifferent)
-            return (false, "different character seeds must be able to produce different random attributes");
+            return (false, "no fixed small node found");
 
         var seeded = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 202);
         var expected = seeded.GetNodeStatBonusesForCharacter(node);
+        if (!DictionariesEqual(expected, node.StatBonuses))
+            return (false, $"{node.NodeId} fixed node should use content JSON bonuses directly");
         if (!ActivateNodeCompletely(seeded, node.NodeId))
             return (false, $"failed to activate {node.NodeId}");
 
@@ -535,35 +893,49 @@ public static class SkillTreeLayoutTests
         return (true, "");
     }
 
-    private static (bool, string) RandomAttributesEffectTextUsesCharacterSeed(SkillTreeData tree)
+    private static (bool, string) CharacterSkillContentIsShuffledBySeedWithinSectorRoles(SkillTreeData tree)
     {
-        bool foundDifferentText = false;
-        foreach (var node in tree.Nodes.Values.Where(n =>
-            n.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute
-            && n.CurrentNodeType == SkillNodeData.NodeType.Small
-            && n.CurrentRegion != SkillNodeData.Region.Transition).Take(120))
-        {
-            var seedA = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 101);
-            var seedB = new CharacterSkillTree(tree, level: 1, randomAttributeSeed: 202);
-            var bonusesA = seedA.GetNodeStatBonusesForCharacter(node);
-            var bonusesB = seedB.GetNodeStatBonusesForCharacter(node);
-            string textA = seedA.GetNodeEffectTextForCharacter(node);
-            string textB = seedB.GetNodeEffectTextForCharacter(node);
-            string expectedA = node.GetEffectText(bonusesA);
-            string expectedB = node.GetEffectText(bonusesB);
+        var sample = tree.Nodes.Values
+            .Where(n => n.CurrentRegion == SkillNodeData.Region.Str
+                && n.CurrentNodeType == SkillNodeData.NodeType.Big
+                && n.IsActiveSkill)
+            .OrderBy(n => n.NodeId)
+            .FirstOrDefault();
+        if (sample == null)
+            return (false, "no STR active node found");
 
-            if (textA != expectedA)
-                return (false, $"{node.NodeId} effect text for seed 101 did not use character bonuses");
-            if (textB != expectedB)
-                return (false, $"{node.NodeId} effect text for seed 202 did not use character bonuses");
+        var sameSeedA = new CharacterSkillTree(tree, level: 20, randomAttributeSeed: 101);
+        var sameSeedB = new CharacterSkillTree(tree, level: 20, randomAttributeSeed: 101);
+        var otherSeed = new CharacterSkillTree(tree, level: 20, randomAttributeSeed: 202);
 
-            if (textA != textB)
-                foundDifferentText = true;
-        }
+        string effectA = sameSeedA.GetEffectiveNode(sample).SkillEffect;
+        string effectA2 = sameSeedB.GetEffectiveNode(sample).SkillEffect;
+        string effectB = otherSeed.GetEffectiveNode(sample).SkillEffect;
+        if (effectA != effectA2)
+            return (false, "same character seed must reproduce identical skill content placement");
+        if (effectA == sample.SkillEffect)
+            return (false, $"{sample.NodeId} should not keep its original effect after same-sector role shuffle");
 
-        return foundDifferentText
-            ? (true, "")
-            : (false, "no sampled random node produced visibly different character-seeded effect text");
+        var originalEffects = tree.Nodes.Values
+            .Where(n => n.CurrentRegion == sample.CurrentRegion
+                && n.CurrentNodeType == sample.CurrentNodeType
+                && n.IsActiveSkill == sample.IsActiveSkill)
+            .Select(n => n.SkillEffect)
+            .OrderBy(e => e)
+            .ToArray();
+        var shuffledEffects = tree.Nodes.Values
+            .Where(n => n.CurrentRegion == sample.CurrentRegion
+                && n.CurrentNodeType == sample.CurrentNodeType
+                && n.IsActiveSkill == sample.IsActiveSkill)
+            .Select(n => otherSeed.GetEffectiveNode(n).SkillEffect)
+            .OrderBy(e => e)
+            .ToArray();
+        if (!originalEffects.SequenceEqual(shuffledEffects))
+            return (false, "shuffle must preserve same-sector same-role content pool");
+        if (effectA == effectB)
+            return (false, "different seeds should be able to place different content on the same geometry node");
+
+        return (true, "");
     }
 
     private static bool ActivateNodeCompletely(CharacterSkillTree tree, string nodeId)
@@ -593,56 +965,82 @@ public static class SkillTreeLayoutTests
         return true;
     }
 
-    private static (bool, string) FixedLargeNodesDoNotGrantTileAttributes(SkillTreeData tree)
+    private static (bool, string) AllNonStartTilesGrantSectorAttributes(SkillTreeData tree)
     {
-        var node = tree.Nodes.Values.FirstOrDefault(n =>
-            n.CurrentNodeType == SkillNodeData.NodeType.Big &&
-            n.IsActiveSkill &&
-            n.CurrentRegion == SkillNodeData.Region.Str);
-        if (node == null)
-            return (false, "找不到 STR 主动大件节点");
+        var candidates = tree.Nodes.Values
+            .Where(n => n.CurrentNodeType != SkillNodeData.NodeType.Start
+                && n.CurrentRegion is not SkillNodeData.Region.None and not SkillNodeData.Region.Transition)
+            .GroupBy(n => n.CurrentRegion)
+            .Select(g => g.First())
+            .ToArray();
+        if (candidates.Length != 6)
+            return (false, $"expected one sample per attribute sector, got {candidates.Length}");
 
-        var save = new Godot.Collections.Dictionary
+        foreach (var node in candidates)
         {
-            { "activated_nodes", new Godot.Collections.Array { SkillTreeData.StartNodeId, node.NodeId } },
-            { "available_attribute_points", 0 },
-            { "random_attribute_seed", 101 },
-        };
+            string expectedKey = node.CurrentRegion switch
+            {
+                SkillNodeData.Region.Str => "str",
+                SkillNodeData.Region.Dex => "dex",
+                SkillNodeData.Region.Con => "con",
+                SkillNodeData.Region.Int => "int",
+                SkillNodeData.Region.Wis => "wis",
+                SkillNodeData.Region.Cha => "cha",
+                _ => "",
+            };
+            if (string.IsNullOrEmpty(expectedKey))
+                return (false, $"{node.NodeId} has unsupported region {node.CurrentRegion}");
 
-        var characterTree = new CharacterSkillTree();
-        characterTree.Deserialize(save, tree);
-        var attributes = characterTree.GetAllAccumulatedAttributes();
-        if (attributes.Count != 0)
-            return (false, $"{node.NodeId} 是固定大件，不应逐片提供六维属性: {attributes}");
+            var save = new Godot.Collections.Dictionary
+            {
+                { "activated_nodes", new Godot.Collections.Array { SkillTreeData.StartNodeId } },
+                { "available_attribute_points", 0 },
+                { "random_attribute_seed", 101 },
+                { "node_tile_progress", new Godot.Collections.Dictionary { { node.NodeId, 1 } } },
+            };
+
+            var characterTree = new CharacterSkillTree();
+            characterTree.Deserialize(save, tree);
+            var attributes = characterTree.GetAllAccumulatedAttributes();
+            if (!attributes.ContainsKey(expectedKey) || attributes[expectedKey].AsInt32() != 1)
+                return (false, $"{node.NodeId} should grant {expectedKey}+1 for one filled tile, got {attributes}");
+        }
 
         return (true, "");
     }
 
-    private static (bool, string) IntGiantOpensTierFourSpellStudy(SkillTreeData tree)
+    private static (bool, string) IntSpellStudyUsesRingBandsForTiers(SkillTreeData tree)
     {
-        if (!tree.Nodes.TryGetValue("int_g01", out var node))
-            return (false, "missing int_g01");
-
-        if (node.CurrentNodeType != SkillNodeData.NodeType.Giant)
-            return (false, "int_g01 must be a giant node");
-        if (node.IsActiveSkill)
-            return (false, "int_g01 must not be a combat active skill");
-        if (!SpellStudyCatalog.IsSpellSlotEffect(node.SkillEffect))
-            return (false, $"int_g01 effect must be a spell slot, actual {node.SkillEffect}");
-
-        int tier = SpellStudyCatalog.GetTierFromSpellSlotEffect(node.SkillEffect);
-        if (tier != 4)
-            return (false, $"int_g01 must map to tier 4, actual {tier}");
-
-        var options = SpellStudyCatalog.GetOptions(tier);
-        if (options.Length != 5)
-            return (false, $"tier 4 spell study must expose 5 school options, actual {options.Length}");
-
-        foreach (var option in options)
+        var expected = new Dictionary<string, int>
         {
-            if ((int)option.Spell.tier != 4)
-                return (false, $"{option.Spell.SpellId} is not a tier 4 spell");
+            ["int_a01"] = 1,
+            ["int_a02"] = 1,
+            ["int_a03"] = 2,
+            ["int_a04"] = 2,
+            ["int_a05"] = 3,
+            ["int_a06"] = 3,
+        };
+
+        foreach (var (nodeId, expectedTier) in expected)
+        {
+            if (!tree.Nodes.TryGetValue(nodeId, out var node))
+                return (false, $"missing {nodeId}");
+            if (!SpellStudyCatalog.IsSpellSlotEffect(node.SkillEffect))
+                return (false, $"{nodeId} must be a spell study node, actual {node.SkillEffect}");
+            int tier = SpellStudyCatalog.GetTierFromSpellSlotEffect(node.SkillEffect);
+            if (tier != expectedTier)
+                return (false, $"{nodeId} tier mismatch: expected {expectedTier}, actual {tier}");
+
+            var options = SpellStudyCatalog.GetOptions(tier);
+            if (options.Length != 5)
+                return (false, $"tier {tier} spell study must expose 5 school options, actual {options.Length}");
+            foreach (var option in options)
+                if ((int)option.Spell.tier != tier)
+                    return (false, $"{option.Spell.SpellId} is not a tier {tier} spell");
         }
+
+        if (tree.Nodes.TryGetValue("int_g01", out var giant) && SpellStudyCatalog.IsSpellSlotEffect(giant.SkillEffect))
+            return (false, $"int_g01 must not grant spell study after ring-band rule, actual {giant.SkillEffect}");
 
         return (true, "");
     }
@@ -658,14 +1056,28 @@ public static class SkillTreeLayoutTests
             return (false, $"找不到技能配置: {configPath}");
 
         var registered = new HashSet<string>();
+        var configs = new Dictionary<string, JsonElement>();
         using (var doc = JsonDocument.Parse(File.ReadAllText(configPath)))
         {
             foreach (var skill in doc.RootElement.EnumerateArray())
             {
                 if (skill.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String)
-                    registered.Add(id.GetString()!);
+                {
+                    string skillId = id.GetString()!;
+                    registered.Add(skillId);
+                    configs[skillId] = skill.Clone();
+                }
             }
         }
+
+        if (!configs.TryGetValue("poison_blade", out var poisonBlade))
+            return (false, "poison_blade 未注册到 skill_configs.json");
+        if (!poisonBlade.TryGetProperty("target", out var poisonTarget) || poisonTarget.GetString() != "Self")
+            return (false, "poison_blade 必须是自身目标，用于标记下次武器攻击");
+        if (!poisonBlade.TryGetProperty("action_cost", out var poisonAp) || poisonAp.GetInt32() != 2)
+            return (false, "poison_blade 必须消耗 2 AP/次行动");
+        if (!poisonBlade.TryGetProperty("cooldown", out var poisonCooldown) || poisonCooldown.GetInt32() != 2)
+            return (false, "poison_blade 必须是 CD2");
 
         foreach (var node in tree.Nodes.Values.Where(n => n.IsActiveSkill && !string.IsNullOrEmpty(n.SkillEffect)))
         {
@@ -747,8 +1159,8 @@ public static class SkillTreeLayoutTests
 
         if (!tree.Nodes.TryGetValue("int_g01", out var intGiant))
             return (false, "缺少 INT 巨型节点 int_g01");
-        if (intGiant.CurrentNodeType != SkillNodeData.NodeType.Giant || intGiant.IsActiveSkill || intGiant.SkillEffect != "spell_slot_4")
-            return (false, $"INT 巨型应为非战斗 spell_slot_4, actual active={intGiant.IsActiveSkill}, effect={intGiant.SkillEffect}");
+        if (intGiant.CurrentNodeType != SkillNodeData.NodeType.Giant || !intGiant.IsActiveSkill || intGiant.SkillEffect != "int_giant_apex")
+            return (false, $"INT 巨型应为主动 apex, actual active={intGiant.IsActiveSkill}, effect={intGiant.SkillEffect}");
 
         var repoRoot = FindRepoRoot();
         if (repoRoot == null)

@@ -18,8 +18,8 @@ public static class SupportSkillHandlers
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Allies);
         if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有盟友"); return; }
         int wisMod = RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveWis(ctx.Attacker.Data));
-        int heal = RPGRuleEngine.RollDice(1, 8) + wisMod
-                 + (ctx.Attacker.SkillTree?.GetHealBonus() ?? 0);
+        int heal = RPGRuleEngine.RollDice(1, 8) + wisMod;
+        heal = ApplySkillTreeHealMultiplier(ctx.Attacker, heal);
         int actual = target.Heal(heal, ctx.Attacker);
         ctx.Builder.AddHeal(target, actual);
     }
@@ -29,8 +29,8 @@ public static class SupportSkillHandlers
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Allies);
         if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有盟友"); return; }
         int wisMod = RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveWis(ctx.Attacker.Data));
-        int heal = RPGRuleEngine.RollDice(2, 8) + wisMod
-                 + (ctx.Attacker.SkillTree?.GetHealBonus() ?? 0);
+        int heal = RPGRuleEngine.RollDice(2, 8) + wisMod;
+        heal = ApplySkillTreeHealMultiplier(ctx.Attacker, heal);
         int actual = target.Heal(heal, ctx.Attacker);
         ctx.Builder.AddHeal(target, actual);
         ctx.Builder.AddRemoveEffect(target, "bleed");
@@ -48,6 +48,7 @@ public static class SupportSkillHandlers
             {
                 int heal = RPGRuleEngine.RollDice(1, 6) + wisMod;
                 if (ctx.Attacker.HasSkillEffect("life_mastery")) heal = (int)(heal * 1.5f);
+                heal = ApplySkillTreeHealMultiplier(ctx.Attacker, heal);
                 int actual = ally.Heal(heal, ctx.Attacker);
                 ctx.Builder.AddHeal(ally, actual);
             }
@@ -65,14 +66,14 @@ public static class SupportSkillHandlers
         // CON_HP_Bonus = floor(sqrt(CON/4))
         int conScore = CombatStats.GetEffectiveCon(ctx.Attacker.Data);
         int conBonus = (int)System.Math.Floor(System.Math.Sqrt(conScore / 4.0));
-        int nodeHeal = ctx.Attacker.SkillTree?.GetMeleeDamageBonus() ?? 0; // 节点 heal_amount 暂用通用接口
         var neighbors = ctx.Grid != null ? HexUtils.GetNeighbors(ctx.Attacker.GridPos.X, ctx.Attacker.GridPos.Y) : Array.Empty<Vector2I>();
         foreach (var pos in neighbors)
         {
             var ally = SkillUtils.FindUnitAt(pos, ctx.Allies);
             if (ally != null && GodotObject.IsInstanceValid(ally) && ally.CurrentHp > 0)
             {
-                int heal = RPGRuleEngine.RollDice(1, 10) + conBonus + nodeHeal;
+                int heal = RPGRuleEngine.RollDice(1, 10) + conBonus;
+                heal = ApplySkillTreeHealMultiplier(ctx.Attacker, heal);
                 int actual = ally.Heal(heal, ctx.Attacker);
                 ctx.Builder.AddHeal(ally, actual);
             }
@@ -81,6 +82,12 @@ public static class SupportSkillHandlers
     }
 
     // ========== 增益/防御 ==========
+
+    private static int ApplySkillTreeHealMultiplier(Unit caster, int heal)
+    {
+        float bonus = caster.SkillTree?.GetHealPercentBonus() ?? 0.0f;
+        return Math.Max(1, (int)(heal * Math.Max(0.0f, 1.0f + bonus)));
+    }
 
     public static void Blessing(in SkillHandlerContext ctx)
     {

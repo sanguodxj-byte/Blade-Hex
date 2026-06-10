@@ -40,7 +40,7 @@ public static class AssassinSkillHandlers
         var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
         if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
         // 直接结算：模拟"必定暴击 + 1.5x 伤害"
-        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, +5, 1.5f);
+        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false, false, +5, 1.5f, triggerVisuals: false);
         ctx.Builder.AddDamageFromResolver(target, r);
     }
 

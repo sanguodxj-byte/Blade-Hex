@@ -41,7 +41,9 @@ public static class ChunkAStarTests
         yield return Run(nameof(FindPath_AcrossTwoChunks), FindPath_AcrossTwoChunks);
         yield return Run(nameof(FindPath_StartNotLoaded_ReturnsEmpty), FindPath_StartNotLoaded_ReturnsEmpty);
         yield return Run(nameof(FindPath_TargetUnloaded_ReturnsBoundaryPath), FindPath_TargetUnloaded_ReturnsBoundaryPath);
+        yield return Run(nameof(FindPathPixels_SameTileDifferentPixels_ReturnsClickTarget), FindPathPixels_SameTileDifferentPixels_ReturnsClickTarget);
         yield return Run(nameof(FindPath_SeaMode_LandImpassable), FindPath_SeaMode_LandImpassable);
+        yield return Run(nameof(FindPath_LandMode_ShallowWaterTargetFallsBack), FindPath_LandMode_ShallowWaterTargetFallsBack);
         yield return Run(nameof(FindPath_CacheConsistency), FindPath_CacheConsistency);
     }
 
@@ -136,6 +138,21 @@ public static class ChunkAStarTests
         return (true, "");
     }
 
+    private static (bool, string) FindPathPixels_SameTileDifferentPixels_ReturnsClickTarget()
+    {
+        var mgr = MakeManagerWithChunk(0, 0);
+        var aStar = new ChunkAStar();
+        var start = HexOverworldTile.AxialToPixel(5, 5);
+        var target = start + new Vector2(20.0f, 0.0f);
+
+        var path = aStar.FindPathPixels(start, target, mgr);
+
+        if (path.Length != 2) return (false, $"expected 2 pixel points, got {path.Length}");
+        if (path[0] != start) return (false, $"path should start at exact player position, got {path[0]}");
+        if (path[^1] != target) return (false, $"path should end at click target, got {path[^1]}");
+        return (true, "");
+    }
+
     private static (bool, string) FindPath_SeaMode_LandImpassable()
     {
         // 默认 chunk 全是 Plains（陆地），海上模式下不可通行
@@ -150,6 +167,32 @@ public static class ChunkAStarTests
         // 不强求空数组（实现可能返回 [start]），但路径不应该到达 target
         if (path.Length > 0 && path[^1] == target)
             return (false, $"sea mode should not traverse plains, but got full path of length {path.Length}");
+        return (true, "");
+    }
+
+    private static (bool, string) FindPath_LandMode_ShallowWaterTargetFallsBack()
+    {
+        var mgr = MakeManagerWithChunk(0, 0);
+        var target = new Vector2I(4, 0);
+        var targetTile = mgr.GetTile(target.X, target.Y);
+        if (targetTile == null) return (false, "target tile missing");
+        targetTile.SetTerrain(HexOverworldTile.TerrainType.ShallowWater);
+
+        var aStar = new ChunkAStar { Mode = ChunkAStar.NavigationMode.Land };
+        var start = new Vector2I(0, 0);
+        var path = aStar.FindPathAxial(start, target, mgr);
+
+        if (path.Length == 0)
+            return (false, "expected fallback path to nearest land tile, got empty");
+        if (path[0] != start)
+            return (false, $"path should start at {start}, got {path[0]}");
+        if (path[^1] == target)
+            return (false, "land-mode path should not end on shallow water target");
+
+        var endTile = mgr.GetTile(path[^1].X, path[^1].Y);
+        if (endTile == null || !endTile.IsPassable || endTile.Terrain == HexOverworldTile.TerrainType.ShallowWater)
+            return (false, $"fallback target is not land-passable: {path[^1]} terrain={endTile?.Terrain}");
+
         return (true, "");
     }
 

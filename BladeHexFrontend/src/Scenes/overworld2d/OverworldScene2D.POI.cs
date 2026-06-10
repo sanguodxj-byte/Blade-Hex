@@ -43,6 +43,7 @@ public partial class OverworldScene2D
     private void OnPlayerEnteredPoi(OverworldPOI poi)
     {
         _poiEntered = true;
+        ClearDirectedInteraction();
         _playerMoving = false;
         IsWaiting = false;
         TriggerPOIInteraction(poi);

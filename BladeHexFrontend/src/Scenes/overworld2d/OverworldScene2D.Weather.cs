@@ -130,6 +130,8 @@ public partial class OverworldScene2D
             _envAudio.SetWeather(audioWeather);
         }
 
+        UpdateWeatherGameplayFactors();
+
         GD.Print($"[OverworldScene2D/Weather] 天气变化: {(WeatherType)oldWeather} → {weatherType}");
     }
 
@@ -174,6 +176,7 @@ public partial class OverworldScene2D
             WeatherSpeedFactor = 1.0f;
             WeatherVisionFactor = 1.0f;
             WeatherEncounterFactor = 1.0f;
+            SyncWeatherSpeedFactor();
             return;
         }
 
@@ -183,6 +186,16 @@ public partial class OverworldScene2D
         WeatherSpeedFactor = factors.Speed;
         WeatherVisionFactor = factors.Vision;
         WeatherEncounterFactor = factors.Encounter;
+        SyncWeatherSpeedFactor();
+    }
+
+    private void SyncWeatherSpeedFactor()
+    {
+        if (PlayerParty?.SpeedComponent != null)
+            PlayerParty.SpeedComponent.WeatherSpeedFactor = WeatherSpeedFactor;
+
+        if (EntityMgr?.SimCtx != null)
+            EntityMgr.SimCtx.WeatherSpeedFactor = WeatherSpeedFactor;
     }
 
     // ========================================

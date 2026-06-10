@@ -9,6 +9,8 @@ namespace BladeHex.Strategic;
 /// </summary>
 public static class OverworldHostility
 {
+    public const string DefaultPlayerFaction = "player";
+
     private static readonly HashSet<string> IntrinsicHostileFactions = new(StringComparer.OrdinalIgnoreCase)
     {
         "hostile",
@@ -60,9 +62,36 @@ public static class OverworldHostility
         return false;
     }
 
+    public static bool AreHostileToPlayer(
+        OverworldEntity entity,
+        OverworldEntity playerProxy,
+        WorldEventEngine? engine = null,
+        Hero.HeroRelationMatrix? relationMatrix = null)
+    {
+        if (entity == playerProxy) return false;
+
+        string playerFaction = NormalizePlayerFaction(playerProxy.Faction);
+        if (string.Equals(entity.Faction, playerFaction, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (engine != null)
+        {
+            if (engine.AreAllied(entity.Faction, playerFaction)) return false;
+            if (engine.AreAtWar(entity.Faction, playerFaction)) return true;
+        }
+
+        if (entity.IsHostileToPlayer || IsIntrinsicHostileFaction(entity.Faction))
+            return true;
+
+        return AreHostile(entity, playerProxy, engine, relationMatrix);
+    }
+
+    public static string NormalizePlayerFaction(string? faction)
+        => string.IsNullOrWhiteSpace(faction) ? DefaultPlayerFaction : faction;
+
     public static bool IsIntrinsicHostileFaction(string faction)
         => IntrinsicHostileFactions.Contains(faction ?? "");
 
-    private static bool IsPlayerFaction(string faction)
-        => string.Equals(faction, "player", StringComparison.OrdinalIgnoreCase);
+    public static bool IsPlayerFaction(string faction)
+        => string.Equals(faction, DefaultPlayerFaction, StringComparison.OrdinalIgnoreCase);
 }

@@ -60,14 +60,19 @@ public partial class Overworld2DCallChainTest : Node
 
         // Prop 渲染器测试
         RunTest("OverworldPropRenderer2D.Initialize", TestPropRendererInitialize);
+        RunTest("OverworldPropRenderer2D.TextureFiltering", TestPropRendererTextureFiltering);
+        RunTest("OverworldPropRenderer2D.ImportSettings", TestPropImportSettings);
         RunTest("OverworldPropRenderer2D.LoadPropsForTiles", TestPropRendererLoadProps);
         RunTest("OverworldPropRenderer2D.ClearAll", TestPropRendererClearAll);
         RunTest("RoadRenderer.FullyBuiltIntercept", TestRoadRendererFullyBuiltIntercept);
+        RunTest("RoadRenderer.DirectionAwareJunctions", TestRoadRendererDirectionAwareJunctions);
+        RunTest("RoadRenderer.MergesR1Junctions", TestRoadRendererMergesR1Junctions);
         RunTest("RiverRenderer.FullyBuiltIntercept", TestRiverRendererFullyBuiltIntercept);
 
         // 相机测试
         RunTest("OverworldCamera2D.FocusOn", TestCameraFocusOn);
         RunTest("OverworldCamera2D.Zoom", TestCameraZoom);
+        RunTest("OverworldCamera2D.SettleWithoutOvershoot", TestCameraSettleWithoutOvershoot);
 
         // A* 寻路测试
         RunTest("HexOverworldAStar.FindPath", TestAStarFindPath);
@@ -279,6 +284,48 @@ public partial class Overworld2DCallChainTest : Node
         return propRenderer.Name == "OverworldPropRenderer2D";
     }
 
+    private bool TestPropRendererTextureFiltering()
+    {
+        var gen = new HexOverworldGenerator();
+        var grid = gen.Generate(64, 48, 12345);
+
+        var propRenderer = new OverworldPropRenderer2D();
+        propRenderer.Initialize(12345, grid);
+
+        return propRenderer.TextureFilter == CanvasItem.TextureFilterEnum.LinearWithMipmaps;
+    }
+
+    private bool TestPropImportSettings()
+    {
+        string[] names =
+        [
+            "forest_0", "forest_1", "forest_2", "forest_3",
+            "grassland_0", "grassland_1", "grassland_2", "grassland_3",
+            "mountain_0", "mountain_1", "mountain_2", "mountain_3",
+        ];
+
+        foreach (string name in names)
+        {
+            string path = $"res://BladeHexFrontend/src/assets/tiles/overworld/{name}.png.import";
+            if (!FileAccess.FileExists(path))
+                return false;
+
+            using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+            if (file == null)
+                return false;
+
+            string text = file.GetAsText();
+            if (!text.Contains("mipmaps/generate=true"))
+                return false;
+            if (!text.Contains("process/fix_alpha_border=true"))
+                return false;
+            if (!text.Contains("process/premult_alpha=false"))
+                return false;
+        }
+
+        return true;
+    }
+
     private bool TestPropRendererLoadProps()
     {
         var gen = new HexOverworldGenerator();
@@ -330,6 +377,88 @@ public partial class Overworld2DCallChainTest : Node
         return list.Count == 0;
     }
 
+    private bool TestRoadRendererDirectionAwareJunctions()
+    {
+        var chunks = new Dictionary<Vector2I, ChunkData>();
+        AddRoadTile(chunks, new Vector2I(14, 0), 1 << 0);
+        AddRoadTile(chunks, new Vector2I(15, 0), 1 << 0);
+        AddRoadTile(chunks, new Vector2I(16, 0), 1 << 0);
+        AddRoadTile(chunks, new Vector2I(17, 0), 1 << 0);
+
+        // Adjacent road cells from another road should not create a visual junction unless RoadDirections connect them.
+        AddRoadTile(chunks, new Vector2I(16, -1), 1 << 0);
+        AddRoadTile(chunks, new Vector2I(17, -1), 1 << 0);
+
+        var manager = new ChunkManager();
+        foreach (var kvp in chunks)
+            manager.ActiveChunks[kvp.Key] = kvp.Value;
+
+        var roadRenderer = new RoadRenderer();
+        AddChild(roadRenderer);
+        roadRenderer.Initialize(manager);
+        roadRenderer.RebuildFromChunks();
+
+        bool result = roadRenderer.RoadCount > 0 && roadRenderer.DebugJunctionCount == 0;
+        roadRenderer.QueueFree();
+        return result;
+    }
+
+    private bool TestRoadRendererMergesR1Junctions()
+    {
+        var chunks = new Dictionary<Vector2I, ChunkData>();
+        AddRoadTile(chunks, new Vector2I(0, 0), DirectionMask(0, 3, 5));
+        AddRoadTile(chunks, new Vector2I(1, 0), DirectionMask(0, 2, 3));
+        AddRoadTile(chunks, new Vector2I(-1, 0), 0);
+        AddRoadTile(chunks, new Vector2I(0, 1), 0);
+        AddRoadTile(chunks, new Vector2I(2, 0), 0);
+        AddRoadTile(chunks, new Vector2I(1, -1), 0);
+
+        var manager = new ChunkManager();
+        foreach (var kvp in chunks)
+            manager.ActiveChunks[kvp.Key] = kvp.Value;
+
+        var roadRenderer = new RoadRenderer();
+        AddChild(roadRenderer);
+        roadRenderer.Initialize(manager);
+        roadRenderer.RebuildFromChunks();
+
+        bool result = roadRenderer.RoadCount > 0 && roadRenderer.DebugJunctionCount == 1;
+        roadRenderer.QueueFree();
+        return result;
+    }
+
+    private static void AddRoadTile(Dictionary<Vector2I, ChunkData> chunks, Vector2I coord, int roadDirections)
+    {
+        var chunkCoord = ChunkData.WorldToChunk(coord.X, coord.Y);
+        if (!chunks.TryGetValue(chunkCoord, out var chunk))
+        {
+            chunk = new ChunkData
+            {
+                ChunkCoord = chunkCoord,
+                IsActive = true,
+                IsGenerated = true,
+            };
+            chunks[chunkCoord] = chunk;
+        }
+
+        chunk.Tiles[coord] = new HexOverworldTile
+        {
+            Coord = coord,
+            PixelPos = HexOverworldTile.AxialToPixel(coord.X, coord.Y),
+            IsRoad = true,
+            RoadDirections = roadDirections,
+            RoadClassVal = 1,
+        };
+    }
+
+    private static int DirectionMask(params int[] directions)
+    {
+        int result = 0;
+        foreach (int direction in directions)
+            result |= 1 << direction;
+        return result;
+    }
+
     private bool TestRiverRendererFullyBuiltIntercept()
     {
         var riverRenderer = new RiverRenderer();
@@ -373,6 +502,32 @@ public partial class Overworld2DCallChainTest : Node
 
         bool result = camera.Zoom.X == 2.0f && camera.Zoom.Y == 2.0f;
 
+        camera.QueueFree();
+        return result;
+    }
+
+    private bool TestCameraSettleWithoutOvershoot()
+    {
+        var camera = new OverworldCamera2D();
+        AddChild(camera);
+
+        camera.FocusOnImmediate(Vector2.Zero);
+        var target = new Vector2(1000, 0);
+        camera.FocusOn(target);
+
+        // Simulate a few hitchy frames after map streaming. Camera smoothing must not overshoot,
+        // otherwise pixel-grid snapping can make world sprites jitter after movement stops.
+        for (int i = 0; i < 6; i++)
+        {
+            camera._Process(0.25);
+            if (camera.Position.X < -0.001f || camera.Position.X > target.X + 0.001f)
+            {
+                camera.QueueFree();
+                return false;
+            }
+        }
+
+        bool result = camera.Position.DistanceTo(target) <= 1.0f;
         camera.QueueFree();
         return result;
     }

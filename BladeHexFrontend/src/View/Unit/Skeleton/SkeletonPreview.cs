@@ -31,7 +31,7 @@ public partial class SkeletonPreview : Node3D
     private const float MinOrthoSize = 80f;
     private const float MaxOrthoSize = 600f;
     private const float PanSpeed = 400f;
-    private const string BasePedestalPath = "res://assets/generated_ui_icons/unit_base_steel.png";
+    private const string BasePedestalPath = "res://assets/ui_icons/unit_base_steel.png";
 
     private UpperBodySkeleton? _skeleton;
     private Node3D? _bodyRoot;

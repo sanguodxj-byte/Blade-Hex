@@ -88,7 +88,7 @@ $env:HTTPS_PROXY='http://127.0.0.1:7897'
 python rembg_weapons.py
 
 # 清理噪点
-python clean_alpha.py "D:\123\Blade&Hex\assets\generated_weapons\weapon_sheet1_output"
+python clean_alpha.py "D:\123\Blade&Hex\assets\weapons\weapon_sheet1_output"
 ```
 
 ## 文件命名规则
@@ -99,9 +99,9 @@ python clean_alpha.py "D:\123\Blade&Hex\assets\generated_weapons\weapon_sheet1_o
 
 ## 输出目录
 
-- 头盔: `assets/generated_helmets/`
-- 护甲/手套/鞋子: `assets/generated_armor/`（各 sheet 有独立 `_output` 子目录）
-- 武器: `assets/generated_weapons/weapon_sheet{N}_output/`
+- 头盔: `assets/helmets/`
+- 护甲/手套/鞋子: `assets/armor/`（各 sheet 有独立 `_output` 子目录）
+- 武器: `assets/weapons/weapon_sheet{N}_output/`
 
 ## 已知问题
 

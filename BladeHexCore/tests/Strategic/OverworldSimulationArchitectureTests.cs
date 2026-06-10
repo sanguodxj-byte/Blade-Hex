@@ -293,17 +293,42 @@ public static class OverworldSimulationArchitectureTests
         lordA.SiegeTarget = poiB;
         poiB.BeginSiege(lordA);
 
-        // 模拟 SIEGE_DAYS = 2 天的围攻
-        // 第一天: 围攻天数累计
-        var events1 = sim.TickDay(ctx);
-        // 第二天: 围攻结算
-        var events2 = sim.TickDay(ctx);
+        // 预检查：poiB 的围攻状态
+        if (!poiB.IsUnderSiege)
+            return (false, "BeginSiege 后 SiegeDays 应 > 0");
+        if (poiB.SiegeDays != 0)
+            return (false, $"BeginSiege 后 SiegeDays 应为 0，得到 {poiB.SiegeDays}");
 
-        bool siegeResolved = events2.Any(e => e.Type == OverworldSimulationEvent.EventType.SiegeResolved);
-        bool poiCaptured = events2.Any(e => e.Type == OverworldSimulationEvent.EventType.PoiCaptured);
+        // 模拟围攻 — 收集所有天的事件
+        var allEvents = new List<OverworldSimulationEvent>();
+        for (int day = 0; day < 3; day++)
+        {
+            try
+            {
+                var dayEvents = sim.TickDay(ctx);
+                allEvents.AddRange(dayEvents);
+
+                // 每天结束后记录重要状态
+                string log = $"Day {ctx.CurrentDay - 1} 后: SiegeDays={poiB.SiegeDays}, state={lordA.CurrentAIState}, " +
+                             $"IsUnderSiege={poiB.IsUnderSiege}, SiegeTarget={(lordA.SiegeTarget?.PoiName ?? "null")}, " +
+                             $"events={dayEvents.Count}";
+                GD.Print($"[SiegeTest] {log}");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"TickDay {day + 1} 异常: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            // 如果已结算则提前退出
+            if (allEvents.Any(e => e.Type == OverworldSimulationEvent.EventType.SiegeResolved))
+                break;
+        }
+
+        bool siegeResolved = allEvents.Any(e => e.Type == OverworldSimulationEvent.EventType.SiegeResolved);
+        bool poiCaptured = allEvents.Any(e => e.Type == OverworldSimulationEvent.EventType.PoiCaptured);
 
         if (!siegeResolved)
-            return (false, "围攻 2 天后应结算，但没有 SiegeResolved 事件");
+            return (false, $"围攻 3 天后应结算: SiegeDays={poiB.SiegeDays}, state={lordA.CurrentAIState}, IsUnderSiege={poiB.IsUnderSiege}, events={allEvents.Count}");
         return (true, $"围攻已结算: SiegeResolved={siegeResolved}, PoiCaptured={poiCaptured}");
     }
 

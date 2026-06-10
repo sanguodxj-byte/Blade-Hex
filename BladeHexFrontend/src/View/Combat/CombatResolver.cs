@@ -6,6 +6,8 @@ using BladeHex.Data;
 using BladeHex.Events;
 using BladeHex.Map;
 using BladeHex.Strategic;
+using BladeHex.View.Combat;
+using BladeHex.Debug;
 
 namespace BladeHex.Combat;
 
@@ -38,7 +40,8 @@ public static class CombatResolver
         float nodePassiveScale = 1.0f,
         Unit[]? defenderAllies = null,
         float extraCritChance = 0f,
-        float targetAcMultiplier = 1.0f)
+        float targetAcMultiplier = 1.0f,
+        bool triggerVisuals = true)
     {
         var weapon = attacker.Model.GetMainHand() as WeaponData;
         bool isChargeValid = isCharge && weapon != null && !weapon.IsRanged && !weapon.IsCatalyst;
@@ -411,9 +414,7 @@ public static class CombatResolver
         }
 
         // ===== 4. 委托 Core 层计算伤害 =====
-        // v0.6 11.4.1 节点平伤 AP 归一化: NodeDamage * WeaponAP / 4
-        // 防止低 AP 多段武器从 +1 melee_damage 节点过度获利。
-        // v0.6 11.4.2 / 11.8: AOE / 多段技能再乘 nodePassiveScale (一般 0.5)
+        // 技能盘伤害节点使用百分比乘区；固定伤害加值只保留给非技能盘来源。
         int weaponApForNode = weapon?.ApCost ?? 4;
         int rawPassiveMelee  = PassiveSkillResolver.GetPassiveMeleeDamageBonus(attacker);
         int rawPassiveRanged = PassiveSkillResolver.GetPassiveRangedDamageBonus(attacker);
@@ -446,6 +447,7 @@ public static class CombatResolver
             buffDamageMultiplier *= BladeHex.Combat.Buff.BuffSystem.ResolveMultiplier(attacker.Data, "damage");
             buffDamageMultiplier *= BladeHex.Combat.Buff.BuffSystem.ResolveMultiplier(attacker.Data, isMelee ? "melee_damage" : "ranged_damage");
         }
+        buffDamageMultiplier *= PassiveSkillResolver.GetSkillTreeWeaponDamageMultiplier(attacker, isMelee);
 
         float critTakenMultiplier = 1.0f;
         if (defender.Data != null)
@@ -624,10 +626,8 @@ public static class CombatResolver
             }
         }
 
-        // ===== 8. 同步 HP + 触发表现（Node 层副作用）=====
+        // ===== 8. 同步 HP + 数据层副作用 =====
         defender.CurrentHp = defender.Model.CurrentHp;
-        defender.UpdateHpBar();
-        defender.UpdateArmorBar();
         result["damage"] = hpDamage;
         defender.ApplyRedirectedDamage(dmgResult);
 
@@ -638,12 +638,9 @@ public static class CombatResolver
         if (hpDamage > 0)
             CareerPassiveHooks.OnHpDamageTaken(defender, hpDamage);
 
-        if (hpDamage > 0 || dmgResult.DrDamage > 0)
-        {
-            if (defender.RenderBus != null) defender.RenderBus.NotifyHit(defender);
-            Events.EventBus.Instance?.PublishUnitDamaged(defender, hpDamage, defender.CurrentHp);
-            _ = defender.HandleDeathAnimIfDead();
-        }
+        // ===== 8b. 触发表现层（HP 条、特效、动画、事件）=====
+        if (triggerVisuals)
+            CombatVisuals.ApplyAttackVisuals(attacker, defender, hpDamage, dmgResult.DrDamage, weapon, finalCritical);
 
         // v1 职业被动: 幻术师 — 受击消耗 1 层幻影 (所有伤害类型)
         if (result["hit"].AsBool())
@@ -667,7 +664,8 @@ public static class CombatResolver
                 attacker.CurrentHp = healedHp;
                 attacker.Model.CurrentHp = healedHp;
                 attacker.Data.Runtime.CurrentHp = healedHp;
-                attacker.UpdateHpBar();
+                if (triggerVisuals)
+                    CombatVisuals.ApplyLeechVisuals(attacker);
                 result["blood_oath_leech"] = healedHp - beforeLeech;
             }
         }
@@ -687,7 +685,7 @@ public static class CombatResolver
                     _isBladeDancerExtraResolving = true;
                     try
                     {
-                        var extraResult = ResolveAttack(attacker, extraTarget, grid, attackerAllies: attackerAllies, defenderAllies: defenderAllies);
+                        var extraResult = ResolveAttack(attacker, extraTarget, grid, attackerAllies: attackerAllies, defenderAllies: defenderAllies, triggerVisuals: false);
                         // 无论额外攻击是否命中，消耗本回合剑舞者额外攻击次数
                         CareerPassiveHooks.MarkBladeDancerExtraAttackUsed(attacker);
                         result["blade_dancer_extra_target"] = extraTarget;
@@ -739,7 +737,7 @@ public static class CombatResolver
                     if (counterDmg > 0 && attacker.CurrentHp > 0)
                     {
                         ApplyDirectHpLoss(attacker, counterDmg);
-                        Events.EventBus.Instance?.PublishUnitDamaged(attacker, counterDmg, attacker.CurrentHp);
+                        CombatVisuals.ApplyDamageEvent(attacker, counterDmg);
                         result["riposte_damage"] = counterDmg;
                     }
                 }
@@ -757,8 +755,8 @@ public static class CombatResolver
         }
 
         // ===== 9. 装备能力钩子（OnDealDamage / Reflect）=====
-        ApplyEquipmentAbilityEffects(attacker, defender, hpDamage, dmgResult.DrDamage, dmgResult.ReflectDamageToAttacker);
-        TryApplyNextHitPoison(attacker, defender, result);
+        ApplyEquipmentAbilityEffects(attacker, defender, hpDamage, dmgResult.DrDamage, dmgResult.ReflectDamageToAttacker, triggerVisuals);
+        TryApplyNextHitPoison(attacker, defender, weapon, result);
 
         return result;
     }
@@ -799,7 +797,8 @@ public static class CombatResolver
         defender.CurrentHp = Math.Min(maxHp, defender.CurrentHp + redirected);
         defender.Model.CurrentHp = defender.CurrentHp;
         defender.Data.Runtime.CurrentHp = defender.CurrentHp;
-        defender.UpdateHpBar();
+        try { defender.UpdateHpBar(); }
+        catch (Exception ex) { GameLog.Exception("[CombatResolver] ApplyMartyrOathRedirect HP条更新异常", ex); }
 
         martyr.ApplyRedirectedHpDamage(redirected, bypassMitigation: true);
         result["martyr_oath_redirect"] = redirected;
@@ -810,9 +809,11 @@ public static class CombatResolver
         return remainingDamage;
     }
 
-    private static void TryApplyNextHitPoison(Unit attacker, Unit defender, Godot.Collections.Dictionary result)
+    private static void TryApplyNextHitPoison(Unit attacker, Unit defender, WeaponData? weapon, Godot.Collections.Dictionary result)
     {
         if (attacker.Data == null || defender?.Data == null) return;
+        if (!result.ContainsKey("hit") || !result["hit"].AsBool()) return;
+        if (weapon == null || weapon.IsCatalyst) return;
         var poisonBuff = BladeHex.Combat.Buff.BuffModifierReader.FirstBuffWithTruthy(attacker.Data, "next_hit_poison_duration");
         if (poisonBuff == null) return;
 
@@ -940,14 +941,15 @@ public static class CombatResolver
     /// <summary>
     /// 应用装备能力效果：攻击方 OnDealDamage（如 lifesteal）+ 防御方反弹（如 thorns）
     /// </summary>
-    private static void ApplyEquipmentAbilityEffects(Unit attacker, Unit defender, int hpDamage, int drDamage, int reflectDamage)
+    private static void ApplyEquipmentAbilityEffects(Unit attacker, Unit defender, int hpDamage, int drDamage, int reflectDamage, bool triggerVisuals)
     {
         // 1) 反伤：来自防御方的 OnTakeDamage（已在 ApplyDamage 中聚合）
         if (reflectDamage > 0 && attacker.CurrentHp > 0)
         {
             int actualReflect = Math.Max(0, Math.Min(reflectDamage, attacker.CurrentHp));
             ApplyDirectHpLoss(attacker, actualReflect);
-            Events.EventBus.Instance?.PublishUnitDamaged(attacker, actualReflect, attacker.CurrentHp);
+            if (triggerVisuals)
+                CombatVisuals.ApplyDamageEvent(attacker, actualReflect);
         }
 
         // 2) OnDealDamage：触发攻击方装备能力（lifesteal 等）
@@ -972,8 +974,11 @@ public static class CombatResolver
                 if (dmgEvent.Damage <= 0 || defender.CurrentHp <= 0) continue;
                 int actualExtra = Math.Max(0, Math.Min(dmgEvent.Damage, defender.CurrentHp));
                 ApplyDirectHpLoss(defender, actualExtra);
-                Events.EventBus.Instance?.PublishUnitDamaged(defender, actualExtra, defender.CurrentHp);
-                _ = defender.HandleDeathAnimIfDead();
+                if (triggerVisuals)
+                {
+                    CombatVisuals.ApplyDamageEvent(defender, actualExtra);
+                    CombatVisuals.ApplyExtraDamageDeathAnim(defender);
+                }
             }
         }
     }
@@ -989,7 +994,8 @@ public static class CombatResolver
             : Math.Max(0, unit.Model.CurrentHp - hpDamage);
         unit.CurrentHp = unit.Model.CurrentHp;
         if (unit.Data != null) unit.Data.Runtime.CurrentHp = unit.CurrentHp;
-        unit.UpdateHpBar();
+        try { unit.UpdateHpBar(); }
+        catch (Exception ex) { GameLog.Exception("[CombatResolver] ApplyDirectHpLoss HP条更新异常", ex); }
     }
 
     // ============================================================================
@@ -1131,5 +1137,40 @@ public static class CombatResolver
             { "max", max },
             { "avg", avg }
         };
+    }
+
+    // ========================================
+    // 受击特效类型判定
+    // ========================================
+
+    /// <summary>
+    /// 根据攻击者和防御者状态确定受击特效类型。
+    /// - 盾牌格挡远程 → Shield
+    /// - 武器或防御者无护甲 → Flesh
+    /// - 魔法/火焰/冰霜伤害 → Magic
+    /// - 有护甲 → Armor
+    /// </summary>
+    public static HitEffectType GetHitEffectType(Unit attacker, Unit defender, WeaponData? weapon, bool isBlockedByShield = false)
+    {
+        if (isBlockedByShield)
+            return HitEffectType.Shield;
+
+        if (weapon != null)
+        {
+            switch (weapon.WeaponDamageType)
+            {
+                case WeaponData.DamageType.Magic:
+                case WeaponData.DamageType.Fire:
+                case WeaponData.DamageType.Frost:
+                case WeaponData.DamageType.Lightning:
+                    return HitEffectType.Magic;
+            }
+        }
+
+        // 检查防御者是否有护甲
+        if (defender.Data != null && defender.Data.CurrentDr > 0)
+            return HitEffectType.Armor;
+
+        return HitEffectType.Flesh;
     }
 }

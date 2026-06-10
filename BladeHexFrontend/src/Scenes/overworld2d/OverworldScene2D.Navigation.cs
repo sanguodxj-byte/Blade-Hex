@@ -42,6 +42,7 @@ public partial class OverworldScene2D
         PlayerParty.MoveTo(targetPixel);
         if (!PlayerParty.IsMoving || PlayerParty.Path.Count == 0)
         {
+            ClearDirectedInteraction();
             GD.Print($"[Nav] 无法找到路径: from={_playerPixelPos} to={targetPixel}");
             _toast?.Show("无法到达该位置", new Color(0.9f, 0.3f, 0.3f));
             return;
@@ -50,6 +51,7 @@ public partial class OverworldScene2D
         _currentPath = new List<Vector2>(PlayerParty.Path);
         _pathIndex = 0;
         _playerMoving = true;
+        IsTimePaused = false;
         _cameraFollowing = true;
         ShowPathPreview(_currentPath);
 
@@ -62,6 +64,34 @@ public partial class OverworldScene2D
         if (!_playerMoving || PlayerParty == null)
             return;
 
+        // 追击移动实体动态更新终点
+        if (_directedInteraction != null && _directedInteraction.Kind == DirectedInteractionKind.Entity)
+        {
+            var targetEntity = _directedInteraction.Entity;
+            if (targetEntity != null && targetEntity.IsAlive)
+            {
+                float distanceToLastTarget = targetEntity.Position.DistanceTo(_directedInteraction.TargetPosition);
+                if (distanceToLastTarget > 20.0f)
+                {
+                    _directedInteraction = new PlayerDirectedInteraction
+                    {
+                        Kind = DirectedInteractionKind.Entity,
+                        Entity = targetEntity,
+                        TargetPosition = targetEntity.Position
+                    };
+                    _pendingInteractionEntity = targetEntity;
+
+                    PlayerParty.MoveTo(targetEntity.Position);
+                    if (PlayerParty.IsMoving && PlayerParty.Path.Count > 0)
+                    {
+                        _currentPath = new List<Vector2>(PlayerParty.Path);
+                        _pathIndex = 0;
+                        ShowPathPreview(_currentPath);
+                    }
+                }
+            }
+        }
+
         // 从 NavigationAgent2D 获取位置
         _playerPixelPos = PlayerParty.Position;
 
@@ -72,6 +102,9 @@ public partial class OverworldScene2D
             _playerMoving = false;
             _cameraFollowing = false;
             ClearPathPreview();
+            if (!_encounterActive && ResolveDirectedInteractionOnArrival())
+                return;
+
             IsTimePaused = true; // 寻路到达目标地点时暂停游戏
             return;
         }

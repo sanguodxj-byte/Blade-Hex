@@ -45,6 +45,7 @@
         <button @click="saveToLS" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded text-xs"><i class="fa-solid fa-floppy-disk mr-1"></i>暂存</button>
         <button @click="triggerImport" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded text-xs"><i class="fa-solid fa-file-import mr-1"></i>载入</button>
         <button @click="exportJSON" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded text-xs"><i class="fa-solid fa-file-export mr-1"></i>导出</button>
+        <button @click="resetBoard" class="px-3 py-1.5 bg-red-950/70 hover:bg-red-900 border border-red-800/60 rounded text-xs text-red-100"><i class="fa-solid fa-rotate-left mr-1"></i>重置</button>
         <button @click="showExport=true" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-semibold"><i class="fa-solid fa-code mr-1"></i>生成 C#</button>
     </div>
 </header>
@@ -58,28 +59,56 @@
     <div class="absolute bottom-4 left-4 z-10 flex space-x-1 glass-panel p-1.5 rounded-lg">
         <button @click="zoom*=1.15" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-plus"></i></button>
         <button @click="zoom*=0.87" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-minus"></i></button>
-        <button @click="panX=0;panY=0;zoom=1" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-crosshairs"></i></button>
+        <button @click="panX=0;panY=0;zoom=0.58" class="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center text-xs text-slate-300"><i class="fa-solid fa-crosshairs"></i></button>
     </div>
     <!-- Info -->
     <div class="absolute top-4 left-4 z-10 glass-panel px-3 py-1.5 rounded text-[10px] text-slate-500 font-mono">
         半径={{hexRadius}} | 瓦片数={{totalTileCount}} | 已用={{nodes.length}} | 缩放={{(zoom*100).toFixed(0)}}%
     </div>
+    <div class="absolute top-14 left-4 z-10 glass-panel px-3 py-2 rounded text-[10px] text-slate-400 font-mono leading-5">
+        <div v-for="item in componentStats" :key="item.type" class="flex items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-sm" :style="`background:${item.color}`"></span>
+            <span>{{item.label}} x{{item.count}}</span>
+        </div>
+    </div>
 
     <!-- SVG -->
     <svg class="w-full h-full" style="display:block">
         <g :transform="`translate(${svgCx + panX}, ${svgCy + panY}) scale(${zoom})`">
+            <!-- Attribute sector fills -->
+            <polygon v-for="sector in sectorFills" :key="sector.key"
+                     :points="sector.points"
+                     :fill="sector.fill" />
+
             <!-- Background: all triangle tiles as faint outlines -->
             <polygon v-for="tile in bgTiles" :key="tile.key"
                      :points="tile.points"
-                     fill="rgba(20,24,40,0.4)"
+                     fill="rgba(20,24,40,0.28)"
                      stroke="rgba(100,116,139,0.12)"
                      stroke-width="0.5" />
+
+            <!-- Sector dividers and inner/middle/outer ring boundaries -->
+            <line v-for="line in sectorSeparators" :key="line.key"
+                  :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2"
+                  stroke="rgba(255,255,255,0.62)" stroke-width="1.4" />
+            <polygon v-for="ring in ringBoundaries" :key="ring.key"
+                     :points="ring.points"
+                     fill="none"
+                     stroke="rgba(255,255,255,0.78)"
+                     stroke-width="2.2" />
 
             <!-- Hex boundary -->
             <polygon :points="hexBoundaryPoints" fill="none" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" />
 
+            <!-- Sector labels -->
+            <text v-for="label in sectorLabels" :key="label.key"
+                  :x="label.x" :y="label.y"
+                  font-size="13" text-anchor="middle" fill="rgba(226,232,240,0.7)"
+                  class="pointer-events-none select-none font-orbitron"
+                  font-weight="700">{{label.text}}</text>
+
             <!-- Node tiles (assigned) -->
-            <polygon v-for="n in renderedNodes" :key="n.id"
+            <polygon v-for="n in renderedNodes" :key="n.renderKey"
                      :points="n.triPoints"
                      :fill="n.fill"
                      :stroke="n.stroke"
@@ -89,7 +118,7 @@
                      @click.stop="onNodeClick(n.id)" />
 
             <!-- Node labels -->
-            <text v-for="n in renderedNodes" :key="'lbl-'+n.id"
+            <text v-for="n in nodeLabels" :key="'lbl-'+n.id"
                   :x="n.cx" :y="n.cy + 3"
                   font-size="7" text-anchor="middle" fill="#e2e8f0" class="pointer-events-none select-none"
                   font-weight="600">{{n.label}}</text>
@@ -133,12 +162,13 @@
         <!-- Header -->
         <div class="flex items-center space-x-2">
             <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold border"
-                 :style="`background:${regionColor(sel.id,0.2)};color:${regionColor(sel.id,1)};border-color:${regionColor(sel.id,0.5)}`">
-                {{sel.type==='Start'?'◎':sel.type==='Keystone'?'★':sel.type==='Big'?'◆':'▲'}}
+                 :style="`background:${componentColor(selectedComponent.type,0.2)};color:${componentColor(selectedComponent.type,1)};border-color:${componentColor(selectedComponent.type,0.55)}`">
+                {{selectedComponent.icon}}
             </div>
             <div class="flex-1">
                 <input v-model="sel.name" class="w-full bg-slate-800/60 border border-slate-700/50 px-2 py-0.5 rounded text-sm text-white font-bold" />
                 <div class="text-[10px] text-slate-500 font-mono mt-0.5">{{sel.id}} · ({{sel.q}},{{sel.r}},{{sel.t}})</div>
+                <div class="text-[10px] text-slate-400 font-mono mt-0.5">{{selectedComponent.label}} · {{selectedComponent.size}} 瓦片 · r{{selectedComponent.minDepth}}-r{{selectedComponent.maxDepth}}</div>
             </div>
             <button @click="deleteNode" class="text-red-500 hover:text-red-400 text-xs px-2 py-1"><i class="fa-solid fa-trash"></i></button>
         </div>
@@ -146,13 +176,10 @@
         <!-- Type & Region -->
         <div class="grid grid-cols-2 gap-2">
             <div>
-                <label class="text-[10px] text-slate-500">类型</label>
-                <select v-model="sel.type" class="w-full bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-slate-300">
-                    <option value="Small">▲ Small</option>
-                    <option value="Big">◆ Big</option>
-                    <option value="Keystone">★ Keystone</option>
-                    <option value="Start">◎ Start</option>
-                </select>
+                <label class="text-[10px] text-slate-500">瓦片类型</label>
+                <div class="w-full bg-slate-900/70 border border-slate-700 px-2 py-1 rounded text-xs text-slate-300">
+                    {{selectedComponent.label}}
+                </div>
             </div>
             <div>
                 <label class="text-[10px] text-slate-500">深度(ring)</label>
@@ -206,8 +233,8 @@
 
         <!-- Debug -->
         <div class="flex space-x-2 pt-2">
-            <button @click="sel.isActivated=!sel.isActivated" :class="sel.isActivated?'bg-purple-600':'bg-slate-800 border border-white/5'" class="flex-1 py-1.5 text-xs rounded">
-                {{sel.isActivated?'✓ 已点亮':'点亮'}}
+            <button @click.stop="toggleHidden" :class="sel.hidden?'bg-slate-800 border border-slate-600 text-slate-400':'bg-purple-600 text-white'" class="flex-1 py-1.5 text-xs rounded">
+                {{sel.hidden?'显示瓦片':'隐藏瓦片'}}
             </button>
         </div>
     </div>
@@ -273,12 +300,26 @@ const { createApp, ref, computed, onMounted, watch } = Vue;
 // ============================================================
 
 const EDGE_LEN = 36; // 格点间距(像素) — 即三角形边长
+const DEFAULT_HEX_RADIUS = 20;
+const RING_BOUNDARY_RADII = [8, 15];
+const SECTOR_REGIONS = ['Int', 'Con', 'Str', 'Dex', 'Cha', 'Wis'];
+const COMPONENT_TYPES = {
+    start: { label: '启程', color: '#e2e8f0', icon: '◎' },
+    pip: { label: 'Pip / 1', color: '#94a3b8', icon: '·' },
+    small: { label: '小节点 / 2', color: '#38bdf8', icon: '◆' },
+    passive: { label: '被动 / 3', color: '#22c55e', icon: '▲' },
+    active: { label: '主动 / 4', color: '#f59e0b', icon: '✦' },
+    keystone: { label: 'Keystone / 6', color: '#eab308', icon: '★' },
+    giant: { label: '巨型 / 12', color: '#ef4444', icon: '✹' },
+    invalid: { label: '未定规格', color: '#f43f5e', icon: '!' },
+};
+const COMPONENT_TYPE_ORDER = ['pip', 'small', 'passive', 'active', 'keystone', 'giant', 'invalid'];
 
 // 格点 (q,r) 的像素坐标 (pointy-top axial layout)
 function vertexPixel(q, r) {
-    const x = EDGE_LEN * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r);
-    const y = EDGE_LEN * (1.5 * r);
-    return { x, y };
+    const rawX = EDGE_LEN * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r);
+    const rawY = EDGE_LEN * (1.5 * r);
+    return { x: rawY, y: -rawX };
 }
 
 // 三角形瓦片 (q,r,t) 的 3 个顶点像素坐标
@@ -303,6 +344,24 @@ function tileCentroid(q, r, t) {
 
 function verticesStr(q, r, t) {
     return tileVertices(q, r, t).map(v => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(' ');
+}
+
+function polygonPointsFromVertices(vertices) {
+    return vertices.map(([q, r]) => {
+        const p = vertexPixel(q, r);
+        return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+    }).join(' ');
+}
+
+function startTiles() {
+    return [
+        { q: 0, r: 0, t: 0 },
+        { q: -1, r: 0, t: 0 },
+        { q: 0, r: -1, t: 0 },
+        { q: -1, r: 0, t: 1 },
+        { q: 0, r: -1, t: 1 },
+        { q: -1, r: -1, t: 1 },
+    ];
 }
 
 // 判断格点 (q,r) 是否在半径 R 的正六边形内
@@ -380,10 +439,10 @@ function getRegion(id) {
 // ============================================================
 createApp({
     setup() {
-        const hexRadius = ref(7);
+        const hexRadius = ref(DEFAULT_HEX_RADIUS);
         const nodes = ref([]);
         const selectedId = ref(null);
-        const zoom = ref(1.0);
+        const zoom = ref(0.58);
         const panX = ref(0);
         const panY = ref(0);
         const isPanning = ref(false);
@@ -402,6 +461,15 @@ createApp({
             const R = hexRadius.value;
             return 6 * R * R; // exact triangle count in hex of radius R
         });
+
+        const outlineVertices = computed(() => [
+            [hexRadius.value, 0],
+            [0, hexRadius.value],
+            [-hexRadius.value, hexRadius.value],
+            [-hexRadius.value, 0],
+            [0, -hexRadius.value],
+            [hexRadius.value, -hexRadius.value],
+        ]);
 
         // All background tiles
         const bgTiles = computed(() => {
@@ -423,23 +491,62 @@ createApp({
 
         // Hex boundary polygon (6 vertices of the outer hex, using actual vertex positions)
         const hexBoundaryPoints = computed(() => {
-            const R = hexRadius.value;
-            // The 6 corners of the hex in axial coords are:
-            // (R, 0), (0, R), (-R, R), (-R, 0), (0, -R), (R, -R)
-            const corners = [
-                [R, 0], [0, R], [-R, R], [-R, 0], [0, -R], [R, -R]
-            ];
-            return corners.map(([q, r]) => {
-                const p = vertexPixel(q, r);
-                return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-            }).join(' ');
+            return polygonPointsFromVertices(outlineVertices.value);
+        });
+
+        const sectorFills = computed(() => {
+            const center = vertexPixel(0, 0);
+            return outlineVertices.value.map((left, i) => {
+                const right = outlineVertices.value[(i + 1) % outlineVertices.value.length];
+                const lp = vertexPixel(left[0], left[1]);
+                const rp = vertexPixel(right[0], right[1]);
+                const color = REGION_COLORS[SECTOR_REGIONS[i]];
+                return {
+                    key: `sector-${i}`,
+                    points: `${center.x.toFixed(1)},${center.y.toFixed(1)} ${lp.x.toFixed(1)},${lp.y.toFixed(1)} ${rp.x.toFixed(1)},${rp.y.toFixed(1)}`,
+                    fill: `${color}22`,
+                };
+            });
+        });
+
+        const sectorSeparators = computed(() => {
+            const center = vertexPixel(0, 0);
+            return outlineVertices.value.map((vertex, i) => {
+                const p = vertexPixel(vertex[0], vertex[1]);
+                return { key: `sep-${i}`, x1: center.x, y1: center.y, x2: p.x, y2: p.y };
+            });
+        });
+
+        const ringBoundaries = computed(() => RING_BOUNDARY_RADII
+            .filter(r => r < hexRadius.value)
+            .map(r => ({
+                key: `ring-${r}`,
+                points: polygonPointsFromVertices([
+                    [r, 0], [0, r], [-r, r], [-r, 0], [0, -r], [r, -r],
+                ]),
+            })));
+
+        const sectorLabels = computed(() => {
+            return outlineVertices.value.map((left, i) => {
+                const right = outlineVertices.value[(i + 1) % outlineVertices.value.length];
+                const lp = vertexPixel(left[0], left[1]);
+                const rp = vertexPixel(right[0], right[1]);
+                return {
+                    key: `label-${i}`,
+                    text: SECTOR_REGIONS[i].toUpperCase(),
+                    x: (lp.x + rp.x) * 0.43,
+                    y: (lp.y + rp.y) * 0.43,
+                };
+            });
         });
 
         // Node lookup by tile key
         const nodeMap = computed(() => {
             const m = {};
-            for (const n of nodes.value) {
-                m[tileKey(n.q, n.r, n.t)] = n;
+            for (const n of visibleNodes.value) {
+                for (const tile of nodeTiles(n)) {
+                    m[tileKey(tile.q, tile.r, tile.t)] = n;
+                }
             }
             return m;
         });
@@ -452,23 +559,186 @@ createApp({
 
         // Rendered nodes with visual info
         const renderedNodes = computed(() => {
-            return nodes.value.map(n => {
-                const cent = tileCentroid(n.q, n.r, n.t);
+            const rendered = [];
+            const componentById = componentIndex.value.byNodeId;
+            for (const n of visibleNodes.value) {
                 const reg = getRegion(n.id);
-                const color = REGION_COLORS[reg] || '#e2e8f0';
+                const component = componentById[n.id] || defaultComponent(n);
+                const typeColor = componentColor(component.type, 1.0);
+                const regionCol = REGION_COLORS[reg] || '#e2e8f0';
                 const isSelected = n.id === selectedId.value;
+                for (const tile of nodeTiles(n)) {
+                    rendered.push({
+                        id: n.id,
+                        renderKey: `${n.id}-${tileKey(tile.q, tile.r, tile.t)}`,
+                        triPoints: verticesStr(tile.q, tile.r, tile.t),
+                        cx: tileCentroid(tile.q, tile.r, tile.t).x,
+                        cy: tileCentroid(tile.q, tile.r, tile.t).y,
+                        fill: componentColor(component.type, 0.58),
+                        stroke: isSelected ? '#ffd86b' : typeColor,
+                        selected: isSelected,
+                    });
+                }
+            }
+            return rendered;
+        });
+
+        const nodeLabels = computed(() => {
+            return componentIndex.value.components.map(component => {
                 return {
-                    id: n.id,
-                    triPoints: verticesStr(n.q, n.r, n.t),
-                    cx: cent.x,
-                    cy: cent.y,
-                    fill: n.isActivated ? color : `rgba(30,41,59,0.6)`,
-                    stroke: isSelected ? '#ffd86b' : color,
-                    selected: isSelected,
-                    label: n.name.slice(0, 3),
+                    id: component.id,
+                    cx: component.cx,
+                    cy: component.cy,
+                    label: component.icon,
                 };
             });
         });
+
+        const visibleNodes = computed(() => nodes.value.filter(n => n.id === 'start' || !n.hidden));
+
+        const selectedComponent = computed(() => {
+            if (!sel.value) return defaultComponent(null);
+            return componentIndex.value.byNodeId[sel.value.id] || defaultComponent(sel.value);
+        });
+
+        const componentStats = computed(() => {
+            const counts = {};
+            for (const component of componentIndex.value.components) {
+                if (component.type === 'start') continue;
+                counts[component.type] = (counts[component.type] || 0) + 1;
+            }
+            return COMPONENT_TYPE_ORDER
+                .filter(type => counts[type])
+                .map(type => ({
+                    type,
+                    label: COMPONENT_TYPES[type].label,
+                    color: COMPONENT_TYPES[type].color,
+                    count: counts[type],
+                }));
+        });
+
+        function nodeTiles(n) {
+            if (n.id === 'start') return startTiles();
+            if (Array.isArray(n.tiles) && n.tiles.length > 0) {
+                return n.tiles.map(tile => Array.isArray(tile)
+                    ? { q: tile[0], r: tile[1], t: tile[2] }
+                    : { q: tile.q, r: tile.r, t: tile.t });
+            }
+            return [{ q: n.q, r: n.r, t: n.t }];
+        }
+
+        function nodeCenter(n) {
+            const tiles = nodeTiles(n);
+            const sum = tiles.reduce((acc, tile) => {
+                const c = tileCentroid(tile.q, tile.r, tile.t);
+                acc.x += c.x;
+                acc.y += c.y;
+                return acc;
+            }, { x: 0, y: 0 });
+            return { x: sum.x / tiles.length, y: sum.y / tiles.length };
+        }
+
+        const componentIndex = computed(() => {
+            const tileToNode = {};
+            const nodeById = {};
+            for (const node of visibleNodes.value) {
+                nodeById[node.id] = node;
+                if (node.id === 'start') continue;
+                for (const tile of nodeTiles(node)) {
+                    tileToNode[tileKey(tile.q, tile.r, tile.t)] = { node, tile };
+                }
+            }
+
+            const components = [];
+            const byNodeId = {};
+            const visited = new Set();
+
+            const start = nodes.value.find(n => n.id === 'start');
+            if (start) {
+                const c = makeComponent('component_start', [start], startTiles(), 'start');
+                components.push(c);
+                byNodeId[start.id] = c;
+            }
+
+            for (const key of Object.keys(tileToNode)) {
+                if (visited.has(key)) continue;
+                const queue = [key];
+                visited.add(key);
+                const memberNodes = [];
+                const memberTiles = [];
+                while (queue.length > 0) {
+                    const cur = queue.shift();
+                    const item = tileToNode[cur];
+                    if (!item) continue;
+                    memberNodes.push(item.node);
+                    memberTiles.push(item.tile);
+                    for (const nb of tileNeighbors3(item.tile.q, item.tile.r, item.tile.t)) {
+                        const nbKey = tileKey(nb.q, nb.r, nb.t);
+                        if (!tileToNode[nbKey] || visited.has(nbKey)) continue;
+                        visited.add(nbKey);
+                        queue.push(nbKey);
+                    }
+                }
+                const component = makeComponent(`component_${components.length}`, memberNodes, memberTiles, inferComponentType(memberTiles.length));
+                components.push(component);
+                for (const node of memberNodes) {
+                    byNodeId[node.id] = component;
+                }
+            }
+
+            return { components, byNodeId };
+        });
+
+        function makeComponent(id, memberNodes, tiles, type) {
+            const center = tiles.reduce((acc, tile) => {
+                const c = tileCentroid(tile.q, tile.r, tile.t);
+                acc.x += c.x;
+                acc.y += c.y;
+                return acc;
+            }, { x: 0, y: 0 });
+            const depths = tiles.map(tile => ringDepth(tile.q, tile.r, tile.t));
+            const meta = COMPONENT_TYPES[type] || COMPONENT_TYPES.invalid;
+            return {
+                id,
+                type,
+                label: meta.label,
+                icon: meta.icon,
+                color: meta.color,
+                size: tiles.length,
+                minDepth: Math.min(...depths),
+                maxDepth: Math.max(...depths),
+                cx: center.x / tiles.length,
+                cy: center.y / tiles.length,
+                nodeIds: memberNodes.map(n => n.id),
+                tiles: tiles.map(tile => [tile.q, tile.r, tile.t]),
+            };
+        }
+
+        function inferComponentType(size) {
+            if (size === 1) return 'pip';
+            if (size === 2) return 'small';
+            if (size === 3) return 'passive';
+            if (size === 4) return 'active';
+            if (size === 6) return 'keystone';
+            if (size === 12) return 'giant';
+            return 'invalid';
+        }
+
+        function defaultComponent(node) {
+            if (node && node.id === 'start') {
+                return makeComponent('component_start', [node], startTiles(), 'start');
+            }
+            const tile = node ? { q: node.q, r: node.r, t: node.t } : { q: 0, r: 0, t: 0 };
+            return makeComponent('component_none', node ? [node] : [], [tile], 'invalid');
+        }
+
+        function componentColor(type, alpha = 1.0) {
+            const hex = (COMPONENT_TYPES[type] || COMPONENT_TYPES.invalid).color;
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
 
         // Empty tiles (for click-to-create)
         const emptyClickTiles = computed(() => {
@@ -480,15 +750,15 @@ createApp({
         const neighborEdges = computed(() => {
             const edges = [];
             const drawn = new Set();
-            for (const n of nodes.value) {
-                const c1 = tileCentroid(n.q, n.r, n.t);
+            for (const n of visibleNodes.value) {
+                const c1 = nodeCenter(n);
                 for (const nbId of (n.neighbors || [])) {
-                    const nb = nodes.value.find(x => x.id === nbId);
+                    const nb = visibleNodes.value.find(x => x.id === nbId);
                     if (!nb) continue;
                     const key = [n.id, nbId].sort().join('|');
                     if (drawn.has(key)) continue;
                     drawn.add(key);
-                    const c2 = tileCentroid(nb.q, nb.r, nb.t);
+                    const c2 = nodeCenter(nb);
                     const reg = getRegion(n.id);
                     edges.push({
                         key,
@@ -530,7 +800,7 @@ createApp({
                 id,
                 name: '新节点',
                 type: 'Small',
-                depth: Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)),
+                depth: ringDepth(q, r, t),
                 q, r, t,
                 bonuses: {},
                 effect: '',
@@ -547,21 +817,26 @@ createApp({
             saveToLS();
         }
 
+        function ringDepth(q, r, t) {
+            const vertices = t === 0
+                ? [[q, r], [q + 1, r], [q, r + 1]]
+                : [[q + 1, r], [q, r + 1], [q + 1, r + 1]];
+            return Math.max(...vertices.map(([vq, vr]) => Math.max(Math.abs(vq), Math.abs(vr), Math.abs(-vq - vr))));
+        }
+
         function guessPrefix(q, r, t) {
             // Determine region from angle of centroid
             const cent = tileCentroid(q, r, t);
             const dist = Math.sqrt(cent.x * cent.x + cent.y * cent.y);
             if (dist < EDGE_LEN * 0.5) return 'start';
-            // atan2 gives angle from positive X axis
-            // In our pointy-top layout: STR is dir0 (East), DEX dir1 (SE), etc.
             const angle = (Math.atan2(cent.y, cent.x) * 180 / Math.PI + 360) % 360;
-            // 6 sectors of 60° each, starting from -30° (i.e. 330°-30° is STR)
-            if (angle < 30 || angle >= 330) return 'str_s';
-            if (angle < 90) return 'dex_s';
-            if (angle < 150) return 'con_s';
-            if (angle < 210) return 'int_s';
-            if (angle < 270) return 'wis_s';
-            return 'cha_s';
+            // Matches runtime sector order: INT, CON, STR, DEX, CHA, WIS.
+            if (angle >= 270 && angle < 330) return 'int_s';
+            if (angle >= 330 || angle < 30) return 'con_s';
+            if (angle < 90) return 'str_s';
+            if (angle < 150) return 'dex_s';
+            if (angle < 210) return 'cha_s';
+            return 'wis_s';
         }
 
         function deleteNode() {
@@ -599,6 +874,22 @@ createApp({
         function removeNeighbor(nbId) {
             if (!sel.value) return;
             toggleNeighbor(sel.value.id, nbId);
+        }
+
+        function toggleActivated() {
+            if (!selectedId.value) return;
+            const node = nodes.value.find(n => n.id === selectedId.value);
+            if (!node) return;
+            node.isActivated = !Boolean(node.isActivated);
+            saveToLS();
+        }
+
+        function toggleHidden() {
+            if (!selectedId.value || selectedId.value === 'start') return;
+            const node = nodes.value.find(n => n.id === selectedId.value);
+            if (!node) return;
+            node.hidden = !Boolean(node.hidden);
+            saveToLS();
         }
 
         function autoLinkNeighbors() {
@@ -669,23 +960,68 @@ createApp({
         function saveToLS() {
             localStorage.setItem('bh_skill_tiles_v2', JSON.stringify({ hexRadius: hexRadius.value, nodes: nodes.value }));
         }
+        function createDefaultNodes() {
+            return [{
+                id: 'start', name: '启程', type: 'Start', depth: 0,
+                q: 0, r: 0, t: 0,
+                bonuses: {}, effect: '', isActive: false, isActivated: true,
+                description: '所有角色的起点', cost_desc: '', cost_bonuses: {},
+                neighbors: [], prerequisites: [],
+            }];
+        }
+        function resetBoard() {
+            if (!confirm('确定重置全盘？当前暂存和已绘制节点都会清空。')) return;
+            localStorage.removeItem('bh_skill_tiles_v2');
+            hexRadius.value = DEFAULT_HEX_RADIUS;
+            nodes.value = createDefaultNodes();
+            selectedId.value = 'start';
+            panX.value = 0;
+            panY.value = 0;
+            zoom.value = 0.58;
+            saveToLS();
+        }
         function loadFromLS() {
             const raw = localStorage.getItem('bh_skill_tiles_v2');
             if (!raw) return false;
             try {
                 const data = JSON.parse(raw);
-                if (data.nodes) { nodes.value = data.nodes; }
-                if (data.hexRadius) { hexRadius.value = data.hexRadius; }
+                if (data.nodes) { nodes.value = migrateNodes(data.nodes); }
+                hexRadius.value = Math.max(data.hexRadius || DEFAULT_HEX_RADIUS, DEFAULT_HEX_RADIUS);
                 return true;
             } catch (e) { return false; }
         }
+        function migrateNodes(rawNodes) {
+            return rawNodes.map(node => ({
+                ...node,
+                hidden: node.id === 'start' ? false : Boolean(node.hidden),
+            }));
+        }
         function triggerImport() { document.getElementById('importFile').click(); }
         function exportJSON() {
-            const blob = new Blob([JSON.stringify({ hexRadius: hexRadius.value, nodes: nodes.value }, null, 2)], { type: 'application/json' });
+            const payload = {
+                hexRadius: hexRadius.value,
+                nodes: nodes.value,
+                components: exportComponents(),
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = 'skill_tiles.json';
             a.click();
+        }
+
+        function exportComponents() {
+            return componentIndex.value.components
+                .filter(component => component.type !== 'start')
+                .map((component, index) => ({
+                    id: `ref_${String(index + 1).padStart(2, '0')}`,
+                    type: component.type,
+                    size: component.size,
+                    minDepth: component.minDepth,
+                    maxDepth: component.maxDepth,
+                    nodeIds: component.nodeIds,
+                    tiles: component.tiles,
+                }));
         }
 
         // ---- Code Generation ----
@@ -761,13 +1097,7 @@ createApp({
         onMounted(() => {
             if (!loadFromLS()) {
                 // Create default start node at center
-                nodes.value = [{
-                    id: 'start', name: '启程', type: 'Start', depth: 0,
-                    q: 0, r: 0, t: 0,
-                    bonuses: {}, effect: '', isActive: false, isActivated: true,
-                    description: '所有角色的起点', cost_desc: '', cost_bonuses: {},
-                    neighbors: [], prerequisites: [],
-                }];
+                nodes.value = createDefaultNodes();
             }
 
             document.getElementById('importFile').addEventListener('change', (e) => {
@@ -777,8 +1107,8 @@ createApp({
                 reader.onload = (ev) => {
                     try {
                         const data = JSON.parse(ev.target.result);
-                        if (data.nodes) { nodes.value = data.nodes; hexRadius.value = data.hexRadius || 7; }
-                        else if (Array.isArray(data)) { nodes.value = data; }
+                        if (data.nodes) { nodes.value = migrateNodes(data.nodes); hexRadius.value = data.hexRadius || DEFAULT_HEX_RADIUS; }
+                        else if (Array.isArray(data)) { nodes.value = migrateNodes(data); }
                         saveToLS();
                         alert('载入成功: ' + nodes.value.length + ' 个瓦片节点');
                     } catch (ex) { alert('JSON 解析失败'); }
@@ -798,13 +1128,14 @@ createApp({
         return {
             hexRadius, nodes, selectedId, sel, zoom, panX, panY,
             svgCx, svgCy, totalTileCount,
-            bgTiles, hexBoundaryPoints, renderedNodes, emptyClickTiles, neighborEdges,
-            selectNode, onNodeClick, onEmptyTileClick, deleteNode, autoLinkNeighbors,
+            bgTiles, hexBoundaryPoints, sectorFills, sectorSeparators, ringBoundaries, sectorLabels,
+            renderedNodes, nodeLabels, componentStats, selectedComponent, emptyClickTiles, neighborEdges,
+            selectNode, onNodeClick, onEmptyTileClick, deleteNode, toggleActivated, toggleHidden, autoLinkNeighbors,
             removeNeighbor, linkMode,
-            addBonus, renameBonus, regionColor,
+            addBonus, renameBonus, regionColor, componentColor,
             startPan, onZoom,
             showExport, generatedCode, copyCode, copied,
-            saveToLS, triggerImport, exportJSON,
+            saveToLS, resetBoard, triggerImport, exportJSON,
             STATS,
         };
     }

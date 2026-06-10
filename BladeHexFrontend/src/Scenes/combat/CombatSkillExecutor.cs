@@ -118,8 +118,9 @@ public partial class CombatSkillExecutor : Node
 					{
 						// 弹出伤害数字
 						BladeHex.View.Combat.DamageNumberPopup.SpawnAtUnit(ParentScene, targetNode, dmg.Damage, dmg.IsCritical);
-
-						// 触发受击
+	
+						// 触发受击特效
+						HitEffectManager.Instance?.OnUnitHit(caster, targetNode, dmg.Damage, targetNode.GetMaxHp(), HitEffectType.Magic, dmg.IsCritical);
 						if (targetNode.RenderBus != null) targetNode.RenderBus.NotifyHit(targetNode);
 
 						CombatUi.LogMessage($"[color=red]{caster.Data?.UnitName ?? "单位"} 释放技能对 {targetNode.Data?.UnitName ?? "单位"} 造成 {dmg.Damage} 伤害！[/color]");
@@ -653,8 +654,9 @@ public partial class CombatSkillExecutor : Node
 
 							// 弹出伤害数字
 							BladeHex.View.Combat.DamageNumberPopup.SpawnAtUnit(ParentScene, targetNode, dmg, isCrit);
-
-							// 触发受击
+		
+							// 触发受击特效
+							HitEffectManager.Instance?.OnUnitHit(activeUnit, targetNode, dmg, targetNode.GetMaxHp(), HitEffectType.Magic, isCrit);
 							if (targetNode.RenderBus != null) targetNode.RenderBus.NotifyHit(targetNode);
 
 							CombatUi.LogMessage($"[color=red]{activeUnit.Data?.UnitName ?? "单位"} 的法术命中 {targetNode.Data?.UnitName ?? "单位"}，造成 {dmg} 伤害！[/color]");

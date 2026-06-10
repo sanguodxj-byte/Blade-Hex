@@ -66,6 +66,7 @@ public partial class StatusEffectManager : Node
             IsNegative = effectData.IsNegative,
             TickDamageCount = effectData.TickDamageDiceCount,
             TickDamageSides = effectData.TickDamageDiceSides,
+            TickDamageMaxHpPercent = effectData.TickDamageMaxHpPercent,
             TickDamageType = effectData.TickDamageType,
             SaveToRemove = effectData.SaveToRemove,
             SaveDc = effectData.SaveDc,
@@ -135,7 +136,14 @@ public partial class StatusEffectManager : Node
 
         foreach (var inst in effectsCopy)
         {
-            if (inst.TickDamageCount > 0 && inst.TickDamageSides != 0)
+            if (inst.TickDamageMaxHpPercent > 0.0f)
+            {
+                int dmg = Math.Max(1, (int)MathF.Ceiling(unit.GetMaxHp() * inst.TickDamageMaxHpPercent));
+                unit.TakeDamage(dmg);
+                EventBus.Instance?.PublishStatusEffectTicked(unit, inst.Id, dmg);
+                EmitSignal(SignalName.EffectTicked, unit, inst.Id, dmg);
+            }
+            else if (inst.TickDamageCount > 0 && inst.TickDamageSides != 0)
             {
                 if (inst.TickDamageSides < 0)
                 {

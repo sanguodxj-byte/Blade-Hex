@@ -32,6 +32,9 @@ public partial class HexOverworldAStar : RefCounted
     /// <summary>道路偏好因子 (0=无偏好, 越大越偏好道路)</summary>
     public float RoadPreference { get; set; } = 0.3f;
 
+    /// <summary>本次寻路是否忽略 IsRoad 覆盖层的低代价。</summary>
+    public bool IgnoreRoadOverlayCostForPath { get; set; } = false;
+
     // ========================================
     // 构造
     // ========================================
@@ -148,6 +151,9 @@ public partial class HexOverworldAStar : RefCounted
             actualTarget = FindNearestPassable(targetTile);
             if (actualTarget == null) return [];
         }
+
+        if (actualStart.Coord == actualTarget.Coord)
+            return startPx.DistanceTo(targetPx) > 1.0f ? [startPx, targetPx] : [startPx];
 
         var hexPath = FindPath(actualStart.Coord, actualTarget.Coord);
         if (hexPath.Length == 0) return [];
@@ -339,11 +345,20 @@ public partial class HexOverworldAStar : RefCounted
 
     private float GetMoveCost(HexOverworldTile tile)
     {
+        float moveCost = IgnoreRoadOverlayCostForPath && (tile.IsRoad || tile.Terrain == HexOverworldTile.TerrainType.Road)
+            ? GetNonRoadMoveCost(tile)
+            : tile.MoveCost;
+
         if (IgnorePassability)
-            return tile.IsPassable ? tile.MoveCost : ImpassablePenalty;
+            return tile.IsPassable ? moveCost : ImpassablePenalty;
         if (!tile.IsPassable) return -1.0f;
-        return tile.MoveCost;
+        return moveCost;
     }
+
+    private static float GetNonRoadMoveCost(HexOverworldTile tile)
+        => tile.Terrain == HexOverworldTile.TerrainType.Road
+            ? TerrainCostTable.DefaultMoveCost
+            : TerrainCostTable.GetMoveCost(tile.Terrain);
 
     private Vector2I[] ReconstructPath(Dictionary<Vector2I, Vector2I> cameFrom, Vector2I current)
     {

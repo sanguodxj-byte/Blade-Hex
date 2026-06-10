@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using BladeHex.Map;
 using BladeHex.Strategic;
 using BladeHex.Data;
+using BladeHex.Diagnostics;
 
 namespace BladeHex.Scenes.Overworld2d;
 
@@ -55,14 +56,35 @@ public partial class OverworldScene2D
             var gs = BladeHex.Data.Globals.StateOrNull;
             var worldSize = gs != null ? (WorldCreationConfig.WorldSize)gs.WorldGen.Size : WorldCreationConfig.WorldSize.Small;
             var config = WorldCreationConfig.Create(worldSize, seed);
+            DiagnosticLog.Event("OverworldScene2D", "world_config", new Dictionary<string, object?>
+            {
+                ["seed"] = seed,
+                ["world_size"] = worldSize,
+                ["chunks"] = $"{config.WorldChunksW}x{config.WorldChunksH}",
+                ["tiles"] = $"{config.WorldTileWidth}x{config.WorldTileHeight}",
+                ["nations"] = config.Nations.Count,
+            });
 
             var creator = new WorldCreator();
             creator.OnProgress = (progress, msg) =>
             {
                 GD.Print($"[WorldCreator] {progress:P0} {msg}");
+                DiagnosticLog.Event("WorldCreator", "progress", new Dictionary<string, object?>
+                {
+                    ["progress"] = progress.ToString("P0"),
+                    ["message"] = msg,
+                });
             };
 
             var worldData = creator.CreateWorld(seed, config);
+            DiagnosticLog.Event("OverworldScene2D", "world_data_created", new Dictionary<string, object?>
+            {
+                ["chunks"] = worldData.Chunks.Count,
+                ["pois"] = worldData.Pois.Count,
+                ["territories"] = worldData.Territories.Count,
+                ["nations"] = worldData.Nations.Count,
+                ["specials"] = worldData.SpecialCharacters.Count,
+            });
 
             // ChunkManager — 用种子和世界尺寸初始化（含模板网格尺寸）
             _chunkManager = new ChunkManager();
@@ -92,9 +114,15 @@ public partial class OverworldScene2D
             RunBiomeZoneAnalysis(seed);
 
             GD.Print($"[OverworldScene2D] WorldCreator 完成: {config.WorldTileWidth}×{config.WorldTileHeight}, POI={WorldPois.Count}");
+            DiagnosticLog.Event("OverworldScene2D", "world_creator_complete", new Dictionary<string, object?>
+            {
+                ["tiles"] = $"{config.WorldTileWidth}x{config.WorldTileHeight}",
+                ["pois"] = WorldPois.Count,
+            });
         }
         catch (System.Exception e)
         {
+            DiagnosticLog.Exception("OverworldScene2D.InitWorldGeneration", e);
             GD.PrintErr($"[OverworldScene2D] WorldCreator 失败: {e.Message}");
             GD.PrintErr($"  回退到简单生成");
             FallbackSimpleGeneration(seed);
@@ -104,6 +132,7 @@ public partial class OverworldScene2D
     /// <summary>简单生成回退</summary>
     private void FallbackSimpleGeneration(int seed)
     {
+        DiagnosticLog.Event("OverworldScene2D", "fallback_simple_generation", new Dictionary<string, object?> { ["seed"] = seed });
         _gen = new HexOverworldGenerator();
         _grid = _gen.Generate(64, 48, seed);
         _astar = new HexOverworldAStar { Grid = _grid };

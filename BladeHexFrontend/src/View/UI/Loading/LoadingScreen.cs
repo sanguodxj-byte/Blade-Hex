@@ -2,7 +2,7 @@
 // RPG 风格加载界面 — 带阶段性描述的条状进度条 + Tips 轮播
 using Godot;
 using System.Collections.Generic;
-using System.Threading.Tasks;
+using BladeHex.Diagnostics;
 
 namespace BladeHex.UI.Loading;
 
@@ -223,6 +223,12 @@ public partial class LoadingScreen : CanvasLayer
 
     private void _StartLoading(string scenePath, PhaseType phaseType)
     {
+        DiagnosticLog.Event("LoadingScreen", "start", new Dictionary<string, object?>
+        {
+            ["scene"] = scenePath,
+            ["phase"] = phaseType,
+        });
+
         _scenePath = scenePath;
         _targetProgress = 0.0f;
         _displayedProgress = 0.0f;
@@ -262,9 +268,15 @@ public partial class LoadingScreen : CanvasLayer
 
     private async void _BeginActualLoad()
     {
+        DiagnosticLog.Event("LoadingScreen", "threaded_request", new Dictionary<string, object?>
+        {
+            ["scene"] = _scenePath,
+        });
+
         var err = ResourceLoader.LoadThreadedRequest(_scenePath);
         if (err != Error.Ok)
         {
+            DiagnosticLog.Warn($"[LoadingScreen] LoadThreadedRequest returned {err}; fallback scene={_scenePath}");
             GD.PushWarning($"LoadingScreen: LoadThreadedRequest 返回 {err}，尝试同步加载: {_scenePath}");
             _resourceReady = true;
             // 线程加载请求失败（可能是资源已缓存），标记就绪让 _Process 或直接完成
@@ -292,6 +304,10 @@ public partial class LoadingScreen : CanvasLayer
             }
             else if (status == ResourceLoader.ThreadLoadStatus.Loaded)
             {
+                DiagnosticLog.Event("LoadingScreen", "resource_loaded", new Dictionary<string, object?>
+                {
+                    ["scene"] = _scenePath,
+                });
                 _resourceReady = true;
                 if (!_useMinDuration)
                 {
@@ -302,12 +318,13 @@ public partial class LoadingScreen : CanvasLayer
             }
             else
             {
+                DiagnosticLog.Error($"[LoadingScreen] load failed status={status} scene={_scenePath}");
                 GD.PushError($"LoadingScreen: 加载失败: {status}");
                 _resourceReady = true;
                 _FinishLoadFallback();
                 break;
             }
-            await Task.Delay(50);
+            await ToSignal(GetTree().CreateTimer(0.05), Timer.SignalName.Timeout);
         }
     }
 
@@ -340,6 +357,11 @@ public partial class LoadingScreen : CanvasLayer
 
     private void _DoSceneTransition()
     {
+        DiagnosticLog.Event("LoadingScreen", "transition_packed", new Dictionary<string, object?>
+        {
+            ["scene"] = _scenePath,
+        });
+
         var resource = ResourceLoader.LoadThreadedGet(_scenePath) as PackedScene;
 
         if (resource == null)
@@ -367,6 +389,11 @@ public partial class LoadingScreen : CanvasLayer
     /// </summary>
     private void _DoSceneTransitionFallback()
     {
+        DiagnosticLog.Event("LoadingScreen", "transition_file_fallback", new Dictionary<string, object?>
+        {
+            ["scene"] = _scenePath,
+        });
+
         BladeHex.View.SceneTransition.CleanupOrphanNodes(GetTree());
         GetTree().ChangeSceneToFile(_scenePath);
 
@@ -382,6 +409,7 @@ public partial class LoadingScreen : CanvasLayer
     /// </summary>
     public static void NotifySceneReady()
     {
+        DiagnosticLog.Event("LoadingScreen", "scene_ready");
         if (_instance != null && _instance._waitingForSceneReady)
         {
             _instance._waitingForSceneReady = false;

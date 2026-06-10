@@ -32,6 +32,9 @@ public partial class ChunkAStar : RefCounted
     /// <summary>道路偏好权重 — 启发式中对道路方向的额外吸引力 (0=无偏好, 1=强偏好)</summary>
     public float RoadPreferenceFactor { get; set; } = 0.3f;
 
+    /// <summary>本次寻路是否忽略 IsRoad 覆盖层的低代价。</summary>
+    public bool IgnoreRoadOverlayCostForPath { get; set; } = false;
+
     /// <summary>预计算代价网格引用（由外部注入）</summary>
     public PathfindingCostGrid? CostGrid { get; set; }
 
@@ -71,6 +74,9 @@ public partial class ChunkAStar : RefCounted
     {
         var fromAxial = HexOverworldTile.PixelToAxial(fromPixel.X, fromPixel.Y);
         var toAxial = HexOverworldTile.PixelToAxial(toPixel.X, toPixel.Y);
+
+        if (fromAxial == toAxial)
+            return fromPixel.DistanceTo(toPixel) > 1.0f ? [fromPixel, toPixel] : [fromPixel];
 
         var axialPath = FindPathAxial(fromAxial, toAxial, mgr);
         if (axialPath.Length == 0) return [];
@@ -180,7 +186,7 @@ public partial class ChunkAStar : RefCounted
     private Vector2I[] TileLevelAStarInternal(Vector2I start, Vector2I target, ChunkManager mgr)
     {
         var targetTile = mgr.GetTile(target.X, target.Y);
-        if (targetTile == null || !targetTile.IsPassable)
+        if (targetTile == null || !IsTileNavigable(targetTile))
         {
             target = FindNearestPassable(target, mgr);
             if (target == start) return [start];
@@ -236,7 +242,11 @@ public partial class ChunkAStar : RefCounted
                     if (nTile.Terrain == HexOverworldTile.TerrainType.ShallowWater) continue;
 
                     // 优先从预计算代价网格读取（O(1) 数组索引），回退到 tile 查询
-                    if (CostGrid != null)
+                    if (IgnoreRoadOverlayCostForPath && (nTile.IsRoad || nTile.Terrain == HexOverworldTile.TerrainType.Road))
+                    {
+                        moveCost = GetNonRoadMoveCost(nTile);
+                    }
+                    else if (CostGrid != null)
                     {
                         float gridCost = CostGrid.GetCost(neighbor.X, neighbor.Y);
                         moveCost = gridCost > 0f ? gridCost : nTile.MoveCost;
@@ -351,6 +361,11 @@ public partial class ChunkAStar : RefCounted
 
     // ========== 辅助方法 ==========
 
+    private static float GetNonRoadMoveCost(HexOverworldTile tile)
+        => tile.Terrain == HexOverworldTile.TerrainType.Road
+            ? TerrainCostTable.DefaultMoveCost
+            : TerrainCostTable.GetMoveCost(tile.Terrain);
+
     /// <summary>找到 fromChunk 朝向 toChunk 方向的边界可通行瓦片</summary>
     private Vector2I FindEdgeTile(Vector2I fromChunk, Vector2I toChunk, ChunkManager mgr)
     {
@@ -368,8 +383,11 @@ public partial class ChunkAStar : RefCounted
         else if (dirVec.Y < 0) bestR = chunkOrigin.Y;
 
         // 优先寻找边界上的道路瓦片
-        var roadTile = FindEdgeRoadTile(fromChunk, dirVec, mgr);
-        if (roadTile.HasValue) return roadTile.Value;
+        if (!IgnoreRoadOverlayCostForPath)
+        {
+            var roadTile = FindEdgeRoadTile(fromChunk, dirVec, mgr);
+            if (roadTile.HasValue) return roadTile.Value;
+        }
 
         // 如果该瓦片可通行，直接返回
         var tile = mgr.GetTile(bestQ, bestR);
@@ -487,7 +505,7 @@ public partial class ChunkAStar : RefCounted
 
             var tile = mgr.GetTile(next.X, next.Y);
             if (tile == null) break;
-            if (tile.IsPassable) lastValid = next;
+            if (IsTileNavigable(tile)) lastValid = next;
 
             current = next;
         }
@@ -530,7 +548,7 @@ public partial class ChunkAStar : RefCounted
 
                 var tile = mgr.GetTile(next.X, next.Y);
                 if (tile == null) break;
-                if (tile.IsPassable) lastValid = next;
+                if (IsTileNavigable(tile)) lastValid = next;
                 current = next;
             }
 

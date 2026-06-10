@@ -7,7 +7,7 @@ namespace BladeHex.View.Unit.Skeleton.Editor;
 
 public partial class AnimEditorPreview : Node3D
 {
-    private const string BasePedestalPath = "res://assets/generated_ui_icons/unit_base_steel.png";
+    private const string BasePedestalPath = "res://assets/ui_icons/unit_base_steel.png";
 
     private UpperBodySkeleton? _skeleton;
     private Node3D? _bodyRoot;

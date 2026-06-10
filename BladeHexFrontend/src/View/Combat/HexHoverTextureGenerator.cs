@@ -64,13 +64,6 @@ public static class HexHoverTextureGenerator
         for (int i = 0; i < 6; i++)
             DrawLine(img, verts[i], verts[(i + 2) % 6], LineColor * 0.35f, 0.7f);
 
-        // 5. 顶点发光点
-        for (int i = 0; i < 6; i++)
-            DrawGlow(img, (int)verts[i].X, (int)verts[i].Y, 10, GlowColor);
-
-        // 6. 中心微弱发光
-        DrawGlow(img, Center, Center, 14, GlowColor * 0.25f);
-
         return ImageTexture.CreateFromImage(img);
     }
 

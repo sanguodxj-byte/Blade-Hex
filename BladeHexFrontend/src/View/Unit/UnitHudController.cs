@@ -28,8 +28,6 @@ public partial class UnitHudController : Node3D
     private MeshInstance3D? _hpBarBg;
     private MeshInstance3D? _hpBarFg;
     private Node3D? _statusContainer;
-    private MeshInstance3D? _selectionRing;
-    private MeshInstance3D? _turnIndicator;
 
     private int _currentHp;
     private int _maxHp = 1;
@@ -60,8 +58,6 @@ public partial class UnitHudController : Node3D
         _hpBarBg = hudInstance.GetNode<MeshInstance3D>("%HpBarBg");
         _hpBarFg = hudInstance.GetNode<MeshInstance3D>("%HpBarFg");
         _statusContainer = hudInstance.GetNode<Node3D>("%StatusContainer");
-        _selectionRing = hudInstance.GetNode<MeshInstance3D>("%SelectionRing");
-        _turnIndicator = hudInstance.GetNode<MeshInstance3D>("%TurnIndicator");
 
         if (_hpLabel != null) _hpLabel.Visible = false;
         if (_hpBarBg != null) _hpBarBg.Visible = false;
@@ -92,17 +88,11 @@ public partial class UnitHudController : Node3D
     public void SetSelected(bool on)
     {
         _isSelected = on;
-        if (_selectionRing != null)
-            _selectionRing.Visible = on;
-
-        SetProcess(on);
     }
 
     public void SetActiveTurn(bool on)
     {
         _isActiveTurn = on;
-        if (_turnIndicator != null)
-            _turnIndicator.Visible = on;
     }
 
     public void HideAll()
@@ -113,21 +103,7 @@ public partial class UnitHudController : Node3D
         if (_statusContainer != null) _statusContainer.Visible = false;
     }
 
-    public override void _Process(double delta)
-    {
-        if (!_isSelected || _selectionRing == null)
-            return;
 
-        float t = (float)(Time.GetTicksMsec() / 1000.0) % 2.0f;
-        float pulse = 1.0f + 0.1f * Mathf.Sin(t * Mathf.Tau);
-        _selectionRing.Scale = new Vector3(pulse, 1.0f, pulse);
-
-        if (_turnIndicator != null && _isActiveTurn)
-        {
-            float baseY = _cachedBodyHeight * _cachedPixelSize + HpLabelYGap + HpLabelPixelSize * 15.0f + TurnIndicatorYGap;
-            _turnIndicator.Position = _turnIndicator.Position with { Y = baseY + 3.0f * Mathf.Sin(t * Mathf.Pi * 3.0f) };
-        }
-    }
 
     private void ApplyLayout()
     {
@@ -154,34 +130,7 @@ public partial class UnitHudController : Node3D
         if (_statusContainer != null)
             _statusContainer.Position = new Vector3(0, topY + HpBarYGap + HpBarHeight + 5.0f, 0);
 
-        if (_selectionRing != null)
-        {
-            _selectionRing.Mesh = new CylinderMesh
-            {
-                TopRadius = SelectionRingRadius,
-                BottomRadius = SelectionRingRadius,
-                Height = SelectionRingHeight,
-            };
-            _selectionRing.Position = new Vector3(0, SelectionRingHeight / 2.0f, 0);
-            _selectionRing.MaterialOverride = new StandardMaterial3D
-            {
-                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                AlbedoColor = new Color(1.0f, 0.9f, 0.2f, 0.6f),
-            };
-        }
 
-        if (_turnIndicator != null)
-        {
-            _turnIndicator.Mesh = new QuadMesh { Size = new Vector2(12, 12) };
-            _turnIndicator.Position = new Vector3(0, topY + HpLabelYGap + HpLabelPixelSize * 15.0f + TurnIndicatorYGap, 0);
-            _turnIndicator.MaterialOverride = new StandardMaterial3D
-            {
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
-                AlbedoColor = new Color(0.2f, 1.0f, 0.4f),
-            };
-        }
     }
 
     private static StandardMaterial3D MakeHudMaterial(Color color) => new()

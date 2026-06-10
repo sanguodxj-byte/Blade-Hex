@@ -117,7 +117,7 @@ public partial class JoinBattlePrompt : PanelContainer
     }
 
     /// <summary>
-    /// 显示参战提示
+    /// 显示参战提示（支持 NvN 多方战场）
     /// </summary>
     public void ShowPrompt(JoinOpportunity opp)
     {
@@ -126,14 +126,29 @@ public partial class JoinBattlePrompt : PanelContainer
         if (opp.Type == WarBattleType.Siege)
         {
             _titleLabel.Text = L10n.Tr("JOIN_BATTLE_TITLE");
-            _descLabel.Text = L10n.Tr("JOIN_BATTLE_DESC_SIEGE", opp.Attacker.EntityName, opp.Attacker.Faction, opp.DefenderPoi!.PoiName, opp.DefenderPoi.OwningFaction);
+            string desc = opp.DefenderPoi != null
+                ? L10n.Tr("JOIN_BATTLE_DESC_SIEGE", opp.Attacker.EntityName, opp.Attacker.Faction, opp.DefenderPoi.PoiName, opp.DefenderPoi.OwningFaction)
+                : "";
+            if (opp.Attackers.Count > 1)
+                desc += $"\n{L10n.Tr("JOIN_BATTLE_NVN_ATTACKERS", opp.Attackers.Count, opp.AttackerTotalPower)}";
+            if (opp.DefenderPoi != null)
+                desc += $"\n{L10n.Tr("JOIN_BATTLE_NVN_DEFENDERS_GARRISON", opp.DefenderPoi.GarrisonCurrent, opp.DefenderPoi.GarrisonMax)}";
+            _descLabel.Text = desc;
             _joinAttackerBtn.Text = L10n.Tr("JOIN_BATTLE_ATTACKER");
             _joinDefenderBtn.Visible = true;
         }
         else if (opp.Type == WarBattleType.FieldBattle)
         {
             _titleLabel.Text = L10n.Tr("JOIN_BATTLE_TITLE");
-            _descLabel.Text = L10n.Tr("JOIN_BATTLE_DESC_FIELD", opp.Attacker.EntityName, opp.Attacker.Faction, opp.DefenderEntity!.EntityName, opp.DefenderEntity.Faction);
+            string desc = opp.DefenderEntity != null
+                ? L10n.Tr("JOIN_BATTLE_DESC_FIELD", opp.Attacker.EntityName, opp.Attacker.Faction, opp.DefenderEntity.EntityName, opp.DefenderEntity.Faction)
+                : "";
+            // NvN 汇总信息
+            if (opp.Attackers.Count > 1)
+                desc += $"\n{L10n.Tr("JOIN_BATTLE_NVN_ATTACKERS", opp.Attackers.Count, opp.AttackerTotalPower)}";
+            if (opp.Defenders.Count > 1)
+                desc += $"\n{L10n.Tr("JOIN_BATTLE_NVN_DEFENDERS", opp.Defenders.Count, opp.DefenderTotalPower)}";
+            _descLabel.Text = desc;
             _joinAttackerBtn.Text = L10n.Tr("JOIN_BATTLE_ATTACKER");
             _joinDefenderBtn.Visible = true;
         }

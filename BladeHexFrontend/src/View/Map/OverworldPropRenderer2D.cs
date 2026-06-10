@@ -92,8 +92,6 @@ public partial class OverworldPropRenderer2D : Node2D
     private bool _layerVisible = true;
     private bool _dirty = true;
 
-    private float _densityFactor = 1.0f;
-
     public void Initialize(int worldSeed, HexOverworldGrid grid)
     {
         Name = "OverworldPropRenderer2D";
@@ -101,6 +99,7 @@ public partial class OverworldPropRenderer2D : Node2D
         _grid = grid;
         _knownChunks = null;
 
+        TextureFilter = TextureFilterEnum.LinearWithMipmaps;
         YSortEnabled = true;
         ZIndex = 30;
 
@@ -117,6 +116,7 @@ public partial class OverworldPropRenderer2D : Node2D
         _knownChunks = chunkManager.AllKnownChunks;
         GD.Print($"[OverworldPropRenderer2D] InitializeFromChunks: 使用 {_knownChunks.Count} 个已知 chunk 进行预计算");
 
+        TextureFilter = TextureFilterEnum.LinearWithMipmaps;
         YSortEnabled = true;
         ZIndex = 30;
 
@@ -631,23 +631,16 @@ public partial class OverworldPropRenderer2D : Node2D
 
     public void UpdateLOD(float zoomLevel)
     {
+        bool shouldShow = _layerVisible
+            ? zoomLevel >= LodHideThreshold
+            : zoomLevel >= LodShowThreshold;
+        if (shouldShow == _layerVisible)
+            return;
 
-        float newDensity;
-        if (zoomLevel < 0.45f)
-            newDensity = 0.0f;
-        else if (zoomLevel < 0.6f)
-            newDensity = (zoomLevel - 0.45f) / 0.15f * 0.4f;
-        else if (zoomLevel < 1.0f)
-            newDensity = 0.4f + (zoomLevel - 0.6f) / 0.4f * 0.6f;
-        else
-            newDensity = 1.0f;
+        _layerVisible = shouldShow;
+        Visible = shouldShow;
 
-        if (Mathf.Abs(newDensity - _densityFactor) < 0.05f) return;
-
-        _densityFactor = newDensity;
-        Visible = _densityFactor > 0.01f;
-
-        if (Visible)
+        if (shouldShow)
         {
             _dirty = true;
             QueueRedraw();
@@ -665,11 +658,6 @@ public partial class OverworldPropRenderer2D : Node2D
 
             foreach (var prop in kvp.Value)
             {
-
-                uint hash = Hash((uint)(prop.Position.X * 73856093) ^ (uint)(prop.Position.Y * 19349663));
-                float normalized = hash / (float)uint.MaxValue;
-                if (normalized > _densityFactor) continue;
-
                 var srcRect = new Rect2(0, 0, texture.GetWidth(), texture.GetHeight());
                 var dstRect = prop.DstRect;
 

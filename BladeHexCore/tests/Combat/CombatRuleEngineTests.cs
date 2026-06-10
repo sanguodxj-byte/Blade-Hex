@@ -46,6 +46,8 @@ public static class CombatRuleEngineTests
         yield return Run(nameof(Damage_ChargeMultiplier_Applied), Damage_ChargeMultiplier_Applied);
         yield return Run(nameof(Damage_DamageReduction_NeverBelowOne), Damage_DamageReduction_NeverBelowOne);
         yield return Run(nameof(Damage_FinalMultiplier_AoOHalves), Damage_FinalMultiplier_AoOHalves);
+        yield return Run(nameof(DamageResolution_RangedShieldAbsorbsBeforeHp), DamageResolution_RangedShieldAbsorbsBeforeHp);
+        yield return Run(nameof(DamageResolution_CrushCanBreakArmor), DamageResolution_CrushCanBreakArmor);
         yield return Run(nameof(Range_d6Plus2_ReturnsMinMaxAvg), Range_d6Plus2_ReturnsMinMaxAvg);
         yield return Run(nameof(Range_NeverZero), Range_NeverZero);
         yield return Run(nameof(Counter_FullDirection_FullDamage), Counter_FullDirection_FullDamage);
@@ -176,6 +178,65 @@ public static class CombatRuleEngineTests
         input.FinalMultiplier = 0.5f;
         var result = CombatRuleEngine.CalculateDamage(in input);
         return Expect(result.FinalDamage == 5, $"expected 5, got {result.FinalDamage}");
+    }
+
+    private static (bool, string) DamageResolution_RangedShieldAbsorbsBeforeHp()
+    {
+        var unit = MakeUnit(currentHp: 100);
+        unit.Shield = new ArmorData
+        {
+            armorType = ArmorData.ArmorType.Shield,
+            DrThreshold = 8,
+            CurrentArmorPoints = 100,
+            MaxArmorPoints = 100,
+            RangedDamageMultiplier = 0.5f,
+        };
+
+        var model = new BattleUnitModel(unit) { CurrentHp = 100 };
+        var result = model.ApplyDamage(
+            DamageSource.WeaponAttack,
+            20,
+            WeaponData.DamageType.Pierce,
+            naturalRoll: 20,
+            isRanged: true);
+
+        bool ok = result.ShieldAbsorbed == 10
+            && result.HpDamage == 10
+            && model.CurrentHp == 90
+            && unit.Shield?.CurrentArmorPoints == 90;
+
+        return Expect(ok,
+            $"expected shield=10 hpDamage=10 hp=90 shieldAp=90; got shield={result.ShieldAbsorbed} hpDamage={result.HpDamage} hp={model.CurrentHp} shieldAp={unit.Shield?.CurrentArmorPoints ?? -1}");
+    }
+
+    private static (bool, string) DamageResolution_CrushCanBreakArmor()
+    {
+        var unit = MakeUnit(currentHp: 100);
+        unit.Armor = new ArmorData
+        {
+            armorType = ArmorData.ArmorType.Heavy,
+            DrThreshold = 10,
+            CurrentArmorPoints = 5,
+            MaxArmorPoints = 5,
+        };
+        unit.CurrentDr = 10;
+
+        var model = new BattleUnitModel(unit) { CurrentHp = 100 };
+        var result = model.ApplyDamage(
+            DamageSource.WeaponAttack,
+            20,
+            WeaponData.DamageType.Crush,
+            naturalRoll: 20,
+            weaponWeight: WeaponData.WeightCategory.Heavy);
+
+        bool ok = result.ArmorBroken
+            && unit.Armor == null
+            && result.HpDamage == 6
+            && result.DrDamage == 14
+            && model.CurrentHp == 94;
+
+        return Expect(ok,
+            $"expected broken=true hpDamage=6 drDamage=14 hp=94; got broken={result.ArmorBroken} armorNull={unit.Armor == null} hpDamage={result.HpDamage} drDamage={result.DrDamage} hp={model.CurrentHp}");
     }
 
     // ========================================

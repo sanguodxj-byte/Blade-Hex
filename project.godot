@@ -26,10 +26,12 @@ AudioEventReactor="*res://BladeHexFrontend/src/View/Events/AudioEventReactor.cs"
 UITheme="*res://BladeHexFrontend/src/View/UI/UITheme.cs"
 CursorManager="*res://BladeHexFrontend/src/View/UI/CursorManager.cs"
 DebugConsole="*res://BladeHexFrontend/src/View/Debug/DebugConsole.cs"
+RuntimeLogConsole="*res://BladeHexFrontend/src/View/Debug/RuntimeLogConsole.cs"
 UIThemeTweaker="*res://BladeHexFrontend/src/View/Debug/UIThemeTweaker.cs"
 GameMenuManager="*res://BladeHexFrontend/src/View/UI/Global/GameMenuManager.cs"
 WeatherManager="*res://BladeHexFrontend/src/View/Environment/WeatherManager.cs"
 TutorialManager="*res://BladeHexFrontend/src/View/UI/Tutorial/TutorialManager.cs"
+HitEffectManager="*res://BladeHexFrontend/src/View/Combat/HitEffectManager.cs"
 
 [display]
 
@@ -77,7 +79,7 @@ texture={
 
 [internationalization]
 
-locale/translations=PackedStringArray("res://translations/ui.csv")
+locale/translations=PackedStringArray("res://translations/ui.en.translation", "res://translations/ui.zh_CN.translation")
 locale/fallback="zh_CN"
 
 [physics]

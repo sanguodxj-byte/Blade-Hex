@@ -419,7 +419,7 @@ public partial class OverworldScene2D
             HomePosition = spawnPos,
             Faction = "hostile",
             IsHostileToPlayer = true,
-            MoveSpeed = 180.0f,
+            MoveSpeed = 130.0f,
             VisionRange = 350.0f,
             PatrolRadius = 300.0f,
             AIStrategy = AIStrategyEnum.Instinct,
@@ -437,6 +437,7 @@ public partial class OverworldScene2D
                 entity.AdventurerType = "veteran";
                 entity.PartySize = 2 + (int)(GD.Randi() % 5);
                 entity.PartyLevel = 1 + (int)(GD.Randi() % 3);
+                entity.MoveSpeed = 150.0f;
                 entity.GoldCarried = 30 + (int)(GD.Randi() % 100);
                 entity.CombatPower = entity.PartySize * entity.PartyLevel * 2.0f;
                 entity.AIStrategy = AIStrategyEnum.Tactical;
@@ -497,7 +498,7 @@ public partial class OverworldScene2D
                 entity.MonsterType = "dragon";
                 entity.PartyLevel = 5 + (int)(GD.Randi() % 4);
                 entity.CombatPower = 30.0f + entity.PartyLevel * 5.0f;
-                entity.MoveSpeed = 250.0f;
+                entity.MoveSpeed = 130.0f;
                 entity.VisionRange = 500.0f;
                 entity.PatrolRadius = 400.0f;
                 entity.TerritoryCenter = spawnPos;
@@ -529,7 +530,7 @@ public partial class OverworldScene2D
                 entity.PartySize = entity.GarrisonSize;
                 entity.PartyLevel = 3 + (int)(GD.Randi() % 3);
                 entity.CombatPower = entity.PartySize * entity.PartyLevel * 2.0f;
-                entity.MoveSpeed = 160.0f;
+                entity.MoveSpeed = 140.0f;
                 entity.AIStrategy = AIStrategyEnum.Tactical;
                 break;
 

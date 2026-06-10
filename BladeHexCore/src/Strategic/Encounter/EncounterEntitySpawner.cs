@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Map;
+using BladeHex.Strategic.WorldEvents;
 
 namespace BladeHex.Strategic;
 
@@ -60,6 +61,12 @@ public class EncounterEntitySpawner
     /// <summary>同步过来的玩家大地图战斗力</summary>
     public float PlayerCombatPower { get; set; } = 10.0f;
 
+    /// <summary>玩家当前战略阵营；未加入国家或建国时使用 player。</summary>
+    public string PlayerFaction { get; set; } = OverworldHostility.DefaultPlayerFaction;
+
+    /// <summary>世界外交状态；用于判定玩家当前阵营的战争/同盟。</summary>
+    public WorldEventEngine? WorldEngineRef { get; set; }
+
     private readonly PerceptionIntentResolver _perceptionResolver = new();
     private readonly OverworldEntity _playerProxy = new()
     {
@@ -102,6 +109,7 @@ public class EncounterEntitySpawner
         List<OverworldPOI>? worldPois)
     {
         var newlySpawned = new List<OverworldEntity>();
+        SyncPlayerProxy(playerPosition);
 
         // 累积玩家移动距离（首帧仅记录位置，不累积距离）
         if (_positionInitialized)
@@ -139,6 +147,7 @@ public class EncounterEntitySpawner
     /// <summary>检查是否触发战斗（玩家靠近敌对实体）</summary>
     public OverworldEntity? CheckEncounter(Vector2 playerPosition, List<OverworldEntity> entities)
     {
+        SyncPlayerProxy(playerPosition);
         OverworldEntity? closest = null;
         float closestDist = EncounterDistance;
         foreach (var e in entities)
@@ -435,25 +444,8 @@ public class EncounterEntitySpawner
             && IsHostileToPlayer(entity)
             && CanReactToPlayer(entity))
         {
-            var intent = _perceptionResolver.Resolve(entity, _playerProxy, null);
-            switch (intent.Type)
-            {
-                case Intent.IntentType.Chase:
-                    entity.CurrentAIState = OverworldEntity.AIState.Chasing;
-                    entity.ChaseTarget = _playerProxy;
-                    entity.CurrentTacticalTarget = _playerProxy;
-                    entity.LastIntentSummary = "追击玩家队伍";
-                    break;
-                case Intent.IntentType.Flee:
-                    entity.CurrentAIState = OverworldEntity.AIState.Fleeing;
-                    entity.ChaseTarget = null;
-                    entity.CurrentTacticalTarget = _playerProxy;
-                    entity.LastIntentSummary = "逃离玩家队伍";
-                    break;
-                // Intent.None → 战力相当或阈值范围内，不改变状态
-                default:
-                    break;
-            }
+            var intent = _perceptionResolver.ResolvePlayer(entity, _playerProxy, WorldEngineRef);
+            OverworldIntentApplier.Apply(entity, intent, "追击玩家队伍", "逃离玩家队伍");
         }
         else if (entity.CurrentAIState == OverworldEntity.AIState.Chasing && entity.ChaseTarget == _playerProxy)
         {
@@ -559,7 +551,7 @@ public class EncounterEntitySpawner
             float d = entity.Position.DistanceTo(other.Position);
             if (d > entity.VisionRange) continue;
 
-            if (!OverworldHostility.AreHostile(entity, other)) continue;
+            if (!OverworldHostility.AreHostile(entity, other, WorldEngineRef)) continue;
 
             if (d < bestDist)
             {
@@ -572,6 +564,7 @@ public class EncounterEntitySpawner
 
     private void SyncPlayerProxy(Vector2 playerPos)
     {
+        _playerProxy.Faction = OverworldHostility.NormalizePlayerFaction(PlayerFaction);
         _playerProxy.Position = playerPos;
         _playerProxy.HomePosition = playerPos;
         _playerProxy.CombatPower = Math.Max(1f, PlayerCombatPower);
@@ -581,12 +574,17 @@ public class EncounterEntitySpawner
 
     private bool IsHostileToPlayer(OverworldEntity entity)
         => entity.EntityTypeEnum != OverworldEntity.EntityType.Caravan
-           && OverworldHostility.AreHostile(entity, _playerProxy);
+           && OverworldHostility.AreHostileToPlayer(entity, _playerProxy, WorldEngineRef);
 
-    private static bool CanReactToPlayer(OverworldEntity entity)
+    private bool CanReactToPlayer(OverworldEntity entity)
         => entity.CurrentAIState == OverworldEntity.AIState.Idle
         || entity.CurrentAIState == OverworldEntity.AIState.Patrolling
-        || (entity.CurrentAIState == OverworldEntity.AIState.Chasing && entity.ChaseTarget?.Faction == "player");
+        || (entity.CurrentAIState == OverworldEntity.AIState.Chasing
+            && entity.ChaseTarget != null
+            && string.Equals(
+                entity.ChaseTarget.Faction,
+                OverworldHostility.NormalizePlayerFaction(PlayerFaction),
+                StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// 构建追击路径 — 沿直线方向每 200px 采样，跳过不可通行点。

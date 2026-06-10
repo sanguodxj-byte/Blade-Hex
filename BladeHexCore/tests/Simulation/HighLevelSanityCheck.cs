@@ -6,6 +6,7 @@
 //   90+   : weapons tier >= 3, body armor in plate family
 // Also catches the "lvl 120 enemy unnamed / 180 HP" regression.
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using BladeHex.Combat;
 using BladeHex.Data;
@@ -46,6 +47,8 @@ public static class HighLevelSanityCheck
 
         // Skill tree integration
         yield return ("SkillTreeAllocator_AppliesPoints",     SkillTreeAllocator_AppliesPoints);
+        yield return ("SkillTreeAllocator_AutoEquipsActiveSkills", SkillTreeAllocator_AutoEquipsActiveSkills);
+        yield return ("SkillTreeAllocator_AutoLearnsAndEquipsSpells", SkillTreeAllocator_AutoLearnsAndEquipsSpells);
         yield return ("SkillTreeAllocator_HpBonusOnSquad",    SkillTreeAllocator_HpBonusOnSquad);
         yield return ("ChargeRule_Melee_ChargesProperly",      ChargeRule_Melee_ChargesProperly);
         yield return ("ChargeRule_Ranged_NoCharge",           ChargeRule_Ranged_NoCharge);
@@ -229,6 +232,67 @@ public static class HighLevelSanityCheck
             return (false, $"allocator spent no points, remaining {tree.AvailableAttributePoints}");
         if (tree.GetActivatedCount() < 3)
             return (false, $"only {tree.GetActivatedCount()} nodes activated, expected >=3 under tile-cost layout");
+        return (true, "");
+    }
+
+    private static (bool, string) SkillTreeAllocator_AutoEquipsActiveSkills()
+    {
+        using var _ = CombatRandom.Use(new SeededRandomSource(20260609));
+        var data = new UnitData
+        {
+            Level = 20,
+            UnitName = "AutoSkillNPC",
+            Str = 18, Dex = 12, Con = 12, Intel = 10, Wis = 10, Cha = 10,
+            BaseMaxHp = 30, BaseAc = 8, BaseAp = 12, BaseMoveRange = 4,
+        };
+
+        var tree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(data);
+        if (tree == null) return (false, "AllocateForUnit returned null");
+
+        var activeEffects = tree.GetActiveSkills()
+            .Select(n => n.SkillEffect)
+            .Where(e => !string.IsNullOrEmpty(e) && !SpellStudyCatalog.IsSpellSlotEffect(e))
+            .ToList();
+        if (activeEffects.Count == 0)
+            return (false, $"allocated {tree.GetActivatedCount()} nodes but unlocked no auto-equippable active skill; activated=[{string.Join(", ", tree.ActivatedNodes)}]; partial=[{string.Join(", ", tree.NodeTileProgress.Where(kvp => !tree.ActivatedSet.Contains(kvp.Key)).Select(kvp => $"{kvp.Key}:{kvp.Value}/{tree.GetRequiredTileCount(kvp.Key)}"))}]");
+
+        var equipped = data.EquippedSkills
+            .Where(e => !string.IsNullOrEmpty(e))
+            .ToList();
+        if (equipped.Count == 0)
+            return (false, $"unlocked active skills [{string.Join(", ", activeEffects)}] but EquippedSkills is empty");
+
+        if (!activeEffects.Any(data.IsSkillEquipped))
+            return (false, $"equipped [{string.Join(", ", equipped)}] does not include unlocked active [{string.Join(", ", activeEffects)}]");
+
+        return (true, "");
+    }
+
+    private static (bool, string) SkillTreeAllocator_AutoLearnsAndEquipsSpells()
+    {
+        using var _ = CombatRandom.Use(new SeededRandomSource(20260610));
+        var data = new UnitData
+        {
+            Level = 20,
+            UnitName = "AutoSpellNPC",
+            Str = 10, Dex = 10, Con = 12, Intel = 18, Wis = 12, Cha = 10,
+            BaseMaxHp = 30, BaseAc = 8, BaseAp = 12, BaseMoveRange = 4,
+        };
+
+        var tree = BladeHex.Strategic.SkillTreeAllocator.AllocateForUnit(data);
+        if (tree == null) return (false, "AllocateForUnit returned null");
+
+        bool unlockedSpellStudy = tree.GetActiveSkillEffects().Any(SpellStudyCatalog.IsSpellSlotEffect);
+        if (!unlockedSpellStudy)
+            return (false, $"allocated {tree.GetActivatedCount()} nodes but unlocked no spell study slot; activated=[{string.Join(", ", tree.ActivatedNodes)}]; partial=[{string.Join(", ", tree.NodeTileProgress.Where(kvp => !tree.ActivatedSet.Contains(kvp.Key)).Select(kvp => $"{kvp.Key}:{kvp.Value}/{tree.GetRequiredTileCount(kvp.Key)}"))}]");
+
+        if (data.KnownSpells.Count == 0)
+            return (false, "unlocked spell study but KnownSpells is empty");
+
+        bool equippedSpell = data.EquippedSkills.Any(SpellStudyCatalog.IsEquippedSpellEntry);
+        if (!equippedSpell)
+            return (false, $"known spells [{string.Join(", ", data.KnownSpells.Select(s => s.SpellId))}] but no equipped spell entry");
+
         return (true, "");
     }
 

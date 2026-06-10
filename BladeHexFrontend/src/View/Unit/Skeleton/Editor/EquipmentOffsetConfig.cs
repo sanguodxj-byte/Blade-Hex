@@ -45,6 +45,7 @@ public sealed class EquipmentOffsetConfig
     {
         ItemData.EquipSlot.Body,
         ItemData.EquipSlot.Head,
+        ItemData.EquipSlot.Hair,
         ItemData.EquipSlot.Weapon,
         ItemData.EquipSlot.Costume,
         ItemData.EquipSlot.Helmet,
@@ -78,7 +79,7 @@ public sealed class EquipmentOffsetConfig
         Version = 2.0f,
         OffsetX = 0,
         OffsetY = 0,
-        Scale = (slot == ItemData.EquipSlot.Helmet || slot == ItemData.EquipSlot.Costume || slot == ItemData.EquipSlot.Body || slot == ItemData.EquipSlot.Head) ? 0.5f
+        Scale = (slot == ItemData.EquipSlot.Helmet || slot == ItemData.EquipSlot.Costume || slot == ItemData.EquipSlot.Body || slot == ItemData.EquipSlot.Head || slot == ItemData.EquipSlot.Hair) ? 0.5f
               : (slot == ItemData.EquipSlot.Hands) ? 0.25f
               : (slot == ItemData.EquipSlot.Shield) ? 0.5f
               : 1.0f,

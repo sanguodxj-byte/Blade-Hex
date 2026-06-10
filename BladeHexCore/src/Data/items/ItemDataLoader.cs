@@ -180,7 +180,7 @@ public static class ItemDataLoader
 
     /// <summary>
     /// 自动分配纹理ID和背包网格尺寸。
-    /// 纹理ID = PascalCase 的 ItemId（约定 res://assets/generated_*/FileName.png）。
+    /// 纹理ID = PascalCase 的 ItemId（约定 res://assets/<category>/FileName.png）。
     /// 网格尺寸根据物品类型/子类型自动推断（除非 JSON 显式覆盖）。
     /// </summary>
     private static void PostProcessItems()

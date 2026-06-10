@@ -69,9 +69,9 @@ public partial class SpellManager : Node
         }
 
         // 先解析目标并检查有效性（不消耗资源）
-        var cellsArray = SpellShapeResolver.GetCellsInShape((int)spell.shape, targetCell, caster.GridPos, spell.ShapeSize, pos => grid.GetCell(pos.X, pos.Y) != null);
+        var cellsArray = SpellShapeResolver.GetCellsInShape((int)spell.shape, targetCell, caster.GridPos, spell.ShapeSize, pos => grid!.GetCell(pos.X, pos.Y) != null);
         var targetCells = new Godot.Collections.Array<Vector2I>(cellsArray);
-        if (SpellTargetRules.RequiresValidUnitTarget(spell) && !HasAnyValidTarget(caster, spell, targetCells, grid))
+        if (SpellTargetRules.RequiresValidUnitTarget(spell) && !HasAnyValidTarget(caster, spell, targetCells, grid!))
             return new Godot.Collections.Dictionary { { "success", false }, { "reason", "没有有效目标。" } };
 
         // 目标有效后再消耗资源
@@ -92,13 +92,13 @@ public partial class SpellManager : Node
         switch (spell.resolutionType)
         {
             case SpellData.ResolutionType.AttackRoll:
-                results = ResolveAttackSpell(caster, spell, targetCells, grid);
+                results = ResolveAttackSpell(caster, spell, targetCells, grid!);
                 break;
             case SpellData.ResolutionType.Save:
-                results = ResolveSaveSpell(caster, spell, targetCells, grid);
+                results = ResolveSaveSpell(caster, spell, targetCells, grid!);
                 break;
             case SpellData.ResolutionType.AutoHit:
-                results = ResolveAutoSpell(caster, spell, targetCells, grid);
+                results = ResolveAutoSpell(caster, spell, targetCells, grid!);
                 break;
         }
 
@@ -120,12 +120,12 @@ public partial class SpellManager : Node
 
             // 法术设计不采用攻击检定 vs AC，始终命中
             int mod = GetCastingModifier(caster);
-            int spellDamageBonus = caster.SkillTree?.GetSpellDamageBonus() ?? 0;
+            float spellDamageMultiplier = GetSkillTreeSpellDamageMultiplier(caster);
 
             var result = new Godot.Collections.Dictionary { { "target", target }, { "hit", true }, { "critical", false } };
             if (spell.DamageDiceCount > 0 && spell.DamageDiceSides > 0)
             {
-                int damage = RPGRuleEngine.RollDice(spell.DamageDiceCount, spell.DamageDiceSides) + mod + spellDamageBonus;
+                int damage = RPGRuleEngine.RollDice(spell.DamageDiceCount, spell.DamageDiceSides) + mod;
                 // v1 职业被动: 天选者 — 法术暴击检定 (伤害修正前)
                 bool spellCrit = CareerPassiveHooks.RollSpellCritical(caster);
                 if (spellCrit)
@@ -136,6 +136,7 @@ public partial class SpellManager : Node
                 if (caster.Data != null)
                     damage = Math.Max(1, (int)(damage * SkillTreeKeystoneResolver.GetSpellDamageFinalMultiplier(
                         caster.Data, GetEquippedCatalyst(caster), caster.HasMoved)));
+                damage = Math.Max(1, (int)(damage * spellDamageMultiplier));
                 // v1 职业被动: 法术伤害加成 (施法者 + 唤星者高度差)
                 damage = CareerPassiveHooks.ModifySpellDamageAgainstTarget(caster, target, grid, damage);
                 // v1 职业被动: 敌法师等法术减伤 (防御者)
@@ -173,8 +174,7 @@ public partial class SpellManager : Node
             var result = new Godot.Collections.Dictionary { { "target", target }, { "hit", true }, { "saved", saved } };
             if (spell.DamageDiceCount > 0 && spell.DamageDiceSides > 0)
             {
-                int damage = RPGRuleEngine.RollDice(spell.DamageDiceCount, spell.DamageDiceSides)
-                           + (caster.SkillTree?.GetSpellDamageBonus() ?? 0);
+                int damage = RPGRuleEngine.RollDice(spell.DamageDiceCount, spell.DamageDiceSides);
                 // v1 职业被动: 天选者 — 法术暴击检定 (伤害修正前)
                 bool spellCrit = CareerPassiveHooks.RollSpellCritical(caster);
                 if (spellCrit)
@@ -186,6 +186,7 @@ public partial class SpellManager : Node
                 if (caster.Data != null)
                     damage = Math.Max(1, (int)(damage * SkillTreeKeystoneResolver.GetSpellDamageFinalMultiplier(
                         caster.Data, GetEquippedCatalyst(caster), caster.HasMoved)));
+                damage = Math.Max(1, (int)(damage * GetSkillTreeSpellDamageMultiplier(caster)));
                 // v1 职业被动: 法术伤害加成 (施法者 + 唤星者高度差)
                 damage = CareerPassiveHooks.ModifySpellDamageAgainstTarget(caster, target, grid, damage);
                 // v1 职业被动: 敌法师等法术减伤 (防御者)
@@ -219,8 +220,7 @@ public partial class SpellManager : Node
             if (spell.DamageDiceCount > 0)
             {
                 int damage = RPGRuleEngine.RollDice(spell.DamageDiceCount, spell.DamageDiceSides)
-                           + GetCastingModifier(caster)
-                           + (caster.SkillTree?.GetSpellDamageBonus() ?? 0);
+                           + GetCastingModifier(caster);
                 // v1 职业被动: 天选者 — 法术暴击检定 (伤害修正前)
                 bool spellCrit = CareerPassiveHooks.RollSpellCritical(caster);
                 if (spellCrit)
@@ -230,6 +230,7 @@ public partial class SpellManager : Node
                 if (caster.Data != null)
                     damage = Math.Max(1, (int)(damage * SkillTreeKeystoneResolver.GetSpellDamageFinalMultiplier(
                         caster.Data, GetEquippedCatalyst(caster), caster.HasMoved)));
+                damage = Math.Max(1, (int)(damage * GetSkillTreeSpellDamageMultiplier(caster)));
                 // v1 职业被动: 法术伤害加成 (施法者 + 唤星者高度差)
                 damage = CareerPassiveHooks.ModifySpellDamageAgainstTarget(caster, target, grid, damage);
                 // v1 职业被动: 敌法师等法术减伤 (防御者)
@@ -247,8 +248,8 @@ public partial class SpellManager : Node
             if (spell.HealDiceCount > 0)
             {
                 int heal = RPGRuleEngine.RollDice(spell.HealDiceCount, spell.HealDiceSides)
-                         + GetCastingModifier(caster) + spell.HealBonus
-                         + (caster.SkillTree?.GetHealBonus() ?? 0);
+                         + GetCastingModifier(caster) + spell.HealBonus;
+                heal = Math.Max(1, (int)(heal * GetSkillTreeHealMultiplier(caster)));
                 Unit healTarget = spell.DamageDiceCount > 0 ? caster : target;
                 int actual = healTarget.Heal(heal, caster);
                 EmitSignal(SignalName.SpellHealed, healTarget, actual);
@@ -318,6 +319,12 @@ public partial class SpellManager : Node
     }
 
     private int GetCastingModifier(Unit caster) => RPGRuleEngine.GetStatModifier(GetCastingAbilityScore(caster));
+
+    private static float GetSkillTreeSpellDamageMultiplier(Unit caster)
+        => Math.Max(0.0f, 1.0f + (caster.SkillTree?.GetSpellDamagePercentBonus() ?? 0.0f));
+
+    private static float GetSkillTreeHealMultiplier(Unit caster)
+        => Math.Max(0.0f, 1.0f + (caster.SkillTree?.GetHealPercentBonus() ?? 0.0f));
 
     private int GetCastingAbilityScore(Unit caster)
     {

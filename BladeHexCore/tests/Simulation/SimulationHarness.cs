@@ -444,13 +444,13 @@ public static class SimulationHarness
         int treeAc      = tree?.GetAcBonus() ?? 0;
         int treeMHit    = tree?.GetMeleeHitBonus() ?? 0;
         int treeRHit    = tree?.GetRangedHitBonus() ?? 0;
-        int treeMDmg    = tree?.GetMeleeDamageBonus() ?? 0;
-        int treeRDmg    = tree?.GetRangedDamageBonus() ?? 0;
+        float treeMDmg  = tree?.GetMeleeDamagePercentBonus() ?? 0.0f;
+        float treeRDmg  = tree?.GetRangedDamagePercentBonus() ?? 0.0f;
         int treeHp      = tree?.GetHpBonus() ?? 0;
 
         notes.Add($"  AC基础: {model.GetAc()}  +技能盘AC {treeAc} = 实战AC {model.GetAc() + treeAc}");
         notes.Add($"  AttackBonus: {model.GetAttackBonus():+#;-#;0}  +技能盘近战 {treeMHit:+#;-#;0}  +技能盘远程 {treeRHit:+#;-#;0}");
-        notes.Add($"  技能盘其他: HP+{treeHp}  近伤+{treeMDmg}  远伤+{treeRDmg}");
+        notes.Add($"  技能盘其他: HP+{treeHp}  近伤+{treeMDmg * 100.0f:0.#}%  远伤+{treeRDmg * 100.0f:0.#}%");
 
         // 武器精通诊断
         if (data.PrimaryMainHand is WeaponData mw)

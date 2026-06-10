@@ -201,7 +201,7 @@ public static class CareerSkillExecutor
             if (enemy != null)
             {
                 attacked++;
-                var attackResult = CombatResolver.ResolveAttack(caster, enemy, grid);
+                var attackResult = CombatResolver.ResolveAttack(caster, enemy, grid, triggerVisuals: false);
                 bool hit = attackResult.ContainsKey("hit") && attackResult["hit"].AsBool();
                 bool isCrit = attackResult.ContainsKey("critical") && attackResult["critical"].AsBool();
                 int dmg = 0;

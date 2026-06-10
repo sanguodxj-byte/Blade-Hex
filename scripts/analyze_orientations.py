@@ -2,7 +2,7 @@ import os
 import numpy as np
 from PIL import Image
 
-weapons_dir = r"d:\123\Blade&Hex\assets\generated_weapons"
+weapons_dir = r"d:\123\Blade&Hex\assets\weapons"
 files = [f for f in os.listdir(weapons_dir) if f.endswith(".png")]
 
 print(f"Analyzing {len(files)} weapon images...")

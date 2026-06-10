@@ -24,13 +24,43 @@ public class JoinOpportunity
 {
     public WarBattleType Type { get; set; }
     public OverworldEntity Attacker { get; set; } = null!;
-    
+
     // Defender 可以是 POI 或者是另一个 Entity (在场战)
     public OverworldPOI? DefenderPoi { get; set; }
     public OverworldEntity? DefenderEntity { get; set; }
-    
+
     public float Distance { get; set; }
     public Army.Army? ArmyRef { get; set; }
+
+    /// <summary>World-space position the player should approach before opening the join panel.</summary>
+    public Vector2 WorldPosition { get; set; } = new(float.NaN, float.NaN);
+
+    public bool HasWorldPosition => !float.IsNaN(WorldPosition.X) && !float.IsNaN(WorldPosition.Y);
+
+    // ── NvN 多方战场扩展 ──
+    /// <summary>战场唯一 ID（用于战后回写清理）</summary>
+    public string BattlefieldId { get; set; } = "";
+
+    /// <summary>攻击方全实体列表（NvN 多方战场）</summary>
+    public List<OverworldEntity> Attackers { get; set; } = new();
+
+    /// <summary>防御方全实体列表（NvN 多方战场）</summary>
+    public List<OverworldEntity> Defenders { get; set; } = new();
+
+    /// <summary>攻击方总战力</summary>
+    public float AttackerTotalPower { get; set; }
+
+    /// <summary>防御方总战力</summary>
+    public float DefenderTotalPower { get; set; }
+
+    /// <summary>获取全部参战实体（攻防合并）</summary>
+    public IEnumerable<OverworldEntity> AllParticipants()
+    {
+        foreach (var e in Attackers) yield return e;
+        foreach (var e in Defenders) yield return e;
+        if (Attacker != null && !Attackers.Contains(Attacker)) yield return Attacker;
+        if (DefenderEntity != null && !Defenders.Contains(DefenderEntity)) yield return DefenderEntity;
+    }
 }
 
 /// <summary>
@@ -41,6 +71,7 @@ public static class WarBattleJoinService
     /// <summary>
     /// 查询玩家周围可加入的战斗与军团。
     /// playerFaction 用于 ArmyJoin 检测;留空时不检测 ArmyJoin,只走 Siege/FieldBattle 路径(向后兼容 M3)。
+    /// registry/battleResolver 用于 BattlefieldRegistry 快照查询（NvN 多方战场）。
     /// </summary>
     public static JoinOpportunity? Query(
         Vector2 playerPos,
@@ -49,7 +80,10 @@ public static class WarBattleJoinService
         string playerFaction = "",
         ArmyRegistry? registry = null,
         float joinRadius = 250.0f,
-        WorldEventEngine? engine = null)
+        WorldEventEngine? engine = null,
+        BattlefieldRegistry? battlefieldRegistry = null,
+        BattleResolver? battleResolver = null,
+        float currentGameHour = 0f)
     {
         if (entities == null || pois == null) return null;
 
@@ -71,6 +105,7 @@ public static class WarBattleJoinService
                                 Type = WarBattleType.ArmyJoin,
                                 Attacker = marshal,
                                 Distance = dist,
+                                WorldPosition = marshal.Position,
                                 ArmyRef = army
                             };
                         }
@@ -92,13 +127,63 @@ public static class WarBattleJoinService
                         Type = WarBattleType.Siege,
                         Attacker = poi.SiegeBy,
                         DefenderPoi = poi,
+                        WorldPosition = poi.Position,
                         Distance = dist
                     };
                 }
             }
         }
 
-        // 2. 检测正在爆发的野外实体交战 (使用 EngagedWith 关系，支持所有实体类型)
+        // 2a. 优先路径：BattlefieldRegistry 快照（NvN 多方战场）
+        if (battlefieldRegistry != null && battleResolver != null)
+        {
+            try
+            {
+                var snapshots = battlefieldRegistry.GetSnapshots(battleResolver, currentGameHour);
+                foreach (var bf in snapshots)
+                {
+                    if (playerPos.DistanceTo(bf.Position) > joinRadius) continue;
+                    if (bf.Attackers.Count == 0 || bf.Defenders.Count == 0) continue;
+
+                    var atkEntities = new List<OverworldEntity>();
+                    var defEntities = new List<OverworldEntity>();
+                    foreach (var p in bf.Attackers)
+                    {
+                        var e = ResolveParticipantEntity(entities, p);
+                        if (e != null) atkEntities.Add(e);
+                    }
+                    foreach (var p in bf.Defenders)
+                    {
+                        var e = ResolveParticipantEntity(entities, p);
+                        if (e != null) defEntities.Add(e);
+                    }
+
+                    var primaryAtk = atkEntities.OrderByDescending(e => e.CombatPower * e.PartySize).FirstOrDefault();
+                    var primaryDef = defEntities.OrderByDescending(e => e.CombatPower * e.PartySize).FirstOrDefault();
+                    if (primaryAtk == null || primaryDef == null) continue;
+
+                    return new JoinOpportunity
+                    {
+                        Type = WarBattleType.FieldBattle,
+                        BattlefieldId = bf.Id,
+                        Attacker = primaryAtk,
+                        DefenderEntity = primaryDef,
+                        Attackers = atkEntities,
+                        Defenders = defEntities,
+                        AttackerTotalPower = atkEntities.Sum(e => e.CombatPower * e.PartySize),
+                        DefenderTotalPower = defEntities.Sum(e => e.CombatPower * e.PartySize),
+                        WorldPosition = bf.Position,
+                        Distance = playerPos.DistanceTo(bf.Position)
+                    };
+                }
+            }
+            catch
+            {
+                // Registry 异常时降级到 EngagedWith pair 扫描
+            }
+        }
+
+        // 2b. 降级路径：EngagedWith pair 扫描
         var engagedPairs = new HashSet<(OverworldEntity, OverworldEntity)>();
         for (int i = 0; i < entities.Count; i++)
         {
@@ -131,11 +216,22 @@ public static class WarBattleJoinService
                     Type = WarBattleType.FieldBattle,
                     Attacker = a,
                     DefenderEntity = b,
+                    WorldPosition = (a.Position + b.Position) * 0.5f,
                     Distance = minDist
                 };
             }
         }
 
         return null;
+    }
+
+    private static OverworldEntity? ResolveParticipantEntity(
+        List<OverworldEntity> entities,
+        BattlefieldParticipantView participant)
+    {
+        if (participant.Entity.IsAlive && entities.Contains(participant.Entity))
+            return participant.Entity;
+
+        return entities.FirstOrDefault(e => e.EntityName == participant.EntityName && e.IsAlive);
     }
 }

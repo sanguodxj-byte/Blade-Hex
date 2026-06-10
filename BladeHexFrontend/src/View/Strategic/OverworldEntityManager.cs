@@ -273,6 +273,18 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
         set => SimCtx.PlayerRaceId = value;
     }
 
+    /// <summary>玩家当前战略阵营（用于外交敌对判定）。</summary>
+    public string PlayerFaction
+    {
+        get => SimCtx.PlayerFaction;
+        set
+        {
+            SimCtx.PlayerFaction = OverworldHostility.NormalizePlayerFaction(value);
+            SimCtx.EncounterSpawner.PlayerFaction = SimCtx.PlayerFaction;
+            SimCtx.EncounterSpawner.WorldEngineRef = SimCtx.WorldEngine;
+        }
+    }
+
     /// <summary>
     /// 检查玩家是否触发遭遇
     /// </summary>

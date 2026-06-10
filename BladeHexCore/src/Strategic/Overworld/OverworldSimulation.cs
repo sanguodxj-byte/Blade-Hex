@@ -34,6 +34,9 @@ public sealed class OverworldSimulation
     private readonly DailyDecisionProcessor _dailyProcessor = new();
     private readonly MovementProcessor _movementProcessor = new();
     private readonly BattleResolver _battleResolver = new();
+
+    /// <summary>BattleResolver 只读访问 — 供 View 层通过 BattlefieldRegistry 查询多方战场</summary>
+    public BattleResolver BattleResolver => _battleResolver;
     private readonly SiegeProcessor _siegeProcessor = new();
     private static readonly Random _respawnRng = new();
 
@@ -69,6 +72,8 @@ public sealed class OverworldSimulation
         _dailyProcessor.SetHeroRelationMatrix(ctx.Relations);
         _siegeProcessor.SetArmyRegistry(ctx.Armies);
         _battleResolver.SetArmyRegistry(ctx.Armies);
+        ctx.EncounterSpawner.PlayerFaction = OverworldHostility.NormalizePlayerFaction(ctx.PlayerFaction);
+        ctx.EncounterSpawner.WorldEngineRef = ctx.WorldEngine;
 
         if (ctx.HexGrid != null && ctx.HexAStar != null)
         {
@@ -92,6 +97,8 @@ public sealed class OverworldSimulation
         {
             _movementProcessor.ZocManagerRef = ctx.ZocManager;
         }
+
+        _movementProcessor.WeatherSpeedFactor = ctx.WeatherSpeedFactor;
 
         // 休眠实体交战一次性结算回调
         ctx.EncounterSpawner.DormantPool.DormantEngagementResolver = entity =>
@@ -120,6 +127,7 @@ public sealed class OverworldSimulation
         var events = new List<OverworldSimulationEvent>();
 
         ctx.CurrentDay++;
+        SyncNavigationContext(ctx);
 
         // ── 英雄网络每日 Tick 与重生处理 ──
         var respawns = HeroTickProcessor.Tick(
@@ -269,6 +277,8 @@ public sealed class OverworldSimulation
     public List<OverworldSimulationEvent> TickFrame(float delta, OverworldSimulationContext ctx)
     {
         var events = new List<OverworldSimulationEvent>();
+        SyncNavigationContext(ctx);
+        _movementProcessor.WeatherSpeedFactor = ctx.WeatherSpeedFactor;
 
         // 1. 遭遇实体生成器 Tick（生成 + 追击 AI）
         var newSpawned = ctx.EncounterSpawner.Tick(delta, ctx.PlayerPosition, ctx.Entities,
@@ -283,6 +293,13 @@ public sealed class OverworldSimulation
 
         // 2. 帧级战术感知：持续刷新追击/逃跑路径，而不是只在每日 Tick 反应
         _dailyProcessor.ProcessFrameTactics(ctx.Entities, ctx.SpatialIndex);
+        BattlefieldInterventionService.ProcessAiBattlefieldResponses(
+            ctx.Entities,
+            _battleResolver,
+            ctx.WorldEngine,
+            ctx.Relations,
+            ctx.GameHour,
+            onFlee: _dailyProcessor.RefreshFleeMoveForExternalIntent);
 
         // 3. 推进所有实体移动
         _lastFramePositions.Clear();
@@ -311,15 +328,26 @@ public sealed class OverworldSimulation
         return events;
     }
 
+    /// <summary>上次运行感知意图判定的累计小时数</summary>
+    private float _lastIntentHour = -1f;
+
     // ========================================
     // 小时 Tick — 封装 TickGameHour
     // ========================================
 
-    /// <summary>推进游戏小时并更新交战状态，返回事件列表</summary>
+    /// <summary>推进游戏小时并更新交战状态 + 每小时感知意图判定，返回事件列表</summary>
     public List<OverworldSimulationEvent> TickHours(float deltaHours, OverworldSimulationContext ctx)
     {
+        SyncNavigationContext(ctx);
         ctx.GameHour += deltaHours;
         _battleResolver.UpdateEngagements(ctx.Entities, ctx.GameHour, ctx.WorldEngine, ctx.PlayerPosition);
+
+        // 每小时感知意图判定：扫描威胁 → 设定追/逃意图 → 立即发起移动
+        if (_lastIntentHour < 0f || (int)ctx.GameHour > (int)_lastIntentHour)
+        {
+            _dailyProcessor.ProcessHourlyIntent(ctx.Entities, ctx.SpatialIndex);
+            _lastIntentHour = ctx.GameHour;
+        }
 
         // 消费待分发的战斗结算事件
         var events = new List<OverworldSimulationEvent>(_pendingCombatEvents);
@@ -339,6 +367,12 @@ public sealed class OverworldSimulation
         _siegeProcessor.ProcessSieges(ctx.Entities, collector, ctx.CurrentDay, ctx.WorldEngine, ctx.PlayerPosition);
 
         return events;
+    }
+
+    private void SyncNavigationContext(OverworldSimulationContext ctx)
+    {
+        _dailyProcessor.SetPlayerPosition(ctx.PlayerPosition);
+        _siegeProcessor.SetPlayerPosition(ctx.PlayerPosition);
     }
 
     private void HandleEntityReachedDestination(OverworldEntity entity, OverworldSimulationContext ctx, List<OverworldSimulationEvent> events)

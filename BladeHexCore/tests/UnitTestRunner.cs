@@ -59,6 +59,7 @@ public partial class UnitTestRunner : Node
         RunSuite("OverworldSimulationArchitectureTests", OverworldSimulationArchitectureTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("PlayerKingdomServiceTests", PlayerKingdomServiceTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("KingdomLawsTests", KingdomLawsTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("OverworldSimulationTests", OverworldSimulationTests.RunAll, ref totalPassed, ref totalFailed);
         // WarLoopSimulationTests 包含大地图与 Node 实体，已迁移至 Frontend 层（通过反射调用以防编译依赖）
         var warLoopTestType = System.Type.GetType("BladeHex.Tests.Strategic.WarLoopSimulationTests, BladeHexFrontend");
         if (warLoopTestType != null)

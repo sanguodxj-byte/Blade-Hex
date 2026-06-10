@@ -2,10 +2,10 @@
 // 感知意图判定器 — 独占"感知 → 追击/逃跑/忽略"的判定
 //
 // 设计目标:
-//   - 合并 EntityBehaviorEvaluator 与 BattleResolver.CheckVisionDetection 的重复逻辑
+//   - 合并旧行为评估器与 BattleResolver 视野检测的重复逻辑
 //   - 单一 Module 负责把所有实体从普通状态改成 Chasing / Fleeing
 //   - AIStrategy、LordPersonality、外交和个人关系只在一个地方参与感知判定
-//   - BattleResolver.CheckVisionDetection 复用同一套追逃判定
+//   - BattleResolver 只处理接触交战，不再写入远距追逃意图
 using System;
 using System.Collections.Generic;
 using BladeHex.Data;
@@ -119,6 +119,22 @@ public sealed class PerceptionIntentResolver
     }
 
     /// <summary>
+    /// Resolves intent toward the player proxy using player-specific hostility
+    /// rules such as IsHostileToPlayer and the player's current nation.
+    /// </summary>
+    public Intent ResolvePlayer(
+        OverworldEntity entity,
+        OverworldEntity playerProxy,
+        WorldEventEngine? engine,
+        Hero.HeroRelationMatrix? relationMatrix = null)
+    {
+        if (!OverworldHostility.AreHostileToPlayer(entity, playerProxy, engine, relationMatrix))
+            return Intent.None;
+
+        return ResolveKnownHostile(entity, playerProxy);
+    }
+
+    /// <summary>
     /// Resolve intent when the caller already owns the hostility decision.
     /// Used by adapters such as player-proximity encounters where the target is
     /// a transient proxy rather than a normal faction participant.
@@ -149,7 +165,7 @@ public sealed class PerceptionIntentResolver
 
     /// <summary>
     /// 扫描所有附近敌对实体，返回最紧迫的意图。
-    /// 等效于 EntityBehaviorEvaluator.EvaluateAll + BattleResolver.CheckVisionDetection。
+    /// 扫描视野内敌对实体，并解析实体当前最应该采取的追击/逃跑意图。
     /// </summary>
     public (OverworldEntity? bestTarget, Intent intent) ResolveBest(
         OverworldEntity entity,

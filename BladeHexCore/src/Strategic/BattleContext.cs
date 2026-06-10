@@ -112,6 +112,17 @@ public partial class BattleContext : Resource
     public JoinOpportunity? WarJoinOppRef { get; set; }
     public bool PlayerJoinedAsAttacker { get; set; }
 
+    // ── NvN 多方战场扩展 ──
+
+    /// <summary>来源战场 ID（用于战后回写清理）</summary>
+    public string SourceBattlefieldId { get; set; } = "";
+
+    /// <summary>玩家加入后，参与战斗的攻击方实体列表</summary>
+    public List<OverworldEntity> JoinedAttackers { get; set; } = new();
+
+    /// <summary>玩家加入后，参与战斗的防御方实体列表</summary>
+    public List<OverworldEntity> JoinedDefenders { get; set; } = new();
+
     // ========================================
     // 工厂方法
     // ========================================

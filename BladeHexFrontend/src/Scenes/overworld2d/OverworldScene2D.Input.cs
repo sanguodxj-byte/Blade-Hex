@@ -3,6 +3,7 @@
 using Godot;
 using BladeHex.Map;
 using BladeHex.Strategic;
+using BladeHex.View.Strategic;
 
 namespace BladeHex.Scenes.Overworld2d;
 
@@ -107,7 +108,7 @@ public partial class OverworldScene2D
     /// <summary>查找指定位置的 POI</summary>
     private OverworldPOI? FindPOIAtPosition(Vector2 pixelPos)
     {
-        float checkRadius = HexOverworldTile.HexSize * 2.0f;
+        float checkRadius = OverworldInteractionHitRules.PoiHitRadius;
 
         foreach (var poi in WorldPois)
         {
@@ -124,10 +125,11 @@ public partial class OverworldScene2D
     {
         if (EntityMgr == null) return null;
 
-        float checkRadius = HexOverworldTile.HexSize * 1.5f;
+        float checkRadius = OverworldInteractionHitRules.EntityHitRadius;
 
         foreach (var entity in EntityMgr.Entities)
         {
+            if (!entity.IsAlive) continue;
             float dist = (entity.Position - pixelPos).Length();
             if (dist < checkRadius)
                 return entity;

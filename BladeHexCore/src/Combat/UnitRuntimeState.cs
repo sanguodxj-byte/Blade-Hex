@@ -222,6 +222,7 @@ public class StatusEffectInstance
     public Dictionary<string, float> StatModifiers = new();
     public int TickDamageCount;
     public int TickDamageSides;
+    public float TickDamageMaxHpPercent;
     public string TickDamageType = "";
     public string SaveToRemove = "";
     public int SaveDc;
@@ -240,6 +241,7 @@ public class StatusEffectInstance
             { "id", Id }, { "name", Name }, { "duration", Duration },
             { "is_negative", IsNegative }, { "stat_modifiers", mods },
             { "tick_damage_count", TickDamageCount }, { "tick_damage_sides", TickDamageSides },
+            { "tick_damage_max_hp_percent", TickDamageMaxHpPercent },
             { "tick_damage_type", TickDamageType }, { "save_to_remove", SaveToRemove },
             { "save_dc", SaveDc }, { "removes_effects", (string[])RemovesEffects.Clone() },
             { "breaks_on_attack", BreaksOnAttack }, { "can_spread", CanSpread },
@@ -256,6 +258,7 @@ public class StatusEffectInstance
             IsNegative = dict.ContainsKey("is_negative") && dict["is_negative"].AsBool(),
             TickDamageCount = dict.ContainsKey("tick_damage_count") ? dict["tick_damage_count"].AsInt32() : 0,
             TickDamageSides = dict.ContainsKey("tick_damage_sides") ? dict["tick_damage_sides"].AsInt32() : 0,
+            TickDamageMaxHpPercent = dict.ContainsKey("tick_damage_max_hp_percent") ? dict["tick_damage_max_hp_percent"].AsSingle() : 0.0f,
             TickDamageType = dict.ContainsKey("tick_damage_type") ? dict["tick_damage_type"].AsString() : "",
             SaveToRemove = dict.ContainsKey("save_to_remove") ? dict["save_to_remove"].AsString() : "",
             SaveDc = dict.ContainsKey("save_dc") ? dict["save_dc"].AsInt32() : 0,

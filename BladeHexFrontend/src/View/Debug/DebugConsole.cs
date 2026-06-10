@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BladeHex.Strategic;
 using BladeHex.Strategic.WorldEvents;
+using BladeHex.Diagnostics;
 
 namespace BladeHex.Debug;
 
@@ -105,6 +106,12 @@ public partial class DebugConsole : Node
     public override void _Ready()
     {
         Instance = this;
+        DiagnosticLog.Event("Game", "startup", new Dictionary<string, object?>
+        {
+            ["log"] = DiagnosticLog.CurrentLogPath,
+        });
+        GD.Print($"[DiagnosticLog] Writing to: {DiagnosticLog.CurrentLogPath}");
+
         _enabled = OS.IsDebugBuild() || OS.HasFeature("dev") || OS.HasFeature("debug_console");
         if (!_enabled)
         {

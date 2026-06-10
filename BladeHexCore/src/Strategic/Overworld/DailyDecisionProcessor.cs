@@ -26,6 +26,13 @@ public class DailyDecisionProcessor
     private Hero.HeroRelationMatrix? _heroRelationMatrix;
 
     /// <summary>
+    /// 安全的实体有效性检查 — 以 IsAlive 为权威生命周期标志，
+    /// 不依赖 GodotObject.IsInstanceValid（测试场景实体不在场景树中会返回 false）。
+    /// </summary>
+    private static bool IsEntityAlive(OverworldEntity? e)
+        => e != null && e.IsAlive;
+
+    /// <summary>
     /// AIStrategy → 巡逻半径倍率（越大跑得越远）
     /// </summary>
     private static float GetPatrolRadiusMultiplier(AIStrategyEnum strategy) => strategy switch
@@ -67,14 +74,15 @@ public class DailyDecisionProcessor
         _navigator.SetChunkNavigation(mgr, astar);
     }
 
-    /// <summary>处理所有实体的每日决策</summary>
+    public void SetPlayerPosition(Vector2 playerPosition)
+    {
+        _navigator.SetPlayerPosition(playerPosition);
+    }
+
+    /// <summary>处理所有实体的每日决策（纯策略层面：巡逻/掠夺/围攻/招募等，不含感知追逃）</summary>
     public void ProcessDailyDecisions(List<OverworldEntity> entities, List<OverworldPOI> pois, int currentDay)
     {
         _allEntities = entities; // 缓存引用供 FindIntruderInTerritory 使用
-
-        // 0. 感知意图判定 — 使用 PerceptionIntentResolver 统一执行感知→评估→追/逃意图设定
-        //     替换原有 EntityBehaviorEvaluator.EvaluateAll() + BattleResolver.CheckVisionDetection 的重复逻辑
-        RunPerceptionPhase(entities);
 
         var toRemove = new List<OverworldEntity>();
         foreach (var entity in entities)
@@ -86,6 +94,30 @@ public class DailyDecisionProcessor
                 toRemove.Add(entity);
         }
         foreach (var e in toRemove) RemoveEntity(entities, e);
+        _allEntities = null;
+    }
+
+    /// <summary>
+    /// 每小时感知意图判定 — 扫描威胁 → 设定追/逃意图 → 立即发起移动。
+    /// 替代旧的每日 RunPerceptionPhase，让实体对周围环境做出近实时反应。
+    /// </summary>
+    public void ProcessHourlyIntent(List<OverworldEntity> entities, EntitySpatialIndex? spatialIndex = null)
+    {
+        _allEntities = entities;
+        RunPerceptionPhase(entities, spatialIndex);
+
+        // 感知意图已更新 → 为所有 Chasing/Fleeing 实体立即发起移动
+        foreach (var entity in entities)
+        {
+            if (!entity.IsAlive || entity.Lod == OverworldEntity.EntityLod.Hibernated)
+                continue;
+
+            if (entity.CurrentAIState == OverworldEntity.AIState.Chasing)
+                RefreshChaseMove(entity);
+            else if (entity.CurrentAIState == OverworldEntity.AIState.Fleeing)
+                RefreshFleeMove(entity);
+        }
+
         _allEntities = null;
     }
 
@@ -118,6 +150,38 @@ public class DailyDecisionProcessor
         if (entity.CurrentAIState == OverworldEntity.AIState.Engaged)
             return;
 
+        // 追击 → 移动由 ProcessHourlyIntent/ProcessFrameTactics 处理，此处做状态清理与目标同步
+        if (entity.CurrentAIState == OverworldEntity.AIState.Chasing)
+        {
+            // 通用：目标死亡/丢失 → 回 Idle
+            if (entity.ChaseTarget == null || !IsEntityAlive(entity.ChaseTarget))
+            {
+                entity.ChaseTarget = null;
+                entity.CurrentTacticalTarget = null;
+                entity.CurrentAIState = OverworldEntity.AIState.Idle;
+            }
+            // EpicMonster 专属：目标离开领地 → 放弃追击
+            else if (entity.EntityTypeEnum == OverworldEntity.EntityType.EpicMonster
+                     && !entity.IsInTerritory(entity.ChaseTarget.Position))
+            {
+                entity.ChaseTarget = null;
+                entity.CurrentAIState = OverworldEntity.AIState.Idle;
+            }
+            else
+            {
+                // 保持 TargetPosition 与追击目标同步（安全网，实际移动由小时级驱动）
+                entity.TargetPosition = entity.ChaseTarget.Position;
+            }
+            return;
+        }
+
+        // 逃跑 → 处理类型特有的状态转换（掠夺队→返回、怪物→巡逻），移动由小时级处理
+        if (entity.CurrentAIState == OverworldEntity.AIState.Fleeing)
+        {
+            HandleFleeingStateTransition(entity);
+            return;
+        }
+
         switch (entity.EntityTypeEnum)
         {
             case OverworldEntity.EntityType.Adventurer: DecideAdventurer(entity); break;
@@ -128,6 +192,30 @@ public class DailyDecisionProcessor
             case OverworldEntity.EntityType.BanditParty:
             case OverworldEntity.EntityType.RobberParty:
             case OverworldEntity.EntityType.PirateCrew: DecideBanditLike(entity); break;
+        }
+    }
+
+    /// <summary>
+    /// 处理 Fleeing 状态的类型特有转换（不处理移动 — 移动由 ProcessHourlyIntent 负责）
+    /// </summary>
+    private void HandleFleeingStateTransition(OverworldEntity entity)
+    {
+        switch (entity.EntityTypeEnum)
+        {
+            case OverworldEntity.EntityType.RaidingParty:
+                // 掠夺队逃跑 → 放弃任务直接返回基地
+                entity.CurrentAIState = OverworldEntity.AIState.Returning;
+                StartMoveTo(entity, entity.HomePosition);
+                break;
+
+            case OverworldEntity.EntityType.EpicMonster:
+                // 史诗怪物逃跑 → 威胁消失后恢复巡逻
+                if (!entity.IsMoving)
+                    entity.CurrentAIState = OverworldEntity.AIState.Patrolling;
+                break;
+
+            // Adventurer / LordArmy / Caravan / BanditLike：
+            // 无类型特有转换，保持 Fleeing 直到 ProcessHourlyIntent 或 ProcessFrameTactics 处理
         }
     }
 
@@ -142,17 +230,6 @@ public class DailyDecisionProcessor
             case OverworldEntity.AIState.Patrolling:
                 if (!entity.IsMoving)
                     TryContinuePatrol(entity);
-                break;
-            case OverworldEntity.AIState.Fleeing:
-                if (!entity.IsMoving) entity.CurrentAIState = OverworldEntity.AIState.Idle;
-                break;
-            case OverworldEntity.AIState.Chasing:
-                if (entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
-                {
-                    entity.TargetPosition = entity.ChaseTarget.Position;
-                    StartMoveTo(entity, entity.ChaseTarget.Position);
-                }
-                else { entity.ChaseTarget = null; entity.CurrentAIState = OverworldEntity.AIState.Idle; }
                 break;
         }
     }
@@ -171,16 +248,6 @@ public class DailyDecisionProcessor
                 if (entity.IsMoving) return;
                 entity.SourceSettlement?.OnRaidPartyDestroyed();
                 entity.IsAlive = false;
-                break;
-            case OverworldEntity.AIState.Fleeing:
-                if (entity.IsMoving) return;
-                entity.CurrentAIState = OverworldEntity.AIState.Returning;
-                StartMoveTo(entity, entity.HomePosition);
-                break;
-            case OverworldEntity.AIState.Chasing:
-                if (entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
-                    StartMoveTo(entity, entity.ChaseTarget.Position);
-                else { entity.ChaseTarget = null; entity.CurrentAIState = OverworldEntity.AIState.MovingToTarget; }
                 break;
         }
     }
@@ -219,26 +286,11 @@ public class DailyDecisionProcessor
         {
             if (entity.DestinationTown != null) { entity.TargetPosition = entity.DestinationTown.Position; StartMoveTo(entity, entity.TargetPosition); entity.CurrentAIState = OverworldEntity.AIState.MovingToTarget; }
         }
-        else if (entity.CurrentAIState == OverworldEntity.AIState.Fleeing)
-        {
-            // 被 EntityBehaviorEvaluator 判定逃跑 — 逃向出发城镇
-            if (entity.OriginTown != null && !entity.IsMoving)
-            {
-                entity.TargetPosition = entity.OriginTown.Position;
-                StartMoveTo(entity, entity.OriginTown.Position);
-            }
-            if (!entity.IsMoving) entity.CurrentAIState = OverworldEntity.AIState.Idle;
-        }
     }
 
     private void DecideEpicMonster(OverworldEntity entity)
     {
-        // 如果行为评估器判定逃跑,不覆盖
-        if (entity.CurrentAIState == OverworldEntity.AIState.Fleeing)
-        {
-            if (!entity.IsMoving) entity.CurrentAIState = OverworldEntity.AIState.Patrolling;
-            return;
-        }
+        // Fleeing 已由 DecideDailyAction 顶层 + HandleFleeingStateTransition 处理
 
         // ── 领地回归优先 ── 怪物身处领地外时，放弃一切行为、径直返回领地中心
         if (!entity.IsInTerritory(entity.Position))
@@ -251,7 +303,7 @@ public class DailyDecisionProcessor
             return;
         }
 
-        // ── 领地内入侵者检测 ──
+        // ── 领地内入侵者检测（每日级，补充小时级感知判定） ──
         var intruder = FindIntruderInTerritory(entity);
         if (intruder != null)
         {
@@ -276,76 +328,27 @@ public class DailyDecisionProcessor
                     if (entity.IsMoving) entity.CurrentAIState = OverworldEntity.AIState.Patrolling;
                 }
                 break;
-            case OverworldEntity.AIState.Chasing:
-                if (entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
-                {
-                    // 目标仍在领地内 → 继续追击；离开领地 → 放弃追击
-                    if (entity.IsInTerritory(entity.ChaseTarget.Position))
-                        StartMoveTo(entity, entity.ChaseTarget.Position);
-                    else
-                    { entity.ChaseTarget = null; entity.CurrentAIState = OverworldEntity.AIState.Idle; }
-                }
-                else
-                { entity.ChaseTarget = null; entity.CurrentAIState = OverworldEntity.AIState.Idle; }
-                break;
         }
     }
 
     /// <summary>
     /// 通用匪类决策 — BanditParty(山贼) / RobberParty(劫匪) / PirateCrew(海寇)
-    /// 无源聚落，以 HomePosition 为据点巡逻；追击/逃跑由 EntityBehaviorEvaluator 设定意图。
+    /// 无源聚落，以 HomePosition 为据点巡逻；追击/逃跑由小时级 ProcessHourlyIntent 处理。
     /// </summary>
     private void DecideBanditLike(OverworldEntity entity)
     {
         float patrolMult = GetPatrolRadiusMultiplier(entity.AIStrategy);
-        if (entity.IsMoving && entity.CurrentAIState != OverworldEntity.AIState.Idle) 
-        {
-            // 正在移动中，等待到达
-            if (entity.CurrentAIState == OverworldEntity.AIState.Chasing
-                && entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
-            {
-                // 追击时持续更新目标位置
-                entity.TargetPosition = entity.ChaseTarget.Position;
-                StartMoveTo(entity, entity.ChaseTarget.Position);
-            }
-            return;
-        }
+        if (entity.IsMoving && entity.CurrentAIState != OverworldEntity.AIState.Idle)
+            return; // 正在移动中，等待到达
 
         switch (entity.CurrentAIState)
         {
             case OverworldEntity.AIState.Idle:
-                // 在 HomePosition 附近巡逻
                 TryStartRandomPatrol(entity, entity.HomePosition, entity.PatrolRadius * patrolMult);
                 break;
 
             case OverworldEntity.AIState.Patrolling:
-                // 到达巡逻点后继续寻找下一段巡逻路径
                 TryContinuePatrol(entity);
-                break;
-
-            case OverworldEntity.AIState.Fleeing:
-                // 逃回据点
-                if (entity.Position.DistanceTo(entity.HomePosition) < 50f)
-                {
-                    entity.CurrentAIState = OverworldEntity.AIState.Idle;
-                }
-                else
-                {
-                    StartMoveTo(entity, entity.HomePosition);
-                }
-                break;
-
-            case OverworldEntity.AIState.Chasing:
-                if (entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
-                {
-                    entity.TargetPosition = entity.ChaseTarget.Position;
-                    StartMoveTo(entity, entity.ChaseTarget.Position);
-                }
-                else
-                {
-                    entity.ChaseTarget = null;
-                    entity.CurrentAIState = OverworldEntity.AIState.Idle;
-                }
                 break;
         }
     }
@@ -375,8 +378,6 @@ public class DailyDecisionProcessor
                     entity.CurrentAIState = OverworldEntity.AIState.Idle;
                 }
                 return;
-            case OverworldEntity.AIState.Fleeing: if (!entity.IsMoving) entity.CurrentAIState = OverworldEntity.AIState.Idle; return;
-            case OverworldEntity.AIState.Chasing: DecideLordChasing(entity); return;
             case OverworldEntity.AIState.Recruiting: if (entity.DaysAlive % 5 == 0) entity.CurrentAIState = OverworldEntity.AIState.Idle; return;
         }
 
@@ -486,16 +487,7 @@ public class DailyDecisionProcessor
         entity.CurrentAIState = OverworldEntity.AIState.Idle;
     }
 
-    private void DecideLordChasing(OverworldEntity entity)
-    {
-        if (entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
-        {
-            if (entity.Position.DistanceTo(entity.ChaseTarget.Position) > entity.VisionRange * 1.5f)
-            { entity.ChaseTarget = null; entity.CurrentAIState = OverworldEntity.AIState.Idle; }
-            else StartMoveTo(entity, entity.ChaseTarget.Position);
-        }
-        else { entity.ChaseTarget = null; entity.CurrentAIState = OverworldEntity.AIState.Idle; }
-    }
+    // DecideLordChasing 已移除 — 追击移动由 ProcessHourlyIntent → RefreshChaseMove 处理
 
     private OverworldEntity? FindIntruderInTerritory(OverworldEntity monster)
     {
@@ -530,6 +522,16 @@ public class DailyDecisionProcessor
                     entity.CurrentAIState = OverworldEntity.AIState.Idle;
                 break;
         }
+    }
+
+    public void RefreshFleeMoveForExternalIntent(OverworldEntity entity)
+    {
+        if (!entity.IsAlive || entity.Lod == OverworldEntity.EntityLod.Hibernated)
+            return;
+        if (entity.CurrentAIState != OverworldEntity.AIState.Fleeing)
+            return;
+
+        RefreshFleeMove(entity);
     }
 
     private void TryContinuePatrol(OverworldEntity entity)
@@ -573,7 +575,7 @@ public class DailyDecisionProcessor
 
     private void RefreshChaseMove(OverworldEntity entity)
     {
-        if (entity.ChaseTarget != null && GodotObject.IsInstanceValid(entity.ChaseTarget) && entity.ChaseTarget.IsAlive)
+        if (IsEntityAlive(entity.ChaseTarget))
         {
             StartMoveTo(entity, entity.ChaseTarget.Position);
             return;
@@ -588,7 +590,7 @@ public class DailyDecisionProcessor
     private void RefreshFleeMove(OverworldEntity entity)
     {
         var threat = entity.CurrentTacticalTarget;
-        if (threat == null || !GodotObject.IsInstanceValid(threat) || !threat.IsAlive)
+        if (!IsEntityAlive(threat))
         {
             // 没有明确威胁时，回撤至 HomePosition，避免原地卡住。
             if (entity.Position.DistanceTo(entity.HomePosition) > 50.0f)
@@ -640,8 +642,8 @@ public class DailyDecisionProcessor
     {
         if (!_navigator.StartMoveTo(entity, target))
         {
-            if (entity.CurrentAIState == OverworldEntity.AIState.Patrolling)
-                entity.CurrentAIState = OverworldEntity.AIState.Idle;
+            // 导航失败时不重置状态 — 保留原始意图（如 Patrolling/Fleeing），
+            // 让下一个 tick 周期重试。避免每日决策被立即覆盖。
         }
     }
 
@@ -653,7 +655,7 @@ public class DailyDecisionProcessor
 
     /// <summary>
     /// 感知意图阶段 — 对所有活跃实体统一执行感知→评估→追/逃意图设定。
-    /// 替换原有的 EntityBehaviorEvaluator.EvaluateAll() + BattleResolver.CheckVisionDetection 双路径。
+    /// 替换旧行为评估器 + BattleResolver 视野检测的双路径。
     /// </summary>
     private void RunPerceptionPhase(List<OverworldEntity> entities, EntitySpatialIndex? spatialIndex = null)
     {
@@ -688,21 +690,7 @@ public class DailyDecisionProcessor
             if (bestTarget == null || intent.Type == Intent.IntentType.None)
                 continue;
 
-            switch (intent.Type)
-            {
-                case Intent.IntentType.Chase:
-                    entity.CurrentAIState = OverworldEntity.AIState.Chasing;
-                    entity.ChaseTarget = bestTarget;
-                    entity.CurrentTacticalTarget = bestTarget;
-                    entity.LastIntentSummary = $"追击 {bestTarget.EntityName}";
-                    break;
-                case Intent.IntentType.Flee:
-                    entity.CurrentAIState = OverworldEntity.AIState.Fleeing;
-                    entity.ChaseTarget = null;
-                    entity.CurrentTacticalTarget = bestTarget;
-                    entity.LastIntentSummary = $"逃离 {bestTarget.EntityName}";
-                    break;
-            }
+            OverworldIntentApplier.Apply(entity, intent);
         }
     }
 
@@ -711,7 +699,10 @@ public class DailyDecisionProcessor
         switch (army.State)
         {
             case Army.ArmyState.Forming:
-                // 原地集结等
+                // 如果实体已在围攻/交战状态 → 不覆盖（避免兵力不集而先冲锋）
+                if (entity.CurrentAIState == OverworldEntity.AIState.Besieging ||
+                    entity.CurrentAIState == OverworldEntity.AIState.Engaged)
+                    return;
                 entity.CurrentAIState = OverworldEntity.AIState.Idle;
                 entity.IsMoving = false;
                 entity.Path.Clear();

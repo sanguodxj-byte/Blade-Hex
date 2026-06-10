@@ -65,35 +65,45 @@ public class SiegeProcessor
         _navigator.SetChunkNavigation(mgr, astar);
     }
 
+    public void SetPlayerPosition(Vector2 playerPosition)
+    {
+        _navigator.SetPlayerPosition(playerPosition);
+    }
+
     /// <summary>处理所有围攻结算</summary>
     public void ProcessSieges(List<OverworldEntity> entities, ISiegeSignals signals, int currentDay, WorldEventEngine? engine, Vector2 playerPosition = default)
     {
         var toResolve = new List<(OverworldEntity entity, OverworldPOI target)>();
+        var queuedTargets = new HashSet<OverworldPOI>();
         foreach (var entity in entities)
         {
             if (entity.IsAlive && entity.CurrentAIState == OverworldEntity.AIState.Besieging && entity.SiegeTarget != null)
             {
-                var army = _armyRegistry?.GetByLord(entity);
-                if (army != null)
-                {
-                    if (!entity.IsMarshal) continue;
-
-                    int requiredDays = 4;
-                    float defPower = entity.SiegeTarget.GarrisonCurrent;
-                    if (army.AggregateCombatPower / Math.Max(1f, defPower) < 1.5f)
-                    {
-                        requiredDays = 2;
-                    }
-
-                    if (entity.SiegeTarget.SiegeDays >= requiredDays)
-                        toResolve.Add((entity, entity.SiegeTarget));
-                }
-                else
-                {
-                    if (entity.SiegeTarget.SiegeDays >= 2)
-                        toResolve.Add((entity, entity.SiegeTarget));
-                }
+                if (ShouldResolveSiege(entity, entity.SiegeTarget))
+                    QueueSiege(toResolve, queuedTargets, entity, entity.SiegeTarget);
             }
+        }
+
+        // POI is the authoritative "under siege" record. Daily/army decisions can
+        // transiently overwrite the attacker's state; do not let that orphan a siege.
+        foreach (var poi in _pois)
+        {
+            if (!poi.IsUnderSiege || poi.SiegeBy == null || !poi.SiegeBy.IsAlive)
+                continue;
+            if (queuedTargets.Contains(poi))
+                continue;
+
+            var attacker = poi.SiegeBy;
+            if (attacker.CurrentAIState != OverworldEntity.AIState.Engaged)
+            {
+                attacker.CurrentAIState = OverworldEntity.AIState.Besieging;
+                attacker.SiegeTarget = poi;
+                attacker.IsMoving = false;
+                attacker.Path.Clear();
+            }
+
+            if (ShouldResolveSiege(attacker, poi))
+                QueueSiege(toResolve, queuedTargets, attacker, poi);
         }
 
         foreach (var (entity, target) in toResolve)
@@ -156,6 +166,35 @@ public class SiegeProcessor
                 }
             }
         }
+    }
+
+    private bool ShouldResolveSiege(OverworldEntity entity, OverworldPOI target)
+    {
+        var army = _armyRegistry?.GetByLord(entity);
+        if (army != null && army.State != Army.ArmyState.Forming)
+        {
+            if (!entity.IsMarshal) return false;
+
+            int requiredDays = 4;
+            float defPower = target.GarrisonCurrent;
+            if (army.AggregateCombatPower / Math.Max(1f, defPower) < 1.5f)
+                requiredDays = 2;
+
+            return target.SiegeDays >= requiredDays;
+        }
+
+        // No army, or a just-created Forming army whose lord was already sieging.
+        return target.SiegeDays >= 2;
+    }
+
+    private static void QueueSiege(
+        List<(OverworldEntity entity, OverworldPOI target)> toResolve,
+        HashSet<OverworldPOI> queuedTargets,
+        OverworldEntity entity,
+        OverworldPOI target)
+    {
+        if (queuedTargets.Add(target))
+            toResolve.Add((entity, target));
     }
 
     /// <summary>处理回援检查</summary>

@@ -45,9 +45,9 @@ public partial class MainMenu : CanvasLayer
     // ============================================================================
     // 资产路径
     // ============================================================================
-    private const string BgTexturePath = "res://assets/generated_ui_main/selected/MainMenu_Background.png";
-    private const string TitleTexturePath = "res://assets/generated_ui_main/selected/MainMenu_Title_steel_elegant_bright.png";
-    private const string ButtonTexturePath = "res://assets/generated_ui_main/selected/Button_Parchment_v5.png";
+    private const string BgTexturePath = "res://assets/ui_main/selected/MainMenu_Background.png";
+    private const string TitleTexturePath = "res://assets/ui_main/selected/MainMenu_Title_steel_elegant_bright.png";
+    private const string ButtonTexturePath = "res://assets/ui_main/selected/Button_Parchment_v5.png";
 
     private void _SetupUI()
     {

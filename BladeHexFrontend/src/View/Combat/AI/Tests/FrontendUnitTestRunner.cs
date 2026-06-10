@@ -1,6 +1,9 @@
 // FrontendUnitTestRunner.cs
 // Frontend-only unit test entry point for tests that depend on Godot Node/View types.
 using BladeHex.Combat.AI.Tests;
+using BladeHex.UI.Tests;
+using BladeHex.View.Strategic.Tests;
+using BladeHex.View.Unit.Tests;
 using Godot;
 using System.Collections.Generic;
 
@@ -11,6 +14,11 @@ public partial class FrontendUnitTestRunner : Node
 {
     public override void _Ready()
     {
+        Callable.From(RunTests).CallDeferred();
+    }
+
+    private void RunTests()
+    {
         GD.Print("========================================");
         GD.Print("  FrontendUnitTestRunner");
         GD.Print("========================================");
@@ -20,6 +28,10 @@ public partial class FrontendUnitTestRunner : Node
         int totalFailed = 0;
 
         RunSuite("AIBehaviorRegressionTests", AIBehaviorRegressionTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("CharacterPartTextureResolverTests", CharacterPartTextureResolverTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("LegendaryCreatureTextureTests", LegendaryCreatureTextureTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("SkillTreeUITests", SkillTreeUITests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("OverworldFrontendLayerTests", OverworldFrontendLayerTests.RunAll, ref totalPassed, ref totalFailed);
 
         GD.Print();
         GD.Print("========================================");
@@ -27,7 +39,10 @@ public partial class FrontendUnitTestRunner : Node
         GD.Print("========================================");
 
         if (DisplayServer.GetName() == "headless")
-            GetTree().Quit(totalFailed == 0 ? 0 : 1);
+        {
+            int exitCode = totalFailed == 0 ? 0 : 1;
+            Callable.From(() => GetTree().Quit(exitCode)).CallDeferred();
+        }
     }
 
     private static void RunSuite(

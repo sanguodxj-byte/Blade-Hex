@@ -7,7 +7,7 @@ namespace BladeHex.View.Unit;
 
 public static class CreatureTextureConfig
 {
-    public const string SpriteBasePath = "res://assets/generated_legendary_sprites";
+    public const string SpriteBasePath = "res://assets/legendary_sprites";
     public const int PlaceholderW = 128;
     public const int PlaceholderH = 160;
 
@@ -49,7 +49,12 @@ public static class CreatureTextureConfig
             return cached;
 
         string fallbackPath = GetExpectedSpritePath(data);
-        var texture = TextureAssetResolver.LoadUnitSprite(templateId, fallbackPath);
+        bool isLegendary = IsLegendaryCreature(data);
+        var texture = isLegendary
+            ? LoadLegendarySprite(templateId, fallbackPath)
+            : TextureAssetResolver.LoadUnitSprite(templateId, fallbackPath);
+        if (!isLegendary)
+            texture = CharacterTextureNormalizer.Normalize(texture);
         SpriteCache[templateId] = texture;
 
         if (texture != null)
@@ -60,6 +65,18 @@ public static class CreatureTextureConfig
         return texture;
     }
 
+    private static Texture2D? LoadLegendarySprite(string templateId, string fallbackPath)
+    {
+        if (AssetCatalog.TryGet(AssetKind.UnitSprite, templateId, out var catalogEntry))
+        {
+            var catalogTexture = TextureAssetResolver.LoadPath(catalogEntry.Path);
+            if (catalogTexture != null)
+                return catalogTexture;
+        }
+
+        return TextureAssetResolver.LoadPath(fallbackPath);
+    }
+
     public static string GetExpectedSpritePath(UnitData data)
     {
         if (data == null || string.IsNullOrWhiteSpace(data.EnemyTemplateId))
@@ -68,10 +85,22 @@ public static class CreatureTextureConfig
         return $"{SpriteBasePath}/{data.EnemyTemplateId}.png";
     }
 
+    public static bool IsLegendaryCreature(UnitData data)
+    {
+        if (data == null)
+            return false;
+
+        return data.enemyType == UnitData.EnemyType.Legendary
+            || data.LegendaryResistanceUses > 0
+            || data.LegendaryActionPoints > 0
+            || data.LegendaryActions.Count > 0;
+    }
+
     public static void ClearSpriteCache()
     {
         SpriteCache.Clear();
         PlaceholderCache.Clear();
+        CharacterTextureNormalizer.ClearCache();
     }
 
     public static Texture2D GeneratePlaceholder(UnitData data)

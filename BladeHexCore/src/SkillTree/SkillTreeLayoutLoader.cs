@@ -44,6 +44,9 @@ public static class SkillTreeLayoutLoader
             foreach (var nodeElement in layoutDoc.RootElement.GetProperty("nodes").EnumerateArray())
             {
                 string id = ReadRequiredString(nodeElement, "id");
+                if (nodes.ContainsKey(id))
+                    throw new InvalidDataException($"Duplicate layout node id '{id}'");
+
                 var node = new SkillNodeData
                 {
                     NodeId = id,
@@ -154,7 +157,14 @@ public static class SkillTreeLayoutLoader
             return result;
 
         foreach (var node in nodesElement.EnumerateArray())
-            result[ReadRequiredString(node, "id")] = node.Clone();
+        {
+            string id = ReadRequiredString(node, "id");
+            if (result.ContainsKey(id))
+                throw new InvalidDataException($"Duplicate content node id '{id}'");
+
+            result[id] = node.Clone();
+        }
+
         return result;
     }
 

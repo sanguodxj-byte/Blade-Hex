@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://BladeHexFrontend/src/View/Combat/AI/Tests/FrontendUnitTestRunner.cs" id="1_runner"]
+
+[node name="FrontendUnitTestRunner" type="Node"]
+script = ExtResource("1_runner")

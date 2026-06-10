@@ -30,6 +30,18 @@ public partial class AvatarData : Resource
     /// <summary>发型+胡须合并索引（0 = 光头/无发须，同一纹理包含发型和胡须）</summary>
     [Export] public int HairIndex { get; set; } = 0;
 
+    /// <summary>发色 HSL 色相值（0~360，-1 表示不修改，使用原纹理色）</summary>
+    [Export] public float HairColorHue { get; set; } = -1f;
+
+    /// <summary>发色 HSL 饱和度值（0~1，仅当 HairColorHue >= 0 时生效）</summary>
+    [Export] public float HairColorSat { get; set; } = 0.8f;
+
+    /// <summary>
+    /// 发色明度覆盖（-1 = 保留原纹理明度，0~1 = 固定明度值）。
+    /// 用于银白(0.85) / 纯黑(0.12) 等特殊发色。
+    /// </summary>
+    [Export] public float HairColorLightness { get; set; } = -1f;
+
     /// <summary>
     /// 预留装饰槽标识符（未来扩展：特殊头饰、面部纹身、眼罩等）。
     /// 空字符串表示无装饰。格式建议："decoration_xxx"。
@@ -93,6 +105,12 @@ public partial class AvatarData : Resource
     /// <summary>是否有装饰</summary>
     public bool HasDecoration => !string.IsNullOrEmpty(DecorationId);
 
+    /// <summary>是否有自定义发色</summary>
+    public bool HasCustomHairColor => HairColorHue >= 0f;
+
+    /// <summary>是否固定明度（用于银白/纯黑等）</summary>
+    public bool HasFixedLightness => HairColorLightness >= 0f;
+
     /// <summary>克隆</summary>
     public AvatarData Clone()
     {
@@ -103,6 +121,9 @@ public partial class AvatarData : Resource
             HeadIndex = HeadIndex,
             HairIndex = HairIndex,
             DecorationId = DecorationId,
+            HairColorHue = HairColorHue,
+            HairColorSat = HairColorSat,
+            HairColorLightness = HairColorLightness,
         };
     }
 }

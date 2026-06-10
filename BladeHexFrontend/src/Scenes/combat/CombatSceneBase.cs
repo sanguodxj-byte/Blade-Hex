@@ -219,12 +219,17 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		var sunLight = new DirectionalLight3D { Name = "SunLight", ShadowEnabled = true };
 		AddChild(sunLight);
 
+		var fillLight = new DirectionalLight3D { Name = "SkyFillLight", ShadowEnabled = false };
+		AddChild(fillLight);
+
+		float currentHour = GetCurrentHour();
 		_combatSunLight = new BladeHex.View.Combat.CombatSunLight { Name = "CombatSunLight" };
 		AddChild(_combatSunLight);
-		_combatSunLight.Initialize(sunLight, GetCurrentHour());
+		_combatSunLight.Initialize(sunLight, currentHour, fillLight);
 
 		_backdrop = new BladeHex.View.Combat.CombatSceneBackdrop { Name = "Backdrop" };
 		AddChild(_backdrop);
+		_backdrop.SetHour(currentHour);
 	}
 
 	/// <summary>初始化相机、输入与高亮控制器组件（在 GenerateBattlefield 之后调用）</summary>
@@ -250,6 +255,7 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		HighlightCtrl = new CombatHighlightController { Name = "CombatHighlightController" };
 		AddChild(HighlightCtrl);
 		HighlightCtrl.HexGrid = _hexGrid;
+		HighlightCtrl.CurrentHour = GetCurrentHour();
 		HighlightCtrl.CellHovered += (cell) => {
 			if (InputCtrl != null) InputCtrl.CurrentHoverCell = cell;
 			HoverPreviewCtrl?.OnCellHover(cell);
@@ -751,7 +757,10 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		ShowSelectedUnitHighlights();
 
 		if (CameraCtrl != null)
-			CameraCtrl.LockOnUnit(unit);
+		{
+			CameraCtrl.Unlock();
+			_ = CameraCtrl.EnsureUnitVisible(unit);
+		}
 	}
 
 	public void CycleNextPlayerUnit()
@@ -762,7 +771,6 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		int idx = Runtime.ActivePlayerUnit != null ? alive.IndexOf(Runtime.ActivePlayerUnit) : -1;
 		int next = (idx + 1) % alive.Count;
 		SelectUnit(alive[next]);
-		FocusCameraOn(alive[next].Position, 0.3f);
 	}
 
 	// ========== 部署阶段 ==========
@@ -837,7 +845,11 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 
 			if (initUnit != null && IsInstanceValid(initUnit))
 			{
-				CameraCtrl?.LockOnUnit(initUnit);
+				if (CameraCtrl != null)
+				{
+					CameraCtrl.Unlock();
+					_ = CameraCtrl.EnsureUnitVisible(initUnit);
+				}
 			}
 
 			ExecuteAiTurnForUnit(initUnit);
@@ -1121,6 +1133,14 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		if (_combatSunLight != null && GodotObject.IsInstanceValid(_combatSunLight))
 		{
 			_combatSunLight.Tick(currentHour);
+		}
+		if (_backdrop != null && GodotObject.IsInstanceValid(_backdrop))
+		{
+			_backdrop.SetHour(currentHour);
+		}
+		if (HighlightCtrl != null && GodotObject.IsInstanceValid(HighlightCtrl))
+		{
+			HighlightCtrl.CurrentHour = currentHour;
 		}
 	}
 }

@@ -10,6 +10,7 @@ using BladeHex.Strategic.Facilities;
 using BladeHex.Strategic.Tournament;
 using BladeHex.Scenes.Overworld;
 using BladeHex.View.UI.Overworld;
+using BladeHex.View.Strategic;
 using BladeHex.Data;
 using OverworldUI = BladeHex.View.UI.Overworld.OverworldUI;
 
@@ -389,10 +390,14 @@ public partial class OverworldScene2D
         if (interactNode is OverworldEnemy enemy && _grid != null)
         {
             var ctx = enemy.EntityRef != null
-                ? BattleContextFactory.CreatePlayerVsEntity(
+                ? BattleContextFactory.CreatePlayerInitiatedEntityBattle(
                     defender: enemy.EntityRef,
                     grid: _grid,
                     playerPixelPosition: _playerPixelPos,
+                    nearbyEntities: EntityMgr?.Entities ?? Enumerable.Empty<OverworldEntity>(),
+                    engine: EntityMgr?.WorldEngine,
+                    relationMatrix: EntityMgr?.Relations,
+                    playerFaction: GetCurrentPlayerFaction(),
                     seed: (int)GD.Randi())
                 : BattleContext.Create(
                     _mapAccess.GetActiveTileAtPixel(enemy.Position)?.Terrain ?? Map.HexOverworldTile.TerrainType.Plains,
@@ -605,17 +610,15 @@ public partial class OverworldScene2D
         IsTimePaused = false;
         _poiEntered = false;
         _encounterActive = false;
+        StartPlayerEntityInteractionCooldown();
+        // 面板关闭冷却（使用集中化冷却模块）
+        _interactionCooldown.Trigger(CooldownSource.PanelClose, Time.GetTicksMsec() / 1000.0);
         if (_camera != null) _camera.PopInputBlock();
 
         CleanupCurrentTownNode();
         CleanupCurrentEnemyNode();
 
-        // 新增：清除目标 POI 及控制器目标缓存
-        _targetPoi = null;
-        if (_poiController != null)
-        {
-            _poiController.TargetPOI = null;
-        }
+        ClearDirectedInteraction();
 
         if (PendingSmuggleAmbushEntity != null)
         {

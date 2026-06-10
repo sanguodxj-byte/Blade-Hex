@@ -25,12 +25,20 @@ public partial class CombatSceneBackdrop : Node3D
 
     private MeshInstance3D? _groundMesh;
     private WorldEnvironment? _worldEnv;
+    private float _currentHour = -1f;
 
     /// <summary>根据战场 AABB 配置背景几何（首次或战场重生成时调用）</summary>
     public void Configure(Aabb battlefieldBounds)
     {
         EnsureSky();
         EnsureGround(battlefieldBounds);
+    }
+
+    public void SetHour(float hour)
+    {
+        if (Mathf.Abs(hour - _currentHour) < 0.05f) return;
+        _currentHour = Mathf.Clamp(hour, 0f, 24f);
+        ApplyEnvironmentProfile(_currentHour);
     }
 
     private void EnsureSky()
@@ -95,6 +103,61 @@ public partial class CombatSceneBackdrop : Node3D
 
         _worldEnv = new WorldEnvironment { Environment = env, Name = "BackdropEnvironment" };
         AddChild(_worldEnv);
+    }
+
+    private void ApplyEnvironmentProfile(float hour)
+    {
+        var env = _worldEnv?.Environment;
+        if (env == null) return;
+
+        bool isDay = hour >= 6f && hour <= 18f;
+        float dayProgress = isDay ? (hour - 6f) / 12f : 0f;
+        float noonFactor = isDay ? Mathf.Sin(dayProgress * Mathf.Pi) : 0f;
+
+        if (isDay)
+        {
+            env.AmbientLightSkyContribution = Mathf.Lerp(0.48f, 0.36f, noonFactor);
+            env.AmbientLightEnergy = Mathf.Lerp(0.42f, 0.32f, noonFactor);
+            env.TonemapExposure = Mathf.Lerp(0.86f, 0.95f, noonFactor);
+            env.FogLightColor = new Color(
+                Mathf.Lerp(0.70f, 0.62f, noonFactor),
+                Mathf.Lerp(0.66f, 0.70f, noonFactor),
+                Mathf.Lerp(0.58f, 0.78f, noonFactor));
+            env.GlowIntensity = Mathf.Lerp(0.75f, 0.95f, noonFactor);
+
+            if (env.Sky?.SkyMaterial is ProceduralSkyMaterial sky)
+            {
+                sky.SkyTopColor = new Color(
+                    Mathf.Lerp(0.58f, SkyTopColor.R, noonFactor),
+                    Mathf.Lerp(0.54f, SkyTopColor.G, noonFactor),
+                    Mathf.Lerp(0.48f, SkyTopColor.B, noonFactor));
+                sky.SkyHorizonColor = new Color(
+                    Mathf.Lerp(0.86f, SkyHorizonColor.R, noonFactor),
+                    Mathf.Lerp(0.72f, SkyHorizonColor.G, noonFactor),
+                    Mathf.Lerp(0.56f, SkyHorizonColor.B, noonFactor));
+                sky.SunAngleMax = Mathf.Lerp(42f, 26f, noonFactor);
+            }
+        }
+        else
+        {
+            env.AmbientLightSkyContribution = 0.55f;
+            env.AmbientLightEnergy = 0.18f;
+            env.TonemapExposure = 0.72f;
+            env.FogLightColor = new Color(0.34f, 0.40f, 0.58f);
+            env.GlowIntensity = 1.1f;
+
+            if (env.Sky?.SkyMaterial is ProceduralSkyMaterial sky)
+            {
+                sky.SkyTopColor = new Color(0.12f, 0.16f, 0.28f);
+                sky.SkyHorizonColor = new Color(0.28f, 0.32f, 0.42f);
+                sky.SunAngleMax = 18f;
+            }
+        }
+
+        env.FogDepthBegin = Mathf.Lerp(1400f, 1900f, noonFactor);
+        env.FogDepthEnd = Mathf.Lerp(3600f, 4800f, noonFactor);
+        env.SsaoIntensity = Mathf.Lerp(1.35f, 1.75f, noonFactor);
+        env.SsilIntensity = Mathf.Lerp(0.65f, 0.48f, noonFactor);
     }
 
     private void EnsureGround(Aabb battlefieldBounds)

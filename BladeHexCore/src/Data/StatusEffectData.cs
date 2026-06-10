@@ -52,6 +52,7 @@ public partial class StatusEffectData : Resource
     // 每回合伤害骰子
     [Export] public int TickDamageDiceCount;
     [Export] public int TickDamageDiceSides;
+    [Export] public float TickDamageMaxHpPercent;
     [Export] public string TickDamageType { get; set; } = "";
 
     // 属性修正
@@ -86,9 +87,9 @@ public partial class StatusEffectData : Resource
         {
             // ====== 负面状态 ======
             case EffectId.Poison:
-                e.EffectName = "中毒"; e.Description = "每回合开始受到1d4伤害";
+                e.EffectName = "中毒"; e.Description = "每回合开始受到最大生命值5%伤害";
                 e.IsNegative = true; e.DefaultDuration = 3;
-                e.TickDamageDiceCount = 1; e.TickDamageDiceSides = 4; e.TickDamageType = "poison";
+                e.TickDamageMaxHpPercent = 0.05f; e.TickDamageType = "poison";
                 e.SaveToRemove = "fortitude"; e.SaveDc = 12;
                 break;
             case EffectId.Burning:

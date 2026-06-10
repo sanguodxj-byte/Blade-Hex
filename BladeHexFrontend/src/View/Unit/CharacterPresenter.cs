@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.View.AssetSystem;
 using BladeHex.View.Data;
+using BladeHex.View.Unit.Components;
 
 namespace BladeHex.View.Unit;
 
@@ -102,25 +103,13 @@ public static class CharacterPresenter
         int faceIdx = data.FaceIndex > 0 ? data.FaceIndex : headIdx;
        
 
-        var faceTex = AvatarRenderer.LoadPartTexture("face", raceStr, gender, faceIdx);
-        if (faceTex == null)
+        var headTex = AvatarRenderer.LoadPartTexture("head", raceStr, gender, faceIdx);
+        if (headTex != null)
         {
-
-        	faceTex = AvatarRenderer.LoadPartTexture("head", raceStr, gender, faceIdx);
-        }
-        if (faceTex != null)
-        {
-        	result.Slots[ItemData.EquipSlot.Face] = new CharacterSlotResolution
-        	{
-        		Slot = ItemData.EquipSlot.Face,
-        		Texture = faceTex,
-        		Modulate = Colors.White,
-        	};
-
         	result.Slots[ItemData.EquipSlot.Head] = new CharacterSlotResolution
         	{
         		Slot = ItemData.EquipSlot.Head,
-        		Texture = faceTex,
+        		Texture = headTex,
         		Modulate = Colors.White,
         	};
         }
@@ -131,6 +120,11 @@ public static class CharacterPresenter
         	var hairTex = AvatarRenderer.LoadPartTexture("hair", raceStr, gender, data.HairIndex);
         	if (hairTex != null)
         	{
+        		// 若 Avatar 数据指定了自定义发色，对发型纹理进行重着色
+        		var avatar = data.Avatar;
+        		if (avatar != null && avatar.HasCustomHairColor)
+        			hairTex = HairColorComponent.Apply(hairTex, avatar.HairColorHue, avatar.HairColorSat, avatar.HairColorLightness) ?? hairTex;
+
         		result.Slots[ItemData.EquipSlot.Hair] = new CharacterSlotResolution
         		{
         			Slot = ItemData.EquipSlot.Hair,
@@ -183,9 +177,8 @@ public static class CharacterPresenter
         int faceIdx = data.FaceIndex > 0 ? data.FaceIndex : headIdx;
         string raceStr = (data.Race != null) ? data.Race.raceId.ToString().ToLower() : "human";
 
-        var faceTex = AvatarRenderer.LoadPartTexture("face", raceStr, gender, faceIdx);
-        faceTex ??= AvatarRenderer.LoadPartTexture("head", raceStr, gender, faceIdx);
-        if (faceTex != null) return faceTex;
+        var headTex = AvatarRenderer.LoadPartTexture("head", raceStr, gender, faceIdx);
+        if (headTex != null) return headTex;
 
 
         var tex = TextureAssetResolver.LoadPortrait(data.PortraitId);

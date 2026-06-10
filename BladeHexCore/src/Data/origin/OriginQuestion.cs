@@ -53,7 +53,7 @@ public sealed class OriginChoice
     /// <summary>奖励物品类型：weapon/armor/consumable/accessory/quiver/material。</summary>
     public string ItemRewardType { get; set; } = "material";
 
-    /// <summary>关联插图 ID（res://assets/generated_origin_illust/{id}.png）。</summary>
+    /// <summary>关联插图 ID（res://assets/origin_illust/{id}.png）。</summary>
     public string IllustId { get; set; } = "";
 
     /// <summary>是否为伙伴选择（用于 companion 字段）。仅 companionQuestion 中的选项使用。</summary>

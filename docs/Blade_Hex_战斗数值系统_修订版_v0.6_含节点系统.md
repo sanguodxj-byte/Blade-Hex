@@ -694,7 +694,7 @@ $$ManaRegenPerTurn = \lfloor WIS / 8 \rfloor + NodeManaRegen$$
 | double_attack | 单体 | 4 | 2次攻击判定；第2次命中 -3 |
 | whirlwind | 周围(半径1) | 5 | 1次伤害判定覆盖周围所有目标 |
 | blood_vortex | 周围(半径1) | 5 | 1次伤害判定覆盖周围所有目标；每命中1目标自身恢复 1d6 HP |
-| poison_blade | 单体 | 3 | 挂载状态：中毒 (Poison) |
+| poison_blade | 自身 | 2 | 下次武器攻击命中后挂载中毒 (Poison)：1d4/回合，持续 3 回合 |
 | shield_bash | 单体 | 5 | 常规伤害判定；触发位移 (Push) 1格 |
 
 ### 10.2 远程物理 (Ranged Active)
@@ -985,7 +985,7 @@ $$FinalHeal = BaseHeal \times HealingMultiplier$$
 | wis_b01 | 法力涌动 | 主动 | 非 Spell；AP 4；每场 1 次。立即将自身 Mana 恢复至上限。 | 替代旧 basic_heal（生命系迁法表）|
 | wis_b02 | 爆头突袭 | 主动 | 非 Spell；AP 8；下一次武器攻击必定暴击且伤害 ×1.5；不可与精准射击同回合使用。 | WIS 单点爆发主技能 |
 | wis_b04 | 致命猎杀 | 被动 | 对当前 HP <30% 敌人，攻击命中 +2、暴击率 +10%（不影响法术）。 | 暴击与残血协同 |
-| wis_b06 | 影刃涂毒 | 主动 | 非 Spell；AP 3；下次武器攻击附加 1d4×3 回合中毒（复用 DEX `poison_blade`）。 | 提供持续输出窗口 |
+| wis_b06 | 影刃涂毒 | 主动 | 非 Spell；次行动/CD2；下次武器攻击命中后附加 1d4×3 回合中毒。 | 提供持续输出窗口 |
 | wis_b03 | 守护祝福 | 主动（贤者用）| 周围友军 +AC/豁免增益（INT+WIS 贤者跨界用，Sim 暂未触发）。 | 保留 INT+WIS 贤者跨界点 |
 | wis_b05 | 净化领域 | 主动（贤者用）| 周围友军移除负面状态并恢复少量 HP（贤者跨界用）。 | 同上 |
 | wis_b07 | 暗杀 | 主动 | 非 Spell；AP 8；每场 1 次。指定 HP <30% 的敌方单位直接斩杀（豁免无效，无视 AC/DR）；boss 改为造成 50% 当前 HP 真伤。 | 残血斩杀，刺客经典手感 |

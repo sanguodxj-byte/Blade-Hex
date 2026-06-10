@@ -14,6 +14,7 @@ using BladeHex.Events;
 using BladeHex.Scenes;
 using BladeHex.View.Quest;
 using BladeHex.View.UI.Overworld;
+using BladeHex.View.Strategic;
 
 namespace BladeHex.Scenes.Overworld2d;
 
@@ -70,6 +71,15 @@ public partial class OverworldScene2D
     private OverworldEntity? _lastWarnedChasingEntity;
     private double _lastChaseWarningTime = -999.0;
     private bool _fleeAttempted = false;           // 本次追击是否已尝试逃跑
+
+    // ========================================
+    // 战场与引导交互字段
+    // ========================================
+    private const float BATTLEFIELD_DIST = 72.0f; // 点击战场后的加入距离，略大于 marker 避免导航停在边缘卡死
+    private const float INTERACT_DIST = 40.0f;   // 主动交互距离（点击后需靠近此距离）
+    private OverworldEntity? _pendingInteractionEntity;
+    private JoinOpportunity? _pendingBattleJoinOpportunity;
+    private Vector2 _pendingBattleJoinPosition;
 
     // ========================================
     // 战斗过渡
@@ -690,6 +700,7 @@ public partial class OverworldScene2D
         var label = new Label();
         label.Name = "Label";
         label.HorizontalAlignment = HorizontalAlignment.Center;
+        label.MouseFilter = Control.MouseFilterEnum.Ignore;
 
         // 图标 + 文字
         if (entity.Faction == "player")
@@ -1562,5 +1573,193 @@ public partial class OverworldScene2D
         ApplyBattleTerrainFromMapAccess(ctx, terrainPos);
 
         EnterCombatScene(ctx);
+    }
+
+    private bool HasActiveEntityMotion()
+    {
+        if (EntityMgr == null) return false;
+
+        foreach (var entity in EntityMgr.Entities)
+        {
+            if (!entity.IsAlive) continue;
+            if (entity.IsMoving) return true;
+            if (entity.CurrentAIState == OverworldEntity.AIState.Engaged
+                || entity.CurrentAIState == OverworldEntity.AIState.Chasing
+                || entity.CurrentAIState == OverworldEntity.AIState.Besieging)
+                return true;
+        }
+
+        return false;
+    }
+
+    private string GetCurrentPlayerFaction()
+    {
+        if (EntityMgr?.PlayerKingdom != null)
+            return OverworldHostility.NormalizePlayerFaction(EntityMgr.PlayerKingdom.KingdomId);
+
+        if (_reputationTracker != null && EconomyMgr != null)
+        {
+            var nation = new PlayerNationResolver().GetCurrent(_reputationTracker, EconomyMgr.DaysPassed);
+            if (!string.IsNullOrEmpty(nation))
+                return nation;
+        }
+
+        return OverworldHostility.DefaultPlayerFaction;
+    }
+
+    private void ResumeTravelForDirectedInteraction()
+    {
+        IsTimePaused = false;
+        IsWaiting = false;
+    }
+
+    private bool IsHostileToCurrentPlayer(OverworldEntity entity)
+    {
+        return OverworldHostility.AreHostile(entity, _hostilityProxy);
+    }
+
+    private void TriggerFriendlyInteraction(OverworldEntity entity)
+    {
+        if (entity.Faction == "player")
+        {
+            var sp = EntityMgr?.SubParties.GetAll().Find(s => s.LeaderUnitName == entity.EntityName);
+            if (sp != null)
+            {
+                foreach (var member in sp.Members)
+                {
+                    PlayerParty?.Roster?.Add(member);
+                }
+                EntityMgr?.SubParties.Remove(sp.SubPartyId);
+                entity.IsAlive = false;
+                _toast?.Show($"【归队】部下 {entity.EntityName} 已顺利带领队伍重返兵团！");
+
+                if (_entitySpriteMap.TryGetValue(entity, out var spriteNode))
+                {
+                    spriteNode.Container.QueueFree();
+                    _entitySpriteMap.Remove(entity);
+                }
+                return;
+            }
+        }
+
+        RecordEntityEncounter(entity);
+        StopPlayerMovementForEncounter();
+
+        _lastEncounteredEntity = entity;
+        _chasingEntity = null;
+        _fleeAttempted = false;
+
+        CleanupCurrentEnemyNode();
+        var friendlyNode = new OverworldEnemy();
+        friendlyNode.SetupFromEntity(entity);
+        friendlyNode.Visible = false;
+        AddChild(friendlyNode);
+        _currentEnemyNode = friendlyNode;
+
+        _interactionMgr?.TriggerInteraction(friendlyNode);
+    }
+
+    private void TriggerHostileEncounter(OverworldEntity entity)
+    {
+        RecordEntityEncounter(entity);
+        StopPlayerMovementForEncounter();
+
+        _lastEncounteredEntity = entity;
+        _chasingEntity = null;
+        _fleeAttempted = false;
+
+        CleanupCurrentEnemyNode();
+        var enemyNode = new OverworldEnemy();
+        enemyNode.SetupFromEntity(entity);
+        enemyNode.Visible = false;
+        AddChild(enemyNode);
+        _currentEnemyNode = enemyNode;
+
+        _interactionMgr?.TriggerInteraction(enemyNode);
+    }
+
+    private void ShowBattleJoinPrompt(JoinOpportunity opp, bool fromClick)
+    {
+        if (opp.Type == WarBattleType.FieldBattle && EntityMgr != null)
+        {
+            BattlefieldInterventionService.ExpandOpportunityParticipants(
+                opp,
+                EntityMgr.Entities,
+                EntityMgr.WorldEngine,
+                EntityMgr.Relations);
+        }
+
+        ClearDirectedInteraction();
+        _playerMoving = false;
+        PlayerParty?.StopNavAgent();
+        ClearPathPreview();
+        IsTimePaused = true;
+        IsWaiting = false;
+
+        if (_battleJoinPrompt == null)
+        {
+            _battleJoinPrompt = new JoinBattlePrompt();
+            _battleJoinPrompt.JoinSelected += OnJoinBattleSelected;
+            _battleJoinPrompt.LeaveSelected += OnLeaveBattleSelected;
+            AddChild(_battleJoinPrompt);
+        }
+
+        _battleJoinPrompt.ShowPrompt(opp);
+    }
+
+    private void StartPlayerEntityInteractionCooldown()
+    {
+        _interactionCooldown.Trigger(CooldownSource.EntityOverlap, Time.GetTicksMsec() / 1000.0);
+    }
+
+    private void RecordEntityEncounter(OverworldEntity entity)
+    {
+        if (EntityMgr?.Journal == null) return;
+
+        // 1. 领主 → 具名英雄图鉴
+        if (entity.EntityTypeEnum == OverworldEntity.EntityType.LordArmy && !string.IsNullOrEmpty(entity.HeroId))
+        {
+            if (EntityMgr.Journal.EncounterLord(entity.HeroId))
+            {
+                _toast?.Show($"👑 百科已更新: 结识了领主【{entity.EntityName}】！");
+                BladeHex.UI.Tutorial.TutorialManager.Instance?.Trigger("encounter_lord");
+            }
+        }
+        // 2. 冒险者 → 日志
+        else if (entity.EntityTypeEnum == OverworldEntity.EntityType.Adventurer)
+        {
+            if (EntityMgr.Journal.EncounterAdventurer(entity.EntityName))
+            {
+                _toast?.Show($"🧭 百科已更新: 遇见了冒险者队伍【{entity.EntityName}】！");
+            }
+        }
+        // 3. 其它生物或野怪 → 生物图鉴
+        else
+        {
+            var enemies = EncounterUnitFactory.BuildEnemyUnitsFromEntity(entity);
+            if (enemies != null && enemies.Count > 0)
+            {
+                foreach (var enemy in enemies)
+                {
+                    var templateId = enemy.EnemyTemplateId;
+                    if (string.IsNullOrEmpty(templateId)) continue;
+
+                    if (templateId.StartsWith("legend_"))
+                    {
+                        if (EntityMgr.Journal.EncounterLegendary(templateId))
+                        {
+                            _toast?.Show($"🐉 百科已更新: 遭遇了传说生物【{enemy.UnitName}】！");
+                        }
+                    }
+                    else
+                    {
+                        if (EntityMgr.Journal.EncounterCreature(templateId))
+                        {
+                            _toast?.Show($"👾 百科已更新: 遭遇了【{enemy.UnitName}】！");
+                        }
+                    }
+                }
+            }
+        }
     }
 }

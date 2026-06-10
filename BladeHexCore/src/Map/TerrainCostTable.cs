@@ -140,18 +140,18 @@ public static class TerrainCostTable
     // 速度因子查询 (供 MovementSpeedComponent 使用)
     // 注意: 速度因子与寻路代价是独立的两套数值！
     // 寻路代价决定"路径选择"（道路 0.2 让 A* 强烈偏好道路）
-    // 速度因子决定"实际移速"（道路 1.5x 是合理的加速幅度）
+    // 速度因子决定"实际移速"（道路 1.2x 是温和加速）
     // ========================================
 
     /// <summary>
     /// 获取地形移速因子（独立于寻路代价）。
-    /// 道路=1.5x, 平原=1.0x, 森林=0.7x, 沼泽=0.5x 等。
+    /// 道路=1.2x, 平原=1.0x, 森林=0.7x, 沼泽=0.5x 等。
     /// </summary>
     public static float GetSpeedFactor(HexOverworldTile.TerrainType terrain)
     {
         return terrain switch
         {
-            HexOverworldTile.TerrainType.Road => 1.5f,
+            HexOverworldTile.TerrainType.Road => 1.2f,
             HexOverworldTile.TerrainType.Plains => 1.0f,
             HexOverworldTile.TerrainType.Grassland => 1.0f,
             HexOverworldTile.TerrainType.Savanna => 1.0f,
@@ -180,7 +180,7 @@ public static class TerrainCostTable
     /// <summary>获取 tile 的速度因子（考虑 IsRoad 覆盖）</summary>
     public static float GetSpeedFactor(HexOverworldTile tile)
     {
-        if (tile.IsRoad) return 1.5f;
+        if (tile.IsRoad) return 1.2f;
         return GetSpeedFactor(tile.Terrain);
     }
 }

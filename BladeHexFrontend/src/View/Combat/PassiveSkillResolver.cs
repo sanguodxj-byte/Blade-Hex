@@ -42,7 +42,7 @@ public static class PassiveSkillResolver
         return 2;
     }
 
-    /// <summary>近战伤害加成（被动）</summary>
+    /// <summary>近战固定伤害加成（非技能盘百分比节点）。</summary>
     public static int GetPassiveMeleeDamageBonus(Unit unit)
     {
         int bonus = 0;
@@ -54,19 +54,22 @@ public static class PassiveSkillResolver
                 if (strMod > 0) bonus += (int)(strMod * 0.5f);
             }
         }
-        // v0.6 11.2 节点 melee_damage 累加值（NodeMeleeDamage）
-        if (unit.SkillTree != null)
-            bonus += unit.SkillTree.GetMeleeDamageBonus();
         return bonus;
     }
 
-    /// <summary>远程伤害加成（被动 + 节点）</summary>
+    /// <summary>远程固定伤害加成（技能盘不提供固定伤害）。</summary>
     public static int GetPassiveRangedDamageBonus(Unit unit)
     {
-        int bonus = 0;
-        if (unit.SkillTree != null)
-            bonus += unit.SkillTree.GetRangedDamageBonus();
-        return bonus;
+        return 0;
+    }
+
+    public static float GetSkillTreeWeaponDamageMultiplier(Unit unit, bool isMelee)
+    {
+        if (unit.SkillTree == null) return 1.0f;
+        float bonus = isMelee
+            ? unit.SkillTree.GetMeleeDamagePercentBonus()
+            : unit.SkillTree.GetRangedDamagePercentBonus();
+        return Math.Max(0.0f, 1.0f + bonus);
     }
 
     /// <summary>近战伤害总倍率修正</summary>
@@ -479,12 +482,6 @@ public static class PassiveSkillResolver
 
     /// <summary>单手武器是否视为双手</summary>
     public static bool TreatsOneHandedAsTwoHanded(Unit unit) => unit.HasSkillEffect("giant_strength");
-
-    // ============================================================================
-    // 法术命中（spell_hit_plus_1）
-    // ============================================================================
-
-    public static int GetPassiveSpellHitBonus(Unit unit) => unit.HasSkillEffect("spell_hit_plus_1") ? 1 : 0;
 
     // ============================================================================
     // 法术反射（spell_reflect）

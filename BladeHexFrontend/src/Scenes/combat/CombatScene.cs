@@ -154,9 +154,29 @@ public partial class CombatScene : CombatSceneBase
         return BattleDeploymentFactory.BuildUnits(BattleContextRef.DefenderDeployment, seed);
     }
 
+    private List<UnitData> BuildAlliesFromBattleContext()
+    {
+        if (BattleContextRef?.AttackerDeployment == null || BattleContextRef.AttackerDeployment.Length == 0)
+            return new List<UnitData>();
+
+        int seed = BattleContextRef.Seed != 0
+            ? BattleContextRef.Seed + 17
+            : BattleContextRef.EncounterCoord.X * 997 + BattleContextRef.EncounterCoord.Y * 1009 + 17;
+
+        return BattleDeploymentFactory.BuildUnits(BattleContextRef.AttackerDeployment, seed);
+    }
+
     /// <summary>部署模式：创建玩家单位并注册，但不放置到地图上</summary>
     private void SpawnPlayerUnitsForDeployment()
     {
+        var alliedUnits = BuildAlliesFromBattleContext();
+        foreach (var allyData in alliedUnits)
+        {
+            allyData.IsEnemy = false;
+            var unit = new Unit { Data = allyData, Name = $"Ally_{allyData.UnitName}" };
+            RegisterAndInitUnit(unit, true);
+        }
+
         if (PlayerRoster != null && PlayerRoster.GetDeployableMembers().Count > 0)
         {
             var deployable = PlayerRoster.GetDeployableMembers();

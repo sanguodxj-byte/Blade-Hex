@@ -534,7 +534,8 @@ public partial class AIController : Node
             .ToArray();
         var result = CombatResolver.ResolveAttack(actor, target, hexGrid, action.IsCharge,
             attackerAllies: allies,
-            defenderAllies: defenderAllies);
+            defenderAllies: defenderAllies,
+            triggerVisuals: false);
 
         if (result["hit"].AsBool())
         {

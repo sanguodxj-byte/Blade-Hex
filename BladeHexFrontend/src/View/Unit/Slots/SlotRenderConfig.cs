@@ -3,6 +3,7 @@
 // 迁移自 ItemData.SlotRenderConfig（Core），消除 Core 对 Vector3/Vector2 渲染坐标的依赖
 using Godot;
 using BladeHex.Data;
+using System;
 
 namespace BladeHex.View.Unit.Slots;
 
@@ -35,22 +36,21 @@ public static class SlotConfigTable
     private static readonly SlotRenderConfig[] SlotConfigs =
     [
         // 渲染顺序（SortOffset 越负越靠前/离相机越近）：
-        // 武器(-0.50) → 头盔/护手(-0.30) → 护甲(-0.15) → 身体(0.00)
+        // 武器(-0.50) → 头盔/护手(-0.30) → 护甲(-0.15) → 头部/身体(0.00)
         new() { Slot = ItemData.EquipSlot.Body,    AnchorOffset = new Vector3(0, 0, 0),    ZOrder = 0, DefaultSize = new Vector2(64, 96),  SortOffset = 0.000f },
-        new() { Slot = ItemData.EquipSlot.Costume, AnchorOffset = new Vector3(0, 4, 0),    ZOrder = 1, DefaultSize = new Vector2(72, 100), SortOffset = -0.15f },
+        new() { Slot = ItemData.EquipSlot.Costume, AnchorOffset = new Vector3(0, 4, 0),    ZOrder = 2, DefaultSize = new Vector2(72, 100), SortOffset = -0.15f },
         new() { Slot = ItemData.EquipSlot.Hands,   AnchorOffset = new Vector3(0, -20, 0),  ZOrder = 2, DefaultSize = new Vector2(48, 48),  SortOffset = -0.30f },
-        new() { Slot = ItemData.EquipSlot.Head,    AnchorOffset = new Vector3(0, 96, 0),   ZOrder = 3, DefaultSize = new Vector2(48, 48),  SortOffset = -0.25f },
+        new() { Slot = ItemData.EquipSlot.Head,    AnchorOffset = new Vector3(0, 96, 0),   ZOrder = 0, DefaultSize = new Vector2(48, 48),  SortOffset = 0.000f },
         new() { Slot = ItemData.EquipSlot.Helmet,  AnchorOffset = new Vector3(0, 104, 0),  ZOrder = 4, DefaultSize = new Vector2(56, 56),  SortOffset = -0.32f },
         new() { Slot = ItemData.EquipSlot.Weapon,  AnchorOffset = new Vector3(56, -10, 0), ZOrder = 5, DefaultSize = new Vector2(32, 80),  SortOffset = -0.50f },
         new() { Slot = ItemData.EquipSlot.Feet,    AnchorOffset = new Vector3(0, -40, 0),  ZOrder = 6, DefaultSize = new Vector2(48, 32),  SortOffset = -0.10f },
         new() { Slot = ItemData.EquipSlot.Shield,  AnchorOffset = new Vector3(-56, 0, 0),  ZOrder = 7, DefaultSize = new Vector2(64, 64),  SortOffset = -0.40f },
-        new() { Slot = ItemData.EquipSlot.Face, AnchorOffset = new Vector3(0, 96, 0), ZOrder = 3, DefaultSize = new Vector2(48, 48), SortOffset = -0.25f }, // Face
         new() { Slot = ItemData.EquipSlot.Hair, AnchorOffset = new Vector3(0, 96, 0), ZOrder = 3, DefaultSize = new Vector2(48, 48), SortOffset = -0.27f }, // Hair+Beard 合并
         ];
 
     /// <summary>获取指定部位的渲染配置</summary>
     public static SlotRenderConfig GetSlotConfig(ItemData.EquipSlot slot)
-        => SlotConfigs[(int)slot];
+        => Array.Find(SlotConfigs, cfg => cfg.Slot == slot) ?? SlotConfigs[0];
 
     /// <summary>获取所有部位渲染配置（按 z_order 排序）</summary>
     public static SlotRenderConfig[] GetAllSlotConfigs()
@@ -67,7 +67,6 @@ public static class SlotConfigTable
         ItemData.EquipSlot.Weapon => "武器",
         ItemData.EquipSlot.Feet => "鞋子",
         ItemData.EquipSlot.Shield => "盾牌",
-        ItemData.EquipSlot.Face => "脸部",
         ItemData.EquipSlot.Hair => "发型+胡须",
         _ => "未知",
     };

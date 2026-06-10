@@ -30,7 +30,6 @@ public partial class SkillNodeData : Resource
     // 拓扑结构
     // ========================================
 
-    public List<string> Neighbors = new();
     [Export] public bool IsBridge { get; set; } = false;
     [Export] public int Depth { get; set; } = 0;
 
@@ -115,7 +114,7 @@ public partial class SkillNodeData : Resource
             ActivationShape.Start => 0,
             ActivationShape.Attribute when CurrentNodeType == NodeType.Pip => 1,
             ActivationShape.Attribute => 2,
-            ActivationShape.PassiveSkill => 4,
+            ActivationShape.PassiveSkill => 3,
             ActivationShape.ActiveSkill => 4,
             ActivationShape.Keystone => 6,
             ActivationShape.Apex => 12,
@@ -151,11 +150,12 @@ public partial class SkillNodeData : Resource
         var statNames = new Dictionary<string, string>
         {
             { "max_hp", "最大生命" }, { "ac", "闪避" }, { "melee_hit", "近战命中" },
-            { "melee_damage", "近战伤害" }, { "ranged_hit", "远程命中" }, { "ranged_damage", "远程伤害" },
+            { "melee_damage", "近战伤害" }, { "melee_damage_percent", "近战伤害" },
+            { "ranged_hit", "远程命中" }, { "ranged_damage", "远程伤害" }, { "ranged_damage_percent", "远程伤害" },
             { "critical_rate", "暴击率" }, { "speed", "移动速度" }, { "mana_max", "魔力上限" },
             { "mana_regen", "魔力回复" }, { "initiative", "先攻" }, { "all_save", "全豁免" }, { "range_bonus", "射程" },
-            { "spell_hit", "法术命中" }, { "spell_damage", "法术伤害" },
-            { "heal_amount", "治疗量" }, { "ally_bonus", "友军加成" },
+            { "spell_damage", "法术伤害" }, { "spell_damage_percent", "法术伤害" },
+            { "heal_amount", "治疗量" }, { "heal_amount_percent", "治疗量" }, { "ally_bonus", "友军加成" },
         };
 
         foreach (var key in bonuses.Keys)
@@ -199,16 +199,6 @@ public partial class SkillNodeData : Resource
         if (IsActivated) return false;
         if (RequiredLevel > characterLevel) return false;
         return Prerequisites.All(p => activatedNodes.Contains(p));
-    }
-
-    public bool IsAdjacentToActivated(ICollection<string> activatedNodes)
-    {
-        // 检查手动定义的 Neighbors
-        if (Neighbors.Any(n => activatedNodes.Contains(n)))
-            return true;
-        // 注：几何邻接（共享边三角形瓦片）由 NodeFiller 在 RefreshAvailable 中处理
-        // 此方法保留用于 TryActivateNode 的快速检查（仅基于手动连线）
-        return false;
     }
 
     public string GetRegionName() => CurrentRegion switch

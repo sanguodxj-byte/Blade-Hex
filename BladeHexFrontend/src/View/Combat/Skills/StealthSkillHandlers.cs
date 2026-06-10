@@ -24,11 +24,25 @@ public static class StealthSkillHandlers
 
     public static void PoisonBlade(in SkillHandlerContext ctx)
     {
-        var target = SkillUtils.FindUnitAt(ctx.TargetCell, ctx.Enemies);
-        if (target == null) { SkillUtils.Fail(ctx.Builder, "目标格没有敌人"); return; }
-        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, false);
-        ctx.Builder.AddDamageFromResolver(target, r);
-        ctx.Builder.AddStatusEffect("poison", target, 3);
+        if (ctx.Attacker.Data == null) { SkillUtils.Fail(ctx.Builder, "施放者无效"); return; }
+        BladeHex.Combat.Buff.BuffSystem.ApplyDirect(ctx.Attacker.Data, new BladeHex.Combat.Buff.BuffInstance
+        {
+            Id = "poison_blade_next",
+            Name = "影刃涂毒",
+            Description = "下次武器攻击命中时附加中毒",
+            Duration = 1,
+            Tags = new[] { "skill_tree", "next_hit" },
+            Modifiers = new()
+            {
+                new BladeHex.Combat.Buff.StatModifier
+                {
+                    Stat = "next_hit_poison_duration",
+                    Layer = BladeHex.Combat.Buff.ModifierLayer.Base,
+                    Value = 3,
+                },
+            },
+        });
+        ctx.Builder.AddStatusEffect("poison_blade_next", ctx.Attacker, 1);
     }
 
     public static void ShadowStrike(in SkillHandlerContext ctx)
@@ -39,7 +53,7 @@ public static class StealthSkillHandlers
         bool hasStealth = ctx.Attacker.Data != null &&
             ctx.Attacker.Model.ActiveStatusEffects.Any(e => e.Id == "invisibility");
         float mult = hasStealth ? 2.0f : 1.0f;
-        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, hasStealth, false, 0, mult);
+        var r = CombatResolver.ResolveAttack(ctx.Attacker, target, ctx.Grid, hasStealth, false, 0, mult, triggerVisuals: false);
         ctx.Builder.AddDamageFromResolver(target, r);
         if (hasStealth)
         {

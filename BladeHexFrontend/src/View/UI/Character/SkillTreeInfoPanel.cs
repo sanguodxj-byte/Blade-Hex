@@ -1,6 +1,8 @@
 using BladeHex.Strategic;
 using BladeHex.View.AssetSystem;
 using Godot;
+using System.Collections.Generic;
+using System.Text;
 
 namespace BladeHex.UI;
 
@@ -32,7 +34,7 @@ public partial class SkillTreeInfoPanel : PanelContainer
 
         _title.Text = "选择节点";
         _title.RemoveThemeColorOverride("font_color");
-        _description.Text = "点击星图节点查看详情。\n\n[color=gray]每个节点属于一个区域，可能解锁属性、主动技能、被动技能或职业里程碑。[/color]";
+        _description.Text = "";
         _activateButton.Text = "激活";
         _jumpButton.Text = "跳跃激活";
         _activateButton.Disabled = true;
@@ -52,7 +54,11 @@ public partial class SkillTreeInfoPanel : PanelContainer
     	if (!_isBuilt)
     		return;
    
-    	_title.Text = node.NodeName;
+        bool isGiant = IsGiantNode(node, requiredTiles);
+        string tierName = GetNodeTierName(requiredTiles);
+        string titleText = GetNodeTitle(node, tierName, isGiant);
+
+    	_title.Text = titleText;
     	_title.AddThemeColorOverride("font_color", UiTheme.GetRegionColor(node.CurrentRegion));
    
     	// 命座转变横幅：如果点亮后会改变职业，在标题上方显示
@@ -66,31 +72,9 @@ public partial class SkillTreeInfoPanel : PanelContainer
     		_careerBanner.Visible = false;
     	}
    
-    	string nodeTypeText = GetNodeTypeText(node);
-    	var figure = SkillNodeShape.GetFigure(node);
-    	string figureKind = figure.IsCareerDefining ? "命座" : "星纹";
-   
-    	string detail = $"[color=gray]{nodeTypeText}[/color]\n";
-    	if (!string.IsNullOrWhiteSpace(node.NodeSubtitle))
-    		detail += $"[color=white]{node.NodeSubtitle}[/color]\n";
-    	detail += $"[color=gray]图形：[/color]{figure.FigureName}（{figureKind}）\n";
-    	detail += $"[color=gray]区域：[/color]{node.GetRegionName()}\n";
-        if (requiredTiles > 0)
-            detail += $"[color=gray]瓦片：[/color]{filledTiles}/{requiredTiles}\n";
-        if (node.RequiredLevel > 0)
-            detail += $"[color=gray]需要等级：[/color]{node.RequiredLevel}\n";
-   
-        string tileRewardText = GetTileRewardText(node);
-        if (!string.IsNullOrWhiteSpace(tileRewardText))
-            detail += $"\n[color=white]属性词条：[/color]{tileRewardText}\n";
-        detail += $"[color=white]节点效果：[/color]{effectText}\n";
-   
-        if (!string.IsNullOrWhiteSpace(node.KeystoneCost))
-            detail += $"\n[color=red]代价：[/color]{node.KeystoneCost}\n";
-        if (activated)
-    		detail += "\n[color=green]✓ 已点亮[/color]";
-   
-    	_description.Text = detail;
+        _description.Text = isGiant
+            ? BuildGiantDetail(effectText)
+            : BuildNodeDetail(node, tierName, filledTiles, requiredTiles, effectText);
     	_activateButton.Text = activated ? "已完成" : "点亮";
     	_jumpButton.Text = "跳跃点亮";
     	_activateButton.Disabled = !canActivate;
@@ -196,28 +180,130 @@ public partial class SkillTreeInfoPanel : PanelContainer
             UiTheme.MakePanelStyle(UiTheme.BgSecondary, UiTheme.BorderHighlight, 1, UiTheme.RadiusMd, UiTheme.SpacingMd));
     }
 
-    private static string GetNodeTypeText(SkillNodeData node)
+    private string BuildNodeDetail(
+        SkillNodeData node,
+        string tierName,
+        int filledTiles,
+        int requiredTiles,
+        string effectText)
     {
-    	return node.CurrentNodeType switch
-    	{
-    		SkillNodeData.NodeType.Giant => "✦ 巨型符文命座",
-    		SkillNodeData.NodeType.Big when node.IsActiveSkill => "◆ 主动星纹",
-    		SkillNodeData.NodeType.Big => "◆ 被动星纹",
-    		SkillNodeData.NodeType.Keystone => "★ 代价命座",
-    		SkillNodeData.NodeType.Pip => "· 微型星纹",
-    		SkillNodeData.NodeType.Start => "◎ 启程",
-    		_ => "● 属性星纹",
-    	};
+        var lines = new List<string>();
+        AddDetailLine(lines, node.GetRegionName(), UiTheme.TextMuted, 13);
+        AddDetailLine(lines, tierName, UiTheme.TextMuted, 13);
+
+        string cleanEffect = CleanEffectText(effectText);
+        if (!string.IsNullOrWhiteSpace(node.KeystoneCost))
+            cleanEffect = string.IsNullOrWhiteSpace(cleanEffect)
+                ? node.KeystoneCost
+                : $"{cleanEffect}\n{node.KeystoneCost}";
+        AddDetailLine(lines, cleanEffect, UiTheme.TextPrimary, 14);
+
+        if (requiredTiles > 0)
+            AddDetailLine(lines, $"{filledTiles}/{requiredTiles}", UiTheme.TextMuted, 12);
+
+        return $"[center]{string.Join("\n", lines)}[/center]";
     }
 
-    private static string GetTileRewardText(SkillNodeData node)
+    private string BuildGiantDetail(string effectText)
     {
-        if (node.CurrentNodeType == SkillNodeData.NodeType.Start)
-            return "";
-        if (node.CurrentContentMode == SkillNodeData.ContentMode.RandomAttribute)
-            return "完成后按角色种子从所属扇区风格池生成";
+        var lines = new List<string>();
+        AddDetailLine(lines, CleanEffectText(effectText), UiTheme.TextPrimary, 14);
+        return $"[center]{string.Join("\n", lines)}[/center]";
+    }
 
-        return "";
+    private static void AddDetailLine(List<string> lines, string text, Color color, int fontSize)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        lines.Add($"[font_size={fontSize}][color=#{ColorToHex(color)}]{text.Trim()}[/color][/font_size]");
+    }
+
+    private static bool IsGiantNode(SkillNodeData node, int requiredTiles)
+        => requiredTiles == 12 || node.CurrentNodeType == SkillNodeData.NodeType.Giant;
+
+    private static string GetNodeTierName(int requiredTiles)
+    {
+        return requiredTiles switch
+        {
+            1 => "星尘",
+            2 => "星点",
+            3 or 4 => "星纹",
+            6 => "命座",
+            12 => "",
+            _ => "星纹",
+        };
+    }
+
+    private static string GetNodeTitle(SkillNodeData node, string tierName, bool isGiant)
+    {
+        if (isGiant)
+            return string.IsNullOrWhiteSpace(node.NodeName) ? node.NodeId : node.NodeName;
+
+        if (IsGenericAttributeName(node.NodeName))
+            return tierName;
+
+        return string.IsNullOrWhiteSpace(node.NodeName) ? tierName : node.NodeName;
+    }
+
+    private static bool IsGenericAttributeName(string nodeName)
+    {
+        return string.IsNullOrWhiteSpace(nodeName)
+            || nodeName is "属性星纹" or "微光星点" or "星点" or "星尘" or "星纹";
+    }
+
+    private static string CleanEffectText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "";
+
+        var sb = new StringBuilder();
+        foreach (string rawLine in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            string line = CleanEffectLine(rawLine.Trim());
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            if (sb.Length > 0)
+                sb.Append('\n');
+            sb.Append(line);
+        }
+
+        return sb.ToString();
+    }
+
+    private static string CleanEffectLine(string line)
+    {
+        string[] prefixes =
+        [
+            "常驻：",
+            "触发：",
+            "武器类型：",
+            "效果：",
+            "节点效果：",
+            "属性词条：",
+            "装备需求: ",
+            "装备需求：",
+            "[代价] ",
+            "代价：",
+        ];
+
+        foreach (string prefix in prefixes)
+        {
+            if (line.StartsWith(prefix, System.StringComparison.Ordinal))
+                return line[prefix.Length..].Trim();
+        }
+
+        return line;
+    }
+
+    private static string ColorToHex(Color color)
+    {
+        int r = Mathf.Clamp(Mathf.RoundToInt(color.R * 255.0f), 0, 255);
+        int g = Mathf.Clamp(Mathf.RoundToInt(color.G * 255.0f), 0, 255);
+        int b = Mathf.Clamp(Mathf.RoundToInt(color.B * 255.0f), 0, 255);
+        int a = Mathf.Clamp(Mathf.RoundToInt(color.A * 255.0f), 0, 255);
+        return $"{r:X2}{g:X2}{b:X2}{a:X2}";
     }
    
     /// <summary>显示职业速查信息（从职业速查表选择后调用）</summary>
@@ -226,16 +312,15 @@ public partial class SkillTreeInfoPanel : PanelContainer
     	if (!_isBuilt) return;
    
     	_careerBanner.Visible = false;
-    	_title.Text = $"职业：{careerTitle}";
+    	_title.Text = careerTitle;
     	_title.RemoveThemeColorOverride("font_color");
    
-    	string detail = $"[color=gray]类型：[/color]{typeTag}\n";
-    	if (!string.IsNullOrWhiteSpace(skillName))
-    		detail += $"[color=white]专属技能：[/color]{skillName}\n";
-    	if (!string.IsNullOrWhiteSpace(skillDesc))
-    		detail += $"[color=white]效果：[/color]{skillDesc}\n";
+        var lines = new List<string>();
+        AddDetailLine(lines, typeTag, UiTheme.TextMuted, 13);
+    	AddDetailLine(lines, skillName, UiTheme.TextPrimary, 14);
+    	AddDetailLine(lines, CleanEffectText(skillDesc), UiTheme.TextPrimary, 14);
    
-    	_description.Text = detail;
+    	_description.Text = $"[center]{string.Join("\n", lines)}[/center]";
     	_activateButton.Disabled = true;
     	_jumpButton.Disabled = true;
     	_activateButton.Text = "点亮";

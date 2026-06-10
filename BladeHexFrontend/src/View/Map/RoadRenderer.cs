@@ -22,11 +22,13 @@ public partial class RoadRenderer : Node2D
 
     public bool FullyBuilt { get; set; }
     public int RoadCount => _roadMeshes.Count;
+    public int DebugJunctionCount => _junctionCoords.Count;
 
     private ChunkManager? _chunkManager;
     private Texture2D? _roadTexture;
     private readonly List<MeshInstance2D> _roadMeshes = new();
     private readonly HashSet<Vector2I> _junctionCoords = new();
+    private readonly Dictionary<Vector2I, Vector2I> _junctionRenderCoords = new();
     private readonly Dictionary<Vector2I, HexOverworldTile> _currentBuildTiles = new();
 
     private readonly struct RoadClassProfile
@@ -122,22 +124,12 @@ public partial class RoadRenderer : Node2D
                 if (_currentBuildTiles.TryGetValue(coord, out var tile))
                     roadClass = Math.Max(roadClass, tile.RoadClassVal);
 
-                pixelPoints.Add(HexOverworldTile.AxialToPixel(coord.X, coord.Y));
+                pixelPoints.Add(GetRoadRenderPoint(coord));
             }
 
             var smoothed = SmoothPath(pixelPoints);
             if (smoothed.Length > 1)
                 CreateRoadMeshStrip(smoothed, roadClass);
-        }
-
-        foreach (var coord in _junctionCoords)
-        {
-            _currentBuildTiles.TryGetValue(coord, out var tile);
-            if (HasPoi(tile))
-                continue;
-
-            int roadClass = tile?.RoadClassVal ?? 1;
-            CreateRoadJunctionMesh(HexOverworldTile.AxialToPixel(coord.X, coord.Y), roadClass);
         }
 
         GD.Print($"[RoadRenderer] Rendered {_roadMeshes.Count} road mesh strips from {roadTiles.Count} {scope} road tiles.");
@@ -250,16 +242,19 @@ public partial class RoadRenderer : Node2D
             || poi.PoiTypeEnum == OverworldPOI.POIType.Castle;
     }
 
-    private static bool HasPoi(HexOverworldTile? tile)
+    private Vector2 GetRoadRenderPoint(Vector2I coord)
     {
-        return tile != null && (tile.HasSettlement || !string.IsNullOrEmpty(tile.PoiId));
+        if (_junctionRenderCoords.TryGetValue(coord, out var junctionCoord))
+            return HexOverworldTile.AxialToPixel(junctionCoord.X, junctionCoord.Y);
+
+        return HexOverworldTile.AxialToPixel(coord.X, coord.Y);
     }
 
     private List<List<Vector2I>> TraceRoadSegments(HashSet<Vector2I> roadTiles)
     {
         var segments = new List<List<Vector2I>>();
         var visitedEdges = new HashSet<(Vector2I, Vector2I)>();
-        var junctions = new HashSet<Vector2I>();
+        var rawJunctions = new HashSet<Vector2I>();
         var endpoints = new HashSet<Vector2I>();
 
         foreach (var coord in roadTiles)
@@ -268,16 +263,14 @@ public partial class RoadRenderer : Node2D
             if (neighborCount == 1)
                 endpoints.Add(coord);
             else if (neighborCount >= 3)
-                junctions.Add(coord);
+                rawJunctions.Add(coord);
         }
 
-        _junctionCoords.Clear();
-        foreach (var junction in junctions)
-            _junctionCoords.Add(junction);
+        NormalizeJunctionCoords(rawJunctions);
 
         var startPoints = new List<Vector2I>();
         startPoints.AddRange(endpoints);
-        startPoints.AddRange(junctions);
+        startPoints.AddRange(rawJunctions);
 
         if (startPoints.Count == 0)
         {
@@ -305,7 +298,7 @@ public partial class RoadRenderer : Node2D
                     visitedEdges.Add((current, previous));
                     segment.Add(current);
 
-                    if (endpoints.Contains(current) || junctions.Contains(current))
+                    if (endpoints.Contains(current) || rawJunctions.Contains(current))
                         break;
 
                     var next = GetNextRoadTile(current, previous, roadTiles);
@@ -324,42 +317,103 @@ public partial class RoadRenderer : Node2D
         return segments;
     }
 
-    private static int CountRoadNeighbors(Vector2I coord, HashSet<Vector2I> roadTiles)
+    private void NormalizeJunctionCoords(HashSet<Vector2I> rawJunctions)
     {
-        int count = 0;
-        for (int direction = 0; direction < 6; direction++)
-        {
-            var neighbor = HexOverworldTile.GetNeighbor(coord.X, coord.Y, direction);
-            if (roadTiles.Contains(neighbor))
-                count++;
-        }
+        _junctionCoords.Clear();
+        _junctionRenderCoords.Clear();
 
-        return count;
+        var canonicalCoords = new List<Vector2I>();
+        var orderedJunctions = new List<Vector2I>(rawJunctions);
+        orderedJunctions.Sort((a, b) => a.X == b.X ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X));
+
+        foreach (var junction in orderedJunctions)
+        {
+            Vector2I canonical = junction;
+            bool foundNearby = false;
+
+            foreach (var existing in canonicalCoords)
+            {
+                if (HexOverworldTile.HexDistance(junction.X, junction.Y, existing.X, existing.Y) <= 1)
+                {
+                    canonical = existing;
+                    foundNearby = true;
+                    break;
+                }
+            }
+
+            if (!foundNearby)
+            {
+                canonicalCoords.Add(junction);
+                _junctionCoords.Add(junction);
+            }
+
+            _junctionRenderCoords[junction] = canonical;
+        }
     }
 
-    private static List<Vector2I> GetRoadNeighbors(Vector2I coord, HashSet<Vector2I> roadTiles)
+    private int CountRoadNeighbors(Vector2I coord, HashSet<Vector2I> roadTiles)
+    {
+        return GetRoadNeighbors(coord, roadTiles).Count;
+    }
+
+    private List<Vector2I> GetRoadNeighbors(Vector2I coord, HashSet<Vector2I> roadTiles)
     {
         var result = new List<Vector2I>();
         for (int direction = 0; direction < 6; direction++)
         {
             var neighbor = HexOverworldTile.GetNeighbor(coord.X, coord.Y, direction);
-            if (roadTiles.Contains(neighbor))
+            if (roadTiles.Contains(neighbor) && AreRoadTilesConnected(coord, neighbor))
                 result.Add(neighbor);
         }
 
         return result;
     }
 
-    private static Vector2I? GetNextRoadTile(Vector2I current, Vector2I previous, HashSet<Vector2I> roadTiles)
+    private Vector2I? GetNextRoadTile(Vector2I current, Vector2I previous, HashSet<Vector2I> roadTiles)
     {
-        for (int direction = 0; direction < 6; direction++)
+        foreach (var neighbor in GetRoadNeighbors(current, roadTiles))
         {
-            var neighbor = HexOverworldTile.GetNeighbor(current.X, current.Y, direction);
-            if (neighbor != previous && roadTiles.Contains(neighbor))
+            if (neighbor != previous)
                 return neighbor;
         }
 
         return null;
+    }
+
+    private bool AreRoadTilesConnected(Vector2I a, Vector2I b)
+    {
+        bool hasDirectionData = false;
+
+        if (_currentBuildTiles.TryGetValue(a, out var tileA) && tileA.RoadDirections != 0)
+        {
+            hasDirectionData = true;
+            if (HasRoadDirectionTo(tileA.RoadDirections, a, b))
+                return true;
+        }
+
+        if (_currentBuildTiles.TryGetValue(b, out var tileB) && tileB.RoadDirections != 0)
+        {
+            hasDirectionData = true;
+            if (HasRoadDirectionTo(tileB.RoadDirections, b, a))
+                return true;
+        }
+
+        return !hasDirectionData;
+    }
+
+    private static bool HasRoadDirectionTo(int directions, Vector2I from, Vector2I to)
+    {
+        for (int direction = 0; direction < 6; direction++)
+        {
+            if ((directions & (1 << direction)) == 0)
+                continue;
+
+            var neighbor = HexOverworldTile.GetNeighbor(from.X, from.Y, direction);
+            if (neighbor == to)
+                return true;
+        }
+
+        return false;
     }
 
     private Vector2[] SmoothPath(List<Vector2> points)
@@ -412,8 +466,8 @@ public partial class RoadRenderer : Node2D
             RoadColor.B * (1.0f - profile.ColorDarken * 0.8f),
             RoadColor.A * profile.CoreAlpha);
 
-        var processedPath = RetractPathEnds(JitterPath(path, profile.JitterPx), classWidth * 0.8f);
-        if (processedPath.Length < 2)
+        var processedPath = JitterPath(path, profile.JitterPx);
+        if (processedPath.Length < 2 || !HasDrawableLength(processedPath))
             return;
 
         if (ShadowOffset.LengthSquared() > 0.01f)
@@ -436,39 +490,20 @@ public partial class RoadRenderer : Node2D
         CreateSingleMeshStrip(processedPath, classWidth, classColor, 47, profile.NoiseFreq, profile.NoiseAmp);
     }
 
-    private void CreateRoadJunctionMesh(Vector2 center, int roadClass)
-    {
-        var profile = GetProfile(roadClass);
-        float classWidth = RoadWidth * profile.WidthMul;
-        Color classColor = new(
-            RoadColor.R * (1.0f - profile.ColorDarken),
-            RoadColor.G * (1.0f - profile.ColorDarken * 0.9f),
-            RoadColor.B * (1.0f - profile.ColorDarken * 0.8f),
-            RoadColor.A * profile.CoreAlpha);
-
-        if (ShadowOffset.LengthSquared() > 0.01f)
-        {
-            Color edgeShadowColor = new(ShadowColor.R, ShadowColor.G, ShadowColor.B, ShadowColor.A * profile.EdgeAlphaFactor);
-            CreateSingleCircleMesh(center + ShadowOffset, classWidth * 1.4f * 0.5f, edgeShadowColor, 42);
-            CreateSingleCircleMesh(center + ShadowOffset, classWidth * 0.5f, ShadowColor, 43);
-        }
-
-        if (SideThickness > 0.1f)
-        {
-            Color sideEdgeColor = new(SideColor.R, SideColor.G, SideColor.B, SideColor.A * profile.EdgeAlphaFactor);
-            Vector2 sideOffset = new(0.0f, SideThickness);
-            CreateSingleCircleMesh(center + sideOffset, classWidth * 1.4f * 0.5f, sideEdgeColor, 44);
-            CreateSingleCircleMesh(center + sideOffset, classWidth * 0.5f, SideColor, 45);
-        }
-
-        Color edgeColor = new(classColor.R, classColor.G, classColor.B, classColor.A * profile.EdgeAlphaFactor);
-        CreateSingleCircleMesh(center, classWidth * 1.4f * 0.5f, edgeColor, 46);
-        CreateSingleCircleMesh(center, classWidth * 0.5f, classColor, 47);
-    }
-
     private void CreateSingleMeshStrip(Vector2[] path, float width, Color color, int zIndex, float noiseFreq, float noiseAmp)
     {
         CreateSingleMeshStripWithOffset(path, width, color, zIndex, noiseFreq, noiseAmp, Vector2.Zero);
+    }
+
+    private static bool HasDrawableLength(Vector2[] path)
+    {
+        for (int i = 1; i < path.Length; i++)
+        {
+            if (path[i].DistanceSquaredTo(path[i - 1]) > 1.0f)
+                return true;
+        }
+
+        return false;
     }
 
     private void CreateSingleMeshStripWithOffset(Vector2[] path, float width, Color color, int zIndex, float noiseFreq, float noiseAmp, Vector2 vertexOffset)
@@ -517,145 +552,6 @@ public partial class RoadRenderer : Node2D
 
         AddChild(meshInstance);
         _roadMeshes.Add(meshInstance);
-    }
-
-    private void CreateSingleCircleMesh(Vector2 center, float radius, Color color, int zIndex)
-    {
-        const int segments = 24;
-        var vertices = new Vector2[segments + 1];
-        var uvs = new Vector2[segments + 1];
-        var colors = new Color[segments + 1];
-
-        vertices[0] = center;
-        uvs[0] = new Vector2(0.5f, 0.5f);
-        colors[0] = color;
-
-        for (int i = 0; i < segments; i++)
-        {
-            float angle = i * Mathf.Tau / segments;
-            vertices[i + 1] = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-            uvs[i + 1] = new Vector2(0.5f + 0.5f * Mathf.Cos(angle), 0.5f + 0.5f * Mathf.Sin(angle));
-            colors[i + 1] = color;
-        }
-
-        var indices = new int[segments * 3];
-        int index = 0;
-        for (int i = 0; i < segments; i++)
-        {
-            indices[index++] = 0;
-            indices[index++] = i + 1;
-            indices[index++] = i == segments - 1 ? 1 : i + 2;
-        }
-
-        var meshInstance = CreateMeshInstance(vertices, uvs, colors, indices, zIndex);
-        if (_roadTexture != null)
-        {
-            var shaderMaterial = new ShaderMaterial();
-            shaderMaterial.Shader = GetOrCreateRoadShader();
-            shaderMaterial.SetShaderParameter("road_texture", _roadTexture);
-            meshInstance.Material = shaderMaterial;
-        }
-        else
-        {
-            meshInstance.Material = new CanvasItemMaterial();
-        }
-
-        AddChild(meshInstance);
-        _roadMeshes.Add(meshInstance);
-    }
-
-    private Vector2[] RetractPathEnds(Vector2[] path, float retractDist)
-    {
-        if (path.Length < 2)
-            return path;
-
-        var tempPath = new List<Vector2>(path);
-        RetractPathStart(tempPath, retractDist);
-        if (tempPath.Count < 2)
-            return Array.Empty<Vector2>();
-
-        RetractPathEnd(tempPath, retractDist);
-        return tempPath.ToArray();
-    }
-
-    private void RetractPathStart(List<Vector2> path, float retractDist)
-    {
-        if (!IsNearJunction(path[0], out _, out var junctionCoord))
-            return;
-
-        _currentBuildTiles.TryGetValue(junctionCoord, out var tile);
-        if (HasPoi(tile))
-            return;
-
-        float accumulated = 0.0f;
-        int cutIndex = 0;
-        for (int i = 1; i < path.Count; i++)
-        {
-            float distance = path[i].DistanceTo(path[i - 1]);
-            accumulated += distance;
-            if (accumulated >= retractDist)
-            {
-                float overrun = accumulated - retractDist;
-                path[i] = path[i - 1].Lerp(path[i], 1.0f - overrun / distance);
-                cutIndex = i;
-                break;
-            }
-        }
-
-        if (cutIndex > 0)
-            path.RemoveRange(0, cutIndex);
-        else
-            path.Clear();
-    }
-
-    private void RetractPathEnd(List<Vector2> path, float retractDist)
-    {
-        if (!IsNearJunction(path[^1], out _, out var junctionCoord))
-            return;
-
-        _currentBuildTiles.TryGetValue(junctionCoord, out var tile);
-        if (HasPoi(tile))
-            return;
-
-        float accumulated = 0.0f;
-        int cutIndex = path.Count - 1;
-        for (int i = path.Count - 2; i >= 0; i--)
-        {
-            float distance = path[i].DistanceTo(path[i + 1]);
-            accumulated += distance;
-            if (accumulated >= retractDist)
-            {
-                float overrun = accumulated - retractDist;
-                path[i] = path[i + 1].Lerp(path[i], 1.0f - overrun / distance);
-                cutIndex = i;
-                break;
-            }
-        }
-
-        if (cutIndex < path.Count - 1)
-            path.RemoveRange(cutIndex + 1, path.Count - 1 - cutIndex);
-        else
-            path.Clear();
-    }
-
-    private bool IsNearJunction(Vector2 position, out Vector2 junctionCenter, out Vector2I junctionCoord)
-    {
-        junctionCenter = Vector2.Zero;
-        junctionCoord = Vector2I.Zero;
-        const float limit = 156.0f * 0.65f;
-
-        foreach (var coord in _junctionCoords)
-        {
-            Vector2 center = HexOverworldTile.AxialToPixel(coord.X, coord.Y);
-            if (position.DistanceTo(center) < limit)
-            {
-                junctionCenter = center;
-                junctionCoord = coord;
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static MeshInstance2D CreateMeshInstance(Vector2[] vertices, Vector2[] uvs, Color[] colors, int[] indices, int zIndex)

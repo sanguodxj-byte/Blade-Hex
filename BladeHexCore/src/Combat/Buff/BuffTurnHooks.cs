@@ -28,7 +28,7 @@ public static class BuffTurnHooks
         {
             if (buff.OnTick != null)
             {
-                int tickValue = RollTick(buff.OnTick) * buff.CurrentStacks;
+                int tickValue = ResolveTickValue(target, buff.OnTick) * buff.CurrentStacks;
                 netHpDelta += buff.OnTick.IsHeal ? -tickValue : tickValue;
                 ticked.Add(buff.Id);
             }
@@ -77,6 +77,14 @@ public static class BuffTurnHooks
         if (buff.Duration <= 0) return false;
         buff.Duration--;
         return buff.Duration <= 0;
+    }
+
+    private static int ResolveTickValue(UnitData target, TickEffect tick)
+    {
+        if (tick.TargetMaxHpPercent > 0.0f)
+            return System.Math.Max(1, (int)System.MathF.Ceiling(CombatStats.GetMaxHp(target) * tick.TargetMaxHpPercent));
+
+        return RollTick(tick);
     }
 
     private static int RollTick(TickEffect tick)

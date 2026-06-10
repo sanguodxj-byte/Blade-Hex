@@ -196,6 +196,7 @@ public partial class CombatMovementController : Node
 		// 恢复待机动画
 		unit.PlayAnim("default");
 
+		CameraCtrl?.Unlock();
 		MinimapPanel?.Refresh();
 	}
 
@@ -257,6 +258,7 @@ public partial class CombatMovementController : Node
 		// 恢复待机动画
 		unit.PlayAnim("default");
 
+		CameraCtrl?.Unlock();
 		MinimapPanel?.Refresh();
 	}
 

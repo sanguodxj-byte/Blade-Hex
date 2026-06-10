@@ -361,7 +361,7 @@ public static class LuaSkillBridge
                 instance.Source = actualSource;
                 instance.Modifiers = LuaTableToStatModifiers(mods);
 
-                applied = Buff.BuffSystem.ApplyDirect(u.Data, instance);
+                applied = Buff.BuffSystem.ApplyDirect(u.Data!, instance);
                 if (applied != null)
                     ApplyImmediateRuntimeModifiers(u, proxy, instance.Modifiers);
             }
@@ -594,7 +594,8 @@ public static class LuaSkillBridge
                 nodePassiveScale: nodeFlatScale,
                 defenderAllies: defenderAllies,
                 extraCritChance: extraCritChance,
-                targetAcMultiplier: targetAcMultiplier);
+                targetAcMultiplier: targetAcMultiplier,
+                triggerVisuals: false);
 
             // 转换 Godot Dictionary → Lua table
             var table = GodotDictToLuaTable(godotResult);

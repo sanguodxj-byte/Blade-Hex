@@ -16,6 +16,7 @@ using BladeHex.Strategic;
 using BladeHex.UI.Loading;
 using BladeHex.View.AssetSystem;
 using BladeHex.View.Unit;
+using BladeHex.View.Unit.Components;
 
 namespace BladeHex.UI;
 
@@ -36,6 +37,34 @@ public partial class OriginSelect : CanvasLayer
     private ButtonGroup _sizeGroup = null!;
     private int _worldSize = 1; // 默认中型
 
+    // ── 发色预设：(Hue, Sat, Key, LightnessOverride) ──
+    // 饱和度 0.30~0.55 以模拟现实发色，不饱和更自然
+    private static readonly (float Hue, float Sat, string Key, float Lightness)[] HairColorPresets =
+    [
+        (-1f,     0f,     "HAIR_NATURAL",   -1f),
+        (  0f,    0f,     "HAIR_BLACK",      0.08f),
+        ( 25f,    0.35f,  "HAIR_DARKBROWN", -1f),
+        ( 30f,    0.45f,  "HAIR_CHESTNUT",  -1f),
+        ( 15f,    0.50f,  "HAIR_AUBURN",    -1f),
+        ( 20f,    0.50f,  "HAIR_GINGER",    -1f),
+        ( 40f,    0.45f,  "HAIR_GOLDEN",    -1f),
+        ( 35f,    0.28f,  "HAIR_ASHBLONDE", -1f),
+        (  0f,    0f,     "HAIR_SILVER",     0.80f),
+    ];
+    private static readonly Color[] HairColorPreviewColors =
+    [
+        new(0.70f, 0.70f, 0.70f),  // 原色
+        new(0.15f, 0.15f, 0.15f),  // 纯黑
+        new(0.30f, 0.22f, 0.15f),  // 深棕
+        new(0.50f, 0.35f, 0.22f),  // 栗色
+        new(0.55f, 0.30f, 0.22f),  // 赤棕
+        new(0.65f, 0.40f, 0.25f),  // 姜黄
+        new(0.78f, 0.68f, 0.42f),  // 金发
+        new(0.65f, 0.60f, 0.50f),  // 亚麻
+        new(0.88f, 0.88f, 0.90f),  // 银白
+    ];
+    private int _hairColorPresetIndex = 0;
+
     // ── UI ──
     private Control _phase1 = null!;
     private Control _phase2 = null!;
@@ -45,6 +74,8 @@ public partial class OriginSelect : CanvasLayer
     private Label _headValueLabel = null!;
     private Label _hairValueLabel = null!;
     private Label _decorationValueLabel = null!;
+    private ColorRect _hairColorPreview = null!;
+    private Label _hairColorNameLabel = null!;
     private Label _questionText = null!;
     private VBoxContainer _choicesArea = null!;
     private Label _attrLabel = null!;
@@ -62,7 +93,7 @@ public partial class OriginSelect : CanvasLayer
     private List<OriginQuestion> _questions = new();
 
     // ── 常量 ──
-    private const string IllustBase = "res://assets/generated_origin_illust/";
+    private const string IllustBase = "res://assets/origin_illust/";
     private static readonly Dictionary<string, string> RaceIllust = new()
     {
         ["人类"] = "race_human",
@@ -112,7 +143,7 @@ public partial class OriginSelect : CanvasLayer
     private void _SetupUI()
     {
         // 背景
-        var bgTex = TextureAssetResolver.LoadUiTexture("res://assets/generated_ui_main/selected/MainMenu_Background.png");
+        var bgTex = TextureAssetResolver.LoadUiTexture("res://assets/ui_main/selected/MainMenu_Background.png");
         if (bgTex != null)
         {
             var bg = new TextureRect { Texture = bgTex, Modulate = new Color(0.45f, 0.45f, 0.45f) };
@@ -181,10 +212,6 @@ public partial class OriginSelect : CanvasLayer
         title.HorizontalAlignment = HorizontalAlignment.Center;
         vbox.AddChild(title);
 
-        var avatarEditor = _BuildAvatarEditor();
-        avatarEditor.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
-        vbox.AddChild(avatarEditor);
-
         // 主体：左插图 + 右内容
         var body = new HBoxContainer();
         body.AddThemeConstantOverride("separation", 24);
@@ -214,6 +241,10 @@ public partial class OriginSelect : CanvasLayer
 
         // 顶部弹性空间，让表单居中偏上
         rightVbox.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill });
+
+        var avatarEditor = _BuildAvatarEditor();
+        avatarEditor.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        rightVbox.AddChild(avatarEditor);
 
         // 种族与特性的水平布局
         var raceAndTraitRow = new HBoxContainer();
@@ -363,54 +394,109 @@ public partial class OriginSelect : CanvasLayer
     private PanelContainer _BuildAvatarEditor()
     {
         var panel = new PanelContainer();
-        panel.CustomMinimumSize = new Vector2(460, 174);
+        panel.CustomMinimumSize = new Vector2(380, 120);
         var ps = new StyleBoxFlat { BgColor = new Color(0.05f, 0.05f, 0.07f, 0.9f) };
         ps.SetBorderWidthAll(1);
         ps.BorderColor = new Color(0.35f, 0.3f, 0.22f, 0.7f);
         ps.SetCornerRadiusAll(6);
-        ps.SetContentMarginAll(12);
+        ps.SetContentMarginAll(8);
         panel.AddThemeStyleboxOverride("panel", ps);
 
         var root = new HBoxContainer();
-        root.AddThemeConstantOverride("separation", 14);
+        root.AddThemeConstantOverride("separation", 10);
         panel.AddChild(root);
 
+        // 左：头像预览（保留稍小尺寸）
         _avatarPreview = new TextureRect
         {
-            CustomMinimumSize = new Vector2(136, 136),
+            CustomMinimumSize = new Vector2(104, 104),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
         };
         root.AddChild(_avatarPreview);
 
+        // 右：控件（无标题row，紧凑居左）
         var controls = new VBoxContainer();
-        controls.AddThemeConstantOverride("separation", 8);
+        controls.AddThemeConstantOverride("separation", 4);
         controls.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        controls.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         root.AddChild(controls);
 
-        var title = _Lbl(L10n.Tr("ORIGIN_AVATAR_TITLE"), 18, new Color(0.9f, 0.8f, 0.5f));
-        title.HorizontalAlignment = HorizontalAlignment.Center;
-        controls.AddChild(title);
-
+        // 面部
         controls.AddChild(_BuildAvatarStepRow(L10n.Tr("ORIGIN_FACE"), out _headValueLabel, delta =>
         {
             _avatarData.HeadIndex = _StepPartIndex("head", _avatarData.HeadIndex, delta, allowZero: false);
             _RefreshAvatarPreview();
         }));
+        // 发型
         controls.AddChild(_BuildAvatarStepRow(L10n.Tr("ORIGIN_HAIR"), out _hairValueLabel, delta =>
         {
             _avatarData.HairIndex = _StepPartIndex("hair", _avatarData.HairIndex, delta, allowZero: true);
             _RefreshAvatarPreview();
         }));
+        // 装饰
         controls.AddChild(_BuildAvatarStepRow(L10n.Tr("ORIGIN_DECORATION"), out _decorationValueLabel, delta =>
         {
             _decorationIndex = _StepPartIndex("decoration", _decorationIndex, delta, allowZero: true);
             _avatarData.DecorationId = _decorationIndex > 0 ? $"decoration_{_decorationIndex}" : "";
             _RefreshAvatarPreview();
         }));
+        // 发色：行标签 + 色块预览 + 左右步进按钮
+        controls.AddChild(_BuildHairColorRow());
 
         _RefreshAvatarPreview();
         return panel;
+    }
+
+    private HBoxContainer _BuildHairColorRow()
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 6);
+
+        var label = _Lbl(L10n.Tr("ORIGIN_HAIR_COLOR"), 15, new Color(0.72f, 0.68f, 0.58f));
+        label.CustomMinimumSize = new Vector2(36, 0);
+        row.AddChild(label);
+
+        var prev = new Button { Text = "<", CustomMinimumSize = new Vector2(28, 26) };
+        prev.AddThemeFontSizeOverride("font_size", 14);
+        prev.Pressed += () => _StepHairColor(-1);
+        row.AddChild(prev);
+
+        // 色块预览
+        _hairColorPreview = new ColorRect
+        {
+            CustomMinimumSize = new Vector2(28, 26),
+            Color = HairColorPreviewColors[0],
+        };
+        row.AddChild(_hairColorPreview);
+
+        var next = new Button { Text = ">", CustomMinimumSize = new Vector2(28, 26) };
+        next.AddThemeFontSizeOverride("font_size", 14);
+        next.Pressed += () => _StepHairColor(1);
+        row.AddChild(next);
+
+        // 发色名称标签
+        _hairColorNameLabel = _Lbl(L10n.Tr(HairColorPresets[0].Key), 14, new Color(0.85f, 0.8f, 0.65f));
+        _hairColorNameLabel.CustomMinimumSize = new Vector2(50, 0);
+        row.AddChild(_hairColorNameLabel);
+
+        return row;
+    }
+
+    private void _StepHairColor(int delta)
+    {
+        int count = HairColorPresets.Length;
+        _hairColorPresetIndex = ((_hairColorPresetIndex + delta) % count + count) % count;
+        var preset = HairColorPresets[_hairColorPresetIndex];
+
+        _avatarData.HairColorHue = preset.Hue;
+        _avatarData.HairColorSat = preset.Sat;
+        _avatarData.HairColorLightness = preset.Lightness;
+        _hairColorPreview.Color = HairColorPreviewColors[_hairColorPresetIndex];
+        if (_hairColorNameLabel != null)
+            _hairColorNameLabel.Text = L10n.Tr(preset.Key);
+
+        _RefreshAvatarPreview();
     }
 
     private HBoxContainer _BuildAvatarStepRow(string labelText, out Label valueLabel, System.Action<int> onStep)
@@ -502,8 +588,7 @@ public partial class OriginSelect : CanvasLayer
         string gender = _avatarData.Gender;
         return partType switch
         {
-            "head" => AvatarRenderer.LoadPartTexture("face", race, gender, index) != null
-                || AvatarRenderer.LoadPartTexture("head", race, gender, index) != null,
+            "head" => AvatarRenderer.LoadPartTexture("head", race, gender, index) != null,
             _ => AvatarRenderer.LoadPartTexture(partType, race, gender, index) != null,
         };
     }

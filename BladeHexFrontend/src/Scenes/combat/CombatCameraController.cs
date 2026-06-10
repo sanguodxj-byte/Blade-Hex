@@ -39,6 +39,7 @@ public partial class CombatCameraController : Node3D
 	private const float MinOrthoSize = 200f;
 	private const float CameraPanPaddingHexes = 6.0f;
 	private const float TiltDegrees = -45f;
+	private const float FocusTargetUiDepthCompensation = 0.35f;
 
 	/// <summary>当前活跃的过渡 Tween（用于冲突检测与取消）</summary>
 	private Tween? _transitionTween;
@@ -197,8 +198,7 @@ public partial class CombatCameraController : Node3D
 		// 当_lockOrthoSize为0时，保持当前缩放不变
 
 		// 速度自适应跟随：距离远时快速趋近，距离近时平滑减速，消除硬切感
-		var camH = _camera.Position.Y;
-		var desiredPos = new Vector3(targetPos.X, camH, targetPos.Z + camH * 0.7f);
+		var desiredPos = GetCameraPositionForWorldTarget(targetPos, _camera.Size, FocusTargetUiDepthCompensation);
 		float distance = _camera.Position.DistanceTo(desiredPos);
 
 		// 将距离归一化到当前视野比例（距离 / 视野 = 相对偏移量）
@@ -284,7 +284,7 @@ public partial class CombatCameraController : Node3D
 		if (_camera == null || !BattlefieldBounds.HasValue) return;
 		var bounds = BattlefieldBounds.Value;
 		var center = bounds.Position + bounds.Size * 0.5f;
-		_camera.Position = new Vector3(center.X, _camera.Position.Y, center.Z + _camera.Position.Y);
+		_camera.Position = GetCameraPositionForWorldTarget(center, _camera.Size);
 	}
 
 	// ===== 缩放 =====
@@ -359,7 +359,7 @@ public partial class CombatCameraController : Node3D
 	{
 		if (_camera == null) return;
 		var currentPos = _camera.Position;
-		var targetCamPos = new Vector3(targetWorldPos.X, currentPos.Y, targetWorldPos.Z + currentPos.Y * 0.7f);
+		var targetCamPos = GetCameraPositionForWorldTarget(targetWorldPos, _camera.Size, FocusTargetUiDepthCompensation);
 
 		// 限制目标位置
 		var viewport = GetViewport().GetVisibleRect().Size;
@@ -387,6 +387,21 @@ public partial class CombatCameraController : Node3D
 		_ = FocusOn(unit.Position);
 	}
 
+	/// <summary>确保单位处于安全视野内；已可见时不移动镜头。</summary>
+	public async Task EnsureUnitVisible(Unit unit, float duration = 0.3f, float marginRatio = 0.18f)
+	{
+		if (unit == null || !IsInstanceValid(unit)) return;
+		await EnsureWorldPosVisible(unit.Position, duration, marginRatio);
+	}
+
+	/// <summary>确保世界坐标处于安全视野内；已可见时不移动镜头。</summary>
+	public async Task EnsureWorldPosVisible(Vector3 worldPos, float duration = 0.3f, float marginRatio = 0.18f)
+	{
+		if (_camera == null) return;
+		if (IsWorldPosVisible(worldPos, marginRatio)) return;
+		await FocusOn(worldPos, duration);
+	}
+
 	// ===== 双目标框定（攻击时同时显示攻击者和目标） =====
 
 	/// <summary>
@@ -404,14 +419,8 @@ public partial class CombatCameraController : Node3D
 		float usableVertical = 1f - topRatio - bottomRatio;
 		if (usableVertical < 0.3f) usableVertical = 0.3f;
 
-		// 正交相机下，Size = 可见世界高度的一半
-		// 需要的世界高度 = 两点在相机平面上的投影距离
-		float camH = _camera.Position.Y;
-		var camA = new Vector3(posA.X, camH, posA.Z + camH * 0.7f);
-		var camB = new Vector3(posB.X, camH, posB.Z + camH * 0.7f);
-
-		float dx = Mathf.Abs(camA.X - camB.X);
-		float dz = Mathf.Abs(camA.Z - camB.Z);
+		float dx = Mathf.Abs(posA.X - posB.X);
+		float dz = Mathf.Abs(posA.Z - posB.Z) * GetGroundDepthScale();
 
 		// 根据宽高比计算需要的 ortho size
 		float neededByWidth = dx / aspect;
@@ -438,12 +447,11 @@ public partial class CombatCameraController : Node3D
 
 		// 计算中点
 		var midWorld = (posA + posB) * 0.5f;
-		float camH = _camera.Position.Y;
-		var targetCamPos = new Vector3(midWorld.X, camH, midWorld.Z + camH * 0.7f);
 
 		// 计算需要的缩放
 		float neededOrtho = CalcOrthoSizeToFrame(posA, posB);
 		float targetOrtho = Mathf.Max(neededOrtho, _camera.Size); // 只放大不缩小，避免频繁抖动
+		var targetCamPos = GetCameraPositionForWorldTarget(midWorld, targetOrtho);
 
 		// 限制目标位置
 		var viewport = GetViewport().GetVisibleRect().Size;
@@ -510,9 +518,7 @@ public partial class CombatCameraController : Node3D
 		float aspect = viewport.X / Mathf.Max(1f, viewport.Y);
 		var (topRatio, bottomRatio) = GetUiInsetRatios();
 
-		float camH = _camera.Position.Y;
-		// 将世界坐标转换为相机平面坐标
-		float targetCamZ = worldPos.Z + camH * 0.7f;
+		float targetCamZ = GetCameraPositionForWorldTarget(worldPos, _camera.Size, FocusTargetUiDepthCompensation).Z;
 		float dx = Mathf.Abs(worldPos.X - _camera.Position.X);
 		float dz = Mathf.Abs(targetCamZ - _camera.Position.Z);
 
@@ -525,6 +531,35 @@ public partial class CombatCameraController : Node3D
 		float safeHalfWidth = halfWidth * (1f - marginRatio);
 
 		return dx < safeHalfWidth && dz < safeHalfHeight;
+	}
+
+	private Vector3 GetCameraPositionForWorldTarget(Vector3 worldPos, float orthoSize, float uiDepthCompensation = 1f)
+	{
+		if (_camera == null) return worldPos;
+
+		float camY = _camera.Position.Y;
+		float tiltRad = Mathf.DegToRad(Mathf.Abs(TiltDegrees));
+		float tanT = Mathf.Max(0.0001f, Mathf.Tan(tiltRad));
+		float lookAtZOffset = camY / tanT;
+		float depthOffset = GetUiDepthOffset(orthoSize, uiDepthCompensation);
+
+		return new Vector3(worldPos.X, camY, worldPos.Z - depthOffset + lookAtZOffset);
+	}
+
+	private float GetUiDepthOffset(float orthoSize, float compensation = 1f)
+	{
+		var (topRatio, bottomRatio) = GetUiInsetRatios();
+		float tiltRad = Mathf.DegToRad(Mathf.Abs(TiltDegrees));
+		float sinT = Mathf.Max(0.0001f, Mathf.Sin(tiltRad));
+		float centerShiftRatio = (topRatio - bottomRatio) * 0.5f;
+		return orthoSize * centerShiftRatio * Mathf.Clamp(compensation, 0f, 1f) / sinT;
+	}
+
+	private static float GetGroundDepthScale()
+	{
+		float tiltRad = Mathf.DegToRad(Mathf.Abs(TiltDegrees));
+		float sinT = Mathf.Max(0.0001f, Mathf.Sin(tiltRad));
+		return sinT;
 	}
 
 	// ===== WASD 移动 =====
@@ -591,8 +626,7 @@ public partial class CombatCameraController : Node3D
 	public void CenterCameraOnUnit(Unit unit)
 	{
 		if (unit == null || _camera == null) return;
-		var targetPos = unit.Position;
-		_camera.Position = new Vector3(targetPos.X, _camera.Position.Y, targetPos.Z + _camera.Position.Y);
+		_camera.Position = GetCameraPositionForWorldTarget(unit.Position, _camera.Size, FocusTargetUiDepthCompensation);
 		ClampPosition();
 	}
 

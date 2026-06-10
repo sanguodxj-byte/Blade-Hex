@@ -23,6 +23,7 @@ public partial class TipsDisplay : Control
     private Tween? _tween;
     private Timer _timer = null!;
     private bool _isRunning = false;
+    private bool _isBuilt = false;
 
     public string FilterCategory { get; set; } = "";
 
@@ -30,31 +31,29 @@ public partial class TipsDisplay : Control
 
     public override void _Ready()
     {
-        BuildUI();
+        EnsureBuilt();
         if (AutoStart)
         {
             Start();
         }
     }
 
-    private void BuildUI()
+    private void EnsureBuilt()
     {
+        if (_isBuilt) return;
+        _isBuilt = true;
+
         var theme = UITheme.Instance;
-        if (theme == null)
-        {
-            GD.PushError("TipsDisplay: UITheme.Instance is null");
-            return;
-        }
 
         _container = new HBoxContainer();
         _container.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _container.AddThemeConstantOverride("separation", theme.SpacingMd);
+        _container.AddThemeConstantOverride("separation", theme?.SpacingMd ?? 12);
         _container.Alignment = BoxContainer.AlignmentMode.Center;
         AddChild(_container);
 
         _iconLabel = new Label();
         _iconLabel.Text = "💡";
-        _iconLabel.AddThemeFontSizeOverride("font_size", theme.FontSizeLg);
+        _iconLabel.AddThemeFontSizeOverride("font_size", theme?.FontSizeLg ?? 18);
         _iconLabel.VerticalAlignment = VerticalAlignment.Center;
         _iconLabel.Visible = ShowIcon;
         _container.AddChild(_iconLabel);
@@ -66,8 +65,8 @@ public partial class TipsDisplay : Control
         _tipLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _tipLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _tipLabel.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        _tipLabel.AddThemeFontSizeOverride("normal_font_size", theme.FontSizeSm);
-        _tipLabel.AddThemeColorOverride("default_color", theme.TextSecondary);
+        _tipLabel.AddThemeFontSizeOverride("normal_font_size", theme?.FontSizeSm ?? 14);
+        _tipLabel.AddThemeColorOverride("default_color", theme?.TextSecondary ?? new Color(0.75f, 0.75f, 0.78f));
         _tipLabel.AddThemeStyleboxOverride("normal", new StyleBoxEmpty { ContentMarginLeft = 0, ContentMarginRight = 0, ContentMarginTop = 0, ContentMarginBottom = 0 });
         _container.AddChild(_tipLabel);
 
@@ -92,6 +91,7 @@ public partial class TipsDisplay : Control
 
     public void Start()
     {
+        EnsureBuilt();
         if (_isRunning) return;
         _isRunning = true;
         if (_tipsData == null)
@@ -104,6 +104,7 @@ public partial class TipsDisplay : Control
 
     public void Stop()
     {
+        EnsureBuilt();
         _isRunning = false;
         _timer.Stop();
     }
@@ -138,6 +139,7 @@ public partial class TipsDisplay : Control
 
     private void AnimateTipChange(Tip tip)
     {
+        EnsureBuilt();
         if (_tween != null && _tween.IsValid())
         {
             _tween.Kill();
@@ -171,6 +173,7 @@ public partial class TipsDisplay : Control
     
     public void ShowLastTip()
     {
+        EnsureBuilt();
         if (_tipsData == null) return;
         var tips = _tipsData.GetAllTips();
         if (tips.Count > 0)

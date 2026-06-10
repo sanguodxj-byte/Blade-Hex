@@ -18,7 +18,7 @@ public static class POIIllustrationResolver
     // ============================================================================
 
     private const int VariantCount = 3;
-    private const string BasePath = "res://assets/generated_poi_illust";
+    private const string BasePath = "res://assets/poi_illust";
 
     // ============================================================================
     // 映射表（唯一真相源）

@@ -1,6 +1,6 @@
 // OverworldEntityAITests.cs
 // 大地图实体 AI 系统综合测试套件
-// 覆盖: DailyDecisionProcessor 各类型行为、BattleResolver 视野检测、
+// 覆盖: DailyDecisionProcessor 各类型行为、PerceptionIntentResolver 视野检测、
 //       MovementProcessor 移动与到达回调、SiegeProcessor 围攻/回援/招募、
 //       EncounterEntitySpawner 生成条件与追击 AI、OverworldAIResolver 结算
 using System;
@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using BladeHex.Data;
+using BladeHex.Map;
 using BladeHex.Strategic;
 using BladeHex.Strategic.Army;
 using BladeHex.Strategic.WorldEvents;
@@ -62,12 +63,13 @@ public static class OverworldEntityAITests
         yield return Run(nameof(LordArmy_InArmy_FollowerFollowsMarshal),     LordArmy_InArmy_FollowerFollowsMarshal);
         yield return Run(nameof(LordArmy_InArmy_MarshalMarchesToTarget),     LordArmy_InArmy_MarshalMarchesToTarget);
 
-        // ── BattleResolver: 视野检测 ────────────────────────────────────
+        // ── DailyDecisionProcessor: 视野检测 ─────────────────────────────
         yield return Run(nameof(VisionDetection_StrongerEntity_Chases),      VisionDetection_StrongerEntity_Chases);
         yield return Run(nameof(VisionDetection_WeakerEntity_Flees),         VisionDetection_WeakerEntity_Flees);
         yield return Run(nameof(VisionDetection_EqualPower_NoAction),        VisionDetection_EqualPower_NoAction);
         yield return Run(nameof(VisionDetection_FleeingEntity_DoesNotChase), VisionDetection_FleeingEntity_DoesNotChase);
         yield return Run(nameof(VisionDetection_SameFaction_NoHostility),    VisionDetection_SameFaction_NoHostility);
+        yield return Run(nameof(Hostility_PlayerFactionWar_MakesNeutralNationHostileToPlayer), Hostility_PlayerFactionWar_MakesNeutralNationHostileToPlayer);
 
         // ── BattleResolver: 战斗结算 ────────────────────────────────────
         yield return Run(nameof(Battle_HostileFaction_Resolves),             Battle_HostileFaction_Resolves);
@@ -79,6 +81,7 @@ public static class OverworldEntityAITests
         yield return Run(nameof(Movement_AdvancesAlongPath),                 Movement_AdvancesAlongPath);
         yield return Run(nameof(Movement_ReachesDestination_FiresCallback),  Movement_ReachesDestination_FiresCallback);
         yield return Run(nameof(Movement_ChasingState_SpeedMultiplier),      Movement_ChasingState_SpeedMultiplier);
+        yield return Run(nameof(Navigator_ChasingRefreshFailure_PreservesExistingPath), Navigator_ChasingRefreshFailure_PreservesExistingPath);
         yield return Run(nameof(Movement_HibernatedEntity_Skipped),          Movement_HibernatedEntity_Skipped);
 
         // ── SiegeProcessor ──────────────────────────────────────────────
@@ -124,17 +127,20 @@ public static class OverworldEntityAITests
         // ── AIStrategy 策略修正 ──────────────────────────────────────────
         yield return Run(nameof(AIStrategy_Berserk_LowersChaseThreshold),    AIStrategy_Berserk_LowersChaseThreshold);
         yield return Run(nameof(AIStrategy_Cautious_RaisesChaseThreshold),   AIStrategy_Cautious_RaisesChaseThreshold);
+        yield return Run(nameof(AIStrategy_ChaseSpeedMultipliers_AreBounded), AIStrategy_ChaseSpeedMultipliers_AreBounded);
+        yield return Run(nameof(EntitySpawner_RaidingPartyRoadChaseSpeed_StaysBelowPlayerBase), EntitySpawner_RaidingPartyRoadChaseSpeed_StaysBelowPlayerBase);
         yield return Run(nameof(AIStrategy_Serialize_Roundtrip),             AIStrategy_Serialize_Roundtrip);
 
         // ── 史诗怪物领地回归 ─────────────────────────────────────────────
         yield return Run(nameof(EpicMonster_OutsideTerritory_ReturnsToCenter), EpicMonster_OutsideTerritory_ReturnsToCenter);
         yield return Run(nameof(EpicMonster_ChasingTargetLeavesTerritory_ClearsTarget), EpicMonster_ChasingTargetLeavesTerritory_ClearsTarget);
-        yield return Run(nameof(EpicMonster_OutsideTerritory_BehaviorEvaluatorSkips), EpicMonster_OutsideTerritory_BehaviorEvaluatorSkips);
+        yield return Run(nameof(EpicMonster_OutsideTerritory_PerceptionSkips), EpicMonster_OutsideTerritory_PerceptionSkips);
 
         // ── 交战机制 ──────────────────────────────────────────────────
         yield return Run(nameof(Engagement_HostilePairWithin100px_EntersEngaged), Engagement_HostilePairWithin100px_EntersEngaged);
         yield return Run(nameof(Engagement_GeneratedHostileFactions_EnterEngaged), Engagement_GeneratedHostileFactions_EnterEngaged);
         yield return Run(nameof(Simulation_TickFrame_MovingHostiles_EnterEngaged), Simulation_TickFrame_MovingHostiles_EnterEngaged);
+        yield return Run(nameof(Simulation_TickFrame_IdleHostiles_PerceptionStartsMovement), Simulation_TickFrame_IdleHostiles_PerceptionStartsMovement);
         yield return Run(nameof(Engagement_PairBeyond100px_NoEngage), Engagement_PairBeyond100px_NoEngage);
         yield return Run(nameof(EngagedCombat_DoesNotResolveBefore2Days), EngagedCombat_DoesNotResolveBefore2Days);
         yield return Run(nameof(EngagedCombat_ResolvesAfter2Days), EngagedCombat_ResolvesAfter2Days);
@@ -607,13 +613,14 @@ public static class OverworldEntityAITests
                 $"marshal state={marshal.CurrentAIState}");
     }
 
-    // ── BattleResolver: 视野检测 ─────────────────────────────────────────
+    // ── DailyDecisionProcessor: 视野检测 ─────────────────────────────────
 
     private static (bool, string) VisionDetection_StrongerEntity_Chases()
     {
-        // 此测试验证: 强敌在视野内但超出交战距离时，会进入追击状态
-        // ENGAGE_DIST=100，实体距离 600px 远超交战距离，应走视野检测路径
-        var resolver = new BattleResolver();
+        // 此测试验证: 强敌在视野内但超出交战距离时，会进入追击状态。
+        // 远距感知由 DailyDecisionProcessor/PerceptionIntentResolver 处理；
+        // BattleResolver 只负责接触交战。
+        var processor = new DailyDecisionProcessor();
         var strong = MakeEntity(OverworldEntity.EntityType.LordArmy, OverworldEntity.AIState.Patrolling, new Vector2(0, 0));
         strong.CombatPower = 300f;
         strong.Faction = "kingdom";
@@ -625,7 +632,7 @@ public static class OverworldEntityAITests
         weak.VisionRange = 800f;
 
         // 距离 600: > ENGAGE_DIST(100) → 不进交战; < VisionRange(800) → 视野检测
-        resolver.ProcessEntityInteractions(new List<OverworldEntity> { strong, weak });
+        processor.ProcessFrameTactics(new List<OverworldEntity> { strong, weak });
 
         // 如果视野检测生效，strong(300 vs 100, ratio=3.0>1.5) 应进入 Chasing
         // 如果未生效，strong 保持 Patrolling
@@ -636,7 +643,7 @@ public static class OverworldEntityAITests
 
     private static (bool, string) VisionDetection_WeakerEntity_Flees()
     {
-        var resolver = new BattleResolver();
+        var processor = new DailyDecisionProcessor();
         var strong = MakeEntity(OverworldEntity.EntityType.LordArmy, OverworldEntity.AIState.Patrolling, new Vector2(0, 0));
         strong.CombatPower = 300f;
         strong.Faction = "kingdom";
@@ -647,7 +654,7 @@ public static class OverworldEntityAITests
         weak.Faction = "hostile";
         weak.VisionRange = 500f;
 
-        resolver.ProcessEntityInteractions(new List<OverworldEntity> { strong, weak });
+        processor.ProcessFrameTactics(new List<OverworldEntity> { strong, weak });
 
         return (weak.CurrentAIState == OverworldEntity.AIState.Fleeing,
                 $"weak state={weak.CurrentAIState}");
@@ -655,7 +662,7 @@ public static class OverworldEntityAITests
 
     private static (bool, string) VisionDetection_EqualPower_NoAction()
     {
-        // 诊断测试: 验证 ProcessEntityInteractions 对同阵营远距离实体无影响
+        // 诊断测试: 验证感知阶段对同阵营远距离实体无影响
         var a = MakeEntity(OverworldEntity.EntityType.LordArmy, OverworldEntity.AIState.Patrolling, new Vector2(0, 0));
         a.CombatPower = 100f;
         a.Faction = "kingdom";
@@ -669,8 +676,8 @@ public static class OverworldEntityAITests
         // 先验证初始状态
         string initState = $"init: a={a.CurrentAIState}/{a.Faction}, b={b.CurrentAIState}/{b.Faction}";
 
-        var resolver = new BattleResolver();
-        resolver.ProcessEntityInteractions(new List<OverworldEntity> { a, b });
+        var processor = new DailyDecisionProcessor();
+        processor.ProcessFrameTactics(new List<OverworldEntity> { a, b });
 
         string afterState = $"after: a={a.CurrentAIState}/{a.Faction}, b={b.CurrentAIState}/{b.Faction}";
 
@@ -678,11 +685,11 @@ public static class OverworldEntityAITests
                 $"{initState} | {afterState}");
     }
 
-    private static (bool, string) VisionDetection_FleeingEntity_DoesNotChase()
+private static (bool, string) VisionDetection_FleeingEntity_DoesNotChase()
     {
-        var resolver = new BattleResolver();
+        var processor = new DailyDecisionProcessor();
         var fleeing = MakeEntity(OverworldEntity.EntityType.LordArmy, OverworldEntity.AIState.Fleeing, new Vector2(0, 0));
-        fleeing.CombatPower = 300f; // 即使更强
+        fleeing.CombatPower = 300f;
         fleeing.Faction = "kingdom";
         fleeing.VisionRange = 500f;
 
@@ -690,7 +697,28 @@ public static class OverworldEntityAITests
         target.CombatPower = 100f;
         target.Faction = "hostile";
 
-        resolver.ProcessEntityInteractions(new List<OverworldEntity> { fleeing, target });
+        // 逃跑实体必须有明确的威胁目标，否则 RefreshFleeMove 认为威胁已消失
+        fleeing.CurrentTacticalTarget = target;
+
+        // 预检查
+        if (!fleeing.IsAlive)
+            return (false, "fleeing 应存活");
+        if (fleeing.CurrentAIState != OverworldEntity.AIState.Fleeing)
+            return (false, $"fleeing 初始状态应为 Fleeing，得到 {fleeing.CurrentAIState}");
+        if (fleeing.CurrentTacticalTarget != target)
+            return (false, $"fleeing.CurrentTacticalTarget 应为 target");
+
+        try
+        {
+            processor.ProcessFrameTactics(new List<OverworldEntity> { fleeing, target });
+        }
+        catch (Exception ex)
+        {
+            return (false, $"ProcessFrameTactics 异常: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        GD.Print($"[FleeTest] fleeing state={fleeing.CurrentAIState}, target={target.CurrentAIState}, " +
+                 $"tacticalTarget={fleeing.CurrentTacticalTarget?.EntityName}, dist={fleeing.Position.DistanceTo(target.Position)}");
 
         return (fleeing.CurrentAIState == OverworldEntity.AIState.Fleeing,
                 $"fleeing state={fleeing.CurrentAIState} (should stay Fleeing)");
@@ -698,7 +726,7 @@ public static class OverworldEntityAITests
 
     private static (bool, string) VisionDetection_SameFaction_NoHostility()
     {
-        var resolver = new BattleResolver();
+        var processor = new DailyDecisionProcessor();
         var a = MakeEntity(OverworldEntity.EntityType.LordArmy, OverworldEntity.AIState.Patrolling, new Vector2(0, 0));
         a.CombatPower = 300f;
         a.Faction = "kingdom";
@@ -708,10 +736,27 @@ public static class OverworldEntityAITests
         b.CombatPower = 100f;
         b.Faction = "kingdom"; // 同阵营
 
-        resolver.ProcessEntityInteractions(new List<OverworldEntity> { a, b });
+        processor.ProcessFrameTactics(new List<OverworldEntity> { a, b });
 
         return (a.CurrentAIState == OverworldEntity.AIState.Patrolling,
                 $"state={a.CurrentAIState} (should stay Patrolling)");
+    }
+
+    private static (bool, string) Hostility_PlayerFactionWar_MakesNeutralNationHostileToPlayer()
+    {
+        var engine = new WorldEventEngine();
+        engine.ActiveWars.Add(new WarState
+        {
+            NationA = "nation_a",
+            NationB = "nation_b",
+            DaysSinceStart = 1,
+        });
+
+        var enemy = MakeEntity(OverworldEntity.EntityType.LordArmy, faction: "nation_b", hostile: false);
+        var player = MakeEntity(OverworldEntity.EntityType.Adventurer, faction: "nation_a", hostile: false);
+
+        bool hostile = OverworldHostility.AreHostileToPlayer(enemy, player, engine);
+        return (hostile, $"expected nation_b hostile to player faction nation_a during war; hostile={hostile}");
     }
 
     // ── BattleResolver: 交战 → 时间战斗结算 ─────────────────────────────
@@ -1437,15 +1482,15 @@ public static class OverworldEntityAITests
         berserker.Position = new Vector2(0, 0);
         instEntity.Position = new Vector2(0, 0);
 
-        var evaluator = new EntityBehaviorEvaluator();
+        var processor = new DailyDecisionProcessor();
 
         // 单独评估狂暴实体
         var berserkerList = new List<OverworldEntity> { berserker, target };
-        evaluator.EvaluateAll(berserkerList, null);
+        processor.ProcessFrameTactics(berserkerList);
 
         // 单独评估本能实体
         var instList = new List<OverworldEntity> { instEntity, MakeEntity(type: OverworldEntity.EntityType.RaidingParty, combatPower: 100f, faction: "hostile", hostile: true, position: new Vector2(300, 0)) };
-        evaluator.EvaluateAll(instList, null);
+        processor.ProcessFrameTactics(instList);
 
         bool berserkerChases = berserker.CurrentAIState == OverworldEntity.AIState.Chasing;
         bool instinctNoChase = instEntity.CurrentAIState != OverworldEntity.AIState.Chasing; // 60/100=0.6 < 1.5, 不追
@@ -1469,19 +1514,64 @@ public static class OverworldEntityAITests
         cautious.Position = new Vector2(0, 0);
         instEntity.Position = new Vector2(0, 0);
 
-        var evaluator = new EntityBehaviorEvaluator();
+        var processor = new DailyDecisionProcessor();
 
         var cautiousList = new List<OverworldEntity> { cautious, target1 };
-        evaluator.EvaluateAll(cautiousList, null);
+        processor.ProcessFrameTactics(cautiousList);
 
         var instList = new List<OverworldEntity> { instEntity, target2 };
-        evaluator.EvaluateAll(instList, null);
+        processor.ProcessFrameTactics(instList);
 
         bool cautiousNoChase = cautious.CurrentAIState != OverworldEntity.AIState.Chasing; // 1.8 < 2.25
         bool instinctChases = instEntity.CurrentAIState == OverworldEntity.AIState.Chasing; // 1.8 > 1.5
 
         return (cautiousNoChase && instinctChases,
                 $"cautious={cautious.CurrentAIState}, instinct={instEntity.CurrentAIState}");
+    }
+
+    private static (bool, string) AIStrategy_ChaseSpeedMultipliers_AreBounded()
+    {
+        const float maxAllowed = 1.12f;
+
+        foreach (AIStrategyEnum strategy in Enum.GetValues<AIStrategyEnum>())
+        {
+            float multiplier = EntitySpeedCalculator.GetChaseSpeedMultiplier(strategy);
+            if (multiplier > maxAllowed + 0.001f)
+                return (false, $"{strategy} chase multiplier too high: {multiplier:F2} > {maxAllowed:F2}");
+        }
+
+        float berserk = EntitySpeedCalculator.GetChaseSpeedMultiplier(AIStrategyEnum.Berserk);
+        float cautious = EntitySpeedCalculator.GetChaseSpeedMultiplier(AIStrategyEnum.Cautious);
+        return (berserk > cautious,
+                $"berserk={berserk:F2}, cautious={cautious:F2}");
+    }
+
+    private static (bool, string) EntitySpawner_RaidingPartyRoadChaseSpeed_StaysBelowPlayerBase()
+    {
+        const float playerBaseSpeed = 300.0f;
+        const float roadFactor = 1.2f;
+
+        var source = MakePOI(new Vector2(0, 0), "hostile", OverworldPOI.POIType.Settlement);
+        source.SettlementRaceValue = OverworldPOI.SettlementRace.Pirate;
+        source.ThreatLevel = 1.0f;
+        var village = MakePOI(new Vector2(1000, 0), "kingdom", OverworldPOI.POIType.Village);
+        var spawner = new EntitySpawner();
+
+        for (int i = 0; i < 20; i++)
+        {
+            var party = spawner.CreateRaidingPartyWithTargets(source, new List<OverworldPOI> { source, village });
+            if (party == null)
+                return (false, "raiding party should spawn when a target village exists");
+
+            float worstRoadChaseSpeed = party.MoveSpeed
+                * EntitySpeedCalculator.GetChaseSpeedMultiplier(AIStrategyEnum.Berserk)
+                * roadFactor;
+
+            if (worstRoadChaseSpeed > playerBaseSpeed + 0.001f)
+                return (false, $"road chase speed too high: base={party.MoveSpeed:F1}, final={worstRoadChaseSpeed:F1}");
+        }
+
+        return (true, "raiding party road chase speed stays below player base speed");
     }
 
     private static (bool, string) AIStrategy_Serialize_Roundtrip()
@@ -1507,8 +1597,23 @@ public static class OverworldEntityAITests
         monster.HomePosition = new Vector2(800, 1000);
         monster.IsAggressive = true; // 即使标记为攻击状态也应被覆盖
 
+        // 预检查：怪物确认在领地外
+        if (monster.IsInTerritory(monster.Position))
+            return (false, $"怪物应在领地外: pos={monster.Position}, center={monster.TerritoryCenter}, radius={monster.TerritoryRadius}");
+
         var processor = new DailyDecisionProcessor();
-        processor.ProcessDailyDecisions(new List<OverworldEntity> { monster }, new List<OverworldPOI>(), 1);
+
+        try
+        {
+            processor.ProcessDailyDecisions(new List<OverworldEntity> { monster }, new List<OverworldPOI>(), 1);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"ProcessDailyDecisions 异常: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        GD.Print($"[MonsterTest] state={monster.CurrentAIState}, aggressive={monster.IsAggressive}, " +
+                 $"chaseTarget={monster.ChaseTarget?.EntityName}");
 
         bool notAggressive = !monster.IsAggressive;
         bool patrolling = monster.CurrentAIState == OverworldEntity.AIState.Patrolling;
@@ -1539,9 +1644,9 @@ public static class OverworldEntityAITests
                 $"chaseTarget={monster.ChaseTarget}, state={monster.CurrentAIState}");
     }
 
-    private static (bool, string) EpicMonster_OutsideTerritory_BehaviorEvaluatorSkips()
+    private static (bool, string) EpicMonster_OutsideTerritory_PerceptionSkips()
     {
-        // 怪物在领地外, 附近有一个弱敌 — BehaviorEvaluator 不应覆盖其 Patrolling(返回) 状态
+        // 怪物在领地外, 附近有一个弱敌 — 感知意图阶段不应覆盖其 Patrolling(返回) 状态
         var monster = MakeEntity(type: OverworldEntity.EntityType.EpicMonster, state: OverworldEntity.AIState.Patrolling, position: new Vector2(2000, 1000));
         monster.TerritoryCenter = new Vector2(800, 1000);
         monster.TerritoryRadius = 500f;
@@ -1551,8 +1656,8 @@ public static class OverworldEntityAITests
         enemy.VisionRange = 300f;
         monster.VisionRange = 400f;
 
-        var evaluator = new EntityBehaviorEvaluator();
-        evaluator.EvaluateAll(new List<OverworldEntity> { monster, enemy }, null);
+        var processor = new DailyDecisionProcessor();
+        processor.ProcessFrameTactics(new List<OverworldEntity> { monster, enemy });
 
         // 怪物应维持 Patrolling(返回领地), 不应被评估器改为 Fleeing
         bool stillPatrolling = monster.CurrentAIState == OverworldEntity.AIState.Patrolling;
@@ -1637,6 +1742,52 @@ public static class OverworldEntityAITests
         return (bothEngaged, $"a={a.CurrentAIState}, b={b.CurrentAIState}, a.pos={a.Position}, b.pos={b.Position}");
     }
 
+    private static (bool, string) Simulation_TickFrame_IdleHostiles_PerceptionStartsMovement()
+    {
+        var grid = MakePlainsGrid(12, 12);
+        var astar = new HexOverworldAStar(grid);
+        var ctx = new OverworldSimulationContext
+        {
+            PlayerPosition = Vector2.Zero,
+            SpatialIndex = new EntitySpatialIndex(800),
+            HexGrid = grid,
+            HexAStar = astar,
+        };
+
+        var chaser = MakeEntity(
+            type: OverworldEntity.EntityType.Adventurer,
+            state: OverworldEntity.AIState.Idle,
+            position: HexOverworldTile.AxialToPixel(2, 2),
+            combatPower: 220f,
+            faction: "neutral");
+        chaser.VisionRange = 900f;
+        chaser.MoveSpeed = 220f;
+
+        var target = MakeEntity(
+            type: OverworldEntity.EntityType.RaidingParty,
+            state: OverworldEntity.AIState.Idle,
+            position: HexOverworldTile.AxialToPixel(5, 2),
+            combatPower: 45f,
+            faction: "hostile",
+            hostile: true);
+        target.VisionRange = 900f;
+
+        ctx.Entities.Add(chaser);
+        ctx.Entities.Add(target);
+        ctx.SpatialIndex.Rebuild(ctx.Entities);
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+        Vector2 before = chaser.Position;
+        sim.TickFrame(0.25f, ctx);
+
+        bool chasing = chaser.CurrentAIState == OverworldEntity.AIState.Chasing;
+        bool moving = chaser.IsMoving || chaser.Position.DistanceTo(before) > 0.01f;
+        bool targetSet = chaser.ChaseTarget == target;
+        return (chasing && moving && targetSet,
+            $"state={chaser.CurrentAIState}, moving={chaser.IsMoving}, moved={chaser.Position.DistanceTo(before):F2}, targetSet={targetSet}, path={chaser.Path.Count}");
+    }
+
     private static (bool, string) EngagedCombat_DoesNotResolveBefore2Days()
     {
         var a = MakeEntity(combatPower: 50f, faction: "neutral", position: new Vector2(0, 0));
@@ -1709,6 +1860,29 @@ public static class OverworldEntityAITests
         bool posUnchanged = entity.Position == new Vector2(100, 100);
         return (stopped && pathCleared && posUnchanged,
                 $"isMoving={entity.IsMoving}, pathCount={entity.Path.Count}, pos={entity.Position}");
+    }
+
+    private static (bool, string) Navigator_ChasingRefreshFailure_PreservesExistingPath()
+    {
+        var entity = MakeEntity(state: OverworldEntity.AIState.Chasing, position: new Vector2(0, 0));
+        entity.IsMoving = true;
+        entity.Path.Add(new Vector2(100, 0));
+
+        var navigator = new OverworldEntityNavigator();
+        bool started = navigator.StartMoveTo(entity, new Vector2(500, 0));
+
+        bool pathPreserved = entity.Path.Count == 1 && entity.Path[0] == new Vector2(100, 0);
+        return (started && entity.IsMoving && pathPreserved,
+                $"started={started}, moving={entity.IsMoving}, pathCount={entity.Path.Count}");
+    }
+
+    private static HexOverworldGrid MakePlainsGrid(int width, int height)
+    {
+        var grid = new HexOverworldGrid();
+        grid.Initialize(width, height);
+        foreach (var tile in grid.Tiles.Values)
+            tile.SetTerrain(HexOverworldTile.TerrainType.Plains);
+        return grid;
     }
 
     // ── 辅助类 ───────────────────────────────────────────────────────────

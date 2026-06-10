@@ -323,7 +323,7 @@ public static class ClassTitleResolver
     {
         if (_iconTable != null) return;
         // 注意：每个中文 key 必须唯一，否则后写覆盖前写。
-        // 仅映射到 assets/generated_class_icons/ 中实际存在的 PNG；缺图标的称号留空表项以走 fallback。
+        // 仅映射到 assets/class_icons/ 中实际存在的 PNG；缺图标的称号留空表项以走 fallback。
         _iconTable = new Dictionary<string, string>
         {
             // ---- 6 单属性 ----
@@ -399,7 +399,7 @@ public static class ClassTitleResolver
         EnsureIconTable();
         if (!_iconTable!.TryGetValue(title, out var iconName) || string.IsNullOrEmpty(iconName))
             return null;
-        var path = $"res://assets/generated_class_icons/{iconName}.png";
+        var path = $"res://assets/class_icons/{iconName}.png";
         return Godot.ResourceLoader.Exists(path) ? path : null;
     }
 }

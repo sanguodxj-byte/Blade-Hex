@@ -188,6 +188,16 @@ ORIGIN_AVATAR_TITLE,Avatar,捏脸
 ORIGIN_FACE,Face,脸型
 ORIGIN_HAIR,Hair,发型
 ORIGIN_DECORATION,Decoration,装饰
+ORIGIN_HAIR_COLOR,Hair Color,发色
+HAIR_NATURAL,Natural,原色
+HAIR_BLACK,Black,纯黑
+HAIR_DARKBROWN,Dark Brown,深棕
+HAIR_CHESTNUT,Chestnut,栗色
+HAIR_AUBURN,Auburn,赤棕
+HAIR_GINGER,Ginger,姜黄
+HAIR_GOLDEN,Golden,金发
+HAIR_ASHBLONDE,Ash Blonde,亚麻
+HAIR_SILVER,Silver,银白
 ORIGIN_WRITE_PAST,Write Your Past,书写你的过往
 ORIGIN_ATTRIBUTES,Attributes,属性
 ORIGIN_BAG,Bag,行囊
@@ -308,6 +318,9 @@ JOIN_BATTLE_LEAVE,Leave,离开
 JOIN_ARMY_TITLE,Allied army assembling,发现本国集结军团
 JOIN_ARMY_DESC,Marshal {0} is leading an army toward {1}. Join the march?,{0} 元帅正率领军团，目标: {1}。是否加入随军前行？
 JOIN_ARMY_BUTTON,Join Army,加入军团
+JOIN_BATTLE_NVN_ATTACKERS,"Attackers: {0} units, total power {1}","攻击方: {0} 个单位，总战力 {1}"
+JOIN_BATTLE_NVN_DEFENDERS,"Defenders: {0} units, total power {1}","防御方: {0} 个单位，总战力 {1}"
+JOIN_BATTLE_NVN_DEFENDERS_GARRISON,"Garrison: {0}/{1}","守军: {0}/{1}"
 
 # === 教程提示 ===
 TUTORIAL_PROMPT_TITLE,📖 Tutorial Prompt,📖 教程提示

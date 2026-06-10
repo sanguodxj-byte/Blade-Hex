@@ -238,7 +238,7 @@ public partial class CampaignScene : CanvasLayer
         AddChild(bg);
 
         // 关卡插图（填充顶栏和底栏之间的区域）
-        var illustPath = $"res://assets/generated_campaign_illust/campaign_{(_ctx.CurrentLevel + 1):D2}_{GetLevelImageSuffix()}.png";
+        var illustPath = $"res://assets/campaign_illust/campaign_{(_ctx.CurrentLevel + 1):D2}_{GetLevelImageSuffix()}.png";
         GD.Print($"[Campaign] 加载插图: {illustPath}");
         var illustTex = TextureAssetResolver.LoadCampaignIllustration(illustPath);
         GD.Print($"[Campaign] 插图加载结果: {(illustTex != null ? $"OK {illustTex.GetWidth()}x{illustTex.GetHeight()}" : "NULL")}");

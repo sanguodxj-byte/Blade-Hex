@@ -4,8 +4,8 @@ import numpy as np
 from PIL import Image
 
 # 路径配置
-weapons_dir = r"d:\123\Blade&Hex\assets\generated_weapons"
-backup_dir = r"d:\123\Blade&Hex\assets\generated_weapons_backup"
+weapons_dir = r"d:\123\Blade&Hex\assets\weapons"
+backup_dir = r"d:\123\Blade&Hex\assets\weapons_backup"
 
 # 1. 确保安全备份存在
 if not os.path.exists(backup_dir):

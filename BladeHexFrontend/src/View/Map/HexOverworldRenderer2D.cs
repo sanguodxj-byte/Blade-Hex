@@ -50,7 +50,7 @@ public partial class HexOverworldRenderer2D : Node2D
         {
             Shader = shader,
         };
-        _shaderMaterial.SetShaderParameter("top_texture", parchmentTexture);
+        _shaderMaterial.SetShaderParameter("top_texture", parchmentTexture!);
         _shaderMaterial.SetShaderParameter("texture_scale", 0.0008f);
         _shaderMaterial.SetShaderParameter("detail_scale", 0.005f);
         _shaderMaterial.SetShaderParameter("detail_strength", 0.0f);

@@ -15,6 +15,8 @@ namespace BladeHex.Strategic;
 /// </summary>
 public class MovementProcessor
 {
+    private const float WaypointArrivalEpsilon = 1.0f;
+
     private ChunkManager? _chunkManagerRef;
 
     /// <summary>地形查询源（由 OverworldEntityManager 注入）</summary>
@@ -34,12 +36,15 @@ public class MovementProcessor
     /// <summary>POI 控制区管理器（由 OverworldEntityManager 注入）</summary>
     public ZoneOfControlManager? ZocManagerRef { get; set; }
 
+    /// <summary>天气移速倍率（由 OverworldSimulationContext 注入，1.0=无影响）</summary>
+    public float WeatherSpeedFactor { get; set; } = 1.0f;
+
     /// <summary>
     /// 计算实体实际移速 = 委托到 EntitySpeedCalculator
     /// </summary>
     private float CalculateEffectiveSpeed(OverworldEntity entity, Vector2 position)
     {
-        return EntitySpeedCalculator.CalculateSpeed(entity, position, TerrainQueryRef, ZocManagerRef);
+        return EntitySpeedCalculator.CalculateSpeed(entity, position, TerrainQueryRef, ZocManagerRef, WeatherSpeedFactor);
     }
 
     /// <summary>每帧更新所有实体移动</summary>
@@ -56,6 +61,8 @@ public class MovementProcessor
                 entity.Path.Clear();
                 continue;
             }
+
+            TrimReachedWaypoints(entity);
 
             if (entity.Path.Count == 0)
             {
@@ -86,6 +93,15 @@ public class MovementProcessor
             {
                 entity.Position += dir * step;
             }
+        }
+    }
+
+    private static void TrimReachedWaypoints(OverworldEntity entity)
+    {
+        while (entity.Path.Count > 0 &&
+               entity.Position.DistanceTo(entity.Path[0]) <= WaypointArrivalEpsilon)
+        {
+            entity.Path.RemoveAt(0);
         }
     }
 }

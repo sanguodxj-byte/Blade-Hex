@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 base_dir = r"d:\123\Blade&Hex"
-weapons_dir = os.path.join(base_dir, r"assets\generated_weapons")
+weapons_dir = os.path.join(base_dir, r"assets\weapons")
 
 # 四款代表性测试武器
 test_weapons = [
