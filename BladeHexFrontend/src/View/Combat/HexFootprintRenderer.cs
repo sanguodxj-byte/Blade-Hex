@@ -12,8 +12,8 @@ namespace BladeHex.View.Combat;
 public static class HexFootprintRenderer
 {
     // ===== 鞋印尺寸比例（相对于 HexUtils.Size） =====
-    private const float FootLengthRatio = 0.18f; // 鞋印半长
-    private const float FootWidthRatio = 0.09f;  // 鞋印半宽
+    private const float FootLengthRatio = 0.172f; // 鞋印半长 (精确对齐原版全长 33px/96)
+    private const float FootWidthRatio = 0.062f;  // 鞋印半宽 (精确对齐原版主宽 11.9px/96)
 
     /// <summary>
     /// 绘制一个高精度的详细鞋印。
