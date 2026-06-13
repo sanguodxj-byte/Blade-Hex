@@ -28,6 +28,18 @@ public class EncounterEntitySpawner
     /// <summary>同时存在的最大敌对实体数</summary>
     public int MaxActiveEntities = 5;
 
+    /// <summary>是否启用旧的帧级环境刷怪；chunk 模式应由遭遇槽驱动。</summary>
+    public bool EnableAmbientSpawns = true;
+
+    /// <summary>每个刚激活 chunk 最多从生态遭遇槽孵化多少个可移动野怪</summary>
+    public int MaxChunkSlotSpawnsPerChunk = 1;
+
+    /// <summary>单次 chunk 激活批次最多孵化多少个可移动野怪</summary>
+    public int MaxChunkSlotSpawnsPerActivationBatch = 32;
+
+    /// <summary>同时存在的生态遭遇野怪实体上限</summary>
+    public int MaxChunkSlotWildMonsterEntities = 64;
+
     /// <summary>生成距离玩家的最远像素距离（视野外）</summary>
     public float SpawnDistanceMin = 800.0f;
     public float SpawnDistanceMax = 1600.0f;
@@ -120,7 +132,8 @@ public class EncounterEntitySpawner
         _timeSinceLastSpawn += delta;
 
         // 检查 spawn 条件
-        if (_timeSinceLastSpawn >= SpawnIntervalSec
+        if (EnableAmbientSpawns
+            && _timeSinceLastSpawn >= SpawnIntervalSec
             && _accumulatedDistance >= MinDistanceTraveled
             && CountActiveHostiles(existingEntities) < MaxActiveEntities)
         {
@@ -142,6 +155,45 @@ public class EncounterEntitySpawner
         }
 
         return newlySpawned;
+    }
+
+    /// <summary>
+    /// 从已填充的 chunk 遭遇槽位孵化游荡野怪实体。
+    /// 非 WildMonsters 槽位保留给后续地面交互，不在这里消费。
+    /// </summary>
+    public List<OverworldEntity> SpawnWildMonstersFromSlots(
+        ChunkData chunk,
+        EncounterSpawner encounterSpawner,
+        float dangerLevel,
+        int playerLevel,
+        Vector2 playerPosition,
+        float minDistanceFromPlayer = 400.0f,
+        int maxSpawns = int.MaxValue)
+    {
+        var spawned = new List<OverworldEntity>();
+        if (maxSpawns <= 0)
+            return spawned;
+
+        foreach (var coord in chunk.GetAvailableEncounters())
+        {
+            if (spawned.Count >= maxSpawns)
+                break;
+
+            var tile = chunk.GetTile(coord.X, coord.Y);
+            if (tile == null) continue;
+
+            if (tile.PixelPos.DistanceTo(playerPosition) < minDistanceFromPlayer)
+                continue;
+
+            var data = encounterSpawner.BuildEncounter(coord, tile, playerLevel, dangerLevel);
+            if (data.Type != EncounterType.WildMonsters)
+                continue;
+
+            chunk.SetEncounterState(coord.X, coord.Y, EncounterSlotState.Triggered);
+            spawned.Add(CreateWildMonsterEntity(data, tile));
+        }
+
+        return spawned;
     }
 
     /// <summary>检查是否触发战斗（玩家靠近敌对实体）</summary>
@@ -315,6 +367,55 @@ public class EncounterEntitySpawner
         entity.AIStrategy = PickAIStrategy(entityType);
 
         return entity;
+    }
+
+    private OverworldEntity CreateWildMonsterEntity(EncounterData data, HexOverworldTile tile)
+    {
+        var entity = new OverworldEntity
+        {
+            EntityName = data.EnemyTemplateIds.Count > 0 ? GetBeastDisplayName(data.EnemyTemplateIds[0]) : "野外兽群",
+            EntityTypeEnum = OverworldEntity.EntityType.EpicMonster,
+            Position = tile.PixelPos,
+            HomePosition = tile.PixelPos,
+            TerritoryCenter = tile.PixelPos,
+            TerritoryRadius = 800.0f,
+            MoveSpeed = 80.0f + (float)_rng.NextDouble() * 30.0f,
+            PartySize = data.PartySize,
+            PartyLevel = data.EncounterLevel,
+            Faction = "hostile",
+            IsHostileToPlayer = true,
+            VisionRange = EntityVisionRange,
+            PatrolRadius = 300.0f,
+            CurrentAIState = OverworldEntity.AIState.Patrolling,
+            IsAlive = true,
+            MonsterType = "beast",
+            TempEncounterEnemies = data.EnemyTemplateIds.ToArray(),
+        };
+
+        entity.CombatPower = OverworldEntity.CalculateBaseCombatPower(
+            entity.PartySize,
+            entity.PartyLevel,
+            OverworldEntity.EntityType.EpicMonster);
+
+        entity.AIStrategy = new[] { AIStrategyEnum.Instinct, AIStrategyEnum.Territorial, AIStrategyEnum.Berserk }[_rng.Next(3)];
+        return entity;
+    }
+
+    private static string GetBeastDisplayName(string templateId)
+    {
+        return templateId switch
+        {
+            "wolf" => "野狼群",
+            "ice_wolf" => "冰霜狼群",
+            "swamp_beast" => "沼泽巨兽",
+            "treant" => "古老树人",
+            "yeti" => "雪地雪人",
+            "wild_boar" => "狂野山猪",
+            "lizardman" => "蜥蜴人游荡者",
+            "harpy" => "鹰身女妖",
+            "ogre" => "食人魔",
+            _ => "野外兽群",
+        };
     }
 
     /// <summary>按实体类型加权随机分配 AIStrategy</summary>

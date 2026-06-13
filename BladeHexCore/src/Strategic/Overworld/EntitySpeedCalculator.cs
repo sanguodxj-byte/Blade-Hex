@@ -5,7 +5,6 @@
 //   - 供 UI 展示 AI 实体的速度分解（GetSpeedBreakdown）
 //   - MovementProcessor 委托到此组件的 CalculateSpeed
 //   - 轻量级，不含 Godot Resource 依赖
-using Godot;
 using BladeHex.Map;
 using BladeHex.Data;
 

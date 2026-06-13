@@ -1943,6 +1943,73 @@ public partial class BattleMapGenerator : RefCounted
             int elev = em.GetValueOrDefault(key, 2); // 默认基础海拔=2（平地）
             var cell = BattleCellData.CreateFromType(tt, elev);
 
+            // ==========================================
+            // 战斗地图生成优化：障碍物概率生成
+            // ==========================================
+            bool isDenseForest = tt == BattleCellData.TerrainType.DenseForest || tt == BattleCellData.TerrainType.Jungle;
+            bool isMountain = tt == BattleCellData.TerrainType.Mountain || tt == BattleCellData.TerrainType.MountainSnow;
+            bool isOpenTerrain = tt == BattleCellData.TerrainType.Plains
+                || tt == BattleCellData.TerrainType.Grassland
+                || tt == BattleCellData.TerrainType.Savanna
+                || tt == BattleCellData.TerrainType.Wasteland
+                || tt == BattleCellData.TerrainType.Rocky
+                || tt == BattleCellData.TerrainType.Sand
+                || tt == BattleCellData.TerrainType.Snow
+                || tt == BattleCellData.TerrainType.Ice;
+
+            if (isDenseForest && GD.Randf() < 0.30f)
+            {
+                cell.isPassable = false;
+                cell.blocksLineOfSight = true;
+                cell.coverLevel = 2; // 全掩体
+                cell.specialEffect = "obstacle_tree";
+                cell.terrainName = "树木障碍";
+            }
+            else if (isMountain && GD.Randf() < 0.20f)
+            {
+                cell.isPassable = false;
+                cell.blocksLineOfSight = true;
+                cell.coverLevel = 2; // 全掩体
+                cell.specialEffect = "obstacle_rock";
+                cell.terrainName = "岩石障碍";
+            }
+            else if (isOpenTerrain && GD.Randf() < 0.10f)
+            {
+                float roll = GD.Randf();
+                if (roll < 0.25f)
+                {
+                    cell.isPassable = false;
+                    cell.blocksLineOfSight = true;
+                    cell.coverLevel = 2;
+                    cell.specialEffect = "obstacle_tree";
+                    cell.terrainName = "树木障碍";
+                }
+                else if (roll < 0.50f)
+                {
+                    cell.isPassable = false;
+                    cell.blocksLineOfSight = true;
+                    cell.coverLevel = 2;
+                    cell.specialEffect = "obstacle_rock";
+                    cell.terrainName = "岩石障碍";
+                }
+                else if (roll < 0.75f)
+                {
+                    cell.isPassable = false;
+                    cell.blocksLineOfSight = false; // 箱子通常不阻挡视线
+                    cell.coverLevel = 2; // 箱子可以作为全掩体
+                    cell.specialEffect = "obstacle_crate";
+                    cell.terrainName = "箱子堆";
+                }
+                else
+                {
+                    cell.isPassable = false;
+                    cell.blocksLineOfSight = true;
+                    cell.coverLevel = 2;
+                    cell.specialEffect = "obstacle_wagon";
+                    cell.terrainName = "破损马车";
+                }
+            }
+
             // 据点建筑：使用 StrongholdPlacer 设置的动态高度（已采样周围地形）
             if (tt == BattleCellData.TerrainType.Rampart
                 || tt == BattleCellData.TerrainType.Tower

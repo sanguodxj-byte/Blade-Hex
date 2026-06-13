@@ -26,7 +26,7 @@ public partial class CombatHighlightController : Node
     private readonly List<HexCell> _baseRangeCells = new();
     private readonly List<HexCell> _skillRangeCells = new();
     private readonly List<HexCell> _attackRangeOverlayCells = new();
-    private MeshInstance3D? _moveFootprintMesh;
+    private MeshInstance3D? _moveRangeFillMesh;
     private MeshInstance3D? _moveRangeBorderMesh;
     private MeshInstance3D? _moveRangeGlowMesh;
 
@@ -146,70 +146,84 @@ public partial class CombatHighlightController : Node
         foreach (var cell in reachableCells)
             reachable.Add(cell.GridPos);
 
-        DrawMoveFootprints(unit, reachableCells);
+        DrawMoveRangeField(reachableCells);
         DrawMoveRangeBoundary(reachable);
     }
 
     private void ClearMoveRangeVisuals()
     {
-        if (_moveFootprintMesh != null && GodotObject.IsInstanceValid(_moveFootprintMesh))
-            _moveFootprintMesh.QueueFree();
+        if (_moveRangeFillMesh != null && GodotObject.IsInstanceValid(_moveRangeFillMesh))
+            _moveRangeFillMesh.QueueFree();
         if (_moveRangeBorderMesh != null && GodotObject.IsInstanceValid(_moveRangeBorderMesh))
             _moveRangeBorderMesh.QueueFree();
         if (_moveRangeGlowMesh != null && GodotObject.IsInstanceValid(_moveRangeGlowMesh))
             _moveRangeGlowMesh.QueueFree();
 
-        _moveFootprintMesh = null;
+        _moveRangeFillMesh = null;
         _moveRangeBorderMesh = null;
         _moveRangeGlowMesh = null;
     }
 
-    private void DrawMoveFootprints(Unit unit, List<HexCell> reachableCells)
+    private void DrawMoveRangeField(List<HexCell> reachableCells)
     {
-        if (HexGrid == null) return;
+        if (HexGrid == null || reachableCells.Count == 0) return;
 
-        var mesh = new ImmediateMesh();
-        mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
+        var field = new ImmediateMesh();
+        field.SurfaceBegin(Mesh.PrimitiveType.Triangles);
 
         bool hasGeometry = false;
-        float yOffset = CombatLayerHeight.HexTopOffset + CombatLayerHeight.OverlayLayer + 0.4f;
+        float yOffset = CombatLayerHeight.HexTopOffset + CombatLayerHeight.OverlayLayer + 0.15f;
 
         foreach (var cell in reachableCells)
         {
-            var path = HexGrid.FindPath(unit.GridPos, cell.GridPos);
-            if (path == null || path.Count == 0) continue;
+            if (cell == null || !GodotObject.IsInstanceValid(cell)) continue;
 
-            var prevCoord = path.Count >= 2 ? path[path.Count - 2] : unit.GridPos;
-            var prevCell = HexGrid.GetCell(prevCoord.X, prevCoord.Y);
-            if (prevCell == null) continue;
+            var centerColor = AdaptMoveColor(new Color(0.34f, 0.28f, 0.14f, 0.22f), cell);
+            var edgeColor = AdaptMoveColor(new Color(0.18f, 0.14f, 0.07f, 0.055f), cell);
+            AddMoveRangeCellWash(field, cell, yOffset, centerColor, edgeColor);
+            hasGeometry = true;
+        }
 
-            var dir = new Vector3(cell.Position.X - prevCell.Position.X, 0f, cell.Position.Z - prevCell.Position.Z);
+        field.SurfaceEnd();
+        if (!hasGeometry) return;
+
+        _moveRangeFillMesh = new MeshInstance3D
+        {
+            Name = "MoveRangeField",
+            Mesh = field,
+            MaterialOverride = CreateMoveVertexMaterial(4),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        AddChild(_moveRangeFillMesh);
+    }
+
+    private static void AddMoveRangeCellWash(ImmediateMesh mesh, HexCell cell, float yOffset, Color centerColor, Color edgeColor)
+    {
+        float apothem = HexUtils.Size * Mathf.Sqrt(3.0f) * 0.5f * 0.92f;
+        float halfEdge = HexUtils.Size * 0.5f * 0.92f;
+        var center = cell.Position + new Vector3(0f, yOffset, 0f);
+
+        for (int d = 0; d < 6; d++)
+        {
+            var neighbor = HexUtils.GetNeighbor(cell.GridPos.X, cell.GridPos.Y, d);
+            var dir = HexUtils.AxialToWorld3D(neighbor.X, neighbor.Y, cell.Elevation) - cell.Position;
+            dir.Y = 0f;
             if (dir.LengthSquared() < 0.001f) continue;
             dir = dir.Normalized();
 
             var side = new Vector3(-dir.Z, 0f, dir.X);
-            float pathFade = Mathf.Clamp(1.05f - path.Count * 0.055f, 0.52f, 1.0f);
-            var color = AdaptMoveColor(new Color(0.17f, 0.62f, 0.28f, 0.34f * pathFade), cell);
-            var center = cell.Position + new Vector3(0f, yOffset, 0f);
+            var edgeCenter = center + dir * apothem;
+            var a = edgeCenter + side * halfEdge;
+            var b = edgeCenter - side * halfEdge;
 
-            // 程序化脚印：左右脚交替，沿移动方向朝向
-            var footColor = new Color(color.R, color.G, color.B, color.A * 0.88f);
-            HexFootprintRenderer.AddSimpleFootprint(mesh, center + side * 11.0f + dir * 6.0f, dir, side, color);
-            HexFootprintRenderer.AddSimpleFootprint(mesh, center - side * 11.0f - dir * 6.0f, dir, side, footColor);
-            hasGeometry = true;
+            mesh.SurfaceSetNormal(Vector3.Up);
+            mesh.SurfaceSetColor(centerColor);
+            mesh.SurfaceAddVertex(center);
+            mesh.SurfaceSetColor(edgeColor);
+            mesh.SurfaceAddVertex(a);
+            mesh.SurfaceSetColor(edgeColor);
+            mesh.SurfaceAddVertex(b);
         }
-
-        mesh.SurfaceEnd();
-        if (!hasGeometry) return;
-
-        _moveFootprintMesh = new MeshInstance3D
-        {
-            Name = "MoveRangeFootprints",
-            Mesh = mesh,
-            MaterialOverride = CreateFootprintMaterial(6),
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-        };
-        AddChild(_moveFootprintMesh);
     }
 
     private void DrawMoveRangeBoundary(HashSet<Vector2I> reachable)
@@ -245,10 +259,10 @@ public partial class CombatHighlightController : Node
                 var a = edgeCenter + side * halfEdge;
                 var b = edgeCenter - side * halfEdge;
 
-                var coreColor = AdaptMoveColor(new Color(0.06f, 0.95f, 0.34f, 0.62f), cell);
-                var glowColor = AdaptMoveColor(new Color(0.12f, 0.95f, 0.40f, 0.20f), cell);
-                AddSolidEdgeBand(core, a, b, dir, 7.0f, coreColor);
-                AddSoftEdgeGlow(glow, a, b, dir, 6.0f, 24.0f, glowColor);
+                var coreColor = AdaptMoveColor(new Color(0.78f, 0.58f, 0.27f, 0.50f), cell);
+                var glowColor = AdaptMoveColor(new Color(0.44f, 0.32f, 0.14f, 0.16f), cell);
+                AddSolidEdgeBand(core, a, b, dir, 5.0f, coreColor);
+                AddSoftEdgeGlow(glow, a, b, dir, 5.0f, 20.0f, glowColor);
                 hasGeometry = true;
             }
         }
@@ -307,24 +321,6 @@ public partial class CombatHighlightController : Node
         mesh.SurfaceAddVertex(i2);
         mesh.SurfaceSetColor(innerColor);
         mesh.SurfaceAddVertex(i1);
-    }
-
-    private static Texture2D? _bootFootprintTexture;
-
-    private static StandardMaterial3D CreateFootprintMaterial(int renderPriority)
-    {
-        _bootFootprintTexture ??= GD.Load<Texture2D>("res://BladeHexFrontend/src/assets/ui/boot_footprint.png");
-        return new StandardMaterial3D
-        {
-            AlbedoColor = Colors.White,
-            AlbedoTexture = _bootFootprintTexture,
-            VertexColorUseAsAlbedo = true,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
-            RenderPriority = renderPriority,
-        };
     }
 
     private static StandardMaterial3D CreateMoveVertexMaterial(int renderPriority)
@@ -452,6 +448,9 @@ public partial class CombatHighlightController : Node
     // ===== 路径预览线 =====
     private MeshInstance3D? _pathPreviewLine;
     private List<Vector2I>? _previewPath;
+    private Vector3 _previewStartCellPos;
+    private float _pathPreviewProgress;
+    private bool _pathPreviewAnimating;
 
     // ===== 悬浮高亮 =====
     private HexCell? _currentHoverCell;
@@ -464,89 +463,265 @@ public partial class CombatHighlightController : Node
 
     public void DrawPathPreview(List<Vector2I> path, Vector3 startCellPos)
     {
+        if (IsSamePathPreview(path, startCellPos))
+            return;
+
         ClearPathPreview();
         if (HexGrid == null) return;
 
-        var mesh = new ImmediateMesh();
-        mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
-
-        float yOffset = CombatLayerHeight.HexTopOffset + CombatLayerHeight.UIHintLayer;
-        bool hasGeometry = false;
-
-        // 构建完整路径坐标序列（起点 + 路径各点）
-        var worldPositions = new List<Vector3>();
-        worldPositions.Add(startCellPos);
-        foreach (var coord in path)
-        {
-            var c = HexGrid.GetCell(coord.X, coord.Y);
-            if (c != null) worldPositions.Add(c.Position);
-        }
-
-        // 沿路径每一步生成左右脚程序化脚印
-        bool isLeftFoot = true;
-        for (int i = 1; i < worldPositions.Count; i++)
-        {
-            var prev = worldPositions[i - 1];
-            var curr = worldPositions[i];
-
-            var dir = new Vector3(curr.X - prev.X, 0f, curr.Z - prev.Z);
-            if (dir.LengthSquared() < 0.001f) continue;
-            dir = dir.Normalized();
-            var right = new Vector3(-dir.Z, 0f, dir.X);
-
-            float sideSign = isLeftFoot ? 1.0f : -1.0f;
-            float footSpacing = HexUtils.Size * 0.12f;
-
-            // 第一只脚（靠近上一格中心）
-            var pos1 = prev.Lerp(curr, 0.3f) + Vector3.Up * yOffset;
-            var color1 = new Color(0.3f, 0.85f, 0.4f, 0.55f);
-            HexFootprintRenderer.AddDetailedFootprint(mesh, pos1 + right * sideSign * footSpacing, dir, right, color1);
-
-            // 第二只脚（靠近当前格中心）
-            var pos2 = prev.Lerp(curr, 0.75f) + Vector3.Up * yOffset;
-            var color2 = new Color(0.3f, 0.85f, 0.4f, 0.45f);
-            HexFootprintRenderer.AddDetailedFootprint(mesh, pos2 - right * sideSign * footSpacing, dir, right, color2);
-
-            isLeftFoot = !isLeftFoot;
-            hasGeometry = true;
-        }
-
-        // 路径末端标记：小椭圆脚印在终点格中心
-        if (worldPositions.Count >= 2)
-        {
-            var endPos = worldPositions[^1] + Vector3.Up * yOffset;
-            var prevPos = worldPositions[^2];
-            var endDir = new Vector3(endPos.X - prevPos.X, 0f, endPos.Z - prevPos.Z);
-            if (endDir.LengthSquared() > 0.001f)
-            {
-                endDir = endDir.Normalized();
-                var endRight = new Vector3(-endDir.Z, 0f, endDir.X);
-                var endColor = new Color(0.2f, 0.95f, 0.45f, 0.65f);
-                HexFootprintRenderer.AddSimpleFootprint(mesh, endPos, endDir, endRight, endColor);
-                hasGeometry = true;
-            }
-        }
-
-        mesh.SurfaceEnd();
-        if (!hasGeometry) return;
+        _previewPath = new List<Vector2I>(path);
+        _previewStartCellPos = startCellPos;
+        _pathPreviewProgress = 0f;
+        _pathPreviewAnimating = true;
 
         if (_pathPreviewLine == null)
         {
             _pathPreviewLine = new MeshInstance3D();
-            _pathPreviewLine.Name = "PathPreviewLine";
+            _pathPreviewLine.Name = "PathPreviewArrows";
             AddChild(_pathPreviewLine);
         }
 
-        _pathPreviewLine.Mesh = mesh;
-        _pathPreviewLine.MaterialOverride = CreateFootprintMaterial(6);
+        _pathPreviewLine.MaterialOverride = CreateMoveVertexMaterial(8);
         _pathPreviewLine.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        RebuildPathPreviewArrows();
+    }
+
+    private bool IsSamePathPreview(List<Vector2I> path, Vector3 startCellPos)
+    {
+        if (_previewPath == null || _pathPreviewLine == null || !_pathPreviewLine.Visible)
+            return false;
+
+        if (_previewStartCellPos.DistanceSquaredTo(startCellPos) > 0.001f || _previewPath.Count != path.Count)
+            return false;
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            if (_previewPath[i] != path[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    private void UpdatePathPreviewArrows(double delta)
+    {
+        if (!_pathPreviewAnimating || _previewPath == null || _pathPreviewLine == null)
+            return;
+
+        _pathPreviewProgress = Mathf.Min(1f, _pathPreviewProgress + (float)delta * 2.2f);
+        RebuildPathPreviewArrows();
+
+        if (_pathPreviewProgress >= 1f)
+            _pathPreviewAnimating = false;
+    }
+
+    private void RebuildPathPreviewArrows()
+    {
+        if (HexGrid == null || _pathPreviewLine == null || _previewPath == null)
+            return;
+
+        float yOffset = CombatLayerHeight.HexTopOffset + CombatLayerHeight.UIHintLayer;
+        var worldPositions = new List<Vector3> { _previewStartCellPos };
+
+        foreach (var coord in _previewPath)
+        {
+            var c = HexGrid.GetCell(coord.X, coord.Y);
+            if (c != null)
+                worldPositions.Add(c.Position);
+        }
+
+        var mesh = new ImmediateMesh();
+        mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
+
+        float easedProgress = EaseOutCubic(_pathPreviewProgress);
+        float totalLength = GetPathLength(worldPositions);
+        if (totalLength <= 0.001f)
+        {
+            mesh.SurfaceEnd();
+            _pathPreviewLine.Mesh = mesh;
+            _pathPreviewLine.Visible = false;
+            _pathPreviewAnimating = false;
+            return;
+        }
+
+        float visibleLength = totalLength * easedProgress;
+        bool settled = _pathPreviewProgress >= 1f;
+        float alpha = settled ? 0.80f : Mathf.Lerp(0.42f, 0.84f, easedProgress);
+        AddPathArrowRibbon(mesh, worldPositions, visibleLength, alpha, yOffset);
+
+        mesh.SurfaceEnd();
+        _pathPreviewLine.Mesh = mesh;
         _pathPreviewLine.Visible = true;
-        _previewPath = path;
+    }
+
+    private static float GetPathLength(List<Vector3> worldPositions)
+    {
+        float totalLength = 0f;
+        for (int i = 1; i < worldPositions.Count; i++)
+        {
+            var dir = new Vector3(
+                worldPositions[i].X - worldPositions[i - 1].X,
+                0f,
+                worldPositions[i].Z - worldPositions[i - 1].Z);
+            if (dir.LengthSquared() >= 0.001f)
+                totalLength += dir.Length();
+        }
+
+        return totalLength;
+    }
+
+    private static bool TryGetPointOnPath(List<Vector3> worldPositions, float targetDistance, out Vector3 point, out Vector3 direction)
+    {
+        point = Vector3.Zero;
+        direction = Vector3.Forward;
+        float walked = 0f;
+
+        for (int i = 1; i < worldPositions.Count; i++)
+        {
+            var prev = worldPositions[i - 1];
+            var curr = worldPositions[i];
+            var delta = new Vector3(curr.X - prev.X, 0f, curr.Z - prev.Z);
+            float segmentLength = delta.Length();
+            if (segmentLength < 0.001f)
+                continue;
+
+            direction = delta / segmentLength;
+            if (targetDistance <= walked + segmentLength)
+            {
+                float t = Mathf.Clamp((targetDistance - walked) / segmentLength, 0f, 1f);
+                point = prev.Lerp(curr, t);
+                return true;
+            }
+
+            walked += segmentLength;
+            point = curr;
+        }
+
+        return true;
+    }
+
+    private static float EaseOutCubic(float t)
+    {
+        float inv = 1f - Mathf.Clamp(t, 0f, 1f);
+        return 1f - inv * inv * inv;
+    }
+
+    private static void AddPathArrowRibbon(ImmediateMesh mesh, List<Vector3> worldPositions, float visibleLength, float maxAlpha, float yOffset)
+    {
+        if (visibleLength <= 0.001f)
+            return;
+
+        float shaftHalfWidth = HexUtils.Size * 0.090f;
+        float headLength = HexUtils.Size * 0.58f;
+        float headHalfWidth = HexUtils.Size * 0.285f;
+        float headBaseDistance = Mathf.Max(0f, visibleLength - headLength);
+
+        AddSingleArrowShaft(mesh, worldPositions, headBaseDistance, shaftHalfWidth, maxAlpha, yOffset);
+
+        if (!TryGetPointOnPath(worldPositions, visibleLength, out var tip, out var tipDirection))
+            return;
+
+        if (!TryGetPointOnPath(worldPositions, headBaseDistance, out var headBase, out _))
+            return;
+
+        float grow = Mathf.Clamp(visibleLength / headLength, 0.35f, 1f);
+        var headRight = new Vector3(-tipDirection.Z, 0f, tipDirection.X);
+        var baseColor = PathArrowColor(headBaseDistance, maxAlpha);
+        var tipColor = PathArrowSolidColor(Mathf.Min(maxAlpha + 0.10f, 0.90f));
+        headBase += Vector3.Up * yOffset;
+        tip += Vector3.Up * yOffset;
+
+        AddArrowTriangle(
+            mesh,
+            headBase - headRight * headHalfWidth * grow,
+            headBase + headRight * headHalfWidth * grow,
+            tip,
+            baseColor,
+            tipColor);
+    }
+
+    private static void AddSingleArrowShaft(ImmediateMesh mesh, List<Vector3> worldPositions, float length, float halfWidth, float maxAlpha, float yOffset)
+    {
+        if (length <= 0.001f)
+            return;
+
+        int steps = Mathf.Max(2, Mathf.CeilToInt(length / (HexUtils.Size * 0.28f)));
+        if (!TryGetPointOnPath(worldPositions, 0f, out var prevPoint, out var prevDirection))
+            return;
+
+        prevPoint += Vector3.Up * yOffset;
+        var prevRight = new Vector3(-prevDirection.Z, 0f, prevDirection.X);
+        var prevColor = PathArrowColor(0f, maxAlpha);
+        var prevLeft = prevPoint - prevRight * halfWidth;
+        var prevRailRight = prevPoint + prevRight * halfWidth;
+
+        for (int i = 1; i <= steps; i++)
+        {
+            float distance = length * i / steps;
+            if (!TryGetPointOnPath(worldPositions, distance, out var point, out var direction))
+                break;
+
+            point += Vector3.Up * yOffset;
+            var right = new Vector3(-direction.Z, 0f, direction.X);
+            var color = PathArrowColor(distance, maxAlpha);
+            var left = point - right * halfWidth;
+            var railRight = point + right * halfWidth;
+
+            AddArrowQuad(mesh, prevLeft, prevRailRight, railRight, left, prevColor, color);
+
+            prevLeft = left;
+            prevRailRight = railRight;
+            prevColor = color;
+        }
+    }
+
+    private static Color PathArrowColor(float distanceFromStart, float maxAlpha)
+    {
+        float tailFadeLength = HexUtils.Size * 1.55f;
+        float tailFade = Mathf.Clamp(distanceFromStart / tailFadeLength, 0f, 1f);
+        float alpha = Mathf.Lerp(maxAlpha * 0.14f, maxAlpha, tailFade);
+        return PathArrowSolidColor(alpha);
+    }
+
+    private static Color PathArrowSolidColor(float alpha)
+    {
+        return new Color(0.24f, 0.19f, 0.13f, alpha);
+    }
+
+    private static void AddArrowQuad(ImmediateMesh mesh, Vector3 tailLeft, Vector3 tailRight, Vector3 headRight, Vector3 headLeft, Color tailColor, Color headColor)
+    {
+        mesh.SurfaceSetNormal(Vector3.Up);
+        mesh.SurfaceSetColor(tailColor);
+        mesh.SurfaceAddVertex(tailLeft);
+        mesh.SurfaceSetColor(tailColor);
+        mesh.SurfaceAddVertex(tailRight);
+        mesh.SurfaceSetColor(headColor);
+        mesh.SurfaceAddVertex(headRight);
+
+        mesh.SurfaceSetColor(tailColor);
+        mesh.SurfaceAddVertex(tailLeft);
+        mesh.SurfaceSetColor(headColor);
+        mesh.SurfaceAddVertex(headRight);
+        mesh.SurfaceSetColor(headColor);
+        mesh.SurfaceAddVertex(headLeft);
+    }
+
+    private static void AddArrowTriangle(ImmediateMesh mesh, Vector3 left, Vector3 right, Vector3 tip, Color baseColor, Color tipColor)
+    {
+        mesh.SurfaceSetNormal(Vector3.Up);
+        mesh.SurfaceSetColor(baseColor);
+        mesh.SurfaceAddVertex(left);
+        mesh.SurfaceSetColor(baseColor);
+        mesh.SurfaceAddVertex(right);
+        mesh.SurfaceSetColor(tipColor);
+        mesh.SurfaceAddVertex(tip);
     }
 
     public void ClearPathPreview()
     {
         _previewPath = null;
+        _pathPreviewAnimating = false;
+        _pathPreviewProgress = 0f;
         if (_pathPreviewLine != null)
             _pathPreviewLine.Visible = false;
     }
@@ -693,6 +868,7 @@ public partial class CombatHighlightController : Node
     {
         UpdateHoverPulse();
         UpdateSelectedUnitMarker(delta);
+        UpdatePathPreviewArrows(delta);
     }
 
     // ===== 信号订阅与转发 =====

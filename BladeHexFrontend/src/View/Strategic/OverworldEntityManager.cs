@@ -250,6 +250,40 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
         InvalidateVisibleCache();
     }
 
+    /// <summary>处理刚激活的 chunks 中的生态遭遇，并分发生成事件。</summary>
+    public List<OverworldSimulationEvent> ProcessActivatedEncounterChunks(
+        IEnumerable<ChunkData> chunks,
+        EncounterSpawner encounterSpawner,
+        float dangerLevel,
+        int daysElapsed,
+        int seed)
+    {
+        return ProcessActivatedEncounterChunks(chunks, encounterSpawner, _ => dangerLevel, daysElapsed, seed);
+    }
+
+    /// <summary>处理刚激活的 chunks 中的生态遭遇，并允许按 chunk 解析危险度。</summary>
+    public List<OverworldSimulationEvent> ProcessActivatedEncounterChunks(
+        IEnumerable<ChunkData> chunks,
+        EncounterSpawner encounterSpawner,
+        Func<ChunkData, float> dangerResolver,
+        int daysElapsed,
+        int seed)
+    {
+        var events = Simulation.ProcessActivatedChunks(
+            SimCtx,
+            chunks,
+            encounterSpawner,
+            dangerResolver,
+            daysElapsed,
+            seed);
+
+        _eventDispatcher?.Dispatch(events);
+        if (events.Count > 0)
+            InvalidateVisibleCache();
+
+        return events;
+    }
+
     /// <summary>收容距离玩家过远的实体到不活跃池（移至 OverworldSimulation，此处保留兼容调用）</summary>
     private const float DEACTIVATION_DISTANCE = 2500.0f;
 
@@ -350,6 +384,7 @@ public partial class OverworldEntityManager : Node, ISiegeSignals
         foreach (var entity in Entities)
         {
             if (!entity.IsAlive) continue;
+            if (entity.CurrentAIState == OverworldEntity.AIState.Engaged) continue;
             float d = playerPos.DistanceTo(entity.Position);
             if (d < closestDist) { closestDist = d; closest = entity; }
         }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Godot;
 using BladeHex.Strategic.Army;
 using BladeHex.Strategic.WorldEvents;
 

@@ -7,7 +7,6 @@
 //   - View 层不再通过 EngagedWith 自己推断所有战场
 //   - 多方战场显示不会丢参与者
 //   - WarBattleJoinService 可以基于 Battlefield 快照查询
-using Godot;
 using System.Collections.Generic;
 using System.Linq;
 

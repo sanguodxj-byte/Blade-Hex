@@ -8,7 +8,6 @@ public static class CharacterPartTextureResolver
     private const string PartDir = "res://assets/character_parts/";
 
     private static readonly Dictionary<string, Texture2D?> TextureCache = new();
-    private static readonly HashSet<string> MissingKeysLogged = new();
 
     public static Texture2D? Load(string partType, string race, string gender, int index)
     {
@@ -24,7 +23,6 @@ public static class CharacterPartTextureResolver
     public static void ClearCache()
     {
         TextureCache.Clear();
-        MissingKeysLogged.Clear();
         CharacterTextureNormalizer.ClearCache();
     }
 
@@ -53,7 +51,6 @@ public static class CharacterPartTextureResolver
                 return tex;
         }
 
-        LogMissingOnce(partType, race, gender, index);
         return null;
     }
 
@@ -174,7 +171,10 @@ public static class CharacterPartTextureResolver
         foreach (string r in GetAllRaceCandidates(raceKey))
         {
             foreach (int candidateIndex in GetIndexAliases(part, oneBased, zeroBased))
+            {
                 AddPath($"{PartDir}{part}_{r}_{oppositeGender}_{candidateIndex}.png");
+                AddPath($"{PartDir}{part}/{part}_{r}_{oppositeGender}_{candidateIndex}.png");
+            }
         }
 
         // ── 索引取模回退：保证一定能找到同种族/性别的最低索引纹理 ──
@@ -186,6 +186,8 @@ public static class CharacterPartTextureResolver
                 {
                     AddPath($"{PartDir}{part}_{r}_{genderKey}_0.png");
                     AddPath($"{PartDir}{part}_{r}_{genderKey}_1.png");
+                    AddPath($"{PartDir}{part}/{part}_{r}_{genderKey}_0.png");
+                    AddPath($"{PartDir}{part}/{part}_{r}_{genderKey}_1.png");
                 }
             }
         }
@@ -292,10 +294,4 @@ public static class CharacterPartTextureResolver
         yield return "male";
     }
 
-    private static void LogMissingOnce(string partType, string race, string gender, int index)
-    {
-        string key = BuildKey(partType, race, gender, index);
-        if (MissingKeysLogged.Add(key))
-            GD.PushWarning($"[CharacterPartTextureResolver] Missing character part: {key}");
-    }
 }

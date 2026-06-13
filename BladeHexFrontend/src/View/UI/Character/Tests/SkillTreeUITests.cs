@@ -224,9 +224,9 @@ public static class SkillTreeUITests
     {
         var parent = ui.GetParent();
         if (parent?.Name == "SkillTreeUITestHost")
-            parent.QueueFree();
+            parent.Free();
         else
-            ui.QueueFree();
+            ui.Free();
     }
 
     private static Window GetSceneRoot()

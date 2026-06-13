@@ -69,6 +69,7 @@ public partial class HitEffectManager : Node
 
     // 程序化生成的圆形血迹纹理
     private Texture2D? _bloodSplatTexture;
+    private bool _headless;
 
     // ========================================
     // 活跃效果追踪（Node 基类，可存 GpuParticles3D 或 Decal）
@@ -84,6 +85,13 @@ public partial class HitEffectManager : Node
     {
         Instance = this;
         Name = "HitEffectManager";
+        _headless = DisplayServer.GetName() == "headless";
+        if (_headless)
+        {
+            SetProcess(false);
+            GD.Print("[HitEffectManager] Headless mode; VFX pools skipped.");
+            return;
+        }
 
         // 一、程序化生成圆形血迹纹理（Decal 使用，在 Decal 池之前就绪）
         _bloodSplatTexture = GenerateBloodSplatTexture();
@@ -192,6 +200,7 @@ public partial class HitEffectManager : Node
         bool isCrit)
     {
         if (defender == null || !GodotObject.IsInstanceValid(defender)) return;
+        if (_headless) return;
         if (damage <= 0) return;
 
         // 1. 归一化伤害 → 强度 t (0~1)
@@ -216,6 +225,7 @@ public partial class HitEffectManager : Node
                 SpawnSpark(hitPos, t * 0.6f); // 盾牌减弱
                 break;
         }
+        SpawnFakeLight(hitPos, t, hitType, isCrit);
 
         // 4. 暴击：追加屏幕震动 + 打击顿帧
         // 注意：如果 defender 已死亡（hp ≤ 0），跳过 Hit-Stop，
@@ -537,6 +547,25 @@ public partial class HitEffectManager : Node
         ConfigureParticle(particles, pos, amount, lifetime, magicColor, mat);
 
         ScheduleReturn(particles, lifetime + 0.3f);
+    }
+
+    private static void SpawnFakeLight(Vector3 hitPos, float t, HitEffectType hitType, bool isCrit)
+    {
+        Color color = hitType switch
+        {
+            HitEffectType.Flesh => new Color(0.82f, 0.08f, 0.04f, 0.50f),
+            HitEffectType.Armor => new Color(1.0f, 0.58f, 0.12f, 0.62f),
+            HitEffectType.Magic => new Color(0.56f, 0.40f, 1.0f, 0.68f),
+            HitEffectType.Shield => new Color(0.48f, 0.66f, 1.0f, 0.58f),
+            _ => new Color(1.0f, 0.72f, 0.28f, 0.55f),
+        };
+
+        Vector3 lightPos = BattleFakeLightLayer.ProjectHitPositionToGround(hitPos);
+        float radius = Mathf.Lerp(62.0f, 142.0f, t);
+        float intensity = Mathf.Lerp(0.40f, isCrit ? 1.35f : 0.95f, t);
+        float duration = Mathf.Lerp(0.18f, isCrit ? 0.48f : 0.34f, t);
+        float ringStrength = hitType == HitEffectType.Magic || hitType == HitEffectType.Shield ? 0.35f : 0.12f;
+        BattleFakeLightLayer.PlayBurst(lightPos, color, radius, intensity, duration, ringStrength);
     }
 
     // ========================================

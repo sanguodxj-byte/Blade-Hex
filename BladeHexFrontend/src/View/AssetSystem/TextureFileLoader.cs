@@ -11,6 +11,10 @@ internal static class TextureFileLoader
 
         if (path.StartsWith("uid://") || path.StartsWith("res://"))
         {
+            string absolutePath = ProjectSettings.GlobalizePath(path);
+            if (IsImageFilePath(path) && System.IO.File.Exists(absolutePath))
+                return LoadImageFromFile(absolutePath);
+
             if (ResourceLoader.Exists(path))
             {
                 var texture = ResourceLoader.Load<Texture2D>(path);
@@ -18,7 +22,7 @@ internal static class TextureFileLoader
                     return texture;
             }
 
-            return LoadImageFromFile(ProjectSettings.GlobalizePath(path));
+            return LoadImageFromFile(absolutePath);
         }
 
         if (path.StartsWith("user://"))
@@ -28,6 +32,14 @@ internal static class TextureFileLoader
             return LoadImageFromFile(path);
 
         return null;
+    }
+
+    private static bool IsImageFilePath(string path)
+    {
+        return path.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".jpg", System.StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".jpeg", System.StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".webp", System.StringComparison.OrdinalIgnoreCase);
     }
 
     private static Texture2D? LoadImageFromFile(string absolutePath)

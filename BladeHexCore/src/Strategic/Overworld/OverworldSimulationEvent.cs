@@ -5,7 +5,6 @@
 //   - 让 OverworldSimulation.Tick*() 返回结构化事件列表
 //   - Frontend (OverworldEntityManager) 消费事件并转发为 Godot 信号
 //   - 测试可直接检查事件列表，无需连接信号
-using Godot;
 using System;
 
 namespace BladeHex.Strategic;

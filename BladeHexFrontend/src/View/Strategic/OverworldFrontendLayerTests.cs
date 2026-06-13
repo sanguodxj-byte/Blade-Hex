@@ -21,6 +21,8 @@ namespace BladeHex.View.Strategic.Tests;
 
 public static class OverworldFrontendLayerTests
 {
+    private static readonly List<Node> TestNodes = new();
+
     public static (int passed, int failed, List<string> details) RunAll()
     {
         var details = new List<string>();
@@ -39,6 +41,10 @@ public static class OverworldFrontendLayerTests
                 failed++;
                 details.Add($"  [FAIL] {name}: Exception {ex.GetType().Name}: {ex.Message}");
             }
+            finally
+            {
+                FreeTestNodes();
+            }
         }
         return (passed, failed, details);
     }
@@ -54,6 +60,7 @@ public static class OverworldFrontendLayerTests
         yield return (nameof(CommandRouter_EmptyWorld_ReturnsMoveTo), CommandRouter_EmptyWorld_ReturnsMoveTo);
         yield return (nameof(CommandRouter_ClickOnPoi_ReturnsMoveToPoi), CommandRouter_ClickOnPoi_ReturnsMoveToPoi);
         yield return (nameof(CommandRouter_ClickOnHeroEntity_ReturnsInspectEntity), CommandRouter_ClickOnHeroEntity_ReturnsInspectEntity);
+        yield return (nameof(EntityManager_CheckPlayerEncounters_IgnoresEngagedBattleParticipants), EntityManager_CheckPlayerEncounters_IgnoresEngagedBattleParticipants);
         yield return (nameof(BattlefieldLayer_HitTest_UsesMarkerCircle), BattlefieldLayer_HitTest_UsesMarkerCircle);
         yield return (nameof(CommandRouter_BattlefieldClickOutsideMarker_FallsThrough), CommandRouter_BattlefieldClickOutsideMarker_FallsThrough);
         yield return (nameof(SiegeLayer_HitTest_UsesMarkerCircle), SiegeLayer_HitTest_UsesMarkerCircle);
@@ -72,6 +79,32 @@ public static class OverworldFrontendLayerTests
         yield return (nameof(PlayerInitiatedEntityBattle_PullsNearbyNonNeutralParticipants), PlayerInitiatedEntityBattle_PullsNearbyNonNeutralParticipants);
         yield return (nameof(BattleContextFactory_DeduplicatesRepeatedEntityParticipants), BattleContextFactory_DeduplicatesRepeatedEntityParticipants);
         yield return (nameof(AiBattlefieldResponse_JoinsOrFleesBySidePower), AiBattlefieldResponse_JoinsOrFleesBySidePower);
+    }
+
+    private static OverworldBattlefieldLayer2D CreateBattlefieldLayer()
+    {
+        var layer = new OverworldBattlefieldLayer2D();
+        TestNodes.Add(layer);
+        return layer;
+    }
+
+    private static OverworldSiegeLayer2D CreateSiegeLayer()
+    {
+        var layer = new OverworldSiegeLayer2D();
+        TestNodes.Add(layer);
+        return layer;
+    }
+
+    private static void FreeTestNodes()
+    {
+        for (int i = TestNodes.Count - 1; i >= 0; i--)
+        {
+            var node = TestNodes[i];
+            if (GodotObject.IsInstanceValid(node))
+                node.Free();
+        }
+
+        TestNodes.Clear();
     }
 
     // ========================================
@@ -285,6 +318,51 @@ public static class OverworldFrontendLayerTests
         return (true, "");
     }
 
+    private static (bool, string) EntityManager_CheckPlayerEncounters_IgnoresEngagedBattleParticipants()
+    {
+        var manager = CreateTrackedEntityManager();
+        var attacker = new OverworldEntity
+        {
+            EntityName = "EngagedAttacker",
+            Faction = "kingdom",
+            Position = new Vector2(100, 100),
+            IsAlive = true,
+            CurrentAIState = OverworldEntity.AIState.Engaged,
+        };
+        var defender = new OverworldEntity
+        {
+            EntityName = "EngagedDefender",
+            Faction = "bandit",
+            Position = new Vector2(120, 100),
+            IsAlive = true,
+            CurrentAIState = OverworldEntity.AIState.Engaged,
+        };
+        attacker.EngagedWith = defender;
+        defender.EngagedWith = attacker;
+        manager.Entities.Add(attacker);
+        manager.Entities.Add(defender);
+
+        var hitBattleParticipant = manager.CheckPlayerEncounters(new Vector2(105, 100));
+        if (hitBattleParticipant != null)
+            return (false, $"engaged participant should not open normal interaction, got {hitBattleParticipant.EntityName}");
+
+        var traveler = new OverworldEntity
+        {
+            EntityName = "NearbyTraveler",
+            Faction = "neutral",
+            Position = new Vector2(130, 100),
+            IsAlive = true,
+            CurrentAIState = OverworldEntity.AIState.Idle,
+        };
+        manager.Entities.Add(traveler);
+
+        var hitNormalEntity = manager.CheckPlayerEncounters(new Vector2(130, 100));
+        if (hitNormalEntity != traveler)
+            return (false, "normal nearby entity should still open interaction");
+
+        return (true, "");
+    }
+
     // ========================================
     // CommandRouter + Layers 优先级测试
     // ========================================
@@ -330,7 +408,7 @@ public static class OverworldFrontendLayerTests
         entities.Add(hero);
 
         // 创建战场 Layer 并同步
-        var bfLayer = new OverworldBattlefieldLayer2D();
+        var bfLayer = CreateBattlefieldLayer();
         var bfView = new BattlefieldView(
             key: "test_bf",
             battlefieldId: "bf_test001",
@@ -366,7 +444,7 @@ public static class OverworldFrontendLayerTests
 
     private static (bool, string) BattlefieldLayer_HitTest_UsesMarkerCircle()
     {
-        var layer = new OverworldBattlefieldLayer2D();
+        var layer = CreateBattlefieldLayer();
         var attacker = new OverworldEntity { EntityName = "Atk", Faction = "player", Position = new Vector2(80, 100), IsAlive = true };
         var defender = new OverworldEntity { EntityName = "Def", Faction = "hostile", Position = new Vector2(120, 100), IsAlive = true };
         var center = new Vector2(100, 100);
@@ -402,7 +480,7 @@ public static class OverworldFrontendLayerTests
     private static (bool, string) CommandRouter_BattlefieldClickOutsideMarker_FallsThrough()
     {
         var router = new OverworldCommandRouter();
-        var layer = new OverworldBattlefieldLayer2D();
+        var layer = CreateBattlefieldLayer();
         var entities = new List<OverworldEntity>();
         var pois = new List<OverworldPOI>();
         var center = new Vector2(100, 100);
@@ -458,7 +536,7 @@ public static class OverworldFrontendLayerTests
 
     private static (bool, string) SiegeLayer_HitTest_UsesMarkerCircle()
     {
-        var layer = new OverworldSiegeLayer2D();
+        var layer = CreateSiegeLayer();
         var center = new Vector2(200, 200);
         var poi = CreateSiegePoi("CircleCastle", center);
         var siegeView = new SiegeView(
@@ -487,7 +565,7 @@ public static class OverworldFrontendLayerTests
     private static (bool, string) CommandRouter_SiegeClickOutsideMarker_FallsThroughToPoi()
     {
         var router = new OverworldCommandRouter();
-        var layer = new OverworldSiegeLayer2D();
+        var layer = CreateSiegeLayer();
         var entities = new List<OverworldEntity>();
         var pois = new List<OverworldPOI>();
         var center = new Vector2(300, 300);
@@ -594,7 +672,7 @@ public static class OverworldFrontendLayerTests
         poi.SiegeBy = siegeLord;
 
         // 创建围城 Layer 并同步
-        var siegeLayer = new OverworldSiegeLayer2D();
+        var siegeLayer = CreateSiegeLayer();
         var siegeView = new SiegeView(
             poi: poi,
             position: poiPos,
@@ -821,7 +899,7 @@ public static class OverworldFrontendLayerTests
         var registry = new BattlefieldRegistry();
         var projection = new OverworldViewProjection("player");
         var router = new OverworldCommandRouter();
-        var layer = new OverworldBattlefieldLayer2D();
+        var layer = CreateBattlefieldLayer();
 
         var attacker = new OverworldEntity
         {
@@ -946,7 +1024,7 @@ public static class OverworldFrontendLayerTests
             return (false, $"fallback projection should merge same BattlefieldId into 1 marker, got {fallbackSnapshot.Battlefields.Count}");
 
         var battle = fallbackSnapshot.Battlefields[0];
-        var layer = new OverworldBattlefieldLayer2D();
+        var layer = CreateBattlefieldLayer();
         layer.Sync(fallbackSnapshot.Battlefields);
         var command = router.Resolve(
             battle.Position,
@@ -1012,7 +1090,7 @@ public static class OverworldFrontendLayerTests
             return (false, $"expected one projected battlefield, got {snapshot.Battlefields.Count}");
 
         var battle = snapshot.Battlefields[0];
-        var layer = new OverworldBattlefieldLayer2D();
+        var layer = CreateBattlefieldLayer();
         layer.Sync(snapshot.Battlefields);
         var command = router.Resolve(
             battle.Position,
@@ -1234,10 +1312,17 @@ public static class OverworldFrontendLayerTests
         IEnumerable<OverworldEntity> entities,
         IEnumerable<OverworldPOI>? pois = null)
     {
-        var entityMgr = new OverworldEntityManager();
+        var entityMgr = CreateTrackedEntityManager();
         entityMgr.SimCtx.Entities.AddRange(entities);
         if (pois != null)
             entityMgr.SimCtx.Pois.AddRange(pois);
+        return entityMgr;
+    }
+
+    private static OverworldEntityManager CreateTrackedEntityManager()
+    {
+        var entityMgr = new OverworldEntityManager();
+        TestNodes.Add(entityMgr);
         return entityMgr;
     }
 }

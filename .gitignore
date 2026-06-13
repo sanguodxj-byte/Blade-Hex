@@ -33,6 +33,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+__pycache__/
+*.pyc
 
 # Build artifacts
 build/
@@ -48,6 +50,10 @@ dist/
 build_*.txt
 godot_*.txt
 remaining_errors*.txt
+tmp/
+extracted_ui/
+_archived_*.zip
+*.import
 
 # Game assets are large binaries and are distributed separately.
 assets/

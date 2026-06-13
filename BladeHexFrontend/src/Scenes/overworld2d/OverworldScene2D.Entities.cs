@@ -44,6 +44,7 @@ public partial class OverworldScene2D
 
     private bool _encounterActive = false;
     private readonly Dictionary<OverworldEntity, EntityVisualRef> _entitySpriteMap = new();
+    private readonly HashSet<OverworldEntity> _currentBattlefieldParticipants = new();
     private Vector2 _lastPlayerPosForEntities = new(float.MinValue, float.MinValue);
     private OverworldEntity? _lastEncounteredEntity;
 
@@ -137,6 +138,12 @@ public partial class OverworldScene2D
     /// <summary>初始化实体管理器</summary>
     private void InitEntities()
     {
+        _battlefieldLayer = new OverworldBattlefieldLayer2D();
+        AddChild(_battlefieldLayer);
+
+        _siegeLayer = new OverworldSiegeLayer2D();
+        AddChild(_siegeLayer);
+
         EntityMgr = new OverworldEntityManager();
         EntityMgr.Name = "EntityManager";
         EntityMgr.Nations = _worldNations!;
@@ -616,6 +623,38 @@ public partial class OverworldScene2D
     {
         if (EntityMgr == null) return;
 
+        // 气象影响后的可视视野
+        float visionRange = 3000.0f * WeatherVisionFactor;
+        var visible = EntityMgr.GetVisibleEntities(_playerPixelPos, visionRange);
+
+        // 使用 OverworldViewProjection 生成快照
+        if (_viewProjection == null)
+        {
+            _viewProjection = new OverworldViewProjection(GetCurrentPlayerFaction());
+        }
+        else
+        {
+            _viewProjection.SetPlayerFaction(GetCurrentPlayerFaction());
+        }
+
+        var snapshot = _viewProjection.Project(
+            EntityMgr,
+            visible,
+            _playerPixelPos,
+            visionRange,
+            _battlefieldRegistry,
+            EntityMgr.Simulation.BattleResolver,
+            EntityMgr.SimCtx.GameHour
+        );
+
+        // 同步战场与围城
+        _currentBattlefieldParticipants.Clear();
+        foreach (var participant in snapshot.BattlefieldParticipants)
+            _currentBattlefieldParticipants.Add(participant);
+
+        _battlefieldLayer?.Sync(snapshot.Battlefields);
+        _siegeLayer?.Sync(snapshot.Sieges);
+
         // 1. 玩家移动距离小于 50px 时跳过大范围可见性同步，仅推进在场实体的微移动
         float pDist = _playerPixelPos.DistanceTo(_lastPlayerPosForEntities);
         if (pDist < 50f)
@@ -626,6 +665,13 @@ public partial class OverworldScene2D
             foreach (var key in keys)
             {
                 if (!GodotObject.IsInstanceValid(key) || !key.IsAlive) continue;
+                // 如果此实体已被拉入战场，需要即时移除
+                if (snapshot.BattlefieldParticipants.Contains(key))
+                {
+                    _entitySpriteMap[key].Container.QueueFree();
+                    _entitySpriteMap.Remove(key);
+                    continue;
+                }
                 var vis = _entitySpriteMap[key];
                 vis.Container.Position = key.Position;
                 ApplyEntityLOD(ref vis, key, quickZoom);
@@ -635,10 +681,12 @@ public partial class OverworldScene2D
         }
         _lastPlayerPosForEntities = _playerPixelPos;
 
-        // 2. 气象影响后的可视视野
-        float visionRange = 3000.0f * WeatherVisionFactor;
-        var visible = EntityMgr.GetVisibleEntities(_playerPixelPos, visionRange);
-        var visibleSet = new HashSet<OverworldEntity>(visible);
+        // 2. 将投影的可见实体放入 set 中
+        var visibleSet = new HashSet<OverworldEntity>();
+        foreach (var ev in snapshot.Entities)
+        {
+            visibleSet.Add(ev.Entity);
+        }
 
         // 3. 移除不再可见的实体视觉
         var toRemove = new List<OverworldEntity>();
@@ -654,8 +702,9 @@ public partial class OverworldScene2D
 
         // 4. 新显示 / 更新坐标 + LOD
         float zoom = _camera?.Zoom.X ?? 1.0f;
-        foreach (var entity in visible)
+        foreach (var ev in snapshot.Entities)
         {
+            var entity = ev.Entity;
             if (!entity.IsAlive) continue;
 
             if (_entitySpriteMap.TryGetValue(entity, out var visualRef))
@@ -810,6 +859,12 @@ public partial class OverworldScene2D
         var encountered = EntityMgr.CheckPlayerEncounters(_playerPixelPos);
         if (encountered != null)
         {
+            if (IsRoutedThroughBattlefield(encountered))
+            {
+                TryResolveDirectedInteraction();
+                return;
+            }
+
             // --- 动态激活百科条目与遭遇日志录入 ---
             if (EntityMgr.Journal != null)
             {
@@ -1512,7 +1567,17 @@ public partial class OverworldScene2D
             _battleJoinQueryTimer = 0.0f;
             if (EntityMgr != null)
             {
-                var opp = WarBattleJoinService.Query(_playerPixelPos, EntityMgr.Entities, EntityMgr.Pois, "kingdom", EntityMgr.Armies, 250.0f, EntityMgr.WorldEngine);
+                var opp = WarBattleJoinService.Query(
+                    _playerPixelPos,
+                    EntityMgr.Entities,
+                    EntityMgr.Pois,
+                    GetCurrentPlayerFaction(),
+                    EntityMgr.Armies,
+                    250.0f,
+                    EntityMgr.WorldEngine,
+                    _battlefieldRegistry,
+                    EntityMgr.Simulation.BattleResolver,
+                    EntityMgr.SimCtx.GameHour);
                 if (opp != null)
                 {
                     if (opp.Type == WarBattleType.ArmyJoin && PlayerParty != null && !string.IsNullOrEmpty(PlayerParty.ArmyId))
@@ -1611,6 +1676,12 @@ public partial class OverworldScene2D
     {
         IsTimePaused = false;
         IsWaiting = false;
+    }
+
+    private bool IsRoutedThroughBattlefield(OverworldEntity entity)
+    {
+        return _currentBattlefieldParticipants.Contains(entity)
+            || (entity.CurrentAIState == OverworldEntity.AIState.Engaged && entity.EngagedWith != null);
     }
 
     private bool IsHostileToCurrentPlayer(OverworldEntity entity)

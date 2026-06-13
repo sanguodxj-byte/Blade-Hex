@@ -23,6 +23,12 @@ public static class CombatLayerHeight
     /// 24 + 3.5 = 27.5，安全区间：草地(26.0) < Overlay(27.5) < Character(29.0)</summary>
     public const float OverlayLayer = 3.5f;
 
+    /// <summary>脚底接触阴影层。高于大多数地表纹理，低于高亮层。</summary>
+    public const float ContactShadowLayer = 2.8f;
+
+    /// <summary>技能假光投影层。与接触阴影相近，略高以避免闪烁。</summary>
+    public const float FakeLightLayer = 3.0f;
+
     /// <summary>UI 提示层（路径预览线、悬浮魔法阵 Decal）
     /// 在高亮层之上、角色脚底之下，确保路径线不被高亮遮挡。</summary>
     public const float UIHintLayer = 4.2f;

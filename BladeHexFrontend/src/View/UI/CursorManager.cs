@@ -39,6 +39,12 @@ public partial class CursorManager : Node
     {
         Instance = this;
         ProcessMode = ProcessModeEnum.Always;
+        if (DisplayServer.GetName() == "headless")
+        {
+            GD.Print("[CursorManager] Headless mode; custom cursor loading skipped.");
+            return;
+        }
+
         ApplyAllCursors();
         GD.Print("[CursorManager] Initialized.");
     }

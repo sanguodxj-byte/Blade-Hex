@@ -25,7 +25,80 @@ public class RegionNameGenerator
     /// </summary>
     public (string english, string chinese) GenerateName(BiomeZone zone, int zoneIndex = 0)
     {
-        return zone.DominantBiome switch
+        return GenerateName(zone.DominantTerrain, zoneIndex);
+    }
+
+    public (string english, string chinese) GenerateName(HexOverworldTile.TerrainType terrain, int zoneIndex = 0)
+    {
+        if (_terrainSuffixes.TryGetValue(terrain, out var suffixes))
+            return GenerateBiomeName(_terrainPrefixes, _terrainSubjects, suffixes);
+
+        return GenerateLegacyBiomeName(TerrainToBiome.Map(terrain));
+    }
+
+    private static readonly (string en, string cn)[] _terrainPrefixes =
+    [
+        ("Amber", "琥珀"), ("Silverleaf", "银叶"), ("Longwind", "长风"), ("Mistveil", "雾隐"),
+        ("Frostcrown", "霜冠"), ("Ironroot", "铁根"), ("Dawnlight", "晨曦"), ("Duskwatch", "暮望"),
+        ("Redstone", "赤岩"), ("Greenglen", "翠谷"), ("Ashen", "灰烬"), ("Stormward", "风暴"),
+    ];
+
+    private static readonly (string en, string cn)[] _terrainSubjects =
+    [
+        ("Hawthorn", "山楂"), ("Elder", "古木"), ("Crown", "王冠"), ("Wayfarer", "旅人"),
+        ("Stag", "雄鹿"), ("Anvil", "铁砧"), ("Candle", "烛火"), ("Banner", "旌旗"),
+        ("Raven", "渡鸦"), ("Moon", "月影"), ("Ember", "余烬"), ("Spear", "长矛"),
+    ];
+
+    private static readonly Dictionary<HexOverworldTile.TerrainType, (string en, string cn)[]> _terrainSuffixes = new()
+    {
+        [HexOverworldTile.TerrainType.DeepWater] =
+            [("Deep", "深海"), ("Waters", "水域"), ("Abyss", "深渊"), ("Sound", "海峡")],
+        [HexOverworldTile.TerrainType.ShallowWater] =
+            [("Shallows", "浅滩"), ("Shoals", "浅海"), ("Bay", "海湾"), ("Tideflat", "潮滩")],
+        [HexOverworldTile.TerrainType.Sand] =
+            [("Desert", "沙漠"), ("Dunes", "沙丘"), ("Sands", "沙海"), ("Waste", "荒漠")],
+        [HexOverworldTile.TerrainType.Plains] =
+            [("Plain", "平原"), ("Flat", "平野"), ("Lowland", "低地"), ("Field", "原野")],
+        [HexOverworldTile.TerrainType.Grassland] =
+            [("Grassland", "草原"), ("Meadow", "草甸"), ("Pasture", "牧场"), ("Steppe", "草海")],
+        [HexOverworldTile.TerrainType.Forest] =
+            [("Forest", "森林"), ("Wood", "林地"), ("Grove", "树丛"), ("Timberland", "林场")],
+        [HexOverworldTile.TerrainType.DenseForest] =
+            [("Deepwood", "密林"), ("Wildwood", "深林"), ("Thicket", "丛林"), ("Greenwood", "林海")],
+        [HexOverworldTile.TerrainType.Jungle] =
+            [("Jungle", "雨林"), ("Tangle", "莽林"), ("Vinewood", "藤林"), ("Canopy", "树冠林")],
+        [HexOverworldTile.TerrainType.Taiga] =
+            [("Taiga", "针叶林"), ("Pinewood", "松林"), ("Coldwood", "寒林"), ("Firwood", "冷杉林")],
+        [HexOverworldTile.TerrainType.Bog] =
+            [("Bog", "泥沼"), ("Fen", "苔沼"), ("Mire", "寒沼"), ("Mossfen", "苔原沼")],
+        [HexOverworldTile.TerrainType.Swamp] =
+            [("Swamp", "沼泽"), ("Marsh", "湿地"), ("Mire", "泥泽"), ("Reedfen", "芦沼")],
+        [HexOverworldTile.TerrainType.Savanna] =
+            [("Savanna", "稀树草原"), ("Drygrass", "旱草原"), ("Thornveld", "刺木草原"), ("Veld", "疏林草地")],
+        [HexOverworldTile.TerrainType.Wasteland] =
+            [("Wasteland", "荒原"), ("Badland", "恶地"), ("Ashland", "焦土"), ("Barrens", "废土")],
+        [HexOverworldTile.TerrainType.Rocky] =
+            [("Rockland", "岩地"), ("Stonefield", "石原"), ("Crags", "乱石地"), ("Rubble", "碎岩原")],
+        [HexOverworldTile.TerrainType.Hills] =
+            [("Hills", "丘陵"), ("Downs", "缓丘"), ("Highlands", "高地"), ("Hillcountry", "丘地")],
+        [HexOverworldTile.TerrainType.Mountain] =
+            [("Mountains", "山脉"), ("Peaks", "群峰"), ("Ridge", "山岭"), ("Heights", "高山")],
+        [HexOverworldTile.TerrainType.MountainSnow] =
+            [("Snowpeaks", "雪山"), ("Frostpeaks", "冰峰"), ("Whitecrags", "白岭"), ("Highfrost", "高寒山地")],
+        [HexOverworldTile.TerrainType.Snow] =
+            [("Snowfield", "雪原"), ("Snowland", "雪地"), ("Frostplain", "霜原"), ("Whitewaste", "白荒原")],
+        [HexOverworldTile.TerrainType.Ice] =
+            [("Icefield", "冰原"), ("Glacier", "冰川"), ("Frostland", "冻土"), ("Icewaste", "寒冰荒原")],
+        [HexOverworldTile.TerrainType.Road] =
+            [("Road", "大道"), ("Way", "古道"), ("Track", "驿路"), ("Causeway", "长堤道")],
+        [HexOverworldTile.TerrainType.River] =
+            [("River", "河流"), ("Riverbend", "河湾"), ("Riverway", "河道"), ("Fordland", "渡口")],
+    };
+
+    private (string english, string chinese) GenerateLegacyBiomeName(BiomeType biome)
+    {
+        return biome switch
         {
             BiomeType.Plains => GeneratePlainsName(),
             BiomeType.Forest => GenerateForestName(),

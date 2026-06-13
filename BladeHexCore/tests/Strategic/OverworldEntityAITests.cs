@@ -107,6 +107,8 @@ public static class OverworldEntityAITests
         yield return Run(nameof(Spawner_ChaseAI_StopsWhenOutOfRange),        Spawner_ChaseAI_StopsWhenOutOfRange);
         yield return Run(nameof(Spawner_Caravan_NeverHostile),               Spawner_Caravan_NeverHostile);
         yield return Run(nameof(Spawner_HostilePlayerVision_ChasesPlayer),   Spawner_HostilePlayerVision_ChasesPlayer);
+        yield return Run(nameof(Spawner_ChunkSlotWildMonster_SpawnsAndTriggers), Spawner_ChunkSlotWildMonster_SpawnsAndTriggers);
+        yield return Run(nameof(Spawner_ChunkSlotWildMonster_RespectsMaxSpawns), Spawner_ChunkSlotWildMonster_RespectsMaxSpawns);
 
         // ── EntityLodController ─────────────────────────────────────────
         yield return Run(nameof(LOD_FarEntity_Hibernates),                   LOD_FarEntity_Hibernates);
@@ -1291,6 +1293,64 @@ private static (bool, string) VisionDetection_FleeingEntity_DoesNotChase()
 
         return (chasingPlayer && moving,
                 $"state={entity.CurrentAIState}, targetFaction={entity.ChaseTarget?.Faction}, moving={entity.IsMoving}, path={entity.Path.Count}");
+    }
+
+    private static (bool, string) Spawner_ChunkSlotWildMonster_SpawnsAndTriggers()
+    {
+        var chunk = new ChunkData { ChunkCoord = Vector2I.Zero, IsGenerated = true, IsActive = true };
+        var tile = HexOverworldTile.Create(0, 1, HexOverworldTile.TerrainType.Forest, 0.3f, 0.5f, 0.5f);
+        chunk.Tiles[tile.Coord] = tile;
+        chunk.SetEncounterState(tile.Coord.X, tile.Coord.Y, EncounterSlotState.Available);
+
+        var entitySpawner = new EncounterEntitySpawner();
+        var encounterSpawner = new EncounterSpawner();
+        var spawned = entitySpawner.SpawnWildMonstersFromSlots(
+            chunk,
+            encounterSpawner,
+            dangerLevel: 0.5f,
+            playerLevel: 5,
+            playerPosition: new Vector2(-1000, -1000));
+
+        if (spawned.Count != 1)
+            return (false, $"expected 1 spawned entity, got {spawned.Count}");
+
+        var entity = spawned[0];
+        bool slotTriggered = chunk.GetEncounterState(tile.Coord.X, tile.Coord.Y) == EncounterSlotState.Triggered;
+        bool templateInjected = entity.TempEncounterEnemies != null && entity.TempEncounterEnemies.Length > 0;
+        bool entityConfigured = entity.Position == tile.PixelPos
+            && entity.CurrentAIState == OverworldEntity.AIState.Patrolling
+            && entity.IsHostileToPlayer
+            && entity.CombatPower > 0f;
+
+        return (slotTriggered && templateInjected && entityConfigured,
+            $"triggered={slotTriggered}, templates={entity.TempEncounterEnemies?.Length ?? 0}, state={entity.CurrentAIState}, cp={entity.CombatPower}");
+    }
+
+    private static (bool, string) Spawner_ChunkSlotWildMonster_RespectsMaxSpawns()
+    {
+        var chunk = new ChunkData { ChunkCoord = Vector2I.Zero, IsGenerated = true, IsActive = true };
+        for (int q = 0; q < 3; q++)
+        {
+            var tile = HexOverworldTile.Create(q, 1, HexOverworldTile.TerrainType.Forest, 0.3f, 0.5f, 0.5f);
+            chunk.Tiles[tile.Coord] = tile;
+            chunk.SetEncounterState(tile.Coord.X, tile.Coord.Y, EncounterSlotState.Available);
+        }
+
+        var entitySpawner = new EncounterEntitySpawner();
+        var encounterSpawner = new EncounterSpawner();
+        var spawned = entitySpawner.SpawnWildMonstersFromSlots(
+            chunk,
+            encounterSpawner,
+            dangerLevel: 0.5f,
+            playerLevel: 5,
+            playerPosition: new Vector2(-1000, -1000),
+            maxSpawns: 1);
+
+        int triggered = chunk.EncounterSlots.Values.Count(s => s == EncounterSlotState.Triggered);
+        int stillAvailable = chunk.EncounterSlots.Values.Count(s => s == EncounterSlotState.Available);
+
+        return (spawned.Count == 1 && triggered == 1 && stillAvailable == 2,
+            $"spawned={spawned.Count}, triggered={triggered}, available={stillAvailable}");
     }
 
     private static (bool, string) LOD_FarEntity_Hibernates()

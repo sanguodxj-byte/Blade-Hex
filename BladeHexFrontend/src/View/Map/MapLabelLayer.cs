@@ -183,10 +183,10 @@ public partial class MapLabelLayer : Node2D
             int tileR = (int)(region.CenterR * _worldTileH);
             var pos = HexOverworldTile.AxialToPixel(tileQ, tileR);
 
-            var dominantBiome = region.PreferredTerrains.Length > 0
-                ? TerrainToBiome.Map(region.PreferredTerrains[0])
-                : BiomeType.Plains;
-            string name = GeographicNameGenerator.GenerateRegionName(dominantBiome, _worldSeed, idx);
+            var dominantTerrain = region.PreferredTerrains.Length > 0
+                ? region.PreferredTerrains[0]
+                : HexOverworldTile.TerrainType.Plains;
+            string name = GeographicNameGenerator.GenerateRegionName(dominantTerrain, _worldSeed, idx);
 
             var color = region.DangerLevel > 0.5f
                 ? new Color(0.9f, 0.5f, 0.4f)

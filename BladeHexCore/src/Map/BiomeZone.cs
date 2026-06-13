@@ -9,7 +9,7 @@ namespace BladeHex.Map;
 
 /// <summary>
 /// 生态区 — 由 BiomeZoneAnalyzer 通过 flood-fill 识别的连通区域
-/// 代表一块具有相同宏观生态类型的连续土地
+/// 代表一块具有相同真实地形类型的连续土地
 /// </summary>
 public class BiomeZone
 {
@@ -18,6 +18,9 @@ public class BiomeZone
 
     /// <summary>主导生态类型</summary>
     public BiomeType DominantBiome { get; set; }
+
+    /// <summary>Exact terrain type used to split and name this zone.</summary>
+    public HexOverworldTile.TerrainType DominantTerrain { get; set; } = HexOverworldTile.TerrainType.Plains;
 
     /// <summary>属于这个生态区的所有 tile 全局轴向坐标</summary>
     public HashSet<Vector2I> TileCoords { get; set; } = new();
@@ -63,6 +66,7 @@ public class BiomeZone
         {
             ["id"] = Id,
             ["biome"] = (int)DominantBiome,
+            ["terrain"] = (int)DominantTerrain,
             ["tile_count"] = TileCount,
             ["centroid_q"] = Centroid.X,
             ["centroid_r"] = Centroid.Y,
@@ -80,6 +84,9 @@ public class BiomeZone
         {
             Id = data.ContainsKey("id") ? (int)data["id"] : 0,
             DominantBiome = data.ContainsKey("biome") ? (BiomeType)(int)data["biome"] : BiomeType.Plains,
+            DominantTerrain = data.ContainsKey("terrain")
+                ? (HexOverworldTile.TerrainType)(int)data["terrain"]
+                : DefaultTerrainForBiome(data.ContainsKey("biome") ? (BiomeType)(int)data["biome"] : BiomeType.Plains),
             Centroid = new Vector2I(
                 data.ContainsKey("centroid_q") ? (int)data["centroid_q"] : 0,
                 data.ContainsKey("centroid_r") ? (int)data["centroid_r"] : 0),
@@ -89,4 +96,16 @@ public class BiomeZone
             OwnerNationId = data.ContainsKey("owner") ? (string)data["owner"] : "",
         };
     }
+
+    private static HexOverworldTile.TerrainType DefaultTerrainForBiome(BiomeType biome) => biome switch
+    {
+        BiomeType.Forest => HexOverworldTile.TerrainType.Forest,
+        BiomeType.Mountain => HexOverworldTile.TerrainType.Hills,
+        BiomeType.Wasteland => HexOverworldTile.TerrainType.Wasteland,
+        BiomeType.Swamp => HexOverworldTile.TerrainType.Swamp,
+        BiomeType.Tundra => HexOverworldTile.TerrainType.Snow,
+        BiomeType.Jungle => HexOverworldTile.TerrainType.Jungle,
+        BiomeType.Coastal => HexOverworldTile.TerrainType.ShallowWater,
+        _ => HexOverworldTile.TerrainType.Plains,
+    };
 }

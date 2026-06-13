@@ -34,6 +34,7 @@ public sealed class OverworldSimulation
     private readonly DailyDecisionProcessor _dailyProcessor = new();
     private readonly MovementProcessor _movementProcessor = new();
     private readonly BattleResolver _battleResolver = new();
+    private readonly OverworldEncounterDirector _encounterDirector = new();
 
     /// <summary>BattleResolver 只读访问 — 供 View 层通过 BattlefieldRegistry 查询多方战场</summary>
     public BattleResolver BattleResolver => _battleResolver;
@@ -89,6 +90,7 @@ public sealed class OverworldSimulation
             ctx.TerrainQuery = OverworldTerrainQuery.ForActiveChunks(ctx.ChunkManager);
             ctx.EncounterSpawner.ChunkManagerRef = ctx.ChunkManager;
             ctx.EncounterSpawner.TerrainQueryRef = ctx.TerrainQuery;
+            ctx.EncounterSpawner.EnableAmbientSpawns = false;
             _movementProcessor.ChunkManagerRef = ctx.ChunkManager;
             _movementProcessor.TerrainQueryRef = ctx.TerrainQuery;
         }
@@ -326,6 +328,79 @@ public sealed class OverworldSimulation
         DeactivateDistantEntities(ctx, events);
 
         return events;
+    }
+
+    /// <summary>
+    /// 处理刚激活的 chunks：填充遭遇槽、孵化可移动野怪实体，并返回结构化生成事件。
+    /// </summary>
+    public List<OverworldSimulationEvent> ProcessActivatedChunks(
+        OverworldSimulationContext ctx,
+        IEnumerable<ChunkData> chunks,
+        EncounterSpawner encounterSpawner,
+        float dangerLevel,
+        int daysElapsed,
+        int seed)
+    {
+        return ProcessActivatedChunks(ctx, chunks, encounterSpawner, _ => dangerLevel, daysElapsed, seed);
+    }
+
+    /// <summary>
+    /// 处理刚激活的 chunks：按 chunk 危险度填充遭遇槽、孵化可移动野怪实体。
+    /// </summary>
+    public List<OverworldSimulationEvent> ProcessActivatedChunks(
+        OverworldSimulationContext ctx,
+        IEnumerable<ChunkData> chunks,
+        EncounterSpawner encounterSpawner,
+        Func<ChunkData, float> dangerResolver,
+        int daysElapsed,
+        int seed)
+    {
+        var events = new List<OverworldSimulationEvent>();
+        int remainingBatchSpawns = Math.Max(0, ctx.EncounterSpawner.MaxChunkSlotSpawnsPerActivationBatch);
+        int remainingTotalSpawns = Math.Max(0, ctx.EncounterSpawner.MaxChunkSlotWildMonsterEntities - CountActiveChunkSlotWildMonsters(ctx.Entities));
+
+        foreach (var chunk in chunks)
+        {
+            var plan = _encounterDirector.BuildChunkPlan(
+                chunk,
+                dangerResolver(chunk),
+                ctx,
+                remainingBatchSpawns,
+                remainingTotalSpawns);
+
+            encounterSpawner.PopulateEncounterSlots(chunk, plan.DangerLevel, ctx.PlayerLevel, daysElapsed, seed);
+
+            if (plan.MaxWildMonsterSpawns <= 0)
+                continue;
+
+            var spawned = ctx.EncounterSpawner.SpawnWildMonstersFromSlots(
+                chunk,
+                encounterSpawner,
+                plan.DangerLevel,
+                ctx.PlayerLevel,
+                ctx.PlayerPosition,
+                maxSpawns: plan.MaxWildMonsterSpawns);
+
+            foreach (var entity in spawned)
+            {
+                ctx.Entities.Add(entity);
+                ctx.SpatialIndex?.Add(entity);
+                events.Add(OverworldSimulationEvent.EntitySpawned(entity));
+            }
+
+            remainingBatchSpawns -= spawned.Count;
+            remainingTotalSpawns -= spawned.Count;
+        }
+
+        return events;
+    }
+
+    private static int CountActiveChunkSlotWildMonsters(IEnumerable<OverworldEntity> entities)
+    {
+        return entities.Count(e =>
+            e.IsAlive
+            && e.TempEncounterEnemies != null
+            && e.TempEncounterEnemies.Length > 0);
     }
 
     /// <summary>上次运行感知意图判定的累计小时数</summary>

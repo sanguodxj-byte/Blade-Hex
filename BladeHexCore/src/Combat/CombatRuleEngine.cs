@@ -285,6 +285,66 @@ public static class CombatRuleEngine
     }
 
     // ============================================================================
+    // 暴击率计算（预览用）
+    // ============================================================================
+
+    /// <summary>
+    /// 精确计算暴击概率 — 枚举 20 个骰面，按优劣势概率分布加权求和。
+    /// 与 RollAttack() 中的两阶段暴击判定（自然骰面 → 命中后 BonusCritChance 追加）语义一致。
+    /// </summary>
+    public static float CalculateCritChance(in AttackInput input)
+    {
+        bool adv = input.HasAdvantage && !input.HasDisadvantage;
+        bool dis = input.HasDisadvantage && !input.HasAdvantage;
+
+        float critProb = 0f;
+        int finalAc = input.TargetAc + input.CoverAcBonus;
+
+        for (int roll = 1; roll <= 20; roll++)
+        {
+            // 单次骰面概率：优劣势时按 max/min 分布
+            float rollProb;
+            if (adv)
+            {
+                // P(max(r1,r2) = roll) = (roll² - (roll-1)²) / 400
+                rollProb = (roll * roll - (roll - 1) * (roll - 1)) / 400.0f;
+            }
+            else if (dis)
+            {
+                // P(min(r1,r2) = roll) = ((21-roll)² - (20-roll)²) / 400
+                int above = 21 - roll;
+                rollProb = (above * above - (20 - roll) * (20 - roll)) / 400.0f;
+            }
+            else
+            {
+                rollProb = 1.0f / 20.0f;
+            }
+
+            // 阶段 1: 自然暴击 (roll >= critThreshold)
+            bool naturalCrit = !input.SuppressCritical && roll >= input.CritThreshold;
+            if (naturalCrit)
+            {
+                critProb += rollProb;
+                continue;
+            }
+
+            // 阶段 2: BonusCritChance 追加 — 仅在命中前提下
+            if (input.BonusCritChance > 0f && roll > 1) // roll==1 必定大失败
+            {
+                int totalAttack = roll + input.AttackBonus + input.AccuracyMod;
+                bool wouldHit = input.ForceHit || totalAttack >= finalAc;
+                bool wouldGraze = !wouldHit && !input.SuppressCritical && (finalAc - totalAttack) <= 2;
+                if (wouldHit || wouldGraze)
+                {
+                    critProb += rollProb * input.BonusCritChance;
+                }
+            }
+        }
+
+        return Mathf.Clamp(critProb, 0f, 1f);
+    }
+
+    // ============================================================================
     // 伤害预览
     // ============================================================================
 

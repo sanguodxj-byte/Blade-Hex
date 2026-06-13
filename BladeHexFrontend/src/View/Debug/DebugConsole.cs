@@ -112,7 +112,7 @@ public partial class DebugConsole : Node
         });
         GD.Print($"[DiagnosticLog] Writing to: {DiagnosticLog.CurrentLogPath}");
 
-        _enabled = OS.IsDebugBuild() || OS.HasFeature("dev") || OS.HasFeature("debug_console");
+        _enabled = !IsHeadless() && (OS.IsDebugBuild() || OS.HasFeature("dev") || OS.HasFeature("debug_console"));
         if (!_enabled)
         {
             SetProcess(false);
@@ -126,6 +126,12 @@ public partial class DebugConsole : Node
         RegisterBuiltinCommands();
         BladeHex.Debug.LuaDebugCommands.Register(this);
         LogInfo("[Debug] 控制台已就绪。按 ` 切换，F5 刷新，/ 聚焦命令。输入 help 查看命令。");
+    }
+
+    public override void _ExitTree()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 
     public override void _Process(double delta)
@@ -882,5 +888,10 @@ public partial class DebugConsole : Node
         if (float.TryParse(args[0], out float val))
             SetRefreshInterval(val);
         return $"interval = {_refreshInterval:F2}s";
+    }
+
+    private static bool IsHeadless()
+    {
+        return DisplayServer.GetName() == "headless";
     }
 }

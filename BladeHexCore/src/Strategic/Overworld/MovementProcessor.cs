@@ -3,7 +3,6 @@
 // 从 OverworldEntityManager 拆出的 Core 层组件
 //
 // 速度计算委托到 EntitySpeedCalculator (提取为独立组件供 UI 展示分解)
-using Godot;
 using System.Collections.Generic;
 using BladeHex.Data;
 using BladeHex.Map;

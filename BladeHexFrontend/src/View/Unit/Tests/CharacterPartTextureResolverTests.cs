@@ -43,7 +43,7 @@ public static class CharacterPartTextureResolverTests
         yield return (nameof(Head_UsesHeadDirectoryBeforeBackup), Head_UsesHeadDirectoryBeforeBackup);
         yield return (nameof(Hair_UsesHairDirectoryBeforeBackup), Hair_UsesHairDirectoryBeforeBackup);
         yield return (nameof(Head_DwarfFemale_FallsBackToDwarfMale), Head_DwarfFemale_FallsBackToDwarfMale);
-        yield return (nameof(Head_HalfElf_FallsBackToElf), Head_HalfElf_FallsBackToElf);
+        yield return (nameof(Head_HalfElf_UsesOwnHeadBeforeElfFallback), Head_HalfElf_UsesOwnHeadBeforeElfFallback);
         yield return (nameof(Head_HighIndex_FallsBackToLowIndex), Head_HighIndex_FallsBackToLowIndex);
     }
 
@@ -75,14 +75,14 @@ public static class CharacterPartTextureResolverTests
         return AssertPath(path, "res://assets/character_parts/head/head_dwarf_man_0.png");
     }
 
-    private static (bool, string) Head_HalfElf_FallsBackToElf()
+    private static (bool, string) Head_HalfElf_UsesOwnHeadBeforeElfFallback()
     {
         AssetCatalog.Reload();
         CharacterPartTextureResolver.ClearCache();
 
-        // HalfElf 没有自己的纹理，应回退到 elf
+        // HalfElf 现在已有自己的纹理，应优先使用自身资源，而不是直接回退到 elf
         string path = CharacterPartTextureResolver.ResolvePath("head", "halfelf", "female", 1);
-        return AssertPath(path, "res://assets/character_parts/head/head_elf_woman_0.png");
+        return AssertPath(path, "res://assets/character_parts/head/head_halfelf_woman_0.png");
     }
 
     private static (bool, string) Head_HighIndex_FallsBackToLowIndex()

@@ -9,6 +9,7 @@ using BladeHex.Map;
 using BladeHex.Combat;
 using BladeHex.UI.Combat;
 using BladeHex.Data;
+using BladeHex.View.Combat;
 
 namespace BladeHex.Scenes;
 
@@ -110,6 +111,26 @@ public partial class CombatDeploymentController : Node
 		UpdateDeployConfirmButton();
 	}
 
+	/// <summary>Used by playability checks to capture a real combat scene after deployment.</summary>
+	public bool AutoPlaceUnitsAndConfirmForPlayabilityCheck()
+	{
+		if (!_deploymentPhaseActive) return false;
+
+		_deploymentPhaseActive = false;
+		HighlightCtrl.ClearHighlights();
+		if (_deployConfirmButton != null && GodotObject.IsInstanceValid(_deployConfirmButton))
+		{
+			_deployConfirmButton.QueueFree();
+			_deployConfirmButton = null;
+		}
+		_deploymentZoneCells.Clear();
+		_unitsToPlace.Clear();
+
+		AutoPlaceUnitsAndStart();
+		DeploymentCompleted?.Invoke();
+		return true;
+	}
+
 	/// <summary>暴露给外面 Input/Highlight 的交互入口</summary>
 	public void HandleClick(HexCell cell)
 	{
@@ -166,6 +187,7 @@ public partial class CombatDeploymentController : Node
 		_selectedDeployUnit.GridPos = cell.GridPos;
 		cell.Occupant = _selectedDeployUnit;
 		_selectedDeployUnit.Facing = 0; // 玩家朝右
+		BattleFakeShadowLayer.AttachContactShadow(_selectedDeployUnit);
 
 		string unitName = _selectedDeployUnit.Data?.UnitName ?? "单位";
 		CombatUI.LogMessage($"{unitName} 已部署到 ({cell.GridPos.X},{cell.GridPos.Y})。");
@@ -326,6 +348,7 @@ public partial class CombatDeploymentController : Node
 				unit.GridPos = cell.GridPos;
 				cell.Occupant = unit;
 				unit.Facing = 0;
+				BattleFakeShadowLayer.AttachContactShadow(unit);
 			}
 			placed++;
 		}

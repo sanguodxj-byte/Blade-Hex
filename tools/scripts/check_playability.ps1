@@ -1,7 +1,8 @@
 # check_playability.ps1
 # Blade & Hex playability check.
-# Launches Godot headless once per scene; each run uses CHECK_SCENE to know
-# which sub-scene to instantiate as a child. Results written to per-run JSON.
+# Launches Godot once per scene with a real display driver; each run uses
+# CHECK_SCENE to know which sub-scene to instantiate as a child.
+# Results are written to per-run JSON.
 #
 # Usage:
 #   tools\scripts\check_playability.ps1
@@ -31,7 +32,7 @@ $loop = [ordered]@{
 $errors      = [System.Collections.Generic.List[string]]::new()
 $screenshots = [System.Collections.Generic.List[string]]::new()
 
-# ─── helper: run one headless check ───────────────────────────────────────────
+# ─── helper: run one rendered check ───────────────────────────────────────────
 function Invoke-SceneCheck {
     param(
         [string]$SceneKey,    # "boot" | "overworld" | "combat"
@@ -44,7 +45,11 @@ function Invoke-SceneCheck {
     $tmpJson = Join-Path $repoRoot "playability_screenshots\result_${SceneKey}.json"
 
     try {
-        $godotArgs = @('--path', $repoRoot, '--headless', $checkScene)
+        $godotArgs = @('--path', $repoRoot)
+        if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+            $godotArgs += @('--display-driver', 'windows')
+        }
+        $godotArgs += $checkScene
         $envVars   = @{
             CHECK_MODE  = 'playability'
             CHECK_SCENE = $SceneKey

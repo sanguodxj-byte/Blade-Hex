@@ -1049,10 +1049,10 @@ public partial class CombatUI : CanvasLayer
     }
 
     /// <summary>显示命中预览提示</summary>
-    public void ShowHitPreview(Vector2 mousePos, Unit attacker, Unit target, HexGrid? grid = null, int coverType = 0, int elevationDiff = 0, bool hasFlanking = false, bool hasSneak = false)
+    public void ShowHitPreview(Vector2 mousePos, Unit attacker, Unit target, HexGrid? grid = null, int coverType = 0, int elevationDiff = 0, bool hasFlanking = false, bool hasSneak = false, Unit[]? attackerAllies = null, Unit[]? defenderAllies = null)
     {
         if (_hitPreviewTooltip != null && attacker != null && target != null)
-            _hitPreviewTooltip.ShowPreview(attacker, target, grid, coverType, elevationDiff, hasFlanking, hasSneak);
+            _hitPreviewTooltip.ShowPreview(attacker, target, grid, coverType, elevationDiff, hasFlanking, hasSneak, attackerAllies, defenderAllies);
     }
 
     /// <summary>显示超出射程预览（命中率 0%）</summary>

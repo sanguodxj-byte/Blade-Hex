@@ -324,8 +324,11 @@ public sealed partial class OverworldBattlefieldLayer2D : Node2D
     // 纹理
     // ========================================
 
-    private static Texture2D GetBattlefieldTexture()
+    private static Texture2D? GetBattlefieldTexture()
     {
+        if (DisplayServer.GetName() == "headless")
+            return null;
+
         if (_battlefieldTexture == null)
         {
             var img = Image.CreateEmpty(8, 8, false, Image.Format.Rgba8);

@@ -94,6 +94,7 @@ public partial class TerrainTestRunner : Node
         RunSuite("OverworldSamplerTests", OverworldSamplerTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("BattleProjectionTests", BattleProjectionTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("TerrainEnumAlignmentTests", TerrainEnumAlignmentTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("BiomeZoneTerrainNamingTests", BiomeZoneTerrainNamingTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("BattleMapGenerationTests", BattleMapGenerationTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("SaveSystemRoundtripTests", SaveSystemRoundtripTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("TriggerEngineTests", TriggerEngineTests.RunAll, ref totalPassed, ref totalFailed);

@@ -162,7 +162,21 @@ public partial class CombatHoverPreviewController : Node
 							}
 						}
 
-						CombatUi.ShowHitPreview(mousePos, activeUnit, targetUnit, HexGrd, cover, elevDiff, flanking, false);
+						// 检测偷袭能力：攻击者有偷袭技能且当前有优势（包夹/高地等提供优势时）
+						bool hasSneak = PassiveSkillResolver.GetSneakAttackDice(activeUnit, true) > 0
+							&& (flanking || elevDiff > 0);
+
+						// 收集同阵营友军（用于包围、指挥光环等预览加成）
+						var allies = CombatMgr.AllUnits
+							.Where(u => GodotObject.IsInstanceValid(u) && u != activeUnit && u.CurrentHp > 0
+									 && u.IsPlayerSide == activeUnit.IsPlayerSide)
+							.ToArray();
+						var defenderAllies = CombatMgr.AllUnits
+							.Where(u => GodotObject.IsInstanceValid(u) && u != targetUnit && u.CurrentHp > 0
+									 && u.IsPlayerSide == targetUnit.IsPlayerSide)
+							.ToArray();
+
+						CombatUi.ShowHitPreview(mousePos, activeUnit, targetUnit, HexGrd, cover, elevDiff, flanking, hasSneak, allies, defenderAllies);
 					}
 					else
 					{

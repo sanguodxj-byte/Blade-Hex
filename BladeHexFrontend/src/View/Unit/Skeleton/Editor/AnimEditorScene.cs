@@ -49,7 +49,6 @@ public partial class AnimEditorScene : Node3D
 	private const float GizmoHitRadius = 20f; // 屏幕像素半径
 
 	// ─── 旋转模式角度追踪 ───
-	private Vector2 _dragStartBoneScreenPos;
 	private float _dragStartAngle;
 
 	// ─── 枢轴位移模式（右键点击枢轴进入） ───
@@ -876,23 +875,27 @@ public partial class AnimEditorScene : Node3D
 					// 屏幕误差
 					var screenError = targetScreenPos - currentScreenPos;
 
-					// 屏幕像素 → SubViewport 全局坐标增量
 					var skeleton = _preview.GetSkeleton();
-					float worldToScreen = GetViewport().GetVisibleRect().Size.Y / (_cam?.Size ?? 200f);
-					float svScale = 1.0f / ((skeleton?.Config?.PixelSize ?? 1.5f) * worldToScreen);
-					var svDelta = screenError * svScale;
+					if (skeleton != null && _cam != null && SkeletonEditorProjection.TryScreenDeltaToCanvasDelta(
+						_cam,
+						skeleton.Billboard,
+						skeleton.Config.PixelSize,
+						SkeletonEditorProjection.GetBoneCanvasOffset(boneNode),
+						screenError,
+						out var svDelta))
+					{
+						// SubViewport 全局坐标增量 → 骨骼局部坐标增量（通过逆变换矩阵处理父级旋转/缩放）
+						var inv = boneNode.GlobalTransform.AffineInverse();
+						var localDelta = inv.X * svDelta.X + inv.Y * svDelta.Y;
 
-					// SubViewport 全局坐标增量 → 骨骼局部坐标增量（通过逆变换矩阵处理父级旋转/缩放）
-					var inv = boneNode.GlobalTransform.AffineInverse();
-					var localDelta = inv.X * svDelta.X + inv.Y * svDelta.Y;
-
-					var kf = _clip.Keyframes[_selectedKeyframeIdx];
-					var pose = kf.GetPose(_displaceBoneName);
-					pose.PositionX += localDelta.X;
-					pose.PositionY -= localDelta.Y; // pose Y 与局部 Y 相反
-					kf.SetPose(_displaceBoneName, pose);
-					_preview.ApplyBonePose(_displaceBoneName, pose);
-					_bonePanel.SetDisplayPose(pose);
+						var kf = _clip.Keyframes[_selectedKeyframeIdx];
+						var pose = kf.GetPose(_displaceBoneName);
+						pose.PositionX += localDelta.X;
+						pose.PositionY -= localDelta.Y; // pose Y 与局部 Y 相反
+						kf.SetPose(_displaceBoneName, pose);
+						_preview.ApplyBonePose(_displaceBoneName, pose);
+						_bonePanel.SetDisplayPose(pose);
+					}
 				}
 			}
 			GetViewport().SetInputAsHandled();
@@ -928,12 +931,7 @@ public partial class AnimEditorScene : Node3D
 						_dragStartRotZ = _clip.Keyframes[_selectedKeyframeIdx].GetPose(hit).RotationZ;
 					else
 						_dragStartRotZ = 0;
-					// 记录骨骼屏幕位置用于角度计算
-					_dragStartBoneScreenPos = GetBoneScreenPos(hit);
-					_dragStartAngle = Mathf.Atan2(
-						lmb.Position.Y - _dragStartBoneScreenPos.Y,
-						lmb.Position.X - _dragStartBoneScreenPos.X
-					);
+					_dragStartAngle = GetMouseCanvasAngle(lmb.Position, hit);
 					_bonePanel.SelectBone(hit);
 					GetViewport().SetInputAsHandled();
 					return;
@@ -956,12 +954,8 @@ public partial class AnimEditorScene : Node3D
 		// ─── 旋转模式：拖拽旋转骨骼 ───
 		if (_rotationMode && @event is InputEventMouseMotion rotMotion)
 		{
-			// 基于角度的旋转：计算鼠标相对于骨骼的角度变化
-			var currentBoneScreenPos = GetBoneScreenPos(_rotationBoneName);
-			float currentAngle = Mathf.Atan2(
-				rotMotion.Position.Y - currentBoneScreenPos.Y,
-				rotMotion.Position.X - currentBoneScreenPos.X
-			);
+			// 基于骨骼画布角度旋转，避免 3D 相机俯角压缩屏幕 Y 后造成偏移。
+			float currentAngle = GetMouseCanvasAngle(rotMotion.Position, _rotationBoneName);
 			float angleDelta = currentAngle - _dragStartAngle;
 			// 归一化到 [-π, π] 防止跨越 ±180° 时反转
 			while (angleDelta > Mathf.Pi) angleDelta -= Mathf.Tau;
@@ -1074,24 +1068,13 @@ public partial class AnimEditorScene : Node3D
 		var boneNodes = _preview.GetBoneNodes();
 		if (boneNodes == null) return null;
 
-		// 骨骼是 2D 节点（在 SubViewport 内），需要通过 billboard 的 3D 位置来做 hit test
-		// 简化方案：用 billboard 的屏幕位置作为基准，加上 2D 骨骼的相对偏移
 		var skeleton = _preview.GetSkeleton();
 		if (skeleton == null) return null;
-		var billboardWorldPos = skeleton.Billboard.GlobalPosition;
-		if (_cam.IsPositionBehind(billboardWorldPos)) return null;
-		var billboardScreenPos = _cam.UnprojectPosition(billboardWorldPos);
-
-		float worldToScreen = GetViewport().GetVisibleRect().Size.Y / (_cam.Size);
 
 		foreach (var (name, node) in boneNodes)
 		{
-			// 2D 骨骼的全局位置（相对于 SubViewport 画布中心）
-			var bone2DPos = node.GlobalPosition - UpperBodySkeleton.CanvasCenter;
-			// 转换为屏幕偏移（像素）
-			// 2D Y↓ = 屏幕 Y↓，方向一致，不取反
-			var screenOffset = new Vector2(bone2DPos.X, bone2DPos.Y) * skeleton.Config.PixelSize * worldToScreen;
-			var screenPos = billboardScreenPos + screenOffset;
+			if (!SkeletonEditorProjection.TryProjectBoneToScreen(_cam, skeleton.Billboard, skeleton.Config, node, out var screenPos))
+				continue;
 
 			float dist = screenPos.DistanceTo(mousePos);
 			if (dist < closestDist)
@@ -1115,14 +1098,36 @@ public partial class AnimEditorScene : Node3D
 		if (boneNodes == null || !boneNodes.TryGetValue(boneName, out var node))
 			return Vector2.Zero;
 
-		var billboardWorldPos = skeleton.Billboard.GlobalPosition;
-		if (_cam.IsPositionBehind(billboardWorldPos)) return Vector2.Zero;
-		var billboardScreenPos = _cam.UnprojectPosition(billboardWorldPos);
+		return SkeletonEditorProjection.TryProjectBoneToScreen(_cam, skeleton.Billboard, skeleton.Config, node, out var screenPos)
+			? screenPos
+			: Vector2.Zero;
+	}
 
-		float worldToScreen = GetViewport().GetVisibleRect().Size.Y / _cam.Size;
-		var bone2DPos = node.GlobalPosition - UpperBodySkeleton.CanvasCenter;
-		var screenOffset = new Vector2(bone2DPos.X, bone2DPos.Y) * skeleton.Config.PixelSize * worldToScreen;
-		return billboardScreenPos + screenOffset;
+	private float GetMouseCanvasAngle(Vector2 mousePos, string boneName)
+	{
+		if (_cam == null)
+			return 0f;
+
+		var skeleton = _preview.GetSkeleton();
+		var boneNodes = _preview.GetBoneNodes();
+		if (skeleton == null || boneNodes == null || !boneNodes.TryGetValue(boneName, out var node))
+			return 0f;
+
+		var boneScreenPos = GetBoneScreenPos(boneName);
+		var screenDelta = mousePos - boneScreenPos;
+		if (SkeletonEditorProjection.TryScreenDeltaToCanvasDelta(
+			_cam,
+			skeleton.Billboard,
+			skeleton.Config.PixelSize,
+			SkeletonEditorProjection.GetBoneCanvasOffset(node),
+			screenDelta,
+			out var canvasDelta)
+			&& canvasDelta.LengthSquared() > 0.0001f)
+		{
+			return Mathf.Atan2(canvasDelta.Y, canvasDelta.X);
+		}
+
+		return Mathf.Atan2(screenDelta.Y, screenDelta.X);
 	}
 
 	/// <summary>骨骼名称中文映射</summary>

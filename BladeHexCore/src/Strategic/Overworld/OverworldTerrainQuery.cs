@@ -1,6 +1,5 @@
 // OverworldTerrainQuery.cs
 // Core 层大地图地形查询 Adapter：隐藏 chunk/轴坐标细节，默认只查询活跃地图。
-using Godot;
 using BladeHex.Map;
 
 namespace BladeHex.Strategic;

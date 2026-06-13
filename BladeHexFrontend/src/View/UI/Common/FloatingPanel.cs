@@ -137,6 +137,7 @@ public abstract partial class FloatingPanel : PanelContainer
     /// <summary>在指定屏幕位置显示面板</summary>
     public void ShowAt(Vector2 screenPos)
     {
+        ResetSize();
         Visible = true;
 
         if (UseTopLevel)

@@ -38,8 +38,7 @@ public class BiomeZoneAnalyzer
                 continue;
             }
 
-            var biome = TerrainToBiome.Map(tile.Terrain);
-            var zone = FloodFill(coord, biome, tileLookup, visited);
+            var zone = FloodFill(coord, tile.Terrain, tileLookup, visited);
 
             if (zone.TileCount >= MinZoneSize)
             {
@@ -58,11 +57,15 @@ public class BiomeZoneAnalyzer
     /// </summary>
     private BiomeZone FloodFill(
         Vector2I start,
-        BiomeType targetBiome,
+        HexOverworldTile.TerrainType targetTerrain,
         Dictionary<Vector2I, HexOverworldTile> tileLookup,
         HashSet<Vector2I> visited)
     {
-        var zone = new BiomeZone { DominantBiome = targetBiome };
+        var zone = new BiomeZone
+        {
+            DominantBiome = TerrainToBiome.Map(targetTerrain),
+            DominantTerrain = targetTerrain,
+        };
         var queue = new Queue<Vector2I>();
 
         queue.Enqueue(start);
@@ -91,8 +94,7 @@ public class BiomeZoneAnalyzer
                 if (!tileLookup.TryGetValue(neighbor, out var nTile)) continue;
                 if (!TerrainToBiome.IsLandTerrain(nTile.Terrain)) { visited.Add(neighbor); continue; }
 
-                var nBiome = TerrainToBiome.Map(nTile.Terrain);
-                if (nBiome != targetBiome) continue;
+                if (nTile.Terrain != targetTerrain) continue;
 
                 visited.Add(neighbor);
                 queue.Enqueue(neighbor);

@@ -237,6 +237,8 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 		DiagnosticLog.Event("OverworldScene2D", "entities_start");
 		if (!RunReadyStep(readyReport, "init_entities", () => InitEntities()))
 			return;
+		if (!RunReadyStep(readyReport, "initial_wild_monsters", () => SpawnWildMonstersForInitialActiveChunks()))
+			return;
 		DiagnosticLog.Event("OverworldScene2D", "entities_end", new Dictionary<string, object?>
 		{
 			["entities"] = EntityMgr?.Entities.Count ?? -1,
@@ -617,6 +619,12 @@ public partial class OverworldScene2D : Node2D, IOverworldContext
 							GetViewport().SetInputAsHandled();
 							return;
 						}
+					}
+
+					if (IsRoutedThroughBattlefield(entity))
+					{
+						GetViewport().SetInputAsHandled();
+						return;
 					}
 
 					// 点击非战斗实体 → 检查距离并触发交互

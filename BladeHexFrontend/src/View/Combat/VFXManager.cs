@@ -24,6 +24,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using BladeHex.View.Combat;
 
 namespace BladeHex.Combat;
 
@@ -158,6 +159,14 @@ public partial class VFXManager : Node
 
     public static void PlayHitEffect(Node parent, Vector3 pos)
     {
+        BattleFakeLightLayer.PlayBurst(
+            pos + new Vector3(0.0f, -42.0f, 0.0f),
+            new Color(1.0f, 0.62f, 0.18f, 0.65f),
+            82.0f,
+            0.55f,
+            0.24f,
+            0.15f);
+
         var particles = AcquireParticle(parent, pos + new Vector3(0, 50, 0), 15, 0.4f, new Color(1, 0.8f, 0.2f));
         ScheduleReturn(particles, 1.0f);
     }
@@ -176,6 +185,14 @@ public partial class VFXManager : Node
 
     public static void PlayExplosionEffect(Node parent, Vector3 pos)
     {
+        BattleFakeLightLayer.PlayBurst(
+            pos + new Vector3(0.0f, CombatLayerHeight.FakeLightLayer, 0.0f),
+            new Color(1.0f, 0.38f, 0.08f, 0.85f),
+            165.0f,
+            1.25f,
+            0.42f,
+            0.35f);
+
         var particles = AcquireParticle(parent, pos + new Vector3(0, 10, 0), 50, 0.6f, new Color(1.0f, 0.4f, 0.1f));
         if (particles.ProcessMaterial is ParticleProcessMaterial mat)
         {
@@ -219,6 +236,14 @@ public partial class VFXManager : Node
 
     private static void PlayHealVfx(Node parent, Vector3 pos, Color color, int count)
     {
+        BattleFakeLightLayer.PlayBurst(
+            pos + new Vector3(0.0f, -28.0f, 0.0f),
+            new Color(0.30f, 1.0f, 0.55f, 0.62f),
+            112.0f,
+            0.75f,
+            0.55f,
+            0.45f);
+
         var particles = AcquireParticle(parent, pos + new Vector3(0, 30, 0), count, 0.8f, color);
         if (particles.ProcessMaterial is ParticleProcessMaterial mat)
         {
@@ -233,6 +258,14 @@ public partial class VFXManager : Node
 
     private static void PlayShieldVfx(Node parent, Vector3 pos, Color color, int count)
     {
+        BattleFakeLightLayer.PlayBurst(
+            pos + new Vector3(0.0f, -30.0f, 0.0f),
+            new Color(0.50f, 0.68f, 1.0f, 0.58f),
+            124.0f,
+            0.68f,
+            0.48f,
+            0.65f);
+
         var particles = AcquireParticle(parent, pos + new Vector3(0, 50, 0), count, 1.0f, color);
         if (particles.ProcessMaterial is ParticleProcessMaterial mat)
         {

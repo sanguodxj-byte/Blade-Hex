@@ -1139,6 +1139,415 @@ public static class CombatResolver
         };
     }
 
+    /// <summary>命中+暴击率+伤害范围综合预览结构</summary>
+    public struct DetailedHitPreview
+    {
+        public float HitChance;         // 0~1
+        public float CritChance;        // 0~1
+        public int DamageMin;           // 正常命中最小
+        public int DamageMax;           // 正常命中最大
+        public int DamageAvg;           // 正常命中平均
+        public int CritDamageMin;       // 暴击时最小
+        public int CritDamageMax;       // 暴击时最大
+        public int CritDamageAvg;       // 暴击时平均
+        public bool HasAdvantage;
+        public bool HasDisadvantage;
+        public bool IsFlanking;
+        public string FlankDirection;
+        /// <summary>预览中的修饰因子摘要（供 UI 显示）</summary>
+        public Godot.Collections.Dictionary Modifiers;
+    }
+
+    /// <summary>
+    /// 收集与 ResolveAttack 一致的命中修正因子。
+    /// 将两个预览方法共享的 Common 逻辑抽取至此。
+    /// 返回 (attackBonus, targetAc, accuracyMod, hasAdvantage, hasDisadvantage, surroundDamageBonus, modifiers)
+    /// </summary>
+    private static (int attackBonus, int targetAc, int accuracyMod, bool hasAdvantage, bool hasDisadvantage, float surroundDamageBonus, int surroundAcReduction, Godot.Collections.Dictionary modifiers)
+        CollectHitPreviewModifiers(
+            Unit attacker, Unit defender, HexGrid? grid,
+            bool hasFlanking, bool hasSneak,
+            Unit[]? attackerAllies, Unit[]? defenderAllies)
+    {
+        var weapon = attacker.Model.GetMainHand() as WeaponData;
+        bool isMeleeAttack = weapon == null || !weapon.IsRanged;
+        bool isRangedAttack = !isMeleeAttack;
+        int attackDistance = HexUtils.Distance(attacker.GridPos.X, attacker.GridPos.Y, defender.GridPos.X, defender.GridPos.Y);
+
+        int attackBonus = attacker.Model.GetAttackBonus();
+        if (attacker.Data != null)
+            attackBonus = SkillTreeKeystoneResolver.ApplyAttackBonus(
+                attacker.Data, attackBonus, isMeleeAttack, isRangedAttack, attackDistance);
+        if (defender.Data != null)
+            attackBonus = SkillTreeKeystoneResolver.ApplyIncomingAttackBonus(defender.Data, attackBonus, isRangedAttack);
+
+        int targetAc = defender.GetEffectiveAc(attacker);
+        bool hasAdvantage = false;
+        bool hasDisadvantage = false;
+        int accuracyMod = 0;
+        float surroundDamageBonus = 0f;
+        int surroundAcReduction = 0;
+        var modifiers = new Godot.Collections.Dictionary();
+
+        // 指挥光环命中加成
+        int commandAuraAttackBonus = PassiveSkillResolver.GetIncomingCommandAuraAttackBonus(attacker, attackerAllies);
+        if (commandAuraAttackBonus != 0)
+        {
+            attackBonus += commandAuraAttackBonus;
+            modifiers["command_aura_attack"] = commandAuraAttackBonus;
+        }
+
+        // 指挥光环 AC 加成
+        int commandAuraAcBonus = PassiveSkillResolver.GetIncomingCommandAuraAcBonus(defender, defenderAllies);
+        if (commandAuraAcBonus != 0)
+        {
+            modifiers["command_aura_ac"] = commandAuraAcBonus;
+        }
+
+        // 巫师 AC 诅咒削减（与 ResolveAttack 289 行一致）
+        targetAc = CareerPassiveHooks.GetSorcererAcCurseReduction(
+            attacker, targetAc + commandAuraAcBonus);
+
+        if (grid != null)
+        {
+            // 高地
+            var hg = LineOfSight.GetHighGroundBonus(attacker.GridPos, defender.GridPos, grid);
+            if (hg.Advantage) { hasAdvantage = true; modifiers["high_ground"] = true; }
+            if (hg.Disadvantage) { hasDisadvantage = true; modifiers["low_ground"] = true; }
+
+            // LOS 路径惩罚
+            if (weapon != null && weapon.IsRanged)
+            {
+                int losPenalty = LineOfSight.GetPathPenalty(
+                    attacker.GridPos, defender.GridPos, grid, attacker, defender);
+                if (losPenalty < 0)
+                {
+                    losPenalty = CareerPassiveHooks.ModifyCoverPenalty(attacker, losPenalty);
+                    accuracyMod += losPenalty;
+                    modifiers["los_path_penalty"] = losPenalty;
+                }
+            }
+
+            // 高度差命中修正
+            var atkCell = grid.GetCell(attacker.GridPos.X, attacker.GridPos.Y);
+            var defCell = grid.GetCell(defender.GridPos.X, defender.GridPos.Y);
+            if (atkCell != null && defCell != null)
+            {
+                int elevDiff = atkCell.Elevation - defCell.Elevation;
+                if (elevDiff != 0)
+                {
+                    accuracyMod += elevDiff;
+                    modifiers["elevation_mod"] = elevDiff;
+                }
+            }
+
+            // 渡河惩罚
+            if (LineOfSight.HasRiverCrossingPenalty(attacker.GridPos, defender.GridPos, grid))
+            {
+                hasDisadvantage = true;
+                modifiers["river_crossing"] = true;
+            }
+        }
+
+        // 远程命中减益
+        if (isRangedAttack && defender.Data != null
+            && BladeHex.Combat.Buff.BuffModifierReader.SumOrDefault(defender.Data, "ranged_hit_taken") < 0f)
+        {
+            hasDisadvantage = true;
+            modifiers["ranged_hit_taken"] = true;
+        }
+
+        // 包夹命中加成
+        if (hasFlanking)
+        {
+            int flankHitBonus = BladeHex.Combat.Abilities.UnitAbilities.GetTotalFlankingHitBonus(attacker.Data);
+            if (flankHitBonus != 0)
+            {
+                accuracyMod += flankHitBonus;
+                modifiers["flank_hit_bonus"] = flankHitBonus;
+            }
+        }
+
+        // 包围加成
+        if (attackerAllies != null && attackerAllies.Length > 0)
+        {
+            var sb = FacingSystem.GetSurroundingBonus(defender, attackerAllies);
+            if (sb.HitBonus != 0)
+            {
+                accuracyMod += sb.HitBonus;
+                modifiers["surround_hit"] = sb.HitBonus;
+            }
+            if (sb.AcReduction > 0)
+            {
+                surroundAcReduction = sb.AcReduction;
+                targetAc -= sb.AcReduction;
+                modifiers["surround_ac_reduction"] = sb.AcReduction;
+            }
+            if (sb.DamageBonus > 0f)
+            {
+                surroundDamageBonus = sb.DamageBonus;
+                modifiers["surround_damage_bonus"] = sb.DamageBonus;
+            }
+        }
+
+        // 伤势惩罚
+        if (attacker.Data != null)
+        {
+            float atkHpPct = attacker.Model.GetMaxHp() > 0
+                ? (float)attacker.CurrentHp / attacker.Model.GetMaxHp() : 1.0f;
+            var wound = RPGRuleEngine.GetWoundPenalty(atkHpPct);
+            int penalty = wound.ContainsKey("all_checks") ? wound["all_checks"].AsInt32() : 0;
+            if (penalty != 0)
+            {
+                accuracyMod += penalty;
+                modifiers["wound_penalty"] = penalty;
+            }
+        }
+
+        // buff 攻击优势
+        if (attacker.Data != null)
+        {
+            var advMod = BladeHex.Combat.Buff.BuffSystem.ResolveStatModifiers(attacker.Data, "attack_advantage");
+            if (advMod.OverrideValue.HasValue && advMod.OverrideValue.Value >= 1f)
+            {
+                hasAdvantage = true;
+                modifiers["career_advantage"] = true;
+            }
+        }
+
+        // buff 幻影劣势
+        if (defender.Data != null)
+        {
+            var phantomMod = BladeHex.Combat.Buff.BuffSystem.ResolveStatModifiers(defender.Data, "attacker_disadvantage_while_phantom");
+            if (phantomMod.OverrideValue.HasValue && phantomMod.OverrideValue.Value >= 1f)
+            {
+                hasDisadvantage = true;
+                modifiers["phantom_disadvantage"] = true;
+            }
+        }
+
+        // 伏击 → 优势
+        if (hasSneak) hasAdvantage = true;
+
+        // 职业被动
+        accuracyMod += CareerPassiveHooks.ModifyHitBonus(attacker, 0);
+        accuracyMod += CareerPassiveHooks.ModifyHitBonusVsDefender(attacker, defender, 0);
+
+        // 影匿者 — 阴影斗篷 (远程)
+        if (isRangedAttack)
+        {
+            var (shroudHit, _) = CareerPassiveHooks.GetShadowShroudOffenseBonus(attacker);
+            if (shroudHit != 0)
+            {
+                accuracyMod += shroudHit;
+                modifiers["shadow_shroud_offense"] = shroudHit;
+            }
+            int shroudDef = CareerPassiveHooks.GetShadowShroudDefenseBonus(defender);
+            if (shroudDef != 0)
+            {
+                accuracyMod += shroudDef;
+                modifiers["shadow_shroud_defense"] = shroudDef;
+            }
+        }
+
+        // 魔王 — 敌人命中减益
+        int overlordDebuff = CareerPassiveHooks.GetOverlordAccuracyDebuff(defender, attacker);
+        if (overlordDebuff != 0)
+        {
+            accuracyMod += overlordDebuff;
+            modifiers["overlord_debuff"] = overlordDebuff;
+        }
+
+        return (attackBonus, targetAc, accuracyMod, hasAdvantage, hasDisadvantage, surroundDamageBonus, surroundAcReduction, modifiers);
+    }
+
+    /// <summary>
+    /// 综合命中/暴击/伤害预览 — 与 ResolveAttack 使用相同的修正因子采集和伤害管道，
+    /// 但以平均值代替随机掷骰，提供直观的预期数值。
+    /// </summary>
+    public static DetailedHitPreview GetDetailedHitPreview(
+        Unit attacker, Unit defender, HexGrid? grid = null,
+        bool hasFlanking = false, bool hasSneak = false,
+        Unit[]? attackerAllies = null, Unit[]? defenderAllies = null)
+    {
+        var weapon = attacker.Model.GetMainHand() as WeaponData;
+        bool isMeleeAttack = weapon == null || !weapon.IsRanged;
+        bool isRangedAttack = !isMeleeAttack;
+
+        // ===== 1. 收集修正因子（与 ResolveAttack 一致）=====
+        var (attackBonus, targetAc, accuracyMod, hasAdvantage, hasDisadvantage, surroundDamageBonus, surroundAcReduction, modifiers)
+            = CollectHitPreviewModifiers(attacker, defender, grid, hasFlanking, hasSneak, attackerAllies, defenderAllies);
+
+        // ===== 2. 命中率 =====
+        float hitChance = RPGRuleEngine.CalculateHitChance(attackBonus + accuracyMod, targetAc, hasAdvantage, hasDisadvantage);
+
+        // ===== 3. 暴击率 =====
+        int critThreshold = attacker.Model.GetCritThreshold();
+        if (CareerSkillResolver.HasFixedCritThreshold(attacker))
+            critThreshold = CareerSkillResolver.GetFixedCritThreshold();
+        if (CareerSkillResolver.HasDeathSentence(attacker))
+            critThreshold -= CareerSkillResolver.GetDeathSentenceCritReduction(defender);
+
+        float bonusCritChance = 0f;
+        if (attacker.Data != null)
+            bonusCritChance += SkillTreeKeystoneResolver.GetBonusCritChance(
+                attacker.Data, weapon, isRangedAttack, attacker.HasMoved);
+        if (attacker.Data != null && defender.Data != null)
+            bonusCritChance += GetMarkedTargetCritBonus(attacker, defender);
+        bonusCritChance += CareerPassiveHooks.ModifyCritRateBonus(attacker, 0f);
+        bonusCritChance += CareerPassiveHooks.GetLoneBladeUnharmedCritBonus(attacker);
+
+        var critInput = new CombatRuleEngine.AttackInput
+        {
+            AttackBonus = attackBonus,
+            TargetAc = targetAc,
+            CritThreshold = critThreshold,
+            HasAdvantage = hasAdvantage,
+            HasDisadvantage = hasDisadvantage,
+            AccuracyMod = accuracyMod,
+            BonusCritChance = bonusCritChance,
+        };
+        // 应用技能盘骰子规则（resolute_technique 必中、force_attack_hit 等）
+        // 与 ResolveAttack 307-308 行一致。
+        if (attacker.Data != null)
+            SkillTreeKeystoneResolver.ApplyAttackRollRules(attacker.Data, ref critInput, isMeleeAttack);
+        float critChance = CombatRuleEngine.CalculateCritChance(in critInput);
+
+        // ===== 4. 伤害范围计算（用平均值代替随机）=====
+        int apiDiceCount = weapon?.DamageDiceCount ?? 1;
+        int apiDiceSides = weapon?.DamageDiceSides ?? 3;
+        int statMod = attacker.Data != null ? RPGRuleEngine.GetStatModifier(CombatStats.GetEffectiveStr(attacker.Data)) : 0;
+        var (dmgMin, dmgMax, dmgAvg) = CombatRuleEngine.GetWeaponDamageRange(apiDiceCount, apiDiceSides, statMod);
+
+        // 箭筒
+        int quiverBonus = 0;
+        if (weapon != null && weapon.IsRanged && !weapon.IsThrowing)
+        {
+            var offHand = attacker.Data?.PrimaryOffHand;
+            if (offHand != null && offHand.IsQuiver)
+                quiverBonus = offHand.QuiverDamageBonus;
+        }
+
+        // 被动近战/远程加成
+        int weaponApForNode = weapon?.ApCost ?? 4;
+        int rawPassiveMelee  = PassiveSkillResolver.GetPassiveMeleeDamageBonus(attacker);
+        int rawPassiveRanged = PassiveSkillResolver.GetPassiveRangedDamageBonus(attacker);
+        int passiveMelee  = (int)(((rawPassiveMelee  * weaponApForNode) / 4) * 1.0f);
+        int passiveRanged = (int)(((rawPassiveRanged * weaponApForNode) / 4) * 1.0f);
+        int passiveDamageBonus = isMeleeAttack ? passiveMelee : passiveRanged;
+
+        // 偷袭（平均值）
+        bool hasAdvantageFinal = hasAdvantage && !hasDisadvantage;
+        int sneakDice = PassiveSkillResolver.GetSneakAttackDice(attacker, hasAdvantageFinal);
+        int sneakSides = PassiveSkillResolver.GetSneakAttackSides();
+        int sneakAvg = sneakDice > 0 ? sneakDice * (sneakSides + 1) / 2 : 0;
+        int sneakMin = sneakDice > 0 ? sneakDice : 0;
+        int sneakMax = sneakDice > 0 ? sneakDice * sneakSides : 0;
+
+        // 包夹倍率
+        float flankMult = 1.0f;
+        bool flanking = false;
+        string flankDir = "front";
+        if (hasFlanking)
+        {
+            var flankBonus = FacingSystem.GetFlankingBonus(attacker.GridPos, defender);
+            flankMult = flankBonus.DamageMultiplier;
+            flanking = flankMult > 1.0f;
+            flankDir = flankMult < 1.5f ? "flank" : "rear";
+            flankMult = CareerPassiveHooks.ModifyBackstabMultiplier(attacker, flankMult);
+        }
+
+        // 职业近战加成
+        int careerMeleeBonus = isMeleeAttack ? CareerPassiveHooks.ModifyMeleeDamageBonus(attacker, defender, 0) : 0;
+
+        // 被动倍率
+        float passiveMult = PassiveSkillResolver.GetPassiveMeleeDamageMultiplier(attacker)
+            * (isMeleeAttack ? CareerPassiveHooks.ModifyMeleeDamageMultiplier(attacker, 1.0f) : 1.0f)
+            * (isMeleeAttack ? CareerPassiveHooks.GetGrandmasterDamageMultiplier(attacker) : 1.0f);
+
+        float buffDamageMultiplier = 1.0f;
+        if (attacker.Data != null)
+        {
+            buffDamageMultiplier *= BladeHex.Combat.Buff.BuffSystem.ResolveMultiplier(attacker.Data, "damage");
+            buffDamageMultiplier *= BladeHex.Combat.Buff.BuffSystem.ResolveMultiplier(attacker.Data, isMeleeAttack ? "melee_damage" : "ranged_damage");
+        }
+        buffDamageMultiplier *= PassiveSkillResolver.GetSkillTreeWeaponDamageMultiplier(attacker, isMeleeAttack);
+
+        float finalMult = CareerPassiveHooks.GetAllyDamageAuraMultiplier(attacker)
+            * (!isMeleeAttack ? CareerPassiveHooks.GetArcaneArcherDamageMultiplier(attacker) : 1.0f)
+            * CareerPassiveHooks.GetVoidKnightApDamageMultiplier(attacker)
+            * (!isMeleeAttack ? CareerPassiveHooks.GetShadowShroudOffenseBonus(attacker).damageMult : 1.0f)
+            * buffDamageMultiplier;
+
+        // 被动减免
+        int dmgReduction = PassiveSkillResolver.GetPassiveDamageReduction(defender, "physical")
+            + BladeHex.Combat.Abilities.UnitAbilities.GetTotalFlatDamageReduction(defender.Data);
+
+        int critMult = PassiveSkillResolver.GetCritMultiplier(attacker);
+        float critTakenMult = 1.0f;
+        if (defender.Data != null)
+            critTakenMult += BladeHex.Combat.Buff.BuffModifierReader.SumOrDefault(defender.Data, "crit_taken");
+
+        // 用平均值构造 DamageInput，走同一管道
+        var normalDmgInput = new CombatRuleEngine.DamageInput
+        {
+            BaseDamage = dmgAvg + quiverBonus + (isRangedAttack ? passiveRanged : 0),
+            IsGraze = false,
+            IsCritical = false,
+            CritMultiplier = 1,
+            CritDamageTakenMultiplier = 1f,
+            SneakDamage = sneakAvg,
+            PassiveMeleeBonus = isMeleeAttack ? passiveDamageBonus + careerMeleeBonus : 0,
+            PassiveMeleeMultiplier = passiveMult,
+            IsMelee = isMeleeAttack,
+            FlankMultiplier = flankMult * (1.0f + surroundDamageBonus),
+            ChargeMultiplier = 1.0f,
+            MountBonus = (attacker.Data != null && attacker.Data.IsMounted) ? 2 : 0,
+            DamageReduction = dmgReduction,
+            FinalMultiplier = finalMult,
+        };
+        var normalResult = CombatRuleEngine.CalculateDamage(in normalDmgInput);
+
+        var critDmgInput = normalDmgInput;
+        critDmgInput.IsCritical = true;
+        critDmgInput.CritMultiplier = critMult;
+        critDmgInput.CritDamageTakenMultiplier = Math.Max(0.2f, critTakenMult);
+        var critResult = CombatRuleEngine.CalculateDamage(in critDmgInput);
+
+        // 计算 min/max 范围
+        int baseMin = dmgMin + quiverBonus + (isRangedAttack ? passiveRanged : 0);
+        int baseMax = dmgMax + quiverBonus + (isRangedAttack ? passiveRanged : 0);
+
+        var dmgMinInput = normalDmgInput; dmgMinInput.BaseDamage = baseMin;
+        var dmgMaxInput = normalDmgInput; dmgMaxInput.BaseDamage = baseMax;
+        dmgMinInput.SneakDamage = sneakMin; dmgMaxInput.SneakDamage = sneakMax;
+        var rangeMin = CombatRuleEngine.CalculateDamage(in dmgMinInput).FinalDamage;
+        var rangeMax = CombatRuleEngine.CalculateDamage(in dmgMaxInput).FinalDamage;
+
+        // 暴击 min/max
+        dmgMinInput.IsCritical = true; dmgMinInput.CritMultiplier = critMult; dmgMinInput.CritDamageTakenMultiplier = Math.Max(0.2f, critTakenMult);
+        dmgMaxInput.IsCritical = true; dmgMaxInput.CritMultiplier = critMult; dmgMaxInput.CritDamageTakenMultiplier = Math.Max(0.2f, critTakenMult);
+        var critRangeMin = CombatRuleEngine.CalculateDamage(in dmgMinInput).FinalDamage;
+        var critRangeMax = CombatRuleEngine.CalculateDamage(in dmgMaxInput).FinalDamage;
+
+        return new DetailedHitPreview
+        {
+            HitChance = hitChance,
+            CritChance = critChance,
+            DamageMin = Math.Min(rangeMin, rangeMax),
+            DamageMax = Math.Max(rangeMin, rangeMax),
+            DamageAvg = normalResult.FinalDamage,
+            CritDamageMin = Math.Min(critRangeMin, critRangeMax),
+            CritDamageMax = Math.Max(critRangeMin, critRangeMax),
+            CritDamageAvg = critResult.FinalDamage,
+            HasAdvantage = hasAdvantage && !hasDisadvantage,
+            HasDisadvantage = hasDisadvantage && !hasAdvantage,
+            IsFlanking = flanking,
+            FlankDirection = flankDir,
+            Modifiers = modifiers,
+        };
+    }
+
     // ========================================
     // 受击特效类型判定
     // ========================================

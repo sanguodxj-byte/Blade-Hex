@@ -96,26 +96,12 @@ public partial class BoneGizmoOverlay : Control
     {
         if (_boneNodes.Count == 0 || Camera == null || Billboard == null || Config == null) return;
 
-        // billboard 的 3D 世界位置投影到屏幕
-        var billboardWorldPos = Billboard.GlobalPosition;
-        if (Camera.IsPositionBehind(billboardWorldPos)) return;
-        var billboardScreenPos = Camera.UnprojectPosition(billboardWorldPos);
-
-        // 世界单位到屏幕像素的换算系数
-        float worldToScreen = GetViewportRect().Size.Y / Camera.Size;
-
         // 缓存各骨骼的屏幕位置
         var screenPositions = new Dictionary<string, Vector2>();
         foreach (var (name, node) in _boneNodes)
         {
-            // 骨骼在 SubViewport 内的 2D 全局位置（相对于画布原点）
-            var bone2DPos = node.GlobalPosition - UpperBodySkeleton.CanvasCenter;
-            // 转换为屏幕偏移：
-            // 2D 中 Y 向下为正，骨骼在角色上方时 bone2DPos.Y 为负
-            // 屏幕空间 Y 向下为正，骨骼在上方时 screenOffset.Y 应为负
-            // 因此 Y 方向直接映射（不取反）
-            var screenOffset = new Vector2(bone2DPos.X, bone2DPos.Y) * Config.PixelSize * worldToScreen;
-            screenPositions[name] = billboardScreenPos + screenOffset;
+            if (SkeletonEditorProjection.TryProjectBoneToScreen(Camera, Billboard, Config, node, out var screenPos))
+                screenPositions[name] = screenPos;
         }
 
         // 画骨骼连线

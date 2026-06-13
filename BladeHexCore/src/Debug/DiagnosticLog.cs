@@ -184,7 +184,7 @@ public static class DiagnosticLog
         foreach (var level in new[] { DiagnosticReportLevel.Error, DiagnosticReportLevel.Warn, DiagnosticReportLevel.Debug })
         {
             string path = GetLogPath(level);
-            var stream = new FileStream(path, FileMode.Append, System.IO.FileAccess.Write, FileShare.Read);
+            var stream = new FileStream(path, FileMode.Append, System.IO.FileAccess.Write, FileShare.ReadWrite);
             var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
             {
                 AutoFlush = true,

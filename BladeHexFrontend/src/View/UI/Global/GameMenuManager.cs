@@ -25,6 +25,7 @@ public partial class GameMenuManager : CanvasLayer
     private Control _root = null!;
     private Control _menuPanel = null!;
     private Control _settingsPanel = null!;
+    private bool _headless;
 
     /// <summary>当前是否在主菜单场景（主菜单不显示"返回游戏"和"保存"按钮）</summary>
     public bool IsInMainMenu { get; set; } = false;
@@ -49,6 +50,14 @@ public partial class GameMenuManager : CanvasLayer
     {
         ProcessMode = ProcessModeEnum.Always;
         Layer = 200; // 最高层
+        _headless = DisplayServer.GetName() == "headless";
+        if (_headless)
+        {
+            Visible = false;
+            SetProcessInput(false);
+            GD.Print("[GameMenuManager] Headless mode; visual menu construction skipped.");
+            return;
+        }
 
         _root = new Control { Name = "MenuRoot" };
         _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -59,9 +68,15 @@ public partial class GameMenuManager : CanvasLayer
         BuildMenuPanel();
         BuildSettingsPanel();
 
-        LanguageManager.Instance.LocaleChanged += _ => RebuildUiForLocale();
+        LanguageManager.Instance.LocaleChanged += OnLocaleChanged;
 
         Visible = false;
+    }
+
+    public override void _ExitTree()
+    {
+        if (!_headless && LanguageManager.Instance != null)
+            LanguageManager.Instance.LocaleChanged -= OnLocaleChanged;
     }
 
     // ============================================================
@@ -78,6 +93,9 @@ public partial class GameMenuManager : CanvasLayer
     {
         Visible = true;
         GetTree().Paused = true;
+        if (_headless)
+            return;
+
         _settingsPanel.Visible = false;
         _menuPanel.Visible = true;
     }
@@ -86,7 +104,8 @@ public partial class GameMenuManager : CanvasLayer
     {
         Visible = false;
         GetTree().Paused = false;
-        _settingsPanel.Visible = false;
+        if (!_headless)
+            _settingsPanel.Visible = false;
         EmitSignal(SignalName.ResumeRequested);
     }
 
@@ -94,13 +113,16 @@ public partial class GameMenuManager : CanvasLayer
     {
         Visible = true;
         GetTree().Paused = true;
+        if (_headless)
+            return;
+
         _menuPanel.Visible = false;
         _settingsPanel.Visible = true;
     }
 
     public override void _Input(InputEvent @event)
     {
-        if (!Visible) return;
+        if (_headless || !Visible) return;
 
         if (@event is InputEventKey k)
         {
@@ -128,6 +150,9 @@ public partial class GameMenuManager : CanvasLayer
 
     private void RebuildUiForLocale()
     {
+        if (_headless)
+            return;
+
         bool wasOpen = Visible;
         bool wasSettingsOpen = _settingsPanel?.Visible == true;
 
@@ -141,6 +166,11 @@ public partial class GameMenuManager : CanvasLayer
             _menuPanel.Visible = wasOpen && !wasSettingsOpen;
         if (_settingsPanel != null)
             _settingsPanel.Visible = wasOpen && wasSettingsOpen;
+    }
+
+    private void OnLocaleChanged(string locale)
+    {
+        RebuildUiForLocale();
     }
 
     private void BuildMenuPanel()

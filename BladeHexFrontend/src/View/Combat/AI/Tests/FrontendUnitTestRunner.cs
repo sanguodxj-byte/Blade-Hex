@@ -3,6 +3,7 @@
 using BladeHex.Combat.AI.Tests;
 using BladeHex.UI.Tests;
 using BladeHex.View.Strategic.Tests;
+using BladeHex.View.Unit.Skeleton.Editor.Tests;
 using BladeHex.View.Unit.Tests;
 using Godot;
 using System.Collections.Generic;
@@ -17,7 +18,7 @@ public partial class FrontendUnitTestRunner : Node
         Callable.From(RunTests).CallDeferred();
     }
 
-    private void RunTests()
+    private async void RunTests()
     {
         GD.Print("========================================");
         GD.Print("  FrontendUnitTestRunner");
@@ -29,6 +30,7 @@ public partial class FrontendUnitTestRunner : Node
 
         RunSuite("AIBehaviorRegressionTests", AIBehaviorRegressionTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("CharacterPartTextureResolverTests", CharacterPartTextureResolverTests.RunAll, ref totalPassed, ref totalFailed);
+        RunSuite("SkeletonEditorProjectionTests", SkeletonEditorProjectionTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("LegendaryCreatureTextureTests", LegendaryCreatureTextureTests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("SkillTreeUITests", SkillTreeUITests.RunAll, ref totalPassed, ref totalFailed);
         RunSuite("OverworldFrontendLayerTests", OverworldFrontendLayerTests.RunAll, ref totalPassed, ref totalFailed);
@@ -41,7 +43,9 @@ public partial class FrontendUnitTestRunner : Node
         if (DisplayServer.GetName() == "headless")
         {
             int exitCode = totalFailed == 0 ? 0 : 1;
-            Callable.From(() => GetTree().Quit(exitCode)).CallDeferred();
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            GetTree().Quit(exitCode);
         }
     }
 

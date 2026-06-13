@@ -1,5 +1,4 @@
 using System;
-using Godot;
 using BladeHex.Strategic.WorldEvents;
 
 namespace BladeHex.Strategic;

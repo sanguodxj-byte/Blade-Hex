@@ -157,22 +157,22 @@ public static class HeadlessCombatLoop
         if (DebugFirstBattle && !_firstBattleStarted)
         {
             _firstBattleStarted = true;
-            Godot.GD.Print("=== HeadlessCombatLoop DEBUG (first battle) ===");
-            Godot.GD.Print($"  Player squad: {player.AliveCount} units");
+            Console.WriteLine("=== HeadlessCombatLoop DEBUG (first battle) ===");
+            Console.WriteLine($"  Player squad: {player.AliveCount} units");
             foreach (var u in player.AliveUnits)
             {
                 var w = u.GetMainHand() as WeaponData;
                 int armorDr = u.Data.Armor?.DrThreshold ?? 0;
                 int armorAp = u.Data.Armor?.CurrentArmorPoints ?? 0;
-                Godot.GD.Print($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
+                Console.WriteLine($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
             }
-            Godot.GD.Print($"  Enemy squad: {enemy.AliveCount} units");
+            Console.WriteLine($"  Enemy squad: {enemy.AliveCount} units");
             foreach (var u in enemy.AliveUnits)
             {
                 var w = u.GetMainHand() as WeaponData;
                 int armorDr = u.Data.Armor?.DrThreshold ?? 0;
                 int armorAp = u.Data.Armor?.CurrentArmorPoints ?? 0;
-                Godot.GD.Print($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
+                Console.WriteLine($"    {u.Data.UnitName} L{u.Data.Level} HP={u.Runtime.CurrentHp}/{u.GetMaxHp()} AP={u.GetMaxAp()} AC={u.GetEffectiveAc(false, 0)} STR/DEX/CON/INT={u.Data.Str}/{u.Data.Dex}/{u.Data.Con}/{u.Data.Intel} weapon={w?.ItemName ?? "Unarmed"} ({w?.DamageDiceCount ?? 0}d{w?.DamageDiceSides ?? 0} {w?.WeaponDamageType} {w?.ApCost ?? 0}AP) armor=DR{armorDr}/{armorAp}");
             }
         }
 
@@ -885,7 +885,7 @@ public static class HeadlessCombatLoop
         }
         if (ShouldLog)
         {
-            Godot.GD.Print($"    [SPELL ring{ring}] {actor.Data.UnitName} cast → {hits.Count} targets, baseDmg={baseDmg}, totalDealt={totalDealt}, mana left={actor.Data.CurrentMana}/{CombatStats.GetMaxMana(actor.Data)}, AP left={(int)actor.Runtime.CurrentAp}");
+            Console.WriteLine($"    [SPELL ring{ring}] {actor.Data.UnitName} cast → {hits.Count} targets, baseDmg={baseDmg}, totalDealt={totalDealt}, mana left={actor.Data.CurrentMana}/{CombatStats.GetMaxMana(actor.Data)}, AP left={(int)actor.Runtime.CurrentAp}");
         }
         return true;
     }
@@ -978,7 +978,7 @@ public static class HeadlessCombatLoop
             actor.Runtime.WeaponSwitchedThisTurn = true;
             if (DebugFirstBattle && _firstBattleStarted)
             {
-                Godot.GD.Print($"    [SWITCH] {actor.Data.UnitName} 切换到 {(actor.Data.Runtime.UsingPrimaryWeapon ? "主手" : "副手")} 武器（敌距={nearest}，原 range={curRange}，新 range={altRange}）");
+                Console.WriteLine($"    [SWITCH] {actor.Data.UnitName} 切换到 {(actor.Data.Runtime.UsingPrimaryWeapon ? "主手" : "副手")} 武器（敌距={nearest}，原 range={curRange}，新 range={altRange}）");
             }
         }
     }
@@ -1198,7 +1198,7 @@ public static class HeadlessCombatLoop
 
         if (ShouldLog)
         {
-            Godot.GD.Print($"    [ATK] {attacker.Data.UnitName} → {defender.Data.UnitName}: roll {roll.NaturalRoll} +{atkInput.AttackBonus} vs AC{atkInput.TargetAc} → {(roll.IsHit ? "HIT" : "MISS")}{(roll.IsCritical ? " CRIT" : "")} | base={baseDamage} final={finalDamage} → pen={dmgResult.IsPenetrated} hpDmg={dmgResult.HpDamage} drDmg={dmgResult.DrDamage} (def now HP={defender.CurrentHp}/{defender.GetMaxHp()})");
+            Console.WriteLine($"    [ATK] {attacker.Data.UnitName} → {defender.Data.UnitName}: roll {roll.NaturalRoll} +{atkInput.AttackBonus} vs AC{atkInput.TargetAc} → {(roll.IsHit ? "HIT" : "MISS")}{(roll.IsCritical ? " CRIT" : "")} | base={baseDamage} final={finalDamage} → pen={dmgResult.IsPenetrated} hpDmg={dmgResult.HpDamage} drDmg={dmgResult.DrDamage} (def now HP={defender.CurrentHp}/{defender.GetMaxHp()})");
         }
 
         // Sync mirror field used by some downstream queries.

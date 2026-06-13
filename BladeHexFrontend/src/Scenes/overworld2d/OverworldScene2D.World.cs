@@ -2,6 +2,7 @@
 // 世界生成 + ChunkManager 流式加载 — 从 OverworldScene3D.World.cs 迁移
 // 纯逻辑层，无 3D 依赖
 using Godot;
+using System;
 using System.Collections.Generic;
 using BladeHex.Map;
 using BladeHex.Strategic;
@@ -190,19 +191,8 @@ public partial class OverworldScene2D
 
         if (newChunks.Count > 0)
         {
-            foreach (var chunk in newChunks)
-            {
-                // 1. 填充 Chunk 的遭遇槽
-                int seed = (BladeHex.Data.Globals.StateOrNull != null) ? BladeHex.Data.Globals.StateOrNull.WorldGen.Seed : 12345;
-                float danger = 0.5f; // 默认中等危险度
-                int playerLevel = PlayerUnitData?.Level ?? 1;
-                int daysElapsed = CurrentDay;
-                _encounterSpawner.PopulateEncounterSlots(chunk, danger, playerLevel, daysElapsed, seed);
-
-                // 2. 根据遭遇槽孵化野怪实体
-                SpawnWildMonstersFromSlots(chunk, danger, playerLevel);
-            }
-
+            ProcessActivatedEncounterChunks(newChunks);
+            LoadGroundCacheTiles(EnumerateChunkTiles(newChunks));
             LoadStreamingDecorationTiles(newChunks);
         }
 
@@ -313,15 +303,11 @@ public partial class OverworldScene2D
             return;
         }
 
-        LoadGroundCacheTiles(EnumerateKnownChunkTiles());
-
         var playerAxial = HexOverworldTile.PixelToAxial(_playerPixelPos.X, _playerPixelPos.Y);
         _chunkManager.UpdateChunks(playerAxial.X, playerAxial.Y);
 
-        foreach (var kvp in _mapAccess.ActiveChunks)
-        {
-            LoadStreamingDecorationTiles(kvp.Value.Tiles.Values);
-        }
+        LoadGroundCacheTiles(EnumerateKnownChunkTiles());
+        LoadStreamingDecorationTiles(_mapAccess.ActiveChunks.Values);
 
         GD.Print($"[OverworldScene2D] 初始 chunk: {_chunkManager.ActiveChunks.Count}, prop总数: {_propRenderer?.PropCount ?? 0}");
     }
@@ -332,6 +318,15 @@ public partial class OverworldScene2D
             yield break;
 
         foreach (var chunk in _chunkManager.AllKnownChunks.Values)
+        {
+            foreach (var tile in chunk.Tiles.Values)
+                yield return tile;
+        }
+    }
+
+    private IEnumerable<HexOverworldTile> EnumerateChunkTiles(IEnumerable<ChunkData> chunks)
+    {
+        foreach (var chunk in chunks)
         {
             foreach (var tile in chunk.Tiles.Values)
                 yield return tile;
@@ -479,98 +474,55 @@ public partial class OverworldScene2D
         _riverRenderer?.RebuildFromChunks();
     }
 
-    private void SpawnWildMonstersFromSlots(ChunkData chunk, float danger, int playerLevel)
+    private void ProcessActivatedEncounterChunks(IEnumerable<ChunkData> chunks)
     {
         if (EntityMgr == null) return;
 
-        var availableEncounters = chunk.GetAvailableEncounters();
-        var rng = new System.Random();
+        int seed = BladeHex.Data.Globals.StateOrNull?.WorldGen.Seed ?? 12345;
+        int daysElapsed = CurrentDay;
+        Func<ChunkData, float> dangerResolver = chunk =>
+            _chunkManager?.Generator?.GetDangerLevel(chunk.ChunkCoord.X, chunk.ChunkCoord.Y) ?? 0.5f;
 
-        foreach (var coord in availableEncounters)
+        var events = EntityMgr.ProcessActivatedEncounterChunks(
+            chunks,
+            _encounterSpawner,
+            dangerResolver,
+            daysElapsed,
+            seed);
+
+        int spawnedCount = 0;
+        var samples = new List<string>();
+        foreach (var evt in events)
         {
-            var tile = chunk.GetTile(coord.X, coord.Y);
-            if (tile == null) continue;
-
-            // 1. 防刷脸：若孵化点距离玩家小于 400 像素，则跳过本次生成，保留 Available 状态
-            float distToPlayer = tile.PixelPos.DistanceTo(_playerPixelPos);
-            if (distToPlayer < 400.0f)
-            {
+            if (evt.Type != OverworldSimulationEvent.EventType.EntitySpawned || evt.EntityA == null)
                 continue;
-            }
 
-            // 2. 将遭遇槽状态设为 Triggered 避免重复孵出
-            chunk.SetEncounterState(coord.X, coord.Y, EncounterSlotState.Triggered);
+            var wildBeast = evt.EntityA;
+            spawnedCount++;
+            if (samples.Count < 5)
+                samples.Add($"{wildBeast.EntityName}/{wildBeast.AIStrategy}/{wildBeast.CombatPower:F1}");
+        }
 
-            // 3. 构建详细遭遇数据
-            var data = _encounterSpawner.BuildEncounter(coord, tile, playerLevel, danger);
-
-            // 如果生成的遭遇不是野怪（如资源点、环境事件等非游荡实体），则直接跳过（不在大地图产生游荡实体）
-            if (data.Type != EncounterType.WildMonsters)
-            {
-                continue;
-            }
-
-            // 4. 创建大地图怪物实体
-            var wildBeast = new OverworldEntity
-            {
-                EntityName = data.EnemyTemplateIds.Count > 0 ? GetBeastDisplayName(data.EnemyTemplateIds[0]) : "野生兽群",
-                EntityTypeEnum = OverworldEntity.EntityType.EpicMonster,
-                Position = tile.PixelPos,
-                HomePosition = tile.PixelPos,
-                TerritoryCenter = tile.PixelPos,
-                TerritoryRadius = 800.0f,
-                MoveSpeed = 80.0f + (float)rng.NextDouble() * 30.0f,
-                PartySize = data.PartySize,
-                PartyLevel = data.EncounterLevel,
-                Faction = "hostile",
-                IsHostileToPlayer = true,
-                VisionRange = 600.0f,
-                PatrolRadius = 300.0f,
-                CurrentAIState = OverworldEntity.AIState.Patrolling,
-                IsAlive = true,
-                MonsterType = "beast"
-            };
-
-            // 提取战力公式统一折算
-            wildBeast.CombatPower = OverworldEntity.CalculateBaseCombatPower(
-                wildBeast.PartySize,
-                wildBeast.PartyLevel,
-                OverworldEntity.EntityType.EpicMonster
-            );
-
-            // 注入生态敌人模板
-            wildBeast.TempEncounterEnemies = data.EnemyTemplateIds.ToArray();
-
-            // 性格随机赋予
-            wildBeast.AIStrategy = new[] { AIStrategyEnum.Instinct, AIStrategyEnum.Territorial, AIStrategyEnum.Berserk }[rng.Next(3)];
-
-            // 5. 率先投入大地图渲染并更新空间网格
-            EntityMgr.Entities.Add(wildBeast);
-            if (EntityMgr.Spatial != null)
-            {
-                EntityMgr.Spatial.Add(wildBeast);
-            }
-            EntityMgr.InvalidateVisibleCache();
-            EntityMgr.EmitSignal(OverworldEntityManager.SignalName.EntitySpawned, wildBeast);
-
-            GD.Print($"[OverworldScene2D] 生态遭遇孵化: 在 {tile.Terrain} 地形生成了 {wildBeast.EntityName} (性格: {wildBeast.AIStrategy}, 战力: {wildBeast.CombatPower:F1})");
+        if (spawnedCount > 0)
+        {
+            string suffix = spawnedCount > samples.Count ? ", ..." : "";
+            GD.Print($"[OverworldScene2D] 生态遭遇孵化: {spawnedCount} wild monsters ({string.Join(", ", samples)}{suffix})");
         }
     }
 
-    private string GetBeastDisplayName(string templateId)
+    private void SpawnWildMonstersForInitialActiveChunks()
     {
-        return templateId switch
-        {
-            "wolf" => "野狼群",
-            "ice_wolf" => "冰霜狼群",
-            "swamp_beast" => "沼泽巨兽",
-            "treant" => "古老树人",
-            "yeti" => "雪地雪人",
-            "wild_boar" => "狂野山猪",
-            "lizardman" => "蜥蜴人游荡者",
-            "harpy" => "鹰身女妖",
-            "ogre" => "食人魔",
-            _ => "野外兽群"
-        };
+        if (_chunkManager == null || EntityMgr == null)
+            return;
+
+        if (BladeHex.Data.Globals.StateOrNull?.Save.IsLoadingSave == true)
+            return;
+
+        int before = EntityMgr.Entities.Count;
+        ProcessActivatedEncounterChunks(_chunkManager.ActiveChunks.Values);
+
+        int spawned = EntityMgr.Entities.Count - before;
+        if (spawned > 0)
+            GD.Print($"[OverworldScene2D] Initial active chunks spawned {spawned} wild monsters");
     }
 }

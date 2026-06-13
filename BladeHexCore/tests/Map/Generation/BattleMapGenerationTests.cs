@@ -86,6 +86,9 @@ public static class BattleMapGenerationTests
         // 确定性
         yield return Run(nameof(Determinism_SameSeed_SameOutput), Determinism_SameSeed_SameOutput);
         yield return Run(nameof(Determinism_DifferentSeed_DifferentOutput), Determinism_DifferentSeed_DifferentOutput);
+
+        // 障碍物概率与机制验证
+        yield return Run(nameof(Obstacles_DistributionAndProperties_MatchRules), Obstacles_DistributionAndProperties_MatchRules);
     }
 
     private static (string, bool, string) Run(string name, System.Func<(bool, string)> test)
@@ -701,5 +704,85 @@ public static class BattleMapGenerationTests
         details.Add($"Gate:            elev [{gateMinE}-{gateMaxE}]");
         details.Add($"Tower:           elev [{towerMinE}-{towerMaxE}]");
         details.Add($"Expected: Natural < Staircase < Rampart/Gate < Tower");
+    }
+
+    static (bool, string) Obstacles_DistributionAndProperties_MatchRules()
+    {
+        // 1. 测试密林中的树木障碍物（应占 30% 左右）
+        var mdForest = Generate("forest_ambush", BattleContext.BattleSize.Lord, 123);
+        int totalDenseForest = 0;
+        int obstacleDenseForest = 0;
+        foreach (var v in mdForest.Cells.Values)
+        {
+            var cd = v.As<BattleCellData>();
+            if (cd == null) continue;
+            if (cd.terrainType == BattleCellData.TerrainType.DenseForest || cd.terrainType == BattleCellData.TerrainType.Jungle)
+            {
+                totalDenseForest++;
+                if (!cd.isPassable && cd.specialEffect == "obstacle_tree")
+                {
+                    obstacleDenseForest++;
+                }
+            }
+        }
+        float denseForestPct = totalDenseForest > 0 ? (float)obstacleDenseForest / totalDenseForest : 0;
+
+        // 2. 测试山地中的岩石障碍物（应占 20% 左右）
+        var mdMountain = Generate("mountain_pass", BattleContext.BattleSize.Lord, 123);
+        int totalMountain = 0;
+        int obstacleMountain = 0;
+        foreach (var v in mdMountain.Cells.Values)
+        {
+            var cd = v.As<BattleCellData>();
+            if (cd == null) continue;
+            if (cd.terrainType == BattleCellData.TerrainType.Mountain || cd.terrainType == BattleCellData.TerrainType.MountainSnow)
+            {
+                totalMountain++;
+                if (!cd.isPassable && cd.specialEffect == "obstacle_rock")
+                {
+                    obstacleMountain++;
+                }
+            }
+        }
+        float mountainPct = totalMountain > 0 ? (float)obstacleMountain / totalMountain : 0;
+
+        // 3. 测试开阔地形中的随机障碍物（应占 10% 左右）
+        var mdPlain = Generate("plain_field", BattleContext.BattleSize.Lord, 123);
+        int totalOpen = 0;
+        int obstacleOpen = 0;
+        foreach (var v in mdPlain.Cells.Values)
+        {
+            var cd = v.As<BattleCellData>();
+            if (cd == null) continue;
+            bool isOpen = cd.terrainType == BattleCellData.TerrainType.Plains
+                || cd.terrainType == BattleCellData.TerrainType.Grassland
+                || cd.terrainType == BattleCellData.TerrainType.Savanna
+                || cd.terrainType == BattleCellData.TerrainType.Wasteland
+                || cd.terrainType == BattleCellData.TerrainType.Rocky
+                || cd.terrainType == BattleCellData.TerrainType.Sand
+                || cd.terrainType == BattleCellData.TerrainType.Snow
+                || cd.terrainType == BattleCellData.TerrainType.Ice;
+
+            if (isOpen)
+            {
+                totalOpen++;
+                if (!cd.isPassable && !string.IsNullOrEmpty(cd.specialEffect) && cd.specialEffect.StartsWith("obstacle_"))
+                {
+                    obstacleOpen++;
+                }
+            }
+        }
+        float openPct = totalOpen > 0 ? (float)obstacleOpen / totalOpen : 0;
+
+        // 验证比例（加上容差范围，RNG 在大样本下会有波动）
+        bool denseForestOk = totalDenseForest == 0 || (denseForestPct >= 0.15f && denseForestPct <= 0.45f);
+        bool mountainOk = totalMountain == 0 || (mountainPct >= 0.08f && mountainPct <= 0.32f);
+        bool openOk = totalOpen == 0 || (openPct >= 0.04f && openPct <= 0.16f);
+
+        if (!denseForestOk) return (false, $"DenseForest obstacle pct={denseForestPct:P1} (total={totalDenseForest}), expected ~30%");
+        if (!mountainOk) return (false, $"Mountain obstacle pct={mountainPct:P1} (total={totalMountain}), expected ~20%");
+        if (!openOk) return (false, $"Open terrain obstacle pct={openPct:P1} (total={totalOpen}), expected ~10%");
+
+        return (true, $"Obstacles: DenseForest={denseForestPct:P1}, Mountain={mountainPct:P1}, Open={openPct:P1}");
     }
 }

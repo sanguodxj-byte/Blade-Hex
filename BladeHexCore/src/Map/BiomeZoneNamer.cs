@@ -67,8 +67,8 @@ public class BiomeZoneNamer
     {
         var namedZones = new List<NamedBiomeZone>();
 
-        // 按生态类型分组，用于生成不重复的名称
-        var groups = zones.GroupBy(z => z.DominantBiome);
+        // 按真实地形分组，用于生成不重复的名称
+        var groups = zones.GroupBy(z => z.DominantTerrain);
 
         foreach (var group in groups)
         {
@@ -99,7 +99,7 @@ public class BiomeZoneNamer
                     SizeClass = sizeClass,
                 });
 
-                GD.Print($"[BiomeZoneNamer] {zone.DominantBiome} #{i}: {engName} / {cnName} ({zone.TileCount} tiles, center={zone.Centroid})");
+                GD.Print($"[BiomeZoneNamer] {zone.DominantTerrain} #{i}: {engName} / {cnName} ({zone.TileCount} tiles, center={zone.Centroid})");
             }
         }
 

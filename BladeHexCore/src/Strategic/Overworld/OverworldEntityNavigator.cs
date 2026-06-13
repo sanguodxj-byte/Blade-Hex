@@ -1,7 +1,6 @@
 // OverworldEntityNavigator.cs
 // Core 层 AI 实体导航 Adapter：统一 chunk/legacy 寻路选择与实体路径写入。
 // 日志统一由 OverworldDiagnostics 输出，不再自行限频。
-using Godot;
 using BladeHex.Map;
 using System.Collections.Generic;
 

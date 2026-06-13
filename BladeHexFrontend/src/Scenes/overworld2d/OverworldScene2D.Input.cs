@@ -130,6 +130,7 @@ public partial class OverworldScene2D
         foreach (var entity in EntityMgr.Entities)
         {
             if (!entity.IsAlive) continue;
+            if (IsRoutedThroughBattlefield(entity)) continue;
             float dist = (entity.Position - pixelPos).Length();
             if (dist < checkRadius)
                 return entity;

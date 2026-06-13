@@ -23,8 +23,7 @@ public partial class HexCell : Area3D
     /// <summary>引用合批管理器，由 HexGrid 在创建时设置</summary>
     public HexCellMultiMeshBatcher? Batcher { get; set; }
 
-    // 可视化节点（仅保留单元锚点和掩体，六棱柱由 Batcher 合批渲染）
-    private MeshInstance3D? _coverMeshInstance;
+    // 可视化节点（仅保留单元锚点，六棱柱由 Batcher 合批渲染）
     public Node3D? UnitAnchor { get; private set; }
 
     [Signal] public delegate void CellSingleClickedEventHandler(HexCell cell);
@@ -36,7 +35,6 @@ public partial class HexCell : Area3D
     public override void _Ready()
     {
         SetupCollisionAndAnchor();
-        SetupCoverVisual();
         RegisterWithBatcher();
 
         InputEvent += OnInputEvent;
@@ -69,37 +67,6 @@ public partial class HexCell : Area3D
         UnitAnchor.Name = "UnitAnchor";
         UnitAnchor.Position = new Vector3(0, hexHeight / 2.0f, 0);
         AddChild(UnitAnchor);
-    }
-
-    /// <summary>生成掩体视觉效果（每个格子独立，不参与合批）</summary>
-    private void SetupCoverVisual()
-    {
-        if (CoverType <= 0) return;
-
-        float hexRadius = HexUtils.Size;
-        float hexHeight = HexUtils.Size * 0.5f;
-
-        _coverMeshInstance = new MeshInstance3D();
-        var cMesh = new BoxMesh();
-        var cMat = CombatMaterialManager.Instance.GetCoverMaterial(CoverType);
-
-        // 掩体尺寸缩小一档,避免遮挡角色 — 角色身高 ~120 单位、PixelSize=2 整体 ~120 显示高度。
-        // 半掩体 ≈ 角色腰部(36 单位高);全掩体 ≈ 角色胸部(60 单位高)。
-        if (CoverType == 1)
-        {
-            // 半掩体:小盒 — 占地 ≈ 1/3 hex,高 36
-            cMesh.Size = new Vector3(hexRadius * 0.35f, 36f, hexRadius * 0.35f);
-        }
-        else
-        {
-            // 全掩体:中盒 — 占地 ≈ 1/2 hex,高 60
-            cMesh.Size = new Vector3(hexRadius * 0.5f, 60f, hexRadius * 0.5f);
-        }
-
-        _coverMeshInstance.Mesh = cMesh;
-        _coverMeshInstance.MaterialOverride = cMat;
-        _coverMeshInstance.Position = new Vector3(0, hexHeight / 2.0f + cMesh.Size.Y / 2.0f, 0);
-        AddChild(_coverMeshInstance);
     }
 
     /// <summary>注册到 Batcher 进行合批渲染</summary>

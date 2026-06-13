@@ -143,6 +143,9 @@ public partial class EncounterSpawner : RefCounted
 
         foreach (var tile in chunk.Tiles.Values)
         {
+            if (chunk.GetEncounterState(tile.Coord.X, tile.Coord.Y) != Map.EncounterSlotState.None)
+                continue;
+
             // 不可通行的 tile 不生成遭遇
             if (!tile.IsPassable) continue;
             // 有定居点的 tile 不生成遭遇（安全区）

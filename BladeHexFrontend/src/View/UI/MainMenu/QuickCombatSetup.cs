@@ -171,44 +171,15 @@ public partial class QuickCombatSetup : CanvasLayer
 
         _legendaryTypeOption = new OptionButton { CustomMinimumSize = new Vector2(250, 38), Visible = false };
         _legendaryTypeOption.AddItem(L10n.Tr("OPTION_RANDOM"), 0);
-        // 龙族
-        _legendaryTypeOption.AddItem("少年红龙 (Lv.78)", 1);
-        _legendaryTypeOption.AddItem("成年红龙 (Lv.90)", 2);
-        _legendaryTypeOption.AddItem("远古冰龙 (Lv.96)", 3);
-        _legendaryTypeOption.AddItem("陨星之龙 (Lv.120)", 4);
-        _legendaryTypeOption.AddItem("世界之蛇 (Lv.120)", 5);
-        // 亡灵
-        _legendaryTypeOption.AddItem("远古巫妖 (Lv.96)", 6);
-        _legendaryTypeOption.AddItem("死亡骑士王 (Lv.102)", 7);
-        _legendaryTypeOption.AddItem("食尸鬼之王 (Lv.84)", 8);
-        _legendaryTypeOption.AddItem("木乃伊君主 (Lv.96)", 9);
-        _legendaryTypeOption.AddItem("幽影母亲 (Lv.90)", 10);
-        _legendaryTypeOption.AddItem("死亡圣者 (Lv.96)", 11);
-        _legendaryTypeOption.AddItem("女妖之女王 (Lv.90)", 12);
-        // 魔物
-        _legendaryTypeOption.AddItem("熔岩领主 (Lv.108)", 13);
-        _legendaryTypeOption.AddItem("深渊领主 (Lv.108)", 14);
-        _legendaryTypeOption.AddItem("魔眼暴君 (Lv.96)", 15);
-        _legendaryTypeOption.AddItem("美杜莎 (Lv.78)", 16);
-        _legendaryTypeOption.AddItem("夺心魔皇 (Lv.102)", 17);
-        _legendaryTypeOption.AddItem("深坑魔王 (Lv.108)", 18);
-        _legendaryTypeOption.AddItem("刻耳柏洛斯 (Lv.90)", 19);
-        _legendaryTypeOption.AddItem("炎魔 (Lv.108)", 20);
-        // 野兽
-        _legendaryTypeOption.AddItem("九头蛇 (Lv.90)", 21);
-        _legendaryTypeOption.AddItem("奇美拉 (Lv.84)", 22);
-        _legendaryTypeOption.AddItem("克拉肯 (Lv.108)", 23);
-        _legendaryTypeOption.AddItem("狮鹫之王 (Lv.84)", 24);
-        _legendaryTypeOption.AddItem("紫色蠕虫 (Lv.90)", 25);
-        // 巨型
-        _legendaryTypeOption.AddItem("风暴巨人 (Lv.102)", 26);
-        _legendaryTypeOption.AddItem("雪人首领 (Lv.84)", 27);
-        // 构造体
-        _legendaryTypeOption.AddItem("觉醒远古机兵 (Lv.108)", 28);
-        _legendaryTypeOption.AddItem("古树长老 (Lv.96)", 29);
-        _legendaryTypeOption.AddItem("不朽巨像 (Lv.114)", 30);
-        // 人形
-        _legendaryTypeOption.AddItem("大法师 (Lv.96)", 31);
+
+        var legendaryTemplates = UnitTemplateDB.GetLegendaryTemplates();
+        for (int i = 0; i < legendaryTemplates.Count; i++)
+        {
+            var tpl = legendaryTemplates[i];
+            string name = tpl.ContainsKey("name") ? tpl["name"].AsString() : "未知传奇生物";
+            int level = tpl.ContainsKey("level") ? tpl["level"].AsInt32() : 1;
+            _legendaryTypeOption.AddItem($"{name} (Lv.{level})", i + 1);
+        }
         _legendaryTypeOption.Selected = 0;
         _legendaryTypeOption.AddThemeFontSizeOverride("font_size", 15);
         grid.AddChild(_legendaryTypeOption);

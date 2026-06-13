@@ -84,16 +84,36 @@ public partial class HitPreviewTooltip : FloatingPanel
     // 公共 API
     // ============================================================================
 
-    /// <summary>显示命中率与暴击率预览。</summary>
-    public void ShowPreview(Unit attacker, Unit target, HexGrid? grid = null, int coverType = 0, int elevationDiff = 0, bool hasFlanking = false, bool hasSneak = false)
+    /// <summary>显示命中率与暴击率预览 — 使用 CombatResolver.GetDetailedHitPreview 统一预览。</summary>
+    public void ShowPreview(Unit attacker, Unit target, HexGrid? grid = null, int coverType = 0, int elevationDiff = 0, bool hasFlanking = false, bool hasSneak = false, Unit[]? attackerAllies = null, Unit[]? defenderAllies = null)
     {
         if (attacker == null || target == null || attacker.Data == null || target.Data == null)
             return;
 
         var weapon = attacker.GetMainHand() as WeaponData;
-        int targetAc = target.GetAc();
 
-        // === 收集优势/劣势因素 ===
+        // === 全掩体快速返回 ===
+        if (coverType >= 2 && weapon != null && weapon.IsRanged)
+        {
+            string sideTag = target.Data.IsEnemy ? "[color=#ff6666][敌方][/color]" : "[color=#66ff66][友方][/color]";
+            _titleLabel.Text = $"[font_size=14][b]{target.Data.UnitName}[/b][/font_size] {sideTag}\n[color=red][完全隐蔽][/color]";
+            _hitLabel.Text = "命中:\n[color=gray][font_size=16][b]--[/b][/font_size][/color]";
+            _critLabel.Text = "暴击:\n[color=gray][font_size=16][b]--[/b][/font_size][/color]";
+            _dmgLabel.Text = "[color=red]目标处于全掩体阻挡[/color]";
+            _advantageLabel.Text = "";
+            _detailsLabel.Text = "[color=gray]全掩体单位不可被远程攻击[/color]";
+            ShowAtMouse();
+            return;
+        }
+
+        // === 使用统一预览引擎 ===
+        var preview = CombatResolver.GetDetailedHitPreview(attacker, target, grid, hasFlanking, hasSneak, attackerAllies, defenderAllies);
+
+        int hitChancePercent = Mathf.RoundToInt(Mathf.Clamp((float)preview.HitChance * 100.0, 5.0, 95.0));
+        int critChancePercent = Mathf.RoundToInt(Mathf.Clamp((float)preview.CritChance * 100.0, 0, 100));
+        int critMultiplier = PassiveSkillResolver.GetCritMultiplier(attacker);
+
+        // === 收集优势/劣势因素（仅作显示用，实际计算由 GetDetailedHitPreview 在内部完成） ===
         var advantages = new List<string>();
         var disadvantages = new List<string>();
 
@@ -103,29 +123,9 @@ public partial class HitPreviewTooltip : FloatingPanel
         if (hasFlanking) advantages.Add("包夹攻击");
         if (hasSneak) advantages.Add("伏击!");
 
-        // 掩体劣势（仅远程）
-        if (coverType > 0 && weapon != null && weapon.IsRanged)
-        {
-            if (coverType == 1)
-            {
-                disadvantages.Add("半掩体阻挡");
-                targetAc += 2;
-            }
-            else if (coverType == 2)
-            {
-                string sideTag2 = target.Data.IsEnemy ? "[color=#ff6666][敌方][/color]" : "[color=#66ff66][友方][/color]";
-                _titleLabel.Text = $"[font_size=14][b]{target.Data.UnitName}[/b][/font_size] {sideTag2}\n[color=red][完全隐蔽][/color]";
-                _hitLabel.Text = "命中:\n[color=gray][font_size=16][b]--[/b][/font_size][/color]";
-                _critLabel.Text = "暴击:\n[color=gray][font_size=16][b]--[/b][/font_size][/color]";
-                _dmgLabel.Text = "[color=red]目标处于全掩体阻挡[/color]";
-                _advantageLabel.Text = "";
-                _detailsLabel.Text = "[color=gray]全掩体单位不可被远程攻击[/color]";
-                ShowAtMouse();
-                return;
-            }
-        }
+        if (coverType == 1 && weapon != null && weapon.IsRanged)
+            disadvantages.Add("半掩体阻挡");
 
-        // 目标低HP状态
         if (target.CurrentHp > 0)
         {
             float hpRatio = (float)target.CurrentHp / Mathf.Max(target.GetMaxHp(), 1);
@@ -133,78 +133,32 @@ public partial class HitPreviewTooltip : FloatingPanel
             else if (hpRatio < 0.5f) advantages.Add("目标轻伤");
         }
 
-        // === 计算优势/劣势状态并精密计算命中率 ===
-        bool hasAdvantage = advantages.Count > disadvantages.Count;
-        bool hasDisadvantage = disadvantages.Count > advantages.Count;
-
-        // 透传 hasFlanking 与 hasSneak 给命中预测核心，实现所有因子的全覆盖
-        float hitChanceRaw = CombatResolver.GetHitChancePreview(attacker, target, grid, hasFlanking, hasSneak);
-        double hitChance = hitChanceRaw * 100.0;
-        hitChance = Mathf.Clamp(hitChance, 5.0, 95.0);
-
-        // === 计算精密暴击率 (依据 DND 优势/劣势 与 技能树加成) ===
-        int critThreshold = attacker.Model.GetCritThreshold();
-        float bonusCritChance = 0f;
-        if (attacker.SkillTree != null)
-            bonusCritChance += attacker.SkillTree.GetCriticalRateBonus();
-
-        float d20CritChance = 0f;
-        int k = Mathf.Clamp(critThreshold, 1, 20);
-        if (hasAdvantage) // 优势
-        {
-            float failProb = (k - 1) / 20.0f;
-            d20CritChance = 1.0f - failProb * failProb;
-        }
-        else if (hasDisadvantage) // 劣势
-        {
-            float successProb = (21 - k) / 20.0f;
-            d20CritChance = successProb * successProb;
-        }
-        else // 正常
-        {
-            d20CritChance = (21 - k) / 20.0f;
-        }
-
-        float totalCritChance = d20CritChance + (1.0f - d20CritChance) * bonusCritChance;
-        int critChancePercent = Mathf.RoundToInt(totalCritChance * 100.0f);
-        critChancePercent = Mathf.Clamp(critChancePercent, 0, 100);
-
-        // 获取暴击伤害倍率
-        int critMultiplier = PassiveSkillResolver.GetCritMultiplier(attacker);
-
-        // === 计算预计伤害范围 ===
-        int strMod = attacker.GetStatModifier(CombatStats.GetEffectiveStr(attacker.Data));
-        int levelExtra = attacker.Data != null ? RPGRuleEngine.GetDamageDiceCount(attacker.Data.Level) - 1 : 0;
-
-        int minDmg, maxDmg;
-        if (weapon != null)
-        {
-            minDmg = weapon.DamageDiceCount + strMod + levelExtra;
-            maxDmg = weapon.DamageDiceCount * weapon.DamageDiceSides + strMod + levelExtra * 20;
-        }
-        else
-        {
-            minDmg = 1 + levelExtra + strMod;
-            maxDmg = 20 + levelExtra * 20 + strMod;
-        }
-        minDmg = Mathf.Max(1, minDmg);
-        maxDmg = Mathf.Max(minDmg, maxDmg);
-
-        if (hasFlanking) maxDmg = (int)(maxDmg * 1.25f);
+        if (preview.HasAdvantage && !preview.HasDisadvantage && !advantages.Contains("占据高地") && !advantages.Contains("伏击!"))
+            advantages.Add("优势");
+        if (preview.HasDisadvantage && !preview.HasAdvantage && !disadvantages.Contains("仰攻不利"))
+            disadvantages.Add("劣势");
 
         // === 更新 UI 显示 ===
-        string sideTag = target.Data.IsEnemy ? "[color=#ff6666][敌方][/color]" : "[color=#66ff66][友方][/color]";
+        int targetAc = target.GetAc();
+        string sideTag2 = target.Data.IsEnemy ? "[color=#ff6666][敌方][/color]" : "[color=#66ff66][友方][/color]";
         string enemyType = target.Data.IsEnemy ? $" • {target.Data.GetEnemyTypeName()}" : "";
-        _titleLabel.Text = $"[font_size=14][b]{target.Data.UnitName}[/b][/font_size] {sideTag}\n[color=#8a8a9a]Lv.{target.Data.Level}{enemyType}[/color]";
+        _titleLabel.Text = $"[font_size=14][b]{target.Data.UnitName}[/b][/font_size] {sideTag2}\n[color=#8a8a9a]Lv.{target.Data.Level}{enemyType}[/color]";
 
-        Color hitColor = hitChance >= 75 ? HIT_COLOR
-            : hitChance >= 50 ? new Color(0.75f, 0.8f, 0.3f)
-            : hitChance >= 25 ? new Color(0.9f, 0.65f, 0.2f)
+        Color hitColor = hitChancePercent >= 75 ? HIT_COLOR
+            : hitChancePercent >= 50 ? new Color(0.75f, 0.8f, 0.3f)
+            : hitChancePercent >= 25 ? new Color(0.9f, 0.65f, 0.2f)
             : MISS_COLOR;
 
-        _hitLabel.Text = $"命中率:\n[color={hitColor.ToHtml()}][font_size=18][b]{Mathf.RoundToInt((float)hitChance)}%[/b][/font_size][/color]";
+        _hitLabel.Text = $"命中率:\n[color={hitColor.ToHtml()}][font_size=18][b]{hitChancePercent}%[/b][/font_size][/color]";
         _critLabel.Text = $"暴击率:\n[color=gold][font_size=18][b]{critChancePercent}%[/b][/font_size][/color] [color=#eebbee](x{critMultiplier})[/color]";
-        _dmgLabel.Text = $"预计伤害: [color=#ffd700][font_size=14][b]{minDmg} - {maxDmg}[/b][/font_size][/color]";
+
+        // 显示正常伤害范围 + 暴击伤害范围
+        string dmgText = $"预计伤害: [color=#ffd700][font_size=14][b]{preview.DamageMin} - {preview.DamageMax}[/b][/font_size][/color]";
+        if (preview.CritDamageMin > preview.DamageMax)
+        {
+            dmgText += $"\n[color=#ff8800]暴击: [b]{preview.CritDamageMin} - {preview.CritDamageMax}[/b][/color]";
+        }
+        _dmgLabel.Text = dmgText;
 
         string advText = "";
         foreach (var a in advantages)

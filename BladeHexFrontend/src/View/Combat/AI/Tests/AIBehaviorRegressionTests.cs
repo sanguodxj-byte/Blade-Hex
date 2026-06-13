@@ -10,6 +10,8 @@ namespace BladeHex.Combat.AI.Tests;
 
 public static class AIBehaviorRegressionTests
 {
+    private static readonly List<Node> TestNodes = new();
+
     public static (int passed, int failed, List<string> details) RunAll()
     {
         var details = new List<string>();
@@ -26,6 +28,10 @@ public static class AIBehaviorRegressionTests
             {
                 failed++;
                 details.Add($"  [FAIL] {name}: Exception {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                FreeTestNodes();
             }
         }
         return (passed, failed, details);
@@ -59,8 +65,7 @@ public static class AIBehaviorRegressionTests
         Place(grid, target, new Vector2I(2, 0));
         target.Facing = 3; // 让目标背后方向落在 (3,0)，攻击者可移动包夹。
 
-        var controller = new AIController { DifficultyConfig = new AIDifficultyConfig { Difficulty = AIDifficultyConfig.DifficultyLevel.Normal } };
-        controller.Initialize();
+        var controller = CreateController(AIDifficultyConfig.DifficultyLevel.Normal);
 
         var action = controller.DecideActionForUnit(attacker, new List<Unit> { target }, new List<Unit> { attacker }, grid);
         Cleanup(grid);
@@ -81,8 +86,7 @@ public static class AIBehaviorRegressionTests
         Place(grid, attacker, new Vector2I(0, 0));
         Place(grid, target, new Vector2I(4, 0));
 
-        var controller = new AIController { DifficultyConfig = new AIDifficultyConfig { Difficulty = AIDifficultyConfig.DifficultyLevel.Legendary } };
-        controller.Initialize();
+        var controller = CreateController(AIDifficultyConfig.DifficultyLevel.Legendary);
 
         var action = controller.DecideActionForUnit(attacker, new List<Unit> { target }, new List<Unit> { attacker }, grid);
         var weapon = attacker.Model.GetMainHand() as WeaponData;
@@ -121,6 +125,26 @@ public static class AIBehaviorRegressionTests
             }
         }
         return grid;
+    }
+
+    private static AIController CreateController(AIDifficultyConfig.DifficultyLevel difficulty)
+    {
+        var controller = new AIController { DifficultyConfig = new AIDifficultyConfig { Difficulty = difficulty } };
+        TestNodes.Add(controller);
+        controller.Initialize();
+        return controller;
+    }
+
+    private static void FreeTestNodes()
+    {
+        for (int i = TestNodes.Count - 1; i >= 0; i--)
+        {
+            var node = TestNodes[i];
+            if (GodotObject.IsInstanceValid(node))
+                node.Free();
+        }
+
+        TestNodes.Clear();
     }
 
     private static Unit MakeUnit(string name, UnitData.AIStrategy strategy, float ap, int weaponRange, int weaponAp, bool isEnemy)

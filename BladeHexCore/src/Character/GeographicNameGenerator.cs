@@ -102,9 +102,22 @@ public static class GeographicNameGenerator
         return isZH ? prefix + suffix : $"{prefix} {suffix}";
     }
 
+    public static string GenerateFeatureName(HexOverworldTile.TerrainType terrain, int seed, int index)
+    {
+        bool isZH = NameGenerator.GetCurrentLanguage() == "zh";
+        var generator = new RegionNameGenerator(seed ^ (0x47454F + index));
+        var (english, chinese) = generator.GenerateName(terrain, index);
+        return isZH ? chinese : english;
+    }
+
     /// <summary>为 RegionDef 生成名称（基于其偏好地形）</summary>
     public static string GenerateRegionName(BiomeType dominantBiome, int seed, int regionIndex)
     {
         return GenerateFeatureName(dominantBiome, seed, regionIndex);
+    }
+
+    public static string GenerateRegionName(HexOverworldTile.TerrainType dominantTerrain, int seed, int regionIndex)
+    {
+        return GenerateFeatureName(dominantTerrain, seed, regionIndex);
     }
 }

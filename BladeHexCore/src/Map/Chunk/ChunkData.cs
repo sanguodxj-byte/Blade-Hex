@@ -54,6 +54,9 @@ public partial class ChunkData : RefCounted
     /// <summary>遭遇槽位: 全局轴向坐标 → 状态</summary>
     public Dictionary<Vector2I, EncounterSlotState> EncounterSlots { get; set; } = new();
 
+    /// <summary>Precomputed encounter density multiplier for this chunk.</summary>
+    public float EncounterDensity { get; set; } = 1.0f;
+
     // ========================================
     // Chunk 状态
     // ========================================
@@ -183,6 +186,7 @@ public partial class ChunkData : RefCounted
             ["chunk_q"] = ChunkCoord.X,
             ["chunk_r"] = ChunkCoord.Y,
             ["region"] = RegionName,
+            ["encounter_density"] = EncounterDensity,
             ["tiles"] = tilesData,
             ["encounters"] = encounterData,
         };
@@ -196,6 +200,7 @@ public partial class ChunkData : RefCounted
             data.ContainsKey("chunk_r") ? (int)data["chunk_r"] : 0
         );
         chunk.RegionName = data.ContainsKey("region") ? (string)data["region"] : "";
+        chunk.EncounterDensity = data.ContainsKey("encounter_density") ? (float)data["encounter_density"] : 1.0f;
         chunk.IsGenerated = true;
 
         if (data.ContainsKey("tiles") && data["tiles"].Obj is Godot.Collections.Array tilesData)

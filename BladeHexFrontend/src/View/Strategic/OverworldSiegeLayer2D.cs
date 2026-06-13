@@ -264,8 +264,11 @@ public sealed partial class OverworldSiegeLayer2D : Node2D
     // 纹理
     // ========================================
 
-    private static Texture2D GetSiegeTexture()
+    private static Texture2D? GetSiegeTexture()
     {
+        if (DisplayServer.GetName() == "headless")
+            return null;
+
         if (_siegeTexture == null)
         {
             var img = Image.CreateEmpty(8, 8, false, Image.Format.Rgba8);

@@ -29,11 +29,24 @@ public partial class RuntimeLogConsole : Node
     public override void _Ready()
     {
         Instance = this;
+        if (IsHeadless())
+        {
+            SetProcess(false);
+            SetProcessUnhandledInput(false);
+            return;
+        }
+
         ProcessMode = ProcessModeEnum.Always;
         SetProcess(true);
         SetProcessUnhandledInput(true);
         BuildUi();
         Refresh();
+    }
+
+    public override void _ExitTree()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 
     public override void _Process(double delta)
@@ -265,5 +278,10 @@ public partial class RuntimeLogConsole : Node
         return value
             .Replace("[", "[lb]")
             .Replace("]", "[rb]");
+    }
+
+    private static bool IsHeadless()
+    {
+        return DisplayServer.GetName() == "headless";
     }
 }

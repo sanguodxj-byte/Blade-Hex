@@ -79,12 +79,18 @@ public partial class UIThemeTweaker : Node
     public override void _Ready()
     {
         Instance = this;
-        _enabled = OS.IsDebugBuild() || OS.HasFeature("dev");
+        _enabled = !IsHeadless() && (OS.IsDebugBuild() || OS.HasFeature("dev"));
         if (!_enabled) { SetProcess(false); return; }
 
         ProcessMode = ProcessModeEnum.Always;
         BuildUI();
         RegisterDebugCommands();
+    }
+
+    public override void _ExitTree()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 
     public override void _Input(InputEvent @event)
@@ -1090,4 +1096,9 @@ public partial class UIThemeTweaker : Node
     }
 
     private static string DoAction(Action action) { action(); return "OK"; }
+
+    private static bool IsHeadless()
+    {
+        return DisplayServer.GetName() == "headless";
+    }
 }

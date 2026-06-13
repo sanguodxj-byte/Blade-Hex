@@ -6,7 +6,6 @@
 //   - 每场战斗对应一个 Battlefield 实例
 //   - 容纳攻击方/防御方多实体参与
 //   - 提供战场合并、阵营判定、参与方查询能力
-using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;

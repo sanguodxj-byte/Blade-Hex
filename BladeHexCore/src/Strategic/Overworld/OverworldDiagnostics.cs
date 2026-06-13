@@ -7,7 +7,6 @@
 //   - 提供 AI 实体状态计数快照
 //   - 空闲主场景不持续刷日志
 //   - 发生 AI 追逃、寻路失败、战场创建/消失时可从日志定位阶段
-using Godot;
 using System;
 using System.Collections.Generic;
 

@@ -15,10 +15,13 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using BladeHex.Data;
+using BladeHex.Map;
 using BladeHex.Strategic;
 using BladeHex.Strategic.Army;
 using BladeHex.Strategic.WorldEvents;
 using BladeHex.Strategic.Diplomacy;
+using BladeHex.Strategic.WorldGen;
+using BladeHex.Strategic.WorldGen.Stages;
 
 namespace BladeHex.Tests.Strategic;
 
@@ -58,6 +61,15 @@ public static class OverworldSimulationArchitectureTests
         // ── Phase 2: TickFrame ──
         yield return Run(nameof(Simulation_TickFrame_MovesEntities), Simulation_TickFrame_MovesEntities);
         yield return Run(nameof(Simulation_TickFrame_ReturnsSpawnEvents), Simulation_TickFrame_ReturnsSpawnEvents);
+        yield return Run(nameof(Simulation_TickFrame_LegacyMode_AllowsAmbientSpawn), Simulation_TickFrame_LegacyMode_AllowsAmbientSpawn);
+        yield return Run(nameof(Simulation_TickFrame_ChunkMode_DisablesAmbientSpawn), Simulation_TickFrame_ChunkMode_DisablesAmbientSpawn);
+        yield return Run(nameof(Simulation_ProcessActivatedChunks_SpawnsOnce), Simulation_ProcessActivatedChunks_SpawnsOnce);
+        yield return Run(nameof(Simulation_ProcessActivatedChunks_RespectsSpawnCaps), Simulation_ProcessActivatedChunks_RespectsSpawnCaps);
+        yield return Run(nameof(Simulation_ProcessActivatedChunks_UsesPrecomputedEncounterDensity), Simulation_ProcessActivatedChunks_UsesPrecomputedEncounterDensity);
+        yield return Run(nameof(Simulation_ProcessActivatedChunks_SuppressesWildMonstersNearCivilizedPoi), Simulation_ProcessActivatedChunks_SuppressesWildMonstersNearCivilizedPoi);
+        yield return Run(nameof(Simulation_ProcessActivatedChunks_DoesNotSuppressNearLair), Simulation_ProcessActivatedChunks_DoesNotSuppressNearLair);
+        yield return Run(nameof(WorldGen_EncounterDensityStage_WritesChunkDensity), WorldGen_EncounterDensityStage_WritesChunkDensity);
+        yield return Run(nameof(ChunkData_EncounterDensity_RoundTrips), ChunkData_EncounterDensity_RoundTrips);
 
         // ── Phase 2: TickHours ──
         yield return Run(nameof(Simulation_TickHours_AdvancesGameHour), Simulation_TickHours_AdvancesGameHour);
@@ -392,6 +404,374 @@ public static class OverworldSimulationArchitectureTests
         var events = sim.TickFrame(0.1f, ctx);
 
         return (true, $"TickFrame 完成，返回 {events.Count} 个事件");
+    }
+
+    private static (bool, string) Simulation_TickFrame_LegacyMode_AllowsAmbientSpawn()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = Vector2.Zero,
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+        ctx.EncounterSpawner.SpawnIntervalSec = 0.0f;
+        ctx.EncounterSpawner.MinDistanceTraveled = 0.0f;
+        ctx.EncounterSpawner.MaxActiveEntities = 99;
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+
+        var events = sim.TickFrame(0.1f, ctx);
+        int spawned = events.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned);
+
+        return (spawned == 1 && ctx.Entities.Count == 1 && ctx.EncounterSpawner.EnableAmbientSpawns,
+            $"spawned={spawned}, entities={ctx.Entities.Count}, ambient={ctx.EncounterSpawner.EnableAmbientSpawns}");
+    }
+
+    private static (bool, string) Simulation_TickFrame_ChunkMode_DisablesAmbientSpawn()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = Vector2.Zero,
+            PlayerLevel = 5,
+            CurrentDay = 1,
+            ChunkManager = new ChunkManager(),
+            ChunkAStar = new ChunkAStar(),
+        };
+        ctx.EncounterSpawner.SpawnIntervalSec = 0.0f;
+        ctx.EncounterSpawner.MinDistanceTraveled = 0.0f;
+        ctx.EncounterSpawner.MaxActiveEntities = 99;
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+
+        var events = sim.TickFrame(0.1f, ctx);
+        int spawned = events.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned);
+
+        return (spawned == 0 && ctx.Entities.Count == 0 && !ctx.EncounterSpawner.EnableAmbientSpawns,
+            $"spawned={spawned}, entities={ctx.Entities.Count}, ambient={ctx.EncounterSpawner.EnableAmbientSpawns}");
+    }
+
+    private static (bool, string) Simulation_ProcessActivatedChunks_SpawnsOnce()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = new Vector2(-1000, -1000),
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+
+        var chunk = new ChunkData { ChunkCoord = Vector2I.Zero, IsGenerated = true, IsActive = true };
+        var tile = HexOverworldTile.Create(0, 1, HexOverworldTile.TerrainType.Forest, 0.3f, 0.5f, 0.5f);
+        chunk.Tiles[tile.Coord] = tile;
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+        var encounterSpawner = new EncounterSpawner();
+
+        var firstEvents = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { chunk },
+            encounterSpawner,
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        bool firstSpawned = firstEvents.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned) == 1;
+        bool entityIndexed = ctx.SpatialIndex.QueryRadius(tile.PixelPos, 1.0f).Count == 1;
+        bool slotTriggered = chunk.GetEncounterState(tile.Coord.X, tile.Coord.Y) == EncounterSlotState.Triggered;
+
+        var secondEvents = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { chunk },
+            encounterSpawner,
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        bool secondDidNotDuplicate = secondEvents.Count == 0 && ctx.Entities.Count == 1;
+        bool slotStillTriggered = chunk.GetEncounterState(tile.Coord.X, tile.Coord.Y) == EncounterSlotState.Triggered;
+
+        return (firstSpawned && entityIndexed && slotTriggered && secondDidNotDuplicate && slotStillTriggered,
+            $"firstSpawned={firstSpawned}, indexed={entityIndexed}, triggered={slotTriggered}, secondEvents={secondEvents.Count}, entities={ctx.Entities.Count}, stillTriggered={slotStillTriggered}");
+    }
+
+    private static (bool, string) Simulation_ProcessActivatedChunks_RespectsSpawnCaps()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = new Vector2(-1000, -1000),
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerChunk = 1;
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerActivationBatch = 2;
+        ctx.EncounterSpawner.MaxChunkSlotWildMonsterEntities = 2;
+
+        var chunks = new[]
+        {
+            MakeChunkWithAvailableForestSlots(0, 0, [0, 1, 2]),
+            MakeChunkWithAvailableForestSlots(1, 0, [16, 17]),
+            MakeChunkWithAvailableForestSlots(2, 0, [32, 33]),
+        };
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+        var encounterSpawner = new EncounterSpawner();
+
+        var firstEvents = sim.ProcessActivatedChunks(
+            ctx,
+            chunks,
+            encounterSpawner,
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        var cappedOutChunk = MakeChunkWithAvailableForestSlots(3, 0, [48, 49]);
+        var secondEvents = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { cappedOutChunk },
+            encounterSpawner,
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        int firstSpawned = firstEvents.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned);
+        bool perChunkCap = CountState(chunks[0], EncounterSlotState.Triggered) == 1
+            && CountState(chunks[1], EncounterSlotState.Triggered) == 1
+            && CountState(chunks[2], EncounterSlotState.Triggered) == 0;
+        bool batchAndTotalCap = firstSpawned == 2 && ctx.Entities.Count == 2 && secondEvents.Count == 0;
+        bool cappedChunkStillAvailable = CountState(cappedOutChunk, EncounterSlotState.Available) == 2;
+        bool chunkDangerResolver = VerifyChunkDangerResolver(out var dangerDetails);
+
+        return (perChunkCap && batchAndTotalCap && cappedChunkStillAvailable && chunkDangerResolver,
+            $"spawned={firstSpawned}, entities={ctx.Entities.Count}, secondEvents={secondEvents.Count}, perChunk={perChunkCap}, cappedAvailable={cappedChunkStillAvailable}, danger=({dangerDetails})");
+    }
+
+    private static bool VerifyChunkDangerResolver(out string details)
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = new Vector2(-1000, -1000),
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerChunk = 4;
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerActivationBatch = 8;
+        ctx.EncounterSpawner.MaxChunkSlotWildMonsterEntities = 8;
+
+        var safeChunk = MakeChunkWithForestTiles(0, 0, Enumerable.Range(0, 32).ToArray());
+        var dangerousChunk = MakeChunkWithForestTiles(1, 0, Enumerable.Range(16, 32).ToArray());
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+        var encounterSpawner = new EncounterSpawner();
+
+        var events = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { safeChunk, dangerousChunk },
+            encounterSpawner,
+            chunk => chunk.ChunkCoord.X == 0 ? 0.0f : 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        bool safeHasNoSlots = safeChunk.EncounterSlots.Count == 0;
+        bool dangerousHasSlots = dangerousChunk.EncounterSlots.Count > 0;
+
+        details = $"safeSlots={safeChunk.EncounterSlots.Count}, dangerousSlots={dangerousChunk.EncounterSlots.Count}, events={events.Count}";
+        return safeHasNoSlots && dangerousHasSlots;
+    }
+
+    private static (bool, string) Simulation_ProcessActivatedChunks_UsesPrecomputedEncounterDensity()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = new Vector2(-1000, -1000),
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerChunk = 4;
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerActivationBatch = 8;
+        ctx.EncounterSpawner.MaxChunkSlotWildMonsterEntities = 8;
+
+        var chunk = MakeChunkWithAvailableForestSlots(0, 0, [0, 1, 2]);
+        chunk.EncounterDensity = 0.0f;
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+
+        var events = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { chunk },
+            new EncounterSpawner(),
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        int spawned = events.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned);
+        bool noWildMonsters = spawned == 0 && ctx.Entities.Count == 0;
+        bool slotsNotConsumed = CountState(chunk, EncounterSlotState.Triggered) == 0
+            && CountState(chunk, EncounterSlotState.Available) == 3;
+
+        return (noWildMonsters && slotsNotConsumed,
+            $"density={chunk.EncounterDensity}, spawned={spawned}, entities={ctx.Entities.Count}, available={CountState(chunk, EncounterSlotState.Available)}, triggered={CountState(chunk, EncounterSlotState.Triggered)}");
+    }
+
+    private static (bool, string) Simulation_ProcessActivatedChunks_SuppressesWildMonstersNearCivilizedPoi()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = new Vector2(-1000, -1000),
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerChunk = 4;
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerActivationBatch = 8;
+        ctx.EncounterSpawner.MaxChunkSlotWildMonsterEntities = 8;
+
+        var chunk = MakeChunkWithAvailableForestSlots(0, 0, [0, 1, 2]);
+        ctx.Pois.Add(new OverworldPOI
+        {
+            PoiName = "safe town",
+            PoiTypeEnum = OverworldPOI.POIType.Town,
+            Position = chunk.GetCenterPixel(),
+        });
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+
+        var events = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { chunk },
+            new EncounterSpawner(),
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        int spawned = events.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned);
+        bool noWildMonsters = spawned == 0 && ctx.Entities.Count == 0;
+        bool slotsNotConsumed = CountState(chunk, EncounterSlotState.Triggered) == 0
+            && CountState(chunk, EncounterSlotState.Available) == 3;
+
+        return (noWildMonsters && slotsNotConsumed,
+            $"spawned={spawned}, entities={ctx.Entities.Count}, available={CountState(chunk, EncounterSlotState.Available)}, triggered={CountState(chunk, EncounterSlotState.Triggered)}");
+    }
+
+    private static (bool, string) Simulation_ProcessActivatedChunks_DoesNotSuppressNearLair()
+    {
+        var ctx = new OverworldSimulationContext
+        {
+            SpatialIndex = new EntitySpatialIndex(800),
+            PlayerPosition = new Vector2(-1000, -1000),
+            PlayerLevel = 5,
+            CurrentDay = 1,
+        };
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerChunk = 1;
+        ctx.EncounterSpawner.MaxChunkSlotSpawnsPerActivationBatch = 8;
+        ctx.EncounterSpawner.MaxChunkSlotWildMonsterEntities = 8;
+
+        var chunk = MakeChunkWithAvailableForestSlots(0, 0, [0]);
+        ctx.Pois.Add(new OverworldPOI
+        {
+            PoiName = "danger lair",
+            PoiTypeEnum = OverworldPOI.POIType.Lair,
+            Position = chunk.GetCenterPixel(),
+        });
+
+        var sim = new OverworldSimulation();
+        sim.WireToContext(ctx);
+
+        var events = sim.ProcessActivatedChunks(
+            ctx,
+            new[] { chunk },
+            new EncounterSpawner(),
+            dangerLevel: 1.0f,
+            daysElapsed: 1,
+            seed: 12345);
+
+        int spawned = events.Count(e => e.Type == OverworldSimulationEvent.EventType.EntitySpawned);
+        bool spawnedNearLair = spawned == 1 && ctx.Entities.Count == 1;
+        bool slotTriggered = CountState(chunk, EncounterSlotState.Triggered) == 1;
+
+        return (spawnedNearLair && slotTriggered,
+            $"spawned={spawned}, entities={ctx.Entities.Count}, triggered={CountState(chunk, EncounterSlotState.Triggered)}");
+    }
+
+    private static (bool, string) WorldGen_EncounterDensityStage_WritesChunkDensity()
+    {
+        var ctx = new WorldBuildContext(12345, WorldCreationConfig.Small(12345));
+
+        var coreChunk = new ChunkData { ChunkCoord = Vector2I.Zero };
+        var frontierChunk = new ChunkData { ChunkCoord = new Vector2I(5, 0) };
+        ctx.Chunks[coreChunk.ChunkCoord] = coreChunk;
+        ctx.Chunks[frontierChunk.ChunkCoord] = frontierChunk;
+        ctx.Territories["nation_a"] = new NationTerritory
+        {
+            NationId = "nation_a",
+            CoreZone = new BiomeZone { Centroid = new Vector2I(8, 8) },
+        };
+
+        new EncounterDensityStage().Execute(ctx);
+
+        bool coreIsLow = coreChunk.EncounterDensity <= 0.05f + 0.001f;
+        bool frontierIsHigh = frontierChunk.EncounterDensity >= 0.99f;
+        bool ordered = coreChunk.EncounterDensity < frontierChunk.EncounterDensity;
+
+        return (coreIsLow && frontierIsHigh && ordered,
+            $"core={coreChunk.EncounterDensity:0.000}, frontier={frontierChunk.EncounterDensity:0.000}");
+    }
+
+    private static (bool, string) ChunkData_EncounterDensity_RoundTrips()
+    {
+        var original = new ChunkData
+        {
+            ChunkCoord = new Vector2I(2, 3),
+            RegionName = "test_region",
+            EncounterDensity = 0.42f,
+        };
+
+        var restored = ChunkData.Deserialize(original.Serialize());
+        bool sameDensity = Math.Abs(restored.EncounterDensity - 0.42f) < 0.001f;
+
+        return (sameDensity,
+            $"density={restored.EncounterDensity:0.000}, coord={restored.ChunkCoord}");
+    }
+
+    private static ChunkData MakeChunkWithAvailableForestSlots(int chunkQ, int chunkR, int[] worldQs)
+    {
+        var chunk = new ChunkData { ChunkCoord = new Vector2I(chunkQ, chunkR), IsGenerated = true, IsActive = true };
+        foreach (int q in worldQs)
+        {
+            var tile = HexOverworldTile.Create(q, 1, HexOverworldTile.TerrainType.Forest, 0.3f, 0.5f, 0.5f);
+            chunk.Tiles[tile.Coord] = tile;
+            chunk.SetEncounterState(tile.Coord.X, tile.Coord.Y, EncounterSlotState.Available);
+        }
+
+        return chunk;
+    }
+
+    private static ChunkData MakeChunkWithForestTiles(int chunkQ, int chunkR, int[] worldQs)
+    {
+        var chunk = new ChunkData { ChunkCoord = new Vector2I(chunkQ, chunkR), IsGenerated = true, IsActive = true };
+        foreach (int q in worldQs)
+        {
+            var tile = HexOverworldTile.Create(q, 1, HexOverworldTile.TerrainType.Forest, 0.3f, 0.5f, 0.5f);
+            chunk.Tiles[tile.Coord] = tile;
+        }
+
+        return chunk;
+    }
+
+    private static int CountState(ChunkData chunk, EncounterSlotState state)
+    {
+        return chunk.EncounterSlots.Values.Count(s => s == state);
     }
 
     // ===========================================================================

@@ -27,12 +27,17 @@ public partial class BattlefieldTooltip : FloatingPanel
 
     protected override void BuildContent()
     {
+        Content.SizeFlagsVertical = SizeFlags.ShrinkBegin;
+
         _titleLabel = MakeTitleLabel("野战交锋", 17);
         _titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
         Content.AddChild(_titleLabel);
         Content.AddChild(MakeSeparator(0.22f));
 
-        _sides = new HBoxContainer();
+        _sides = new HBoxContainer
+        {
+            SizeFlagsVertical = SizeFlags.ShrinkBegin
+        };
         _sides.AddThemeConstantOverride("separation", 10);
         Content.AddChild(_sides);
 

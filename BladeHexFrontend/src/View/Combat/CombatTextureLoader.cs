@@ -167,7 +167,11 @@ public partial class CombatTextureLoader : RefCounted
         if (string.IsNullOrEmpty(spriteId))
             return null;
 
-        _sceneSprites.TryGetValue(spriteId, out var tex);
+        if (_sceneSprites.TryGetValue(spriteId, out var tex))
+            return tex;
+
+        tex = BattlePropRegistry.GetTexture(spriteId);
+        _sceneSprites[spriteId] = tex;
         return tex;
     }
 
@@ -299,7 +303,7 @@ public partial class CombatTextureLoader : RefCounted
 
             if (WeaponAnimPaths.TryGetValue(subtype, out var path))
             {
-                var frames = SpriteFramesAssetResolver.Load(subtype, path);
+                var frames = TryLoadSpriteFramesQuiet(subtype, path);
                 if (frames != null)
                 {
                     _weaponAnimFrames[subtype] = frames;
@@ -308,10 +312,37 @@ public partial class CombatTextureLoader : RefCounted
             }
 
             string genericPath = $"{WeaponAnimDir}/{subtype.ToLower()}_anim.tres";
-            var genericFrames = SpriteFramesAssetResolver.Load($"{subtype.ToLower()}_anim", genericPath);
+            var genericFrames = TryLoadSpriteFramesQuiet($"{subtype.ToLower()}_anim", genericPath);
             if (genericFrames != null)
                 _weaponAnimFrames[subtype] = genericFrames;
         }
+    }
+
+    private static SpriteFrames? TryLoadSpriteFramesQuiet(string id, string path)
+    {
+        var frames = TryLoadSpriteFramesPath(path);
+        if (frames != null)
+            return frames;
+
+        if (AssetCatalog.TryGetPath(AssetKind.SpriteFrames, id, out var catalogPath))
+        {
+            frames = TryLoadSpriteFramesPath(catalogPath);
+            if (frames != null)
+                return frames;
+        }
+
+        return ResourceRegistry.GetSpriteFrames(id);
+    }
+
+    private static SpriteFrames? TryLoadSpriteFramesPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        if (!ResourceLoader.Exists(path))
+            return null;
+
+        return ResourceLoader.Load<SpriteFrames>(path);
     }
 
     private static void CollectWeaponSubtypes(List<UnitData>? units, HashSet<string> subtypes)
@@ -457,9 +488,7 @@ public partial class CombatTextureLoader : RefCounted
             if (_sceneSprites.ContainsKey(id))
                 continue;
 
-            var tex = TextureAssetResolver.LoadIcon(id);
-            if (tex != null)
-                _sceneSprites[id] = tex;
+            _sceneSprites[id] = BattlePropRegistry.GetTexture(id);
         }
     }
 
