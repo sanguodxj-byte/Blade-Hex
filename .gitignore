@@ -51,6 +51,7 @@ remaining_errors*.txt
 
 # Game assets are large binaries and are distributed separately.
 assets/
+BladeHexFrontend/src/assets/
 sl.txt
 
 # Generated playability check artifacts
