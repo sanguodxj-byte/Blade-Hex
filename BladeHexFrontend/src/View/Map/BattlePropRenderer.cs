@@ -18,11 +18,18 @@ namespace BladeHex.View.Map;
 [GlobalClass]
 public partial class BattlePropRenderer : Node3D
 {
+    private static readonly float BaseYOffset = HexUtils.Size * 0.25f;
+
     /// <summary>每个 HexCell 坐标下挂载的所有 prop 节点</summary>
     private readonly Dictionary<Vector2I, List<Sprite3D>> _propsByCell = new();
 
     /// <summary>立牌像素缩放（越小立牌越小）</summary>
     [Export] public float BasePixelSize { get; set; } = 0.08f;
+
+    public int LastEligibleCellCount { get; private set; }
+    public int LastSkippedCellCount { get; private set; }
+    public int LastCandidateCount { get; private set; }
+    public int LastSkippedMissingTextureCount { get; private set; }
 
     public override void _Ready()
     {
@@ -40,7 +47,7 @@ public partial class BattlePropRenderer : Node3D
         foreach (var placement in props)
         {
             var sprite = CreatePropSprite(placement);
-            sprite.Position = cellWorldPos + placement.LocalOffset;
+            sprite.Position = cellWorldPos + new Vector3(0, BaseYOffset, 0) + placement.LocalOffset;
             AddChild(sprite);
             list.Add(sprite);
         }
@@ -71,6 +78,15 @@ public partial class BattlePropRenderer : Node3D
             }
         }
         _propsByCell.Clear();
+        SetScatterStats(0, 0, 0, 0);
+    }
+
+    public void SetScatterStats(int eligibleCells, int skippedCells, int candidates, int skippedMissingTexture)
+    {
+        LastEligibleCellCount = eligibleCells;
+        LastSkippedCellCount = skippedCells;
+        LastCandidateCount = candidates;
+        LastSkippedMissingTextureCount = skippedMissingTexture;
     }
 
     /// <summary>为一个 placement 创建 Sprite3D 节点</summary>

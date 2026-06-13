@@ -19,6 +19,8 @@ using BladeHex.Combat.Commands;
 using BladeHex.UI.Combat;
 using BladeHex.UI.Minimap;
 using BladeHex.View.Effects;
+using BladeHex.Debug;
+using BladeHex.View.Map;
 
 namespace BladeHex.Scenes;
 
@@ -51,6 +53,8 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 	protected BladeHex.Audio.AudioManager? _audioManager;
 	protected CombatAttackAnimator _attackAnimator = null!;
 	protected EffectOrchestrator _effectOrchestrator = null!;
+	protected BattleVisualDebugPanel _battleVisualDebugPanel = null!;
+	protected BattlePropRenderer _battlePropRenderer = null!;
 
 	// ========== 运行时状态容器 ==========
 	public CombatRuntimeState Runtime { get; } = new();
@@ -150,7 +154,17 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 			_grassOverlay.PlaceGrassOverlays(_hexGrid, _mapData);
 			_elevationEdges.Render(_hexGrid);
 			_waterStripRenderer.Render(_hexGrid);
+			PlaceDeterministicProps();
 			_decorationPlacer.PlaceDecorations(_hexGrid, _mapData);
+			_battleVisualDebugPanel.Initialize(
+				_hexGrid,
+				_mapData,
+				_combatManager,
+				_decorationPlacer,
+				_battlePropRenderer,
+				_grassOverlay,
+				_elevationEdges,
+				_waterStripRenderer);
 			_combatMinimap.Initialize(_hexGrid, _combatManager, _mapWidth, _mapHeight);
 			_combatUi.EmbedMinimap(_combatMinimap);
 			OnPreBattleSetup();
@@ -450,6 +464,12 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		var vfxManager = new VFXManager { Name = "VFXManager" };
 		AddChild(vfxManager);
 
+		var fakeLightLayer = new BladeHex.View.Combat.BattleFakeLightLayer { Name = "BattleFakeLightLayer" };
+		AddChild(fakeLightLayer);
+
+		var fakeShadowLayer = new BladeHex.View.Combat.BattleFakeShadowLayer { Name = "BattleFakeShadowLayer" };
+		AddChild(fakeShadowLayer);
+
 		_effectOrchestrator = new EffectOrchestrator { Name = "EffectOrchestrator" };
 		AddChild(_effectOrchestrator);
 
@@ -493,7 +513,13 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		_waterStripRenderer = new BladeHex.View.Combat.WaterStripRenderer { Name = "WaterStripRenderer" };
 		AddChild(_waterStripRenderer);
 
+		_battlePropRenderer = new BattlePropRenderer { Name = "BattlePropRenderer" };
+		AddChild(_battlePropRenderer);
+
 		_combatMinimap = new CombatMinimapPanel();
+
+		_battleVisualDebugPanel = new BattleVisualDebugPanel { Name = "BattleVisualDebugPanel" };
+		AddChild(_battleVisualDebugPanel);
 
 		var scheduler = new SceneTreeScheduler(GetTree());
 		var projectileSystem = new ProjectileSystem(scheduler);
@@ -504,6 +530,55 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		AddChild(_attackAnimator);
 		_attackAnimator.Initialize(projectileSystem, CameraCtrl);
 		_aiController.SetAttackAnimator(_attackAnimator);
+	}
+
+	private void PlaceDeterministicProps()
+	{
+		if (_hexGrid == null || _battlePropRenderer == null)
+			return;
+
+		_battlePropRenderer.ClearAll();
+
+		uint salt = (uint)(_mapData?.TemplateName?.GetHashCode() ?? 0);
+		int placed = 0;
+		int candidates = 0;
+		int eligibleCells = 0;
+		int skippedCells = 0;
+		int skippedMissingTexture = 0;
+		foreach (var kvp in _hexGrid.Cells)
+		{
+			var cell = kvp.Value;
+			if (cell?.Data == null)
+			{
+				skippedCells++;
+				continue;
+			}
+			if (!cell.Data.isPassable || cell.Data.coverLevel > 0)
+			{
+				skippedCells++;
+				continue;
+			}
+			if (!string.IsNullOrEmpty(cell.Data.specialEffect))
+			{
+				skippedCells++;
+				continue;
+			}
+
+			eligibleCells++;
+			var props = BattlePropScatter.Generate(cell.GridPos, cell.Data.terrainType, salt);
+			candidates += props.Count;
+			int beforeFilter = props.Count;
+			props.RemoveAll(p => !BattlePropRegistry.HasTexture(p.PropId));
+			skippedMissingTexture += beforeFilter - props.Count;
+			if (props.Count == 0)
+				continue;
+
+			_battlePropRenderer.AddPropsForCell(cell.GridPos, cell.Position, props);
+			placed += props.Count;
+		}
+
+		_battlePropRenderer.SetScatterStats(eligibleCells, skippedCells, candidates, skippedMissingTexture);
+		GD.Print($"[CombatSceneBase] Deterministic battle props: eligibleCells={eligibleCells}, skippedCells={skippedCells}, candidates={candidates}, placed={placed}, skippedMissingTexture={skippedMissingTexture}");
 	}
 
 	private void PlayEntranceTransition()
@@ -604,6 +679,7 @@ public abstract partial class CombatSceneBase : Node3D, ICombatSceneAdapter,
 		unit.Position = cell.Position + new Vector3(0, BladeHex.View.Combat.CombatLayerHeight.HexTopOffset + BladeHex.View.Combat.CombatLayerHeight.CharacterLayer, 0);
 		unit.GridPos = cell.GridPos;
 		unit.OccupiedCells = footprintCells;
+		BladeHex.View.Combat.BattleFakeShadowLayer.AttachContactShadow(unit);
 
 		// 设置所有占用格的 Occupant
 		foreach (var fp in footprintCells)

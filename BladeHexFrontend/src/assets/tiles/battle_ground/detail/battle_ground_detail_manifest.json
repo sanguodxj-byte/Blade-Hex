@@ -1,0 +1,39 @@
+{
+  "size": 1024,
+  "edge_blend": 96,
+  "textures": [
+    {
+      "name": "moss_grass",
+      "source": "BladeHexFrontend\\src\\assets\\tiles\\battle_ground\\overlays\\moss_grass_1254.png",
+      "output": "BladeHexFrontend\\src\\assets\\tiles\\battle_ground\\detail\\moss_grass_detail.png",
+      "edge_delta": 13.32,
+      "size": [
+        1024,
+        1024
+      ],
+      "role": "Fine grass and moss grain for plains and forest overlays."
+    },
+    {
+      "name": "stony_mud",
+      "source": "BladeHexFrontend\\src\\assets\\tiles\\battle_ground\\overlays\\stony_mud_1254.png",
+      "output": "BladeHexFrontend\\src\\assets\\tiles\\battle_ground\\detail\\stony_mud_detail.png",
+      "edge_delta": 9.488,
+      "size": [
+        1024,
+        1024
+      ],
+      "role": "Rough earth grain for dirt, wasteland, hills and sand fallback."
+    },
+    {
+      "name": "murky_water",
+      "source": "BladeHexFrontend\\src\\assets\\tiles\\battle_ground\\overlays\\murky_water_1254.png",
+      "output": "BladeHexFrontend\\src\\assets\\tiles\\battle_ground\\detail\\murky_water_detail.png",
+      "edge_delta": 3.801,
+      "size": [
+        1024,
+        1024
+      ],
+      "role": "Subtle ripple grain for water surfaces and pools."
+    }
+  ]
+}

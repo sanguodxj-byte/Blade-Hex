@@ -1,4 +1,5 @@
 using BladeHex.View.AssetSystem;
+using BladeHex.View.Data;
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -20,15 +21,19 @@ public static class BattlePropRegistry
         if (Cache.TryGetValue(propId, out var texture))
             return texture;
 
-        var resolved = TextureAssetResolver.LoadMapTexture(propId, $"{PropsBaseDir}/{propId}.png");
+        var resolved = LoadPropTexture(propId);
         if (resolved != null)
             return CacheAndReturn(propId, resolved);
 
         string? fallbackId = GetVariantFallbackId(propId);
         if (!string.IsNullOrWhiteSpace(fallbackId) && fallbackId != propId)
-            return CacheAndReturn(propId, GetTexture(fallbackId));
+        {
+            resolved = LoadPropTexture(fallbackId);
+            if (resolved != null)
+                return CacheAndReturn(propId, resolved);
+        }
 
-        return GetPlaceholder();
+        return CacheAndReturn(propId, GetPlaceholder());
     }
 
     public static bool HasTexture(string propId)
@@ -39,8 +44,7 @@ public static class BattlePropRegistry
         if (Cache.ContainsKey(propId))
             return true;
 
-        string path = $"{PropsBaseDir}/{propId}.png";
-        var resolved = TextureAssetResolver.LoadMapTexture(propId, path);
+        var resolved = LoadPropTexture(propId);
         if (resolved != null)
         {
             Cache[propId] = resolved;
@@ -48,9 +52,15 @@ public static class BattlePropRegistry
         }
 
         string? fallbackId = GetVariantFallbackId(propId);
-        return !string.IsNullOrWhiteSpace(fallbackId)
-            && fallbackId != propId
-            && HasTexture(fallbackId);
+        if (string.IsNullOrWhiteSpace(fallbackId) || fallbackId == propId)
+            return false;
+
+        resolved = LoadPropTexture(fallbackId);
+        if (resolved == null)
+            return false;
+
+        Cache[propId] = resolved;
+        return true;
     }
 
     public static void ClearCache()
@@ -65,25 +75,39 @@ public static class BattlePropRegistry
         return texture;
     }
 
+    private static Texture2D? LoadPropTexture(string propId)
+    {
+        var texture = TextureAssetResolver.LoadPath($"{PropsBaseDir}/{propId}.png");
+        return texture ?? ResourceRegistry.GetIcon(propId);
+    }
+
     private static string? GetVariantFallbackId(string propId)
     {
-        if (propId.Contains("tree") || propId.Contains("forest"))
+        if (HasVariantSuffix(propId))
+            return null;
+
+        if (propId.Contains("tree") || propId.Contains("forest") || propId.Contains("pine") || propId.Contains("fir"))
         {
             int index = Math.Abs(propId.GetHashCode()) % 4;
             if (propId.Contains("pine"))
                 return $"tree_pine_{index}";
+            if (propId.Contains("fir"))
+                return $"tree_pine_{index}";
             if (propId.Contains("dead"))
                 return $"tree_dead_{index}";
+            if (propId.Contains("frozen"))
+                return $"tree_pine_{index}";
             return $"tree_oak_{index}";
         }
 
-        if (propId.Contains("bush") || propId.Contains("grass"))
+        if (propId.Contains("bush") || propId.Contains("grass") || propId.Contains("flower") || propId.Contains("fern") || propId.Contains("reed"))
         {
             int index = Math.Abs(propId.GetHashCode()) % 4;
-            return propId.Contains("dry") ? $"bush_dry_{index}" : $"bush_green_{index}";
+            return propId.Contains("dry") || propId.Contains("reed") ? $"bush_dry_{index}" : $"bush_green_{index}";
         }
 
-        if (propId.Contains("rock") || propId.Contains("stone") || propId.Contains("ruin"))
+        if (propId.Contains("rock") || propId.Contains("stone") || propId.Contains("ruin") || propId.Contains("boulder")
+            || propId.Contains("cliff") || propId.Contains("shard") || propId.Contains("patch"))
         {
             int index = Math.Abs(propId.GetHashCode()) % 4;
             if (propId.Contains("moss"))
@@ -93,7 +117,27 @@ public static class BattlePropRegistry
             return $"rock_large_{index}";
         }
 
+        if (propId.Contains("log") || propId.Contains("vine"))
+        {
+            int index = Math.Abs(propId.GetHashCode()) % 4;
+            return propId.Contains("vine") ? $"bush_green_{index}" : $"tree_dead_{index}";
+        }
+
+        if (propId.Contains("cactus"))
+        {
+            int index = Math.Abs(propId.GetHashCode()) % 4;
+            return $"bush_dry_{index}";
+        }
+
         return null;
+    }
+
+    private static bool HasVariantSuffix(string propId)
+    {
+        int underscore = propId.LastIndexOf('_');
+        return underscore >= 0
+            && underscore < propId.Length - 1
+            && int.TryParse(propId[(underscore + 1)..], out _);
     }
 
     private static Texture2D GetPlaceholder()

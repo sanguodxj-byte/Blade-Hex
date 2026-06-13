@@ -58,6 +58,8 @@ public partial class SceneDecorationPlacer : Node3D
 
     private readonly List<Sprite3D> _placedDecorations = new();
 
+    public int DecorationCount => _placedDecorations.Count;
+
     // ========================================
     // 公共 API
     // ========================================
@@ -78,6 +80,31 @@ public partial class SceneDecorationPlacer : Node3D
 
             var terrainType = cell.Data?.terrainType ?? BattleCellData.TerrainType.Plains;
             int coverType = cell.CoverType;
+
+            // 障碍物特殊效果优先放置
+            if (cell.Data != null && !string.IsNullOrEmpty(cell.Data.specialEffect))
+            {
+                if (cell.Data.specialEffect.Contains("obstacle_tree"))
+                {
+                    PlaceRandomDecoration(cell, new[] { "tree_oak", "tree_pine" }, 1.0f);
+                    continue;
+                }
+                else if (cell.Data.specialEffect.Contains("obstacle_rock"))
+                {
+                    PlaceRandomDecoration(cell, new[] { "rock_large", "rock_moss" }, 1.0f);
+                    continue;
+                }
+                else if (cell.Data.specialEffect.Contains("obstacle_crate"))
+                {
+                    PlaceRandomDecoration(cell, new[] { "crate", "barrel" }, 1.0f);
+                    continue;
+                }
+                else if (cell.Data.specialEffect.Contains("obstacle_wagon"))
+                {
+                    PlaceRandomDecoration(cell, new[] { "fence_wood", "barrel" }, 1.0f);
+                    continue;
+                }
+            }
 
             // 掩体格子优先放置掩体装饰
             if (coverType > 0 && CoverDecorations.TryGetValue(coverType, out var coverSprites))
